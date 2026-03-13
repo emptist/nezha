@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test
+coverage/
+.nyc_output/
+
+# Temp
+/tmp/
+*.tmp
+
+# Config (local config, can be overridden via CLAWCREATOR_CONFIG_DIR)
+.clawcreator/
+!.clawcreator/config.yaml.example
+
+# Sensitive data
+.secrets/
+AI_providers.md
+!AI_providers.md.example
+.secretes/
