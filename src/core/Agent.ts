@@ -2,6 +2,13 @@ import http from 'http';
 import { OPENCODE_API } from '../config/constants.js';
 import { type AgentResponse, type AgentSession } from '../config/types.js';
 
+const timestamp = () => new Date().toISOString();
+
+const log = {
+  info: (msg: string, ...args: unknown[]) => console.log(`[${timestamp()}] [INFO] ${msg}`, ...args),
+  error: (msg: string, ...args: unknown[]) => console.error(`[${timestamp()}] [ERROR] ${msg}`, ...args),
+};
+
 export interface AgentConfig {
   host?: string;
   port?: number;
@@ -47,12 +54,12 @@ export class Agent {
           try {
             const parsed = JSON.parse(data);
             if (res.statusCode !== 200) {
-              console.error(`[Agent] Request failed [${requestId}] ${method} ${url} - Status: ${res.statusCode}`, parsed
+              log.error(`[Agent] Request failed [${requestId}] ${method} ${url} - Status: ${res.statusCode}`, parsed
   );
             }
             resolve({ ok: res.statusCode === 200, data: parsed, status: res.statusCode ?? 0 });
           } catch {
-            console.error(`[Agent] Response parse error [${requestId}] ${method} ${url} - Status: ${res.statusCode}, Bod
+            log.error(`[Agent] Response parse error [${requestId}] ${method} ${url} - Status: ${res.statusCode}, Bod
   y: ${data.substring(0, 200)}`);
             resolve({ ok: false, status: res.statusCode ?? 0 });
           }
@@ -60,12 +67,12 @@ export class Agent {
       });
 
       req.on('error', (e) => {
-        console.error(`[Agent] Request error [${requestId}] ${method} ${url} - Error: ${e.message}`);
+        log.error(`[Agent] Request error [${requestId}] ${method} ${url} - Error: ${e.message}`);
         resolve({ ok: false, status: 0 });
       });
 
       req.setTimeout(this.timeout, () => {
-        console.error(`[Agent] Request timeout [${requestId}] ${method} ${url} - Timeout: ${this.timeout}ms`);
+        log.error(`[Agent] Request timeout [${requestId}] ${method} ${url} - Timeout: ${this.timeout}ms`);
         req.destroy();
         resolve({ ok: false, status: 0 });
       });
@@ -82,7 +89,7 @@ export class Agent {
 
     if (!result.ok) {
       const errorMsg = `Failed to create session: ${result.status}`;
-      console.error(`[Agent] ${errorMsg}`);
+      log.error(`[Agent] ${errorMsg}`);
       throw new Error(errorMsg);
     }
 
@@ -108,7 +115,7 @@ export class Agent {
 
     if (!result.ok) {
       const errorMsg = `Failed to send message: ${result.status}`;
-      console.error(`[Agent] ${errorMsg}`);
+      log.error(`[Agent] ${errorMsg}`);
       return {
         success: false,
         message: errorMsg,
