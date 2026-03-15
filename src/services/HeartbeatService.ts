@@ -9,11 +9,27 @@ export interface HeartbeatServiceConfig {
   workspaceDir?: string;
 }
 
+export interface HeartbeatHealth {
+  isRunning: boolean;
+  stats: {
+    tasksExecuted: number;
+    tasksSucceeded: number;
+    tasksFailed: number;
+  };
+  lastError: string | null;
+}
+
 export class HeartbeatService {
   private readonly scheduler: Scheduler;
   private readonly agent: Agent;
   private readonly memory: MemoryService;
   private readonly workspaceDir: string;
+  private lastError: string | null = null;
+  private stats = {
+    tasksExecuted: 0,
+    tasksSucceeded: 0,
+    tasksFailed: 0,
+  };
 
   constructor(
     private readonly db: DatabaseClient,
@@ -45,6 +61,8 @@ export class HeartbeatService {
     const maxRetries = 3;
     const retryDelayMs = 30000; // 30 seconds
     
+    this.stats.tasksExecuted++;
+    
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       console.log(`[Heartbeat] Executing task: ${title} (attempt ${attempt}/${maxRetries})`);
       
@@ -68,9 +86,12 @@ export class HeartbeatService {
           content: `Task: ${title}\nResult: ${result.message}`,
           metadata: { type: 'task_result', success: true },
         });
+        
+        this.stats.tasksSucceeded++;
         return; // Success, exit
       } else {
         console.error(`[Heartbeat] Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
+        this.lastError = result.message;
         
         if (attempt < maxRetries) {
           console.log(`[Heartbeat] Waiting ${retryDelayMs / 1000}s before retry...`);
@@ -86,9 +107,19 @@ export class HeartbeatService {
       `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
       [TASK_STATUS.FAILED, 'Max retries exceeded', taskId]
     );
+    
+    this.stats.tasksFailed++;
   }
 
   isRunning(): boolean {
     return this.scheduler.isActive();
+  }
+
+  healthCheck(): HeartbeatHealth {
+    return {
+      isRunning: this.isRunning(),
+      stats: { ...this.stats },
+      lastError: this.lastError,
+    };
   }
 }
