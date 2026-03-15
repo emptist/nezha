@@ -49,11 +49,11 @@ export class Cli {
 
   async status(): Promise<void> {
     const db = await this.getDb();
-    const result = await db.query(
+    await db.query(
       `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
       [TASK_STATUS.PENDING]
     );
-        console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
+    console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
   }
 
   async health(): Promise<void> {
@@ -135,7 +135,27 @@ async function main(): Promise<void> {
       break;
     case 'help':
     default:
-        }
+      console.log(`
+Nezha CLI - Task automation with continuous improvement
+
+Usage: nezha <command>
+
+Commands:
+  start                       Start the heartbeat service
+  stop                        Stop the heartbeat service
+  status                      Show current status
+  health                      Show health information
+  task-add <title> [desc]     Add a new task
+  tasks                       List pending tasks
+  help                        Show this help message
+
+Examples:
+  nezha start
+  nezha task-add "Review code" "Review src/core for issues" 5
+  nezha tasks
+`);
+      break;
+  }
 }
 
 main();

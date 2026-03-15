@@ -91,7 +91,7 @@ export class HeartbeatService {
         return; // Success, exit
       } else {
         console.error(`[Heartbeat] Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
-        this.lastError = result.message;
+        this.lastError = result.message || 'Unknown error';
         
         if (attempt < maxRetries) {
           console.log(`[Heartbeat] Waiting ${retryDelayMs / 1000}s before retry...`);
