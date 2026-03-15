@@ -49,11 +49,13 @@ export class Cli {
 
   async status(): Promise<void> {
     const db = await this.getDb();
-    await db.query(
+    const result = await db.query(
       `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
       [TASK_STATUS.PENDING]
     );
+    const pendingCount = parseInt(result.rows[0]?.count ?? '0', 10);
     console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
+    console.log(`Pending tasks: ${pendingCount}`);
   }
 
   async health(): Promise<void> {
