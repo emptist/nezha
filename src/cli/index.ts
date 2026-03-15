@@ -62,7 +62,24 @@ export class Cli {
       `INSERT INTO tasks (title, description, status, priority) VALUES ($1, $2, $3, $4)`,
       [title, description, TASK_STATUS.PENDING, priority]
     );
-      }
+    console.log(`Task added: ${title}`);
+  }
+
+  async addContinuousImprovementTask(): Promise<void> {
+    const description = `Continuous Improvement Cycle:
+1. Read HEARTBEAT.md to get task list
+2. For each task in the list:
+   a. Execute the task
+   b. Review the results
+   c. If issues found, fix them
+   d. Update documentation if needed
+   e. Run tests/build
+   f. Commit and push changes
+3. Update HEARTBEAT.md with completed tasks and new tasks
+4. Report what was accomplished`;
+    
+    await this.addTask("Continuous Improvement Cycle", description, 10);
+  }
 
   async listTasks(): Promise<void> {
     const db = await this.getDb();

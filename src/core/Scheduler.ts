@@ -2,6 +2,14 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_CONFIG, TASK_STATUS } from '../config/constants.js';
 import { type Task, type TaskStatus, type QueryResult } from '../config/types.js';
 
+const timestamp = () => new Date().toISOString();
+
+const log = {
+  info: (msg: string, ...args: unknown[]) => console.log(`[${timestamp()}] [INFO] ${msg}`, ...args),
+  error: (msg: string, ...args: unknown[]) => console.error(`[${timestamp()}] [ERROR] ${msg}`, ...args),
+  warn: (msg: string, ...args: unknown[]) => console.warn(`[${timestamp()}] [WARN] ${msg}`, ...args),
+};
+
 export interface ScheduledTask {
   id: string;
   data: Record<string, unknown>;
@@ -15,6 +23,9 @@ export class Scheduler {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private recurringTaskTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private isRunning: boolean = false;
+  private consecutiveFailures: number = 0;
+  private isPaused: boolean = false;
+  private pauseUntil: Date | null = null;
 
   constructor(db: DatabaseClient, heartbeatIntervalMs?: number) {
     this.db = db;
@@ -28,7 +39,7 @@ export class Scheduler {
     this.isRunning = true;
     this.heartbeatTimer = setInterval(() => {
       this.heartbeat().catch((err) => {
-        console.error('Scheduler heartbeat error:', err);
+        log.error('Scheduler heartbeat failed:', err);
       });
     }, this.heartbeatIntervalMs);
     await this.heartbeat();
@@ -43,10 +54,28 @@ export class Scheduler {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    for (const timer of this.recurringTaskTimers.values()) {
+      clearInterval(timer);
+    }
+    this.recurringTaskTimers.clear();
   }
 
   private async heartbeat(): Promise<void> {
-    console.log(`[Heartbeat] Checking at ${new Date().toISOString()}`);
+    // Check if paused
+    if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {
+      log.info(`Scheduler heartbeat: Paused until ${this.pauseUntil.toISOString()}`);
+      return;
+    }
+    
+    // Resume if pause time is over
+    if (this.isPaused) {
+      log.info('Scheduler heartbeat: Resuming after pause');
+      this.isPaused = false;
+      this.pauseUntil = null;
+      this.consecutiveFailures = 0;
+    }
+    
+    log.info('Scheduler heartbeat: Checking for pending tasks');
     const tableName = DATABASE_TABLES.TASKS;
     
     // Check for stuck RUNNING tasks (older than 5 minutes) - reset to PENDING for retry
@@ -64,7 +93,7 @@ export class Scheduler {
     
     if (result.rows.length > 0) {
       const task = result.rows[0];
-      console.log(`[Heartbeat] Found task: ${task.title} (id: ${task.id})`);
+      log.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution`);
       
       // Mark task as running to avoid duplicate execution
       await this.db.query(
@@ -75,16 +104,34 @@ export class Scheduler {
       // Execute task and wait for completion
       try {
         await this.onTaskReady?.(task.id, task.title, task.description);
+        log.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully`);
+        
+        // Mark task as completed
+        await this.db.query(
+          `UPDATE ${tableName} SET status = $1, updated_at = NOW() WHERE id = $2`,
+          [TASK_STATUS.COMPLETED, task.id]
+        );
+        
+        this.consecutiveFailures = 0; // Reset failure count on success
       } catch (err) {
-        console.error(`[Heartbeat] Task execution error:`, err);
-        // Reset to PENDING on error
+        log.error(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`, err);
+        this.consecutiveFailures++;
+        
+        // Check if we need to pause
+        if (this.consecutiveFailures >= 5) {
+          this.isPaused = true;
+          this.pauseUntil = new Date(Date.now() + 60 * 1000); // Pause for 1 minute
+          log.warn(`Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for 1 minute`);
+        }
+        
+        // Reset to PENDING for retry (with delay handled by failure count)
         await this.db.query(
           `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
           [TASK_STATUS.PENDING, String(err), task.id]
         );
       }
     } else {
-      console.log(`[Heartbeat] No pending tasks`);
+      log.info('Scheduler heartbeat: No pending tasks found');
     }
   }
 
@@ -111,7 +158,7 @@ export class Scheduler {
   }
 
   private scheduleRecurringTask(taskId: string, intervalMs: number): void {
-    setInterval(async () => {
+    const timer = setInterval(async () => {
       try {
         const tableName = DATABASE_TABLES.TASKS;
         const now = new Date();
@@ -120,9 +167,10 @@ export class Scheduler {
           [now, taskId, TASK_STATUS.PENDING]
         );
       } catch (err) {
-        console.error(`Error in recurring task ${taskId}:`, err);
+        log.error(`Scheduler recurring task (id: ${taskId}): Failed to update task:`, err);
       }
     }, intervalMs);
+    this.recurringTaskTimers.set(taskId, timer);
   }
 
   isActive(): boolean {

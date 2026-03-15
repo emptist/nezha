@@ -42,37 +42,50 @@ export class HeartbeatService {
   }
 
   async executeTask(taskId: string, title: string, description?: string): Promise<void> {
-    console.log(`[Heartbeat] Executing task: ${title}`);
+    const maxRetries = 3;
+    const retryDelayMs = 30000; // 30 seconds
     
-    const result = await this.agent.executeTask(description || title);
-    
-    const tableName = DATABASE_TABLES.TASKS;
-    
-    if (result.success) {
-      console.log(`[Heartbeat] Task completed successfully`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[Heartbeat] Executing task: ${title} (attempt ${attempt}/${maxRetries})`);
       
-      // Mark task as completed
-      await this.db.query(
-        `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW() WHERE id = $3`,
-        [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.message }), taskId]
-      );
+      const result = await this.agent.executeTask(description || title);
       
-      // Save to memory
-      await this.memory.save({
-        id: crypto.randomUUID(),
-        projectId: undefined,
-        content: `Task: ${title}\nResult: ${result.message}`,
-        metadata: { type: 'task_result', success: true },
-      });
-    } else {
-      console.error(`[Heartbeat] Task failed:`, result.message);
+      const tableName = DATABASE_TABLES.TASKS;
       
-      // Mark task as failed
-      await this.db.query(
-        `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
-        [TASK_STATUS.FAILED, result.message, taskId]
-      );
+      if (result.success) {
+        console.log(`[Heartbeat] Task completed successfully`);
+        
+        // Mark task as completed
+        await this.db.query(
+          `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW() WHERE id = $3`,
+          [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.message }), taskId]
+        );
+        
+        // Save to memory
+        await this.memory.save({
+          id: crypto.randomUUID(),
+          projectId: undefined,
+          content: `Task: ${title}\nResult: ${result.message}`,
+          metadata: { type: 'task_result', success: true },
+        });
+        return; // Success, exit
+      } else {
+        console.error(`[Heartbeat] Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
+        
+        if (attempt < maxRetries) {
+          console.log(`[Heartbeat] Waiting ${retryDelayMs / 1000}s before retry...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        }
+      }
     }
+    
+    // All retries failed
+    console.error(`[Heartbeat] Task failed after ${maxRetries} attempts`);
+    const tableName = DATABASE_TABLES.TASKS;
+    await this.db.query(
+      `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
+      [TASK_STATUS.FAILED, 'Max retries exceeded', taskId]
+    );
   }
 
   isRunning(): boolean {

@@ -24,7 +24,10 @@ export class Agent {
   }
 
   private async httpRequest(path: string, method: string, body?: string): Promise<{ ok: boolean; data?: unknown; status:
-   number }> {
+    number }> {
+    const requestId = Math.random().toString(36).substring(2, 9);
+    const url = `${this.getBaseUrl()}${path}`;
+    
     return new Promise((resolve) => {
       const options = {
         hostname: this.host,
@@ -43,18 +46,26 @@ export class Agent {
         res.on('end', () => {
           try {
             const parsed = JSON.parse(data);
+            if (res.statusCode !== 200) {
+              console.error(`[Agent] Request failed [${requestId}] ${method} ${url} - Status: ${res.statusCode}`, parsed
+  );
+            }
             resolve({ ok: res.statusCode === 200, data: parsed, status: res.statusCode ?? 0 });
           } catch {
+            console.error(`[Agent] Response parse error [${requestId}] ${method} ${url} - Status: ${res.statusCode}, Bod
+  y: ${data.substring(0, 200)}`);
             resolve({ ok: false, status: res.statusCode ?? 0 });
           }
         });
       });
 
       req.on('error', (e) => {
+        console.error(`[Agent] Request error [${requestId}] ${method} ${url} - Error: ${e.message}`);
         resolve({ ok: false, status: 0 });
       });
 
       req.setTimeout(this.timeout, () => {
+        console.error(`[Agent] Request timeout [${requestId}] ${method} ${url} - Timeout: ${this.timeout}ms`);
         req.destroy();
         resolve({ ok: false, status: 0 });
       });
@@ -70,7 +81,9 @@ export class Agent {
     const result = await this.httpRequest('/session', 'POST', '{}');
 
     if (!result.ok) {
-      throw new Error(`Failed to create session: ${result.status}`);
+      const errorMsg = `Failed to create session: ${result.status}`;
+      console.error(`[Agent] ${errorMsg}`);
+      throw new Error(errorMsg);
     }
 
     const data = result.data as {
@@ -94,9 +107,11 @@ export class Agent {
     const result = await this.httpRequest(`/session/${sessionId}/message`, 'POST', body);
 
     if (!result.ok) {
+      const errorMsg = `Failed to send message: ${result.status}`;
+      console.error(`[Agent] ${errorMsg}`);
       return {
         success: false,
-        message: `Failed to send message: ${result.status}`,
+        message: errorMsg,
       };
     }
 
