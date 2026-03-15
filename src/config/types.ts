@@ -59,7 +59,7 @@ export interface QueryResult<T> {
 
 export interface Memory {
   id: string;
-  projectId: string;
+  projectId?: string;
   content: string;
   metadata?: Record<string, unknown>;
   createdAt: Date;

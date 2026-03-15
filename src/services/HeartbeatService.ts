@@ -60,7 +60,7 @@ export class HeartbeatService {
       // Save to memory
       await this.memory.save({
         id: crypto.randomUUID(),
-        projectId: 'default',
+        projectId: undefined,
         content: `Task: ${title}\nResult: ${result.message}`,
         metadata: { type: 'task_result', success: true },
       });

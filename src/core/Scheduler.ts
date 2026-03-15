@@ -47,9 +47,17 @@ export class Scheduler {
   private async heartbeat(): Promise<void> {
     console.log(`[Heartbeat] Checking at ${new Date().toISOString()}`);
     const tableName = DATABASE_TABLES.TASKS;
+    
+    // Check for stuck RUNNING tasks (older than 5 minutes) - reset to PENDING for retry
+    await this.db.query(
+      `UPDATE ${tableName} SET status = $1, updated_at = NOW() 
+       WHERE status = 'RUNNING' AND updated_at < NOW() - INTERVAL '5 minutes'`,
+      [TASK_STATUS.PENDING]
+    );
+    
+    // Find pending task
     const result = await this.db.query<{ id: string; title: string; description: string }>(
-      `SELECT id, title, description FROM ${tableName} WHERE status = $1 ORDER BY priority DESC, created_at ASC LIMIT 1`
-  ,
+      `SELECT id, title, description FROM ${tableName} WHERE status = $1 ORDER BY priority DESC, created_at ASC LIMIT 1`,
       [TASK_STATUS.PENDING]
     );
     
@@ -59,12 +67,21 @@ export class Scheduler {
       
       // Mark task as running to avoid duplicate execution
       await this.db.query(
-        `UPDATE ${tableName} SET status = 'RUNNING' WHERE id = $1`,
+        `UPDATE ${tableName} SET status = 'RUNNING', updated_at = NOW() WHERE id = $1`,
         [task.id]
       );
       
-      // Emit event for task execution
-      this.onTaskReady?.(task.id, task.title, task.description);
+      // Execute task and wait for completion
+      try {
+        await this.onTaskReady?.(task.id, task.title, task.description);
+      } catch (err) {
+        console.error(`[Heartbeat] Task execution error:`, err);
+        // Reset to PENDING on error
+        await this.db.query(
+          `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
+          [TASK_STATUS.PENDING, String(err), task.id]
+        );
+      }
     } else {
       console.log(`[Heartbeat] No pending tasks`);
     }
