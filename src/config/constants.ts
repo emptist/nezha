@@ -58,7 +58,7 @@ export const ENV_DEFAULT = {
 
 export const OPENCODE_API = {
   DEFAULT_HOST: '127.0.0.1',
-  DEFAULT_PORT: 4098,
+  DEFAULT_PORT: 4099,
   ENDPOINTS: {
     MESSAGE: '/api/message',
     SESSION: '/api/session',
