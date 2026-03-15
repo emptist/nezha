@@ -27,6 +27,7 @@ export class Scheduler {
   private isPaused: boolean = false;
   private pauseUntil: Date | null = null;
   private lastHeartbeat: Date | null = null;
+  private lastRun: Date | null = null;
   private lastTaskRun: Map<string, Date> = new Map();
 
   constructor(db: DatabaseClient, heartbeatIntervalMs?: number) {
@@ -79,6 +80,7 @@ export class Scheduler {
     
     log.info('Scheduler heartbeat: Checking for pending tasks');
     this.lastHeartbeat = new Date();
+    this.lastRun = new Date();
     const tableName = DATABASE_TABLES.TASKS;
     
     // Check for stuck RUNNING tasks (older than 5 minutes) - reset to PENDING for retry
@@ -183,6 +185,10 @@ export class Scheduler {
 
   getLastHeartbeat(): Date | null {
     return this.lastHeartbeat;
+  }
+
+  getLastRun(): Date | null {
+    return this.lastRun;
   }
 
   getLastTaskRun(taskId: string): Date | undefined {
