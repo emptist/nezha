@@ -4,7 +4,7 @@ import { type Memory, type MemoryFilter, type QueryResult } from '../config/type
 
 export interface SaveMemoryInput {
   id: string;
-  projectId: string;
+  projectId?: string;
   content: string;
   metadata?: Record<string, unknown>;
 }

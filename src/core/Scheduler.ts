@@ -13,6 +13,7 @@ export class Scheduler {
   private readonly db: DatabaseClient;
   private readonly heartbeatIntervalMs: number;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private recurringTaskTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private isRunning: boolean = false;
 
   constructor(db: DatabaseClient, heartbeatIntervalMs?: number) {
