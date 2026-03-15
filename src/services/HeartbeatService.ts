@@ -115,6 +115,14 @@ export class HeartbeatService {
     return this.scheduler.isActive();
   }
 
+  getHealth(): HeartbeatHealth {
+    return {
+      isRunning: this.isRunning(),
+      stats: { ...this.stats },
+      lastError: this.lastError,
+    };
+  }
+
   healthCheck(): HeartbeatHealth {
     return {
       isRunning: this.isRunning(),
