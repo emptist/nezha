@@ -45,12 +45,32 @@ export class Scheduler {
   }
 
   private async heartbeat(): Promise<void> {
+    console.log(`[Heartbeat] Checking at ${new Date().toISOString()}`);
     const tableName = DATABASE_TABLES.TASKS;
-    const result = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM ${tableName} WHERE status = $1`,
+    const result = await this.db.query<{ id: string; title: string; description: string }>(
+      `SELECT id, title, description FROM ${tableName} WHERE status = $1 ORDER BY priority DESC, created_at ASC LIMIT 1`
+  ,
       [TASK_STATUS.PENDING]
     );
-      }
+    
+    if (result.rows.length > 0) {
+      const task = result.rows[0];
+      console.log(`[Heartbeat] Found task: ${task.title} (id: ${task.id})`);
+      
+      // Mark task as running to avoid duplicate execution
+      await this.db.query(
+        `UPDATE ${tableName} SET status = 'RUNNING' WHERE id = $1`,
+        [task.id]
+      );
+      
+      // Emit event for task execution
+      this.onTaskReady?.(task.id, task.title, task.description);
+    } else {
+      console.log(`[Heartbeat] No pending tasks`);
+    }
+  }
+
+  onTaskReady?: (taskId: string, title: string, description?: string) => void;
 
   async scheduleTask(task: ScheduledTask): Promise<string> {
     const tableName = DATABASE_TABLES.TASKS;

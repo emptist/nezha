@@ -53,8 +53,7 @@ export class Cli {
       `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
       [TASK_STATUS.PENDING]
     );
-    console.log(`Pending tasks: ${result.rows[0]?.count ?? 0}`);
-    console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
+        console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
   }
 
   async addTask(title: string, description: string, priority: number = 0): Promise<void> {
@@ -63,16 +62,14 @@ export class Cli {
       `INSERT INTO tasks (title, description, status, priority) VALUES ($1, $2, $3, $4)`,
       [title, description, TASK_STATUS.PENDING, priority]
     );
-    console.log(`Task added: ${title}`);
-  }
+      }
 
   async listTasks(): Promise<void> {
     const db = await this.getDb();
     const result = await db.query(
       `SELECT id, title, status, priority FROM tasks ORDER BY priority DESC, created_at DESC LIMIT 10`
     );
-    console.log('Recent tasks:');
-    for (const row of result.rows) {
+        for (const row of result.rows) {
       console.log(`  [${row.status}] ${row.title} (priority: ${row.priority})`);
     }
   }
@@ -109,8 +106,7 @@ async function main(): Promise<void> {
       break;
     case 'help':
     default:
-      console.log('Commands: start, stop, status, task-add, tasks');
-  }
+        }
 }
 
 main();

@@ -2,6 +2,7 @@ import { TaskStatus } from './types.js';
 
 export const TASK_STATUS = {
   PENDING: 'PENDING' as const,
+  RUNNING: 'RUNNING' as const,
   COMPLETED: 'COMPLETED' as const,
   FAILED: 'FAILED' as const,
 } satisfies Record<TaskStatus, string>;
