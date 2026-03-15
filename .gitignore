@@ -31,9 +31,9 @@ coverage/
 /tmp/
 *.tmp
 
-# Config (local config, can be overridden via CLAWCREATOR_CONFIG_DIR)
-.clawcreator/
-!.clawcreator/config.yaml.example
+# Config (local config, can be overridden via NEZHA_CONFIG_DIR)
+.nezha/
+!.nezha/config.yaml.example
 
 # Sensitive data
 .secrets/
