@@ -13,13 +13,21 @@
 - [x] Commit: 提交更改
 - [x] Push: 推送到远程
 - [x] Update: 更新本清单，标记完成的任务，添加新任务
+- [x] Review: 读取 src/services/HeartbeatService.ts，发现重复方法
+- [x] Fix: 移除重复的 healthCheck() 方法
+- [x] Build: 运行 npm run build 确保编译通过
+- [x] Commit: 提交更改
+- [x] Push: 推送到远程
+- [x] Update: 更新本清单
 
 ## 发现的问题
 
 1. **CLI help 命令为空** - 已修复，添加了帮助文本
 2. **未使用的变量** - status() 方法中的 result 变量未使用，已移除
-3. **代码重复** - 每个文件都有自己的 log 和 timestamp 工具（低优先级）
-4. **测试文件使用错误的测试框架** - test.ts 使用 @jest/globals 但项目使用 vitest - 已修复
+3. **重复方法** - HeartbeatService 中 getHealth() 和 healthCheck() 重复，已移除 healthCheck()
+4. **代码重复** - 每个文件都有自己的 log 和 timestamp 工具（低优先级）
+5. **未使用的查询结果** - CLI status() 方法查询 pending 任务数但未显示（低优先级）
+6. **测试文件使用错误的测试框架** - test.ts 使用 @jest/globals 但项目使用 vitest - 已修复
 
 ## 当前状态 (2026-03-16)
 
