@@ -29,6 +29,7 @@ export class Scheduler {
   private lastHeartbeat: Date | null = null;
   private lastRun: Date | null = null;
   private lastTaskRun: Map<string, Date> = new Map();
+  private totalTasksExecuted: number = 0;
 
   constructor(db: DatabaseClient, heartbeatIntervalMs?: number) {
     this.db = db;
@@ -109,7 +110,8 @@ export class Scheduler {
       // Execute task and wait for completion
       try {
         await this.onTaskReady?.(task.id, task.title, task.description);
-        log.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully`);
+        this.totalTasksExecuted++;
+        log.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`);
         this.lastTaskRun.set(task.id, new Date());
         
         // Mark task as completed
@@ -197,5 +199,9 @@ export class Scheduler {
 
   getAllLastTaskRuns(): Map<string, Date> {
     return new Map(this.lastTaskRun);
+  }
+
+  getTotalTasksExecuted(): number {
+    return this.totalTasksExecuted;
   }
 }
