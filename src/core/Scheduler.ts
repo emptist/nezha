@@ -91,21 +91,26 @@ export class Scheduler {
       [TASK_STATUS.PENDING]
     );
     
-    // Find pending task
+    // Find and lock pending task atomically to prevent race conditions
     const result = await this.db.query<{ id: string; title: string; description: string }>(
-      `SELECT id, title, description FROM ${tableName} WHERE status = $1 ORDER BY priority DESC, created_at ASC LIMIT 1`,
+      `WITH locked_task AS (
+        SELECT id, title, description 
+        FROM ${tableName} 
+        WHERE status = $1 
+        ORDER BY priority DESC, created_at ASC 
+        LIMIT 1 
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE ${tableName} 
+      SET status = 'RUNNING', updated_at = NOW() 
+      WHERE id = (SELECT id FROM locked_task)
+      RETURNING id, title, description`,
       [TASK_STATUS.PENDING]
     );
     
     if (result.rows.length > 0) {
       const task = result.rows[0];
       log.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution`);
-      
-      // Mark task as running to avoid duplicate execution
-      await this.db.query(
-        `UPDATE ${tableName} SET status = 'RUNNING', updated_at = NOW() WHERE id = $1`,
-        [task.id]
-      );
       
       // Execute task and wait for completion
       try {
