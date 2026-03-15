@@ -19,6 +19,20 @@
 1. **CLI help 命令为空** - 已修复，添加了帮助文本
 2. **未使用的变量** - status() 方法中的 result 变量未使用，已移除
 3. **代码重复** - 每个文件都有自己的 log 和 timestamp 工具（低优先级）
+4. **测试文件使用错误的测试框架** - test.ts 使用 @jest/globals 但项目使用 vitest - 已修复
+
+## 当前状态 (2026-03-16)
+
+### 代码审查结果
+- **src/core/**: 核心模块完整 (Agent.ts, EventBus.ts, Scheduler.ts, Memory.ts, AgentSystem.ts, SkillSystem.ts)
+- **src/services/**: 服务层完整 (HeartbeatService.ts)
+- **src/cli/**: CLI 完整 (index.ts)
+- **src/db/**: 数据库层完整 (DatabaseClient.ts)
+- **src/config/**: 配置层完整 (Config.ts, constants.ts, types.ts)
+
+### Build & Test 状态
+- ✅ npm run build - 通过
+- ✅ npm test - 通过 (1 test)
 
 ## 循环说明
 
