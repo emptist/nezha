@@ -204,4 +204,13 @@ export class Scheduler {
   getTotalTasksExecuted(): number {
     return this.totalTasksExecuted;
   }
+
+  getStats(): { totalTasks: number; lastHeartbeat: Date | null; isPaused: boolean; pauseUntil: Date | null } {
+    return {
+      totalTasks: this.totalTasksExecuted,
+      lastHeartbeat: this.lastHeartbeat,
+      isPaused: this.isPaused,
+      pauseUntil: this.pauseUntil,
+    };
+  }
 }
