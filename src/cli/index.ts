@@ -56,6 +56,15 @@ export class Cli {
         console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
   }
 
+  async health(): Promise<void> {
+    const health = this.heartbeatService?.getHealth();
+    if (health) {
+      console.log(JSON.stringify(health, null, 2));
+    } else {
+      console.log('Heartbeat service not initialized');
+    }
+  }
+
   async addTask(title: string, description: string, priority: number = 0): Promise<void> {
     const db = await this.getDb();
     await db.query(
@@ -107,6 +116,9 @@ async function main(): Promise<void> {
       break;
     case 'status':
       await cli.status();
+      break;
+    case 'health':
+      await cli.health();
       break;
     case 'task-add':
       const title = args[1];
