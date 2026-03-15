@@ -122,12 +122,4 @@ export class HeartbeatService {
       lastError: this.lastError,
     };
   }
-
-  healthCheck(): HeartbeatHealth {
-    return {
-      isRunning: this.isRunning(),
-      stats: { ...this.stats },
-      lastError: this.lastError,
-    };
-  }
 }
