@@ -115,11 +115,11 @@ describe('Scheduler', () => {
     
     // First call: reset stuck tasks
     // Second call: get pending task
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult)
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test description' }],
         rowCount: 1,
-      } as QueryResult);
+      } as QueryResult<unknown>);
 
     const callback = vi.fn().mockResolvedValue(undefined);
     scheduler.onTaskReady = callback;
@@ -137,12 +137,12 @@ describe('Scheduler', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     
     mockQuery
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test' }],
         rowCount: 1,
-      } as QueryResult)
-      .mockResolvedValue({ rows: [], rowCount: 1 } as QueryResult);
+      } as QueryResult<unknown>)
+      .mockResolvedValue({ rows: [], rowCount: 1 } as QueryResult<unknown>);
 
     const callback = vi.fn().mockRejectedValue(new Error('Task failed'));
     scheduler.onTaskReady = callback;
