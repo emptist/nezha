@@ -7,7 +7,7 @@
 - **Issue**: Agent uses `/session` and `/session/${sessionId}/message` but `constants.ts` defines `OPENCODE_API.ENDPOINTS.SESSION` as `/api/session`
 - **Impact**: API calls may fail or route to wrong endpoints
 
-### 2. Duplicate Task Completion Logic
+### 2. Duplicate Task Completion Logic (FIXED)
 - **Location**: `src/services/HeartbeatService.ts:77-80` and `src/core/Scheduler.ts:123-126`
 - **Issue**: Both HeartbeatService.executeTask() and Scheduler.heartbeat() mark tasks as COMPLETED
 - **Impact**: Redundant database operations, potential race conditions
