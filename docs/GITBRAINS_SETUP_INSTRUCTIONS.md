@@ -311,6 +311,24 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 
 ## 🚀 执行步骤
 
+### 步骤 0: 验证 PostgreSQL（已安装）
+
+```bash
+# 检查 PostgreSQL 安装
+/Applications/Postgres.app/Contents/Versions/18/bin/psql --version
+
+# 验证数据库是否存在
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -l | grep nezha_gitbrains
+
+# 如果数据库不存在，创建它
+/Applications/Postgres.app/Contents/Versions/18/bin/createdb nezha_gitbrains
+
+# 测试连接
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -d nezha_gitbrains -c "SELECT version();"
+```
+
+**注意**：PostgreSQL 已作为 application 安装在 `/Applications/Postgres.app/`
+
 ### 步骤 1: 创建文件
 
 请 AI 执行以下操作：
@@ -323,7 +341,11 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 ### 步骤 2: 初始化数据库
 
 ```bash
+# PostgreSQL
 createdb nezha_gitbrains
+
+# 或 SQLite
+sqlite3 nezha_gitbrains.db < /Users/jk/gits/hub/nezha/src/db/migrations/001_initial.sql
 ```
 
 ### 步骤 3: 加载项目
