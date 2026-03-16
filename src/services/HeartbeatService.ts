@@ -5,6 +5,7 @@ import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { waitForever } from '../utils/wait.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../services/embedding/index.js';
+import { logger } from '../utils/logger.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
@@ -55,9 +56,9 @@ export class HeartbeatService {
     if (config?.embedding) {
       try {
         embeddingProvider = createEmbeddingProvider(config.embedding);
-        console.log(`[Heartbeat] Embedding provider initialized: ${config.embedding.provider}`);
+        logger.info(`Embedding provider initialized: ${config.embedding.provider}`);
       } catch (error) {
-        console.error('[Heartbeat] Failed to initialize embedding provider:', error);
+        logger.error('Failed to initialize embedding provider:', error);
       }
     }
     
@@ -72,62 +73,53 @@ export class HeartbeatService {
   }
 
   async start(): Promise<void> {
-    console.log('Starting HeartbeatService...');
+    logger.info('Starting HeartbeatService...');
     this.abortController = new AbortController();
     
-    // Start the continuous loop
     await this.runContinuousLoop();
   }
 
   private async runContinuousLoop(): Promise<void> {
     while (!this.abortController?.signal.aborted) {
       try {
-        // 1. Start scheduler
         await this.scheduler.start();
-        console.log('HeartbeatService running');
+        logger.info('HeartbeatService running');
         
-        // 2. Wait for scheduler to stop or abort
         await Promise.race([
           this.scheduler.waitUntilStopped(),
           this.waitForAbort(),
         ]);
         
-        // 3. Check if we should stop
         if (this.abortController?.signal.aborted) {
           break;
         }
         
-        // 4. Auto-reconnect if enabled
         if (this.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
           this.reconnectAttempts++;
           this.stats.reconnectAttempts++;
-          console.log(`[Heartbeat] Reconnecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+          logger.info(`Reconnecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
           
-          // Exponential backoff
           const delayMs = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
           await new Promise(resolve => setTimeout(resolve, delayMs));
           
-          // Continue loop (reconnect)
           continue;
         } else {
-          // Stop if auto-reconnect is disabled or max attempts reached
-          console.log('[Heartbeat] Stopping (auto-reconnect disabled or max attempts reached)');
+          logger.info('Stopping (auto-reconnect disabled or max attempts reached)');
           break;
         }
       } catch (error) {
-        console.error('[Heartbeat] Error in continuous loop:', error);
+        logger.error('Error in continuous loop:', error);
         this.lastError = error instanceof Error ? error.message : 'Unknown error';
         
         if (!this.autoReconnect || this.reconnectAttempts >= this.maxReconnectAttempts) {
           break;
         }
         
-        // Wait before retry
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
     
-    console.log('HeartbeatService stopped');
+    logger.info('HeartbeatService stopped');
   }
 
   private async waitForAbort(): Promise<void> {
@@ -141,43 +133,38 @@ export class HeartbeatService {
   }
 
   async stop(): Promise<void> {
-    console.log('Stopping HeartbeatService...');
+    logger.info('Stopping HeartbeatService...');
     
-    // Abort the continuous loop
     this.abortController?.abort();
     
-    // Stop scheduler
     await this.scheduler.stop();
     
-    // Close database
     await this.db.close();
     
-    console.log('HeartbeatService stopped');
+    logger.info('HeartbeatService stopped');
   }
 
   async executeTask(taskId: string, title: string, description?: string): Promise<void> {
     const maxRetries = 3;
-    const retryDelayMs = 30000; // 30 seconds
+    const retryDelayMs = 30000;
     
     this.stats.tasksExecuted++;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`[Heartbeat] Executing task: ${title} (attempt ${attempt}/${maxRetries})`);
+      logger.info(`Executing task: ${title} (attempt ${attempt}/${maxRetries})`);
       
       const result = await this.agent.executeTask(description || title);
       
       const tableName = DATABASE_TABLES.TASKS;
       
       if (result.success) {
-        console.log(`[Heartbeat] Task completed successfully`);
+        logger.info(`Task completed successfully`);
         
-        // Mark task as completed
         await this.db.query(
           `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW() WHERE id = $3`,
           [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.message }), taskId]
         );
         
-        // Save to memory
         await this.memory.save({
           id: crypto.randomUUID(),
           projectId: undefined,
@@ -186,20 +173,19 @@ export class HeartbeatService {
         });
         
         this.stats.tasksSucceeded++;
-        return; // Success, exit
+        return;
       } else {
-        console.error(`[Heartbeat] Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
+        logger.error(`Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
         this.lastError = result.message || 'Unknown error';
         
         if (attempt < maxRetries) {
-          console.log(`[Heartbeat] Waiting ${retryDelayMs / 1000}s before retry...`);
+          logger.info(`Waiting ${retryDelayMs / 1000}s before retry...`);
           await new Promise(resolve => setTimeout(resolve, retryDelayMs));
         }
       }
     }
     
-    // All retries failed
-    console.error(`[Heartbeat] Task failed after ${maxRetries} attempts`);
+    logger.error(`Task failed after ${maxRetries} attempts`);
     const tableName = DATABASE_TABLES.TASKS;
     await this.db.query(
       `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,

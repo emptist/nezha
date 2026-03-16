@@ -2,6 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, MEMORY_CONFIG } from '../config/constants.js';
 import { type Memory, type MemoryFilter, type QueryResult } from '../config/types.js';
 import { EmbeddingProvider, ZhipuEmbedding } from '../services/embedding/index.js';
+import { logger } from '../utils/logger.js';
 
 export interface SaveMemoryInput {
   id: string;
@@ -54,7 +55,7 @@ export class MemoryService {
       try {
         embeddingVector = await this.embedding.embed(input.content);
       } catch (error) {
-        console.error('Failed to generate embedding:', error);
+        logger.error('Failed to generate embedding:', error);
       }
     }
 
