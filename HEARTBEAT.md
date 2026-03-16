@@ -25,6 +25,12 @@
 - [x] Commit: 提交更改
 - [x] Push: 推送到远程
 - [x] Update: 更新本清单
+- [x] Review: 分析 Scheduler.ts 与 HeartbeatService，发现任务结果可能被覆盖
+- [x] Fix: 添加状态检查，避免重复更新导致 result 数据丢失
+- [x] Build: 运行 npm run build 确保编译通过
+- [x] Commit: 提交更改
+- [x] Push: 推送到远程
+- [x] Update: 更新本清单
 
 ## 发现的问题
 
@@ -34,6 +40,7 @@
 4. **代码重复** - 每个文件都有自己的 log 和 timestamp 工具（低优先级）
 5. **未使用的查询结果** - CLI status() 方法查询 pending 任务数但未显示（低优先级）
 6. **测试文件使用错误的测试框架** - test.ts 使用 @jest/globals 但项目使用 vitest - 已修复
+7. **任务结果被覆盖** - Scheduler 在 HeartbeatService 之后更新任务状态，会覆盖 result 数据 - 已修复
 
 ## 当前状态 (2026-03-16)
 
