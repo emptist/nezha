@@ -565,11 +565,25 @@ CREATE TABLE project_communications (
 - ✅ 完整的历史记录
 
 **相关文档**:
-- [OPENCLAW_CORE_TECHNOLOGY.md](./docs/OPENCLAW_CORE_TECHNOLOGY.md) - OpenClaw 核心技术分析
-- [OPENCODE_VS_TRAE.md](./docs/OPENCODE_VS_TRAE.md) - OpenCode vs Trae 工作模式对比
+
+**核心技术**:
+- [OPENCLAW_CORE_TECHNOLOGY.md](./docs/OPENCLAW_CORE_TECHNOLOGY.md) - OpenClaw 核心技术分析（持续运行机制）
+- [OPENCLAW_VS_NEZHA_CORRECT.md](./docs/OPENCLAW_VS_NEZHA_CORRECT.md) - OpenClaw vs Nezha 架构对比
+
+**开发指南**:
 - [DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) - 完整开发者指南
+- [OPENCODE_VS_TRAE.md](./docs/OPENCODE_VS_TRAE.md) - OpenCode vs Trae 工作模式对比
+
+**多项目集成**:
 - [GITBRAIN_NEZHA_GUIDE.md](./docs/GITBRAIN_NEZHA_GUIDE.md) - 数据库模式使用示例
 - [MULTI_PROJECT_DATABASE_GUIDE.md](./docs/MULTI_PROJECT_DATABASE_GUIDE.md) - 多项目管理指南
+- [MULTI_PROJECT_INTEGRATION.md](./docs/MULTI_PROJECT_INTEGRATION.md) - 多项目集成架构
+
+**学习系统设计**（未实现）:
+- [COMPLETE_LEARNING_SYSTEM_DESIGN.md](./docs/COMPLETE_LEARNING_SYSTEM_DESIGN.md) - 完整学习系统设计
+- [LEARNING_SYSTEM_IMPLEMENTATION_PLAN.md](./docs/LEARNING_SYSTEM_IMPLEMENTATION_PLAN.md) - 学习系统实施计划
+- [UNIFIED_KNOWLEDGE_BASE_DESIGN.md](./docs/UNIFIED_KNOWLEDGE_BASE_DESIGN.md) - 统一知识库设计
+- [TOKEN_OPTIMIZATION_STRATEGY.md](./docs/TOKEN_OPTIMIZATION_STRATEGY.md) - Token 优化策略
 
 ### 持续运行机制
 
