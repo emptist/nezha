@@ -10,6 +10,10 @@ interface TaskRow {
   priority: number;
 }
 
+interface CountRow {
+  count: string;
+}
+
 interface CliArgs {
   command: string;
   options: Record<string, string>;
@@ -56,7 +60,7 @@ export class Cli {
 
   async status(): Promise<void> {
     const db = await this.getDb();
-    const result = await db.query(
+    const result = await db.query<CountRow>(
       `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
       [TASK_STATUS.PENDING]
     );
