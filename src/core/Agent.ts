@@ -1,13 +1,7 @@
 import * as http from 'http';
 import { OPENCODE_API } from '../config/constants.js';
 import { type AgentResponse, type AgentSession } from '../config/types.js';
-
-const timestamp = () => new Date().toISOString();
-
-const log = {
-  info: (msg: string, ...args: unknown[]) => console.log(`[${timestamp()}] [INFO] ${msg}`, ...args),
-  error: (msg: string, ...args: unknown[]) => console.error(`[${timestamp()}] [ERROR] ${msg}`, ...args),
-};
+import { logger } from '../utils/logger.js';
 
 const NETWORK_ERRORS: Record<string, string> = {
   ECONNREFUSED: 'Connection refused - server may be down or port incorrect',
@@ -129,16 +123,16 @@ export class Agent {
             `Host: ${this.host}:${this.port}`,
           ].join(' | ');
           const statusMsg = result.status > 0 ? getHttpStatusMessage(result.status) : 'Connection failed';
-          log.error(this.formatErrorMessage(requestId, method, url, `HTTP request failed: ${statusMsg}`, errorDetails));
+          logger.error(this.formatErrorMessage(requestId, method, url, `HTTP request failed: ${statusMsg}`, errorDetails));
           return result;
         }
 
         const delay = this.calculateRetryDelay(attempt);
-        log.info(this.formatErrorMessage(requestId, method, url, `Retrying after ${Math.round(delay)}ms`, `Attempt ${attempt}/${this.maxRetries + 1}, Status: ${result.status}`));
+        logger.info(this.formatErrorMessage(requestId, method, url, `Retrying after ${Math.round(delay)}ms`, `Attempt ${attempt}/${this.maxRetries + 1}, Status: ${result.status}`));
         await this.sleep(delay);
       } catch (error) {
         if (!(error instanceof NetworkError)) {
-          log.error(this.formatErrorMessage(requestId, method, url, 'Unexpected error', error instanceof Error ? error.message : String(error)));
+          logger.error(this.formatErrorMessage(requestId, method, url, 'Unexpected error', error instanceof Error ? error.message : String(error)));
           return { ok: false, status: 0 };
         }
 
@@ -151,12 +145,12 @@ export class Agent {
             `URL: ${url}`,
             `Host: ${this.host}:${this.port}`,
           ].join(' | ');
-          log.error(this.formatErrorMessage(requestId, method, url, 'Network request failed', errorDetails));
+          logger.error(this.formatErrorMessage(requestId, method, url, 'Network request failed', errorDetails));
           return { ok: false, status: 0 };
         }
 
         const delay = this.calculateRetryDelay(attempt);
-        log.info(this.formatErrorMessage(
+        logger.info(this.formatErrorMessage(
           requestId, method, url,
           `Network error, retrying after ${Math.round(delay)}ms`,
           `${getNetworkErrorMessage(error.code)} - Attempt ${attempt}/${this.maxRetries + 1}`
@@ -167,7 +161,7 @@ export class Agent {
 
     if (lastError) {
       const errorMsg = `Failed after ${this.maxRetries + 1} attempts: ${this.formatNetworkError(lastError)}`;
-      log.error(this.formatErrorMessage(requestId, method, url, 'Max retries exceeded', errorMsg));
+      logger.error(this.formatErrorMessage(requestId, method, url, 'Max retries exceeded', errorMsg));
     }
 
     return { ok: false, status: 0 };
@@ -193,12 +187,12 @@ export class Agent {
           try {
             const parsed = JSON.parse(data);
             if (res.statusCode !== 200) {
-              log.error(this.formatErrorMessage(requestId, method, url, `Request failed`, `Status: ${res.statusCode} - ${getHttpStatusMessage(res.statusCode || 0)}`), parsed);
+              logger.error(this.formatErrorMessage(requestId, method, url, `Request failed`, `Status: ${res.statusCode} - ${getHttpStatusMessage(res.statusCode || 0)}`), parsed);
             }
             resolve({ ok: res.statusCode === 200, data: parsed, status: res.statusCode ?? 0 });
           } catch {
             const truncatedData = data.length > 200 ? data.substring(0, 200) + '...' : data;
-            log.error(this.formatErrorMessage(requestId, method, url, `Response parse error`, `Invalid JSON response (status: ${res.statusCode}, body: "${truncatedData}")`));
+            logger.error(this.formatErrorMessage(requestId, method, url, `Response parse error`, `Invalid JSON response (status: ${res.statusCode}, body: "${truncatedData}")`));
             resolve({ ok: false, status: res.statusCode ?? 0 });
           }
         });
@@ -207,13 +201,13 @@ export class Agent {
       req.on('error', (e: NodeJS.ErrnoException) => {
         const code = e.code || 'UNKNOWN';
         const errorType = code.startsWith('E') ? 'Connection error' : 'Request error';
-        log.error(this.formatErrorMessage(requestId, method, url, errorType, `${e.message} (code: ${code})`));
+        logger.error(this.formatErrorMessage(requestId, method, url, errorType, `${e.message} (code: ${code})`));
         throw new NetworkError(e.message, code, attempt, url);
       });
 
       req.setTimeout(this.timeout, () => {
         const timeoutMsg = this.formatTimeoutError(this.timeout, attempt);
-        log.error(this.formatErrorMessage(requestId, method, url, 'Request timeout', timeoutMsg));
+        logger.error(this.formatErrorMessage(requestId, method, url, 'Request timeout', timeoutMsg));
         req.destroy();
         throw new NetworkError(timeoutMsg, 'ETIMEDOUT', attempt, url);
       });
@@ -232,7 +226,7 @@ export class Agent {
       const errorMsg = result.status > 0 
         ? `Failed to create session: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
         : 'Failed to create session: network error - check server connectivity';
-      log.error(`[Agent] ${errorMsg}`);
+      logger.error(`[Agent] ${errorMsg}`);
       throw new Error(errorMsg);
     }
 
@@ -260,7 +254,7 @@ export class Agent {
       const errorMsg = result.status > 0 
         ? `Failed to send message: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
         : 'Failed to send message: network error - check server connectivity';
-      log.error(`[Agent] ${errorMsg}`);
+      logger.error(`[Agent] ${errorMsg}`);
       return {
         success: false,
         message: errorMsg,
@@ -279,7 +273,7 @@ export class Agent {
       return await this.sendMessage(session.id, message);
     } catch (error) {
       const errorDetail = error instanceof Error ? error.message : String(error);
-      log.error(`[Agent] executeTask failed: ${errorDetail}`);
+      logger.error(`[Agent] executeTask failed: ${errorDetail}`);
       return {
         success: false,
         message: `Task execution failed: ${errorDetail}`,
