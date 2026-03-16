@@ -15,6 +15,7 @@
     "start:daemon": "node dist/cli/index.js start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:clean": "bash scripts/kill-vitest.sh",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

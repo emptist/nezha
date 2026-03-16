@@ -349,6 +349,201 @@ afterEach(() => {
 });
 ```
 
+## 处理多个 Vitest 进程
+
+### 问题场景
+
+如果你发现多个 vitest 进程在后台运行：
+
+```bash
+# 检查运行中的 vitest 进程
+ps aux | grep -i vitest | grep -v grep
+
+# 输出示例：
+# PID 34537: vitest 1 - 201 MB 内存, CPU 42.6%
+# PID 35483: vitest 2 - 96 MB 内存, CPU 10.1%
+```
+
+### 解决方案
+
+#### 方法 1: 使用 npm 脚本（推荐）
+
+```bash
+npm run test:clean
+```
+
+这个命令会：
+1. 检查所有 vitest 进程
+2. 显示进程信息
+3. 安全终止所有进程
+4. 验证清理结果
+
+#### 方法 2: 手动终止
+
+```bash
+# 终止所有 vitest 进程
+pkill -f vitest
+
+# 如果进程不响应，强制终止
+pkill -9 -f vitest
+
+# 验证是否清理干净
+ps aux | grep -i vitest | grep -v grep
+```
+
+#### 方法 3: 使用脚本
+
+```bash
+# 运行清理脚本
+bash scripts/kill-vitest.sh
+```
+
+### 预防措施
+
+#### 1. 避免多个测试会话
+
+**问题**: 在不同终端窗口运行多个 `npm run test:watch`
+
+**解决**: 只在一个终端运行 watch 模式
+
+```bash
+# ❌ 错误做法：在多个终端运行
+# Terminal 1: npm run test:watch
+# Terminal 2: npm run test:watch  # 会创建第二个进程
+
+# ✅ 正确做法：只在一个终端运行
+# Terminal 1: npm run test:watch
+# Terminal 2: npm test  # 使用 run 模式
+```
+
+#### 2. 正确退出测试
+
+**问题**: 使用 Ctrl+Z 挂起而不是终止进程
+
+**解决**: 使用正确的方式退出
+
+```bash
+# 在 vitest watch 模式中
+# 按 'q' 退出（推荐）
+# 或按 Ctrl+C（推荐）
+
+# ❌ 避免
+# Ctrl+Z  # 只是挂起，进程仍在后台运行
+```
+
+#### 3. 使用进程管理工具
+
+**使用 PM2**（适合长期运行）:
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 启动测试
+pm2 start npm --name "vitest" -- run test:watch
+
+# 停止测试
+pm2 stop vitest
+
+# 查看状态
+pm2 status
+```
+
+**使用 nodemon**（适合开发）:
+
+```bash
+# 安装 nodemon
+npm install -g nodemon
+
+# 启动测试
+nodemon --exec "npm test" --watch src --ext ts
+```
+
+#### 4. 定期清理
+
+**添加定时清理任务**:
+
+```json
+// package.json
+{
+  "scripts": {
+    "test:clean": "bash scripts/kill-vitest.sh",
+    "test:safe": "npm run test:clean && npm test"
+  }
+}
+```
+
+### 监控脚本
+
+创建监控脚本 `scripts/monitor-vitest.sh`:
+
+```bash
+#!/bin/bash
+
+echo "🔍 Monitoring vitest processes..."
+
+while true; do
+  clear
+  echo "Time: $(date)"
+  echo ""
+  
+  VITEST_PIDS=$(pgrep -f vitest)
+  
+  if [ -z "$VITEST_PIDS" ]; then
+    echo "✅ No vitest processes running"
+  else
+    echo "📋 Active vitest processes:"
+    echo "$VITEST_PIDS" | while read pid; do
+      ps -p "$pid" -o pid,pcpu,pmem,etime,comm | tail -n +2
+    done
+    
+    # 计算总内存
+    TOTAL_MEM=$(ps -p $(echo "$VITEST_PIDS" | tr '\n' ',') -o rss | awk '{sum+=$1} END {print sum/1024}')
+    echo ""
+    echo "Total memory: ${TOTAL_MEM} MB"
+  fi
+  
+  sleep 5
+done
+```
+
+### 故障排查
+
+#### 问题 1: 进程无法终止
+
+```bash
+# 检查进程状态
+ps aux | grep vitest
+
+# 查看进程详细信息
+lsof -p <PID>
+
+# 强制终止
+kill -9 <PID>
+```
+
+#### 问题 2: 进程自动重启
+
+```bash
+# 检查是否有父进程
+ps -ef | grep vitest
+
+# 终止整个进程树
+pkill -9 -f vitest
+```
+
+#### 问题 3: 内存未释放
+
+```bash
+# 清理系统缓存（macOS/Linux）
+sync && sudo purge  # macOS
+sync && echo 3 | sudo tee /proc/sys/vm/drop_caches  # Linux
+
+# 重启终端
+```
+
+---
+
 ## 总结
 
 ### 问题根源
@@ -356,18 +551,21 @@ afterEach(() => {
 1. ❌ 缺少 vitest 配置文件
 2. ❌ 使用默认多线程配置
 3. ❌ 测试代码清理不彻底
+4. ❌ 多个测试会话同时运行
 
 ### 解决方案
 
 1. ✅ 创建优化的 vitest.config.ts
 2. ✅ 使用单线程模式
 3. ✅ 改进测试代码清理
+4. ✅ 添加进程清理脚本
 
 ### 效果
 
 - 内存占用从 **2-4GB 降低到 200-500MB**
 - 测试稳定性提高
 - 开发体验改善
+- 进程管理更清晰
 
 ## 参考资料
 
