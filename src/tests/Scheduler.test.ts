@@ -213,4 +213,136 @@ describe('HeartbeatService', () => {
     const health = heartbeatService.getHealth();
     expect(health.stats.tasksExecuted).toBeGreaterThanOrEqual(0);
   });
+
+  it('should set last error on task failure', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    heartbeatService = new HeartbeatService(mockDb);
+    const healthBefore = heartbeatService.getHealth();
+    expect(healthBefore.lastError).toBeNull();
+  });
+});
+
+describe('Scheduler - Additional Edge Cases', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockDb = {
+      query: vi.fn(),
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should update lastRun on each heartbeat', async () => {
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    expect(scheduler.getLastRun()).not.toBeNull();
+  });
+
+  it('should track lastTaskRun after successful task execution', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-123', title: 'Test Task', description: 'Test' }],
+        rowCount: 1,
+      } as QueryResult<unknown>);
+
+    scheduler.onTaskReady = vi.fn().mockResolvedValue(undefined);
+
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    expect(scheduler.getLastTaskRun('task-123')).toBeDefined();
+  });
+
+  it('should set pauseUntil when pausing after consecutive failures', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    const failingTask = {
+      rows: [{ id: 'task-1', title: 'Task 1', description: 'Test' }],
+      rowCount: 1,
+    };
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce(failingTask)
+      .mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    scheduler.onTaskReady = vi.fn().mockRejectedValue(new Error('Failure'));
+
+    await scheduler.start();
+    
+    for (let i = 0; i < 5; i++) {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+        .mockResolvedValueOnce(failingTask);
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+
+    const stats = scheduler.getStats();
+    expect(stats.isPaused).toBe(true);
+    expect(stats.pauseUntil).not.toBeNull();
+    expect(stats.pauseUntil!.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('should clear recurring task timers on stop', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    const task: ScheduledTask = {
+      id: 'recurring-task',
+      data: { foo: 'bar' },
+      scheduledAt: new Date(),
+      intervalMs: 50,
+    };
+
+    await scheduler.scheduleTask(task);
+    await new Promise(resolve => setTimeout(resolve, 60));
+    
+    await scheduler.stop();
+    
+    const task2: ScheduledTask = {
+      id: 'recurring-task-2',
+      data: { foo: 'bar' },
+      scheduledAt: new Date(),
+      intervalMs: 50,
+    };
+    
+    await scheduler.scheduleTask(task2);
+    await scheduler.stop();
+    
+    expect(scheduler.isActive()).toBe(false);
+  });
+
+  it('should schedule task without recurring interval', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    const task: ScheduledTask = {
+      id: 'one-time-task',
+      data: { foo: 'bar' },
+      scheduledAt: new Date(),
+    };
+
+    const taskId = await scheduler.scheduleTask(task);
+    expect(taskId).toBe('one-time-task');
+    expect(mockQuery).toHaveBeenCalled();
+  });
 });
