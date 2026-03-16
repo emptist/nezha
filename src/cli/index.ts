@@ -3,6 +3,13 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/HeartbeatService.js';
 import { TASK_STATUS } from '../config/constants.js';
 
+interface TaskRow {
+  id: number;
+  title: string;
+  status: string;
+  priority: number;
+}
+
 interface CliArgs {
   command: string;
   options: Record<string, string>;
@@ -94,10 +101,10 @@ export class Cli {
 
   async listTasks(): Promise<void> {
     const db = await this.getDb();
-    const result = await db.query(
+    const result = await db.query<TaskRow>(
       `SELECT id, title, status, priority FROM tasks ORDER BY priority DESC, created_at DESC LIMIT 10`
     );
-        for (const row of result.rows) {
+    for (const row of result.rows) {
       console.log(`  [${row.status}] ${row.title} (priority: ${row.priority})`);
     }
   }
