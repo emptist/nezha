@@ -442,6 +442,132 @@ LIMIT 10;
 
 ## 架构决策记录
 
+### 双模式架构：文件模式 vs 数据库模式
+
+Nezha 采用**双模式架构**，根据使用场景选择不同的任务管理方式：
+
+#### 1. 文件模式（Nezha 自身项目）
+
+**适用场景**: Nezha 自身的开发和维护
+
+**特点**:
+- 使用 `HEARTBEAT.md` 文件作为任务清单
+- AI 直接读取和修改文件
+- 简单直观，适合单一项目
+- 无需数据库配置
+
+**工作流程**:
+```
+AI 读取 HEARTBEAT.md
+    ↓
+执行任务
+    ↓
+更新文件状态
+    ↓
+提交到 Git
+```
+
+**示例 HEARTBEAT.md**:
+```markdown
+# Tasks
+
+## High Priority
+- [ ] Fix critical bug in Scheduler
+- [ ] Add unit tests for Agent
+
+## Medium Priority
+- [ ] Improve error messages
+- [ ] Update documentation
+
+## Completed
+- [x] Implement heartbeat mechanism
+- [x] Add PostgreSQL support
+```
+
+#### 2. 数据库模式（其他项目）
+
+**适用场景**: 管理 Nezha 之外的其他项目
+
+**特点**:
+- 使用 PostgreSQL 数据库管理任务
+- 支持多项目、多 AI 协作
+- 强大的查询和统计能力
+- 跨项目任务协调
+
+**工作流程**:
+```
+AI 查询数据库
+    ↓
+获取项目任务
+    ↓
+执行任务
+    ↓
+更新数据库状态
+    ↓
+发送消息通知
+```
+
+**数据库表结构**:
+```sql
+-- 项目注册表
+CREATE TABLE projects (
+    id UUID PRIMARY KEY,
+    name TEXT UNIQUE,
+    path TEXT,
+    language TEXT,
+    status TEXT
+);
+
+-- 任务表
+CREATE TABLE tasks (
+    id UUID PRIMARY KEY,
+    project_id UUID REFERENCES projects(id),
+    title TEXT,
+    status TEXT,
+    priority INTEGER
+);
+
+-- AI 通信日志
+CREATE TABLE project_communications (
+    id UUID PRIMARY KEY,
+    project_id UUID REFERENCES projects(id),
+    from_ai TEXT,
+    to_ai TEXT,
+    content TEXT
+);
+```
+
+#### 对比总结
+
+| 维度 | 文件模式 | 数据库模式 |
+|------|---------|-----------|
+| **适用场景** | Nezha 自身 | 其他项目 |
+| **任务存储** | HEARTBEAT.md | PostgreSQL |
+| **项目管理** | 单一项目 | 多项目 |
+| **AI 协作** | 单个 AI | 多 AI 协作 |
+| **查询能力** | 文件读取 | SQL 查询 |
+| **历史记录** | Git 历史 | 数据库记录 |
+| **跨项目协调** | ❌ 不支持 | ✅ 支持 |
+
+#### 为什么采用双模式？
+
+**文件模式的优势**（Nezha 自身）:
+- ✅ 简单直接，无需数据库配置
+- ✅ Git 版本控制，历史清晰
+- ✅ 适合单一项目的快速迭代
+- ✅ AI 可以直接修改文件
+
+**数据库模式的优势**（其他项目）:
+- ✅ 集中管理多个项目
+- ✅ 强大的查询和统计能力
+- ✅ 支持多 AI 协作
+- ✅ 跨项目任务协调
+- ✅ 完整的历史记录
+
+**相关文档**:
+- [GITBRAIN_NEZHA_GUIDE.md](./docs/GITBRAIN_NEZHA_GUIDE.md) - 数据库模式使用示例
+- [MULTI_PROJECT_DATABASE_GUIDE.md](./docs/MULTI_PROJECT_DATABASE_GUIDE.md) - 多项目管理指南
+
 ### 为什么选择 PostgreSQL 而不是 Redis？
 
 | 方面 | PostgreSQL | Redis |
