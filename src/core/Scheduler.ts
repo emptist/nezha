@@ -80,6 +80,17 @@ export class Scheduler {
     this.recurringTaskTimers.clear();
   }
 
+  async waitUntilStopped(): Promise<void> {
+    return new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (!this.isRunning) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 1000);
+    });
+  }
+
   private async heartbeat(): Promise<void> {
     // Check if paused
     if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {

@@ -3,10 +3,13 @@ import { Agent } from '../core/Agent.js';
 import { MemoryService } from '../core/Memory.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
+import { waitForever } from '../utils/wait.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
   workspaceDir?: string;
+  autoReconnect?: boolean;
+  maxReconnectAttempts?: number;
 }
 
 export interface HeartbeatHealth {
@@ -15,6 +18,7 @@ export interface HeartbeatHealth {
     tasksExecuted: number;
     tasksSucceeded: number;
     tasksFailed: number;
+    reconnectAttempts: number;
   };
   lastError: string | null;
 }
@@ -24,12 +28,18 @@ export class HeartbeatService {
   private readonly agent: Agent;
   private readonly memory: MemoryService;
   private readonly workspaceDir: string;
+  private readonly autoReconnect: boolean;
+  private readonly maxReconnectAttempts: number;
+  private readonly heartbeatIntervalMs: number;
   private lastError: string | null = null;
+  private reconnectAttempts = 0;
   private stats = {
     tasksExecuted: 0,
     tasksSucceeded: 0,
     tasksFailed: 0,
+    reconnectAttempts: 0,
   };
+  private abortController: AbortController | null = null;
 
   constructor(
     private readonly db: DatabaseClient,
@@ -40,6 +50,9 @@ export class HeartbeatService {
     this.agent = new Agent();
     this.memory = new MemoryService(db);
     this.workspaceDir = config?.workspaceDir ?? process.cwd();
+    this.autoReconnect = config?.autoReconnect ?? true;
+    this.maxReconnectAttempts = config?.maxReconnectAttempts ?? 5;
+    this.heartbeatIntervalMs = config?.heartbeatIntervalMs ?? 60000;
     
     // Connect scheduler to task execution
     this.scheduler.onTaskReady = this.executeTask.bind(this);
@@ -47,14 +60,85 @@ export class HeartbeatService {
 
   async start(): Promise<void> {
     console.log('Starting HeartbeatService...');
-    await this.scheduler.start();
-    console.log('HeartbeatService running');
+    this.abortController = new AbortController();
+    
+    // Start the continuous loop
+    await this.runContinuousLoop();
+  }
+
+  private async runContinuousLoop(): Promise<void> {
+    while (!this.abortController?.signal.aborted) {
+      try {
+        // 1. Start scheduler
+        await this.scheduler.start();
+        console.log('HeartbeatService running');
+        
+        // 2. Wait for scheduler to stop or abort
+        await Promise.race([
+          this.scheduler.waitUntilStopped(),
+          this.waitForAbort(),
+        ]);
+        
+        // 3. Check if we should stop
+        if (this.abortController?.signal.aborted) {
+          break;
+        }
+        
+        // 4. Auto-reconnect if enabled
+        if (this.autoReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+          this.reconnectAttempts++;
+          this.stats.reconnectAttempts++;
+          console.log(`[Heartbeat] Reconnecting (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+          
+          // Exponential backoff
+          const delayMs = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          
+          // Continue loop (reconnect)
+          continue;
+        } else {
+          // Stop if auto-reconnect is disabled or max attempts reached
+          console.log('[Heartbeat] Stopping (auto-reconnect disabled or max attempts reached)');
+          break;
+        }
+      } catch (error) {
+        console.error('[Heartbeat] Error in continuous loop:', error);
+        this.lastError = error instanceof Error ? error.message : 'Unknown error';
+        
+        if (!this.autoReconnect || this.reconnectAttempts >= this.maxReconnectAttempts) {
+          break;
+        }
+        
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+    
+    console.log('HeartbeatService stopped');
+  }
+
+  private async waitForAbort(): Promise<void> {
+    if (!this.abortController) {
+      return waitForever();
+    }
+    
+    return new Promise<void>((resolve) => {
+      this.abortController!.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
   }
 
   async stop(): Promise<void> {
     console.log('Stopping HeartbeatService...');
+    
+    // Abort the continuous loop
+    this.abortController?.abort();
+    
+    // Stop scheduler
     await this.scheduler.stop();
+    
+    // Close database
     await this.db.close();
+    
     console.log('HeartbeatService stopped');
   }
 

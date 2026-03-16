@@ -565,8 +565,55 @@ CREATE TABLE project_communications (
 - ✅ 完整的历史记录
 
 **相关文档**:
+- [OPENCLAW_CORE_TECHNOLOGY.md](./docs/OPENCLAW_CORE_TECHNOLOGY.md) - OpenClaw 核心技术分析
+- [OPENCODE_VS_TRAE.md](./docs/OPENCODE_VS_TRAE.md) - OpenCode vs Trae 工作模式对比
+- [DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) - 完整开发者指南
 - [GITBRAIN_NEZHA_GUIDE.md](./docs/GITBRAIN_NEZHA_GUIDE.md) - 数据库模式使用示例
 - [MULTI_PROJECT_DATABASE_GUIDE.md](./docs/MULTI_PROJECT_DATABASE_GUIDE.md) - 多项目管理指南
+
+### 持续运行机制
+
+Nezha 现已实现类似 OpenClaw 的持续运行机制：
+
+**核心技术**:
+- `while (true)` 循环：保证持续运行
+- `waitForever()` 函数：保持事件循环活跃
+- 自动重连机制：断开后自动重连
+- 指数退避：避免频繁重连
+
+**启动方式**:
+```bash
+# 方式 1: 直接运行
+node dist/cli/index.js start
+
+# 方式 2: 使用 PM2（推荐）
+pm2 start dist/cli/index.js --name nezha-daemon -- start
+
+# 查看状态
+pm2 status
+
+# 查看日志
+pm2 logs nezha-daemon
+```
+
+**工作原理**:
+```
+启动 Nezha Daemon
+    ↓
+while (true) 循环
+    ↓
+启动 Scheduler
+    ↓
+等待任务或中断
+    ↓
+如果中断，检查是否应该重连
+    ↓
+如果应该重连，等待后重连
+    ↓
+继续循环...
+```
+
+**详细说明**: 参见 [OPENCLAW_CORE_TECHNOLOGY.md](./docs/OPENCLAW_CORE_TECHNOLOGY.md)
 
 ### 为什么选择 PostgreSQL 而不是 Redis？
 

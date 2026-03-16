@@ -396,8 +396,86 @@ psql nezha_projects < backup.sql
 ## 相关文档
 
 - [README.md](../README.md) - 项目概览
+- [OPENCODE_VS_TRAE.md](./OPENCODE_VS_TRAE.md) - OpenCode vs Trae 工作模式对比
 - [GITBRAIN_NEZHA_GUIDE.md](./GITBRAIN_NEZHA_GUIDE.md) - GitBrain 集成示例
 - [MULTI_PROJECT_DATABASE_GUIDE.md](./MULTI_PROJECT_DATABASE_GUIDE.md) - 多项目管理指南
+
+---
+
+## 🔄 持续工作模式
+
+### OpenCode vs Trae
+
+**OpenCode 的工作模式**:
+- 双 AI 协作：zen AI（调度者）+ serv AI（执行者）
+- zen AI 持续运行服务，分配任务
+- serv AI 执行任务，产生新任务
+- 形成持续工作的闭环
+
+**Trae 的限制**:
+- 单 AI 模式，无持续运行的服务
+- 需要用户手动触发
+- 无法自主产生任务闭环
+
+### 如何在 Trae 中实现类似 OpenCode 的工作模式？
+
+**推荐方案**: Nezha Daemon + Trae AI 协作
+
+```
+Nezha Daemon (调度者)     Trae AI (执行者)
+持续运行服务              执行具体任务
+查询任务                  代码评审
+发送消息                  产生新任务
+监控状态                  报告结果
+     ↓                        ↓
+     └──────── PostgreSQL ─────┘
+```
+
+**实施步骤**:
+
+1. **启动 Nezha Daemon**
+   ```bash
+   # 使用 PM2 运行 daemon
+   pm2 start dist/cli/index.js --name nezha-daemon
+   
+   # 查看状态
+   pm2 status
+   
+   # 查看日志
+   pm2 logs nezha-daemon
+   ```
+
+2. **Nezha Daemon 的工作**
+   - 持续运行心跳服务
+   - 查询数据库中的待处理任务
+   - 发送消息给 Trae AI
+   - 监控任务执行状态
+
+3. **Trae AI 的工作**
+   - 定期检查数据库中的消息
+   - 执行任务
+   - 代码评审，发现新问题
+   - 添加新任务到数据库
+   - 报告执行结果
+
+4. **持续工作循环**
+   ```
+   Nezha Daemon 查询任务
+       ↓
+   发送消息给 Trae AI
+       ↓
+   Trae AI 执行任务
+       ↓
+   Trae AI 发现新问题
+       ↓
+   Trae AI 添加新任务
+       ↓
+   Nezha Daemon 继续查询
+       ↓
+   循环...
+   ```
+
+**详细说明**: 参见 [OPENCODE_VS_TRAE.md](./OPENCODE_VS_TRAE.md)
 
 ---
 
