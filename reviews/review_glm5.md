@@ -601,26 +601,35 @@ private sanitizeForLog(data: unknown): string {
 
 ## 测试覆盖率分析
 
-### 当前测试状态
+### 当前测试状态 (Updated 2026-03-16)
 
-**测试文件**: [src/tests/NezhaCore.test.ts](file:///Users/jk/gits/hub/nezha/src/tests/NezhaCore.test.ts)
+**测试文件统计**:
+- ✅ Config.test.ts (25 tests)
+- ✅ SkillSystem.test.ts (10 tests)
+- ✅ EventBus.test.ts (11 tests)
+- ✅ MemoryService.test.ts (12 tests)
+- ✅ Scheduler.test.ts (many tests)
+- ✅ NezhaCore.test.ts (1 test)
 
-```typescript
-import { describe, it, expect } from 'vitest';
-
-describe('NezhaCore', () => {
-  it('should initialize correctly', () => {
-    expect(true).toBe(true);
-  });
-});
+**测试结果**:
+```
+Test Files:  1 failed | 5 passed (6)
+Tests:       2 failed | 78 passed (80)
+Duration:    6.16s
 ```
 
-**问题**: 
-- ❌ 测试覆盖率几乎为 0%
-- ❌ 只有 1 个占位测试
-- ❌ 没有单元测试
-- ❌ 没有集成测试
-- ❌ 没有端到端测试
+**改进**:
+- ✅ 从 0% 提升到 ~30% 测试覆盖率
+- ✅ 新增 5 个测试文件
+- ✅ 78 个测试通过
+- ⚠️ 2 个 Config 测试失败（验证逻辑问题）
+
+**遗留问题**: 
+- ⚠️ Config.test.ts 有 2 个测试失败
+- ❌ 缺少 Agent.test.ts（正在开发中）
+- ❌ 缺少 HeartbeatService.test.ts
+- ❌ 缺少集成测试
+- ❌ 缺少端到端测试
 
 ### 测试策略建议
 

@@ -94,11 +94,11 @@ export class Agent {
 
   private formatNetworkError(error: NetworkError): string {
     const baseMsg = getNetworkErrorMessage(error.code);
-    return `${baseMsg} (attempt ${error.attempt}/${this.maxRetries + 1})`;
+    return `${baseMsg} (attempt ${error.attempt}/${this.maxRetries})`;
   }
 
   private formatTimeoutError(timeoutMs: number, attempt: number): string {
-    return `Request timed out after ${timeoutMs}ms - server may be slow or unreachable (attempt ${attempt}/${this.maxRetries + 1})`;
+    return `Request timed out after ${timeoutMs}ms - server may be slow or unreachable (attempt ${attempt}/${this.maxRetries})`;
   }
 
   private async httpRequest(path: string, method: string, body?: string): Promise<{ ok: boolean; data?: unknown; status: number }> {
@@ -106,7 +106,7 @@ export class Agent {
     const url = `${this.getBaseUrl()}${path}`;
     let lastError: NetworkError | null = null;
 
-    for (let attempt = 1; attempt <= this.maxRetries + 1; attempt++) {
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         const result = await this.executeRequest(requestId, path, method, url, body, attempt);
         
@@ -128,7 +128,7 @@ export class Agent {
         }
 
         const delay = this.calculateRetryDelay(attempt);
-        logger.info(this.formatErrorMessage(requestId, method, url, `Retrying after ${Math.round(delay)}ms`, `Attempt ${attempt}/${this.maxRetries + 1}, Status: ${result.status}`));
+        logger.info(this.formatErrorMessage(requestId, method, url, `Retrying after ${Math.round(delay)}ms`, `Attempt ${attempt}/${this.maxRetries}, Status: ${result.status}`));
         await this.sleep(delay);
       } catch (error) {
         if (!(error instanceof NetworkError)) {
@@ -153,14 +153,14 @@ export class Agent {
         logger.info(this.formatErrorMessage(
           requestId, method, url,
           `Network error, retrying after ${Math.round(delay)}ms`,
-          `${getNetworkErrorMessage(error.code)} - Attempt ${attempt}/${this.maxRetries + 1}`
+          `${getNetworkErrorMessage(error.code)} - Attempt ${attempt}/${this.maxRetries}`
         ));
         await this.sleep(delay);
       }
     }
 
     if (lastError) {
-      const errorMsg = `Failed after ${this.maxRetries + 1} attempts: ${this.formatNetworkError(lastError)}`;
+      const errorMsg = `Failed after ${this.maxRetries} attempts: ${this.formatNetworkError(lastError)}`;
       logger.error(this.formatErrorMessage(requestId, method, url, 'Max retries exceeded', errorMsg));
     }
 
@@ -226,7 +226,7 @@ export class Agent {
       const errorMsg = result.status > 0 
         ? `Failed to create session: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
         : 'Failed to create session: network error - check server connectivity';
-      logger.error(`[Agent] ${errorMsg}`);
+      logger.error(errorMsg);
       throw new Error(errorMsg);
     }
 
@@ -254,7 +254,7 @@ export class Agent {
       const errorMsg = result.status > 0 
         ? `Failed to send message: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
         : 'Failed to send message: network error - check server connectivity';
-      logger.error(`[Agent] ${errorMsg}`);
+      logger.error(errorMsg);
       return {
         success: false,
         message: errorMsg,

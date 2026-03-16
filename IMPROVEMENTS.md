@@ -2,10 +2,11 @@
 
 ## Critical Issues
 
-### 1. API Endpoint Mismatch in Agent.ts
-- **Location**: `src/core/Agent.ts:229, 257`
+### 1. API Endpoint Mismatch in Agent.ts (FIXED)
+- **Location**: `src/core/Agent.ts:223, 251`
 - **Issue**: Agent uses `/session` and `/session/${sessionId}/message` but `constants.ts` defines `OPENCODE_API.ENDPOINTS.SESSION` as `/api/session`
 - **Impact**: API calls may fail or route to wrong endpoints
+- **Fix**: Updated Agent.ts to use `/api/session` and `/api/session/${sessionId}/message`
 
 ### 2. Duplicate Task Completion Logic (FIXED)
 - **Location**: `src/services/HeartbeatService.ts:77-80` and `src/core/Scheduler.ts:123-126`
@@ -17,10 +18,11 @@
 - **Issue**: Config is imported but never used
 - **Impact**: Wasted import, potential confusion
 
-### 4. Missing null checks before service start
+### 4. Missing null checks before service start (FIXED)
 - **Location**: `src/NezhaCore.ts:35-39`
 - **Issue**: The `start()` method doesn't verify that `initialize()` was called first. If `start()` is called without `initialize()`, `this.heartbeatService` will be null, causing a runtime error.
 - **Impact**: Potential null reference errors
+- **Fix**: Added validation in start() to check db, heartbeatService, and scheduler are initialized
 
 ### 5. Async function in setInterval without proper error handling
 - **Location**: `src/core/Scheduler.ts:180-192`

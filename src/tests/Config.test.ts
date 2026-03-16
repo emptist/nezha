@@ -151,6 +151,8 @@ describe('Config', () => {
     process.env.NEZHA_DB_HOST = 'localhost';
     process.env.NEZHA_DB_PORT = '5432';
     process.env.NEZHA_DB_NAME = 'nezha';
+    process.env.NEZHA_DB_USER = 'postgres';
+    process.env.NEZHA_DB_PASSWORD = 'secret';
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     process.env.NEZHA_MAX_RETRIES = '3';
     Config.resetInstance();
@@ -162,6 +164,8 @@ describe('Config', () => {
     process.env.NEZHA_DB_HOST = '';
     process.env.NEZHA_DB_PORT = '5432';
     process.env.NEZHA_DB_NAME = 'nezha';
+    process.env.NEZHA_DB_USER = 'postgres';
+    process.env.NEZHA_DB_PASSWORD = 'secret';
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     Config.resetInstance();
     const config = Config.getInstance();
@@ -195,6 +199,18 @@ describe('Config', () => {
     process.env.NEZHA_DB_NAME = 'nezha';
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     process.env.NEZHA_MAX_RETRIES = '-1';
+    Config.resetInstance();
+    const config = Config.getInstance();
+    expect(config.validate()).toBe(false);
+  });
+
+  it('should fail validation when DB_PASSWORD is empty', () => {
+    process.env.NEZHA_DB_HOST = 'localhost';
+    process.env.NEZHA_DB_PORT = '5432';
+    process.env.NEZHA_DB_NAME = 'nezha';
+    process.env.NEZHA_DB_USER = 'postgres';
+    process.env.NEZHA_DB_PASSWORD = '';
+    process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     Config.resetInstance();
     const config = Config.getInstance();
     expect(config.validate()).toBe(false);
