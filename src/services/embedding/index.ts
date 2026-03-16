@@ -16,8 +16,5 @@ export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvi
     
     case 'ollama':
       return new OllamaEmbedding(config);
-    
-    default:
-      throw new Error(`Unknown embedding provider: ${(config as any).provider}`);
   }
 }

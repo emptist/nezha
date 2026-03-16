@@ -5,10 +5,12 @@ import { Config } from './config/Config.js';
 import { HeartbeatService } from './services/HeartbeatService.js';
 import { EventBus } from './core/EventBus.js';
 import { Scheduler } from './core/Scheduler.js';
+import { AgentSystem, type AgentSystemConfig } from './core/AgentSystem.js';
 
 export interface NezhaCoreConfig {
   heartbeatIntervalMs?: number;
   workspaceDir?: string;
+  agentSystemConfig?: AgentSystemConfig;
 }
 
 export class NezhaCore {
@@ -16,6 +18,7 @@ export class NezhaCore {
   private heartbeatService: HeartbeatService | null = null;
   private eventBus: EventBus;
   private scheduler: Scheduler | null = null;
+  private agentSystem: AgentSystem | null = null;
   private config: Config;
 
   constructor() {
@@ -30,18 +33,23 @@ export class NezhaCore {
       heartbeatIntervalMs: config?.heartbeatIntervalMs,
       workspaceDir: config?.workspaceDir,
     }, this.scheduler);
+    this.agentSystem = new AgentSystem(config?.agentSystemConfig, this.eventBus);
   }
 
   async start(): Promise<void> {
-    if (!this.db || !this.heartbeatService || !this.scheduler) {
+    if (!this.db || !this.heartbeatService || !this.scheduler || !this.agentSystem) {
       throw new Error('NezhaCore not initialized. Call initialize() first.');
     }
+    await this.agentSystem.start();
     if (this.heartbeatService) {
       await this.heartbeatService.start();
     }
   }
 
   async stop(): Promise<void> {
+    if (this.agentSystem) {
+      await this.agentSystem.stop();
+    }
     if (this.heartbeatService) {
       await this.heartbeatService.stop();
     }
@@ -53,6 +61,10 @@ export class NezhaCore {
 
   getScheduler(): Scheduler | null {
     return this.scheduler;
+  }
+
+  getAgentSystem(): AgentSystem | null {
+    return this.agentSystem;
   }
 
   isRunning(): boolean {
