@@ -24,10 +24,11 @@
 - **Impact**: Potential null reference errors
 - **Fix**: Added validation in start() to check db, heartbeatService, and scheduler are initialized
 
-### 5. Async function in setInterval without proper error handling
+### 5. Async function in setInterval without proper error handling (FIXED)
 - **Location**: `src/core/Scheduler.ts:180-192`
 - **Issue**: The setInterval callback is an async function that returns a Promise. If an error occurs, it will be an unhandled promise rejection.
 - **Impact**: Unhandled promise rejections, potential memory leaks
+- **Fix**: Added try-catch in setInterval callback and in scheduleRecurringTask
 
 ## Type Safety Issues
 
