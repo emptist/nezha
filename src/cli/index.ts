@@ -79,10 +79,23 @@ export class Cli {
   }
 
   async addTask(title: string, description: string, priority: number = 0): Promise<void> {
+    if (!title || title.trim().length === 0) {
+      throw new Error('Task title is required');
+    }
+    if (title.length > 500) {
+      throw new Error('Task title must be less than 500 characters');
+    }
+    if (description && description.length > 5000) {
+      throw new Error('Task description must be less than 5000 characters');
+    }
+    if (priority < 0 || priority > 100) {
+      throw new Error('Priority must be between 0 and 100');
+    }
+    
     const db = await this.getDb();
     await db.query(
       `INSERT INTO tasks (title, description, status, priority) VALUES ($1, $2, $3, $4)`,
-      [title, description, TASK_STATUS.PENDING, priority]
+      [title.trim(), description.trim(), TASK_STATUS.PENDING, priority]
     );
     console.log(`Task added: ${title}`);
   }

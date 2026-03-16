@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, TASK_CONFIG, TASK_STATUS } from '../config/constants.js';
+import { DATABASE_TABLES, SCHEDULER_CONFIG, TASK_CONFIG, TASK_STATUS } from '../config/constants.js';
 import { type Task, type TaskStatus, type QueryResult } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -77,11 +77,11 @@ export class Scheduler {
     this.lastRun = new Date();
     const tableName = DATABASE_TABLES.TASKS;
     
-    // Check for stuck RUNNING tasks (older than 5 minutes) - reset to PENDING for retry
+    // Check for stuck RUNNING tasks - reset to PENDING for retry
     await this.db.query(
       `UPDATE ${tableName} SET status = $1, updated_at = NOW() 
-       WHERE status = 'RUNNING' AND updated_at < NOW() - INTERVAL '5 minutes'`,
-      [TASK_STATUS.PENDING]
+       WHERE status = $2 AND updated_at < NOW() - INTERVAL '5 minutes'`,
+      [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
     );
     
     // Find and lock pending task atomically to prevent race conditions
@@ -95,10 +95,10 @@ export class Scheduler {
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = 'RUNNING', updated_at = NOW() 
+      SET status = $2, updated_at = NOW() 
       WHERE id = (SELECT id FROM locked_task)
       RETURNING id, title, description`,
-      [TASK_STATUS.PENDING]
+      [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
     );
     
     if (result.rows.length > 0) {
@@ -118,10 +118,10 @@ export class Scheduler {
         this.consecutiveFailures++;
         
         // Check if we need to pause
-        if (this.consecutiveFailures >= 5) {
+        if (this.consecutiveFailures >= SCHEDULER_CONFIG.MAX_CONSECUTIVE_FAILURES) {
           this.isPaused = true;
-          this.pauseUntil = new Date(Date.now() + 60 * 1000); // Pause for 1 minute
-          logger.warn(`Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for 1 minute`);
+          this.pauseUntil = new Date(Date.now() + SCHEDULER_CONFIG.PAUSE_DURATION_MS);
+          logger.warn(`Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for ${SCHEDULER_CONFIG.PAUSE_DURATION_MS / 1000} seconds`);
         }
         
         // Reset to PENDING for retry (with delay handled by failure count)
