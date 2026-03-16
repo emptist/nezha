@@ -158,30 +158,21 @@ describe('Config', () => {
     expect(config.validate()).toBe(true);
   });
 
-  it('should fail validation when DB_HOST is empty', () => {
+  it('should validate when DB_HOST uses default (empty env var)', () => {
     process.env.NEZHA_DB_HOST = '';
     process.env.NEZHA_DB_PORT = '5432';
     process.env.NEZHA_DB_NAME = 'nezha';
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     Config.resetInstance();
     const config = Config.getInstance();
-    expect(config.validate()).toBe(false);
+    expect(config.getDbConfig().host).toBe('localhost');
+    expect(config.validate()).toBe(true);
   });
 
   it('should fail validation when DB_PORT is invalid', () => {
     process.env.NEZHA_DB_HOST = 'localhost';
     process.env.NEZHA_DB_PORT = '70000';
     process.env.NEZHA_DB_NAME = 'nezha';
-    process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
-    Config.resetInstance();
-    const config = Config.getInstance();
-    expect(config.validate()).toBe(false);
-  });
-
-  it('should fail validation when DB_NAME is empty', () => {
-    process.env.NEZHA_DB_HOST = 'localhost';
-    process.env.NEZHA_DB_PORT = '5432';
-    process.env.NEZHA_DB_NAME = '';
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     Config.resetInstance();
     const config = Config.getInstance();

@@ -54,12 +54,12 @@ export class Config implements IConfig {
     const password = process.env[ENV_KEYS.DB_PASSWORD];
     const max = process.env[ENV_KEYS.DB_MAX];
     return {
-      host: host && host.trim() !== '' ? host : DATABASE_CONFIG.DEFAULT_HOST,
-      port: port && port.trim() !== '' ? parseInt(port, 10) : DATABASE_CONFIG.DEFAULT_PORT,
-      database: database && database.trim() !== '' ? database : 'nezha',
-      user: user && user.trim() !== '' ? user : 'postgres',
-      password: password ?? '',
-      max: max && max.trim() !== '' ? parseInt(max, 10) : DATABASE_CONFIG.DEFAULT_MAX,
+      host: host || DATABASE_CONFIG.DEFAULT_HOST,
+      port: port ? parseInt(port, 10) : DATABASE_CONFIG.DEFAULT_PORT,
+      database: database || 'nezha',
+      user: user || 'postgres',
+      password: password || '',
+      max: max ? parseInt(max, 10) : DATABASE_CONFIG.DEFAULT_MAX,
       idleTimeoutMillis: DATABASE_CONFIG.DEFAULT_IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: DATABASE_CONFIG.DEFAULT_CONNECTION_TIMEOUT_MS,
     };
@@ -125,16 +125,16 @@ export class Config implements IConfig {
   }
 
   validate(): boolean {
-    if (!this.config.db.host) {
+    if (!this.config.db.host || this.config.db.host.trim() === '') {
       return false;
     }
-    if (this.config.db.port <= 0 || this.config.db.port > 65535) {
+    if (!this.config.db.port || this.config.db.port <= 0 || this.config.db.port > 65535) {
       return false;
     }
-    if (!this.config.db.database) {
+    if (!this.config.db.database || this.config.db.database.trim() === '') {
       return false;
     }
-    if (this.config.task.heartbeatIntervalMs <= 0) {
+    if (!this.config.task.heartbeatIntervalMs || this.config.task.heartbeatIntervalMs <= 0) {
       return false;
     }
     if (this.config.task.maxRetries < 0) {
