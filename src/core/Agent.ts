@@ -74,7 +74,7 @@ export class Agent {
     this.retryDelay = config?.retryDelay ?? 1000;
   }
 
-  private getBaseUrl(): string {
+  public getBaseUrl(): string {
     return `http://${this.host}:${this.port}`;
   }
 
@@ -82,7 +82,7 @@ export class Agent {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  private calculateRetryDelay(attempt: number): number {
+  public calculateRetryDelay(attempt: number): number {
     const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.3 * baseDelay;
     return Math.min(baseDelay + jitter, 30000);

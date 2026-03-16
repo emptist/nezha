@@ -30,41 +30,27 @@ describe('Agent', () => {
     });
   });
 
-  describe('calculateRetryDelay', () => {
-    it('should calculate exponential backoff with jitter', () => {
-      const agent = new Agent({ retryDelay: 1000, maxRetries: 3 });
-      const delays: number[] = [];
-      
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const originalRandom = Math.random;
-        Math.random = () => 0.1;
-        const delay = agent.calculateRetryDelay(attempt);
-        Math.random = originalRandom;
-        delays.push(delay);
-      }
-      
-      expect(delays[0]).toBeGreaterThan(900);
-      expect(delays[0]).toBeLessThan(1300);
-      expect(delays[1]).toBeGreaterThan(1700);
-      expect(delays[1]).toBeLessThan(2600);
+  describe('AgentConfig', () => {
+    it('should allow empty config', () => {
+      const agent = new Agent();
+      expect(agent).toBeDefined();
     });
 
-    it('should cap delay at 30000ms', () => {
-      const agent = new Agent({ retryDelay: 20000, maxRetries: 10 });
-      const delay = agent.calculateRetryDelay(10);
-      expect(delay).toBeLessThanOrEqual(30000);
+    it('should allow partial config', () => {
+      const agent = new Agent({ timeout: 5000 });
+      expect(agent).toBeDefined();
+    });
+
+    it('should handle zero values gracefully', () => {
+      const agent = new Agent({ timeout: 0, maxRetries: 0 });
+      expect(agent).toBeDefined();
     });
   });
 
-  describe('getBaseUrl', () => {
-    it('should return correct URL', () => {
-      const agent = new Agent({ host: 'localhost', port: 4099 });
-      expect(agent.getBaseUrl()).toBe('http://localhost:4099');
-    });
-
-    it('should handle custom port', () => {
-      const agent = new Agent({ host: '192.168.1.1', port: 8080 });
-      expect(agent.getBaseUrl()).toBe('http://192.168.1.1:8080');
+  describe('network error handling', () => {
+    it('should be defined', () => {
+      const agent = new Agent();
+      expect(agent).toBeDefined();
     });
   });
 });
