@@ -119,11 +119,17 @@ export class Scheduler {
         log.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`);
         this.lastTaskRun.set(task.id, new Date());
         
-        // Mark task as completed
-        await this.db.query(
-          `UPDATE ${tableName} SET status = $1, updated_at = NOW() WHERE id = $2`,
-          [TASK_STATUS.COMPLETED, task.id]
+        // Mark task as completed only if not already completed by the callback
+        const existingTask = await this.db.query<{ status: string }>(
+          `SELECT status FROM ${tableName} WHERE id = $1`,
+          [task.id]
         );
+        if (existingTask.rows[0]?.status !== TASK_STATUS.COMPLETED) {
+          await this.db.query(
+            `UPDATE ${tableName} SET status = $1, updated_at = NOW() WHERE id = $2`,
+            [TASK_STATUS.COMPLETED, task.id]
+          );
+        }
         
         this.consecutiveFailures = 0; // Reset failure count on success
       } catch (err) {
