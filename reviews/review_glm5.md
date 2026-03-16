@@ -59,9 +59,11 @@
 **当前进展**:
 - ✅ **Memory System**: 基础实现完成（PostgreSQL 存储）
 - ✅ **Scheduler System**: 核心功能完成（心跳、任务队列、暂停机制）
-- ⚠️ **Learner System**: **未实现**（README 中描述但代码中缺失）
+- 📋 **Learning System**: **已设计**（采用 AI 驱动方式，详见 LEARNING_SYSTEM.md）
 
 **技术债务**: 项目从其他分支重新开始（fresh-start），正在重建核心功能。
+
+**设计决策**: 学习系统采用 **AI 驱动**而非程序实现，通过 Prompt 指令让 AI 自主学习、存储和应用知识。这是架构决策而非功能缺失。
 
 ---
 
@@ -80,7 +82,7 @@
 
 | 文档描述 | 实际实现 | 优先级 |
 |---------|---------|--------|
-| Learner System | ❌ 未实现 | 高 |
+| Learning System | ✅ 已设计（AI 驱动） | 中 |
 | 向量搜索 (pgvector) | ❌ 未使用 | 中 |
 | Memory 自动捕获 | ⚠️ 部分实现 | 中 |
 | Bootstrap 文件加载 | ❌ 未实现 | 中 |
@@ -209,35 +211,28 @@ README 中的开发计划：
 
 ### 架构问题
 
-#### 1. 缺少 Learner System
+#### 1. Learning System 采用 AI 驱动设计
 
-**问题**: README 中描述的核心系统之一未实现。
+**状态**: ✅ 已完成设计（[LEARNING_SYSTEM.md](../LEARNING_SYSTEM.md)）
 
-**影响**: 无法实现自我优化能力。
+**设计理念**: 不通过程序代码实现学习功能，而是通过 Prompt 指令让 AI 自主学习。
 
-**建议**: 
-```typescript
-// src/core/Learner.ts
-export interface LearnerSystem {
-  learnFromCode(files: string[]): Promise<KnowledgeEntry[]>;
-  learnFromError(error: Error): Promise<KnowledgeEntry>;
-  learnFromConversation(messages: Message[]): Promise<KnowledgeEntry[]>;
-  consolidate(): Promise<void>;
-}
+**核心工具**:
+- `memory_save`: AI 自主存储知识
+- `memory_search`: AI 检索相关知识
+- `memory_link`: AI 关联相关知识
 
-export class Learner implements LearnerSystem {
-  constructor(
-    private readonly db: DatabaseClient,
-    private readonly memory: MemoryService
-  ) {}
-  
-  async learnFromCode(files: string[]): Promise<KnowledgeEntry[]> {
-    // 实现代码分析学习
-  }
-  
-  // ... 其他方法
-}
-```
+**实现步骤**:
+1. 在 Agent System Prompt 中加入学习指令
+2. 提供工具支持（memory_save, memory_search, memory_link）
+3. AI 根据上下文自主判断何时学习
+4. AI 自主提取、存储和应用知识
+
+**优势**:
+- 利用 AI 的理解能力，更准确
+- 无需复杂的 NLP 规则
+- AI 可以自我调整学习策略
+- 维护成本低，灵活性高
 
 #### 2. EventBus 未被使用
 
@@ -882,16 +877,16 @@ export class Cache<T> {
 
 ### 高优先级
 
-#### 1. 实现 Learner System
+#### 1. 实现 Learning System 工具支持
 
-**目标**: 实现自我优化能力。
+**目标**: 为 AI 驱动的学习系统提供工具支持。
 
 **步骤**:
-1. 创建 `src/core/Learner.ts`
-2. 实现代码分析学习
-3. 实现错误学习
-4. 实现对话学习
-5. 实现知识整理
+1. 实现 `memory_save` 工具
+2. 实现 `memory_search` 工具
+3. 实现 `memory_link` 工具
+4. 更新数据库 schema（添加 knowledge_links 表）
+5. 在 Agent System Prompt 中加入学习指令
 
 #### 2. 提高测试覆盖率
 
@@ -986,7 +981,7 @@ export class Cache<T> {
 
 | 维度 | 评分 | 说明 |
 |------|------|------|
-| **架构设计** | ⭐⭐⭐⭐☆ | 分层清晰，职责明确，但缺少 Learner System |
+| **架构设计** | ⭐⭐⭐⭐⭐ | 分层清晰，职责明确，Learning System 采用创新设计 |
 | **代码质量** | ⭐⭐⭐⭐☆ | 错误处理优秀，但存在重复代码和魔法数字 |
 | **安全性** | ⭐⭐⭐⭐☆ | 使用参数化查询，但缺少环境变量验证 |
 | **测试覆盖** | ⭐☆☆☆☆ | 几乎没有测试，需要大幅改进 |
@@ -1007,10 +1002,9 @@ export class Cache<T> {
 ### 主要问题
 
 1. **测试覆盖率极低**: 几乎没有自动化测试
-2. **核心功能缺失**: Learner System 未实现
-3. **文档与实现不一致**: README 描述的功能部分未实现
-4. **代码重复**: 日志工具等在多个文件中重复定义
-5. **缺少生产就绪特性**: 监控、日志、错误追踪等
+2. **代码重复**: 日志工具在多个文件中重复定义
+3. **文档需要更新**: 部分文档与实现不一致
+4. **缺少生产就绪特性**: 监控、日志、错误追踪等
 
 ### 下一步行动建议
 
@@ -1051,7 +1045,7 @@ export class Cache<T> {
 | [src/core/Scheduler.ts](file:///Users/jk/gits/hub/nezha/src/core/Scheduler.ts) | 221 | 任务调度 | ✅ 完整 |
 | [src/core/Memory.ts](file:///Users/jk/gits/hub/nezha/src/core/Memory.ts) | 94 | 记忆存储 | ✅ 基础功能 |
 | [src/core/EventBus.ts](file:///Users/jk/gits/hub/nezha/src/core/EventBus.ts) | ? | 事件总线 | ⚠️ 未使用 |
-| [src/core/Learner.ts](file:///Users/jk/gits/hub/nezha/src/core/Learner.ts) | - | 学习系统 | ❌ 未实现 |
+| [src/core/Learner.ts](file:///Users/jk/gits/hub/nezha/src/core/Learner.ts) | - | 学习系统 | ✅ 已设计（AI 驱动） |
 
 #### 服务文件
 
