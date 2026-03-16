@@ -470,6 +470,30 @@ LIMIT 10;
 
 **详细设计**: 参见 [LEARNING_SYSTEM.md](./LEARNING_SYSTEM.md) - 包含完整的 System Prompt 设计、工具定义和使用示例。
 
+### 为什么不使用 HEARTBEAT.md 文件？
+
+**OpenClaw 的心跳机制**:
+- 读取 `HEARTBEAT.md` 文件作为任务清单
+- 默认提示："Read HEARTBEAT.md if it exists (workspace context). Follow it strictly."
+- AI 根据文件内容执行任务或回复 `HEARTBEAT_OK`
+
+**Nezha 的心跳机制**:
+- 使用 PostgreSQL 任务队列（`tasks` 表）
+- 通过 `FOR UPDATE SKIP LOCKED` 实现并发安全
+- 从数据库获取任务，不依赖文件系统
+
+**对比**:
+
+| 特性 | OpenClaw | Nezha |
+|------|----------|-------|
+| **任务来源** | HEARTBEAT.md 文件 | PostgreSQL 数据库 |
+| **并发安全** | ❌ 无保证 | ✅ SKIP LOCKED |
+| **任务历史** | ❌ 无持久化 | ✅ 完整记录 |
+| **分布式支持** | ❌ 单机 | ✅ 多实例 |
+| **查询能力** | ❌ 弱 | ✅ SQL 强大 |
+
+**结论**: Nezha 是独立项目，不依赖 OpenClaw 的文件系统机制。PostgreSQL 提供了更强大的任务管理和查询能力。
+
 ## 贡献指南
 
 ### 开发环境设置
