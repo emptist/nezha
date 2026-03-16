@@ -30,7 +30,7 @@ paths:
   tests: GitBrain/tests/
   
 qc:
-  enabled: true
+  enabled: false
   schedule: "0 9 * * *"
   checks:
     - type-safety
@@ -39,7 +39,7 @@ qc:
     - documentation
     
 review:
-  enabled: true
+  enabled: false
   schedule: "0 9 * * 1"
   auto_fix: false
   focus_areas:
@@ -63,7 +63,7 @@ languages:
     
 integrations:
   - type: gitbrain
-    enabled: true
+    enabled: false
     config:
       maildir: GitBrain/maildir/
       brainstates: GitBrain/brainstates/
@@ -101,7 +101,6 @@ Nezha is an AI collaboration system that provides:
 #### 1. Load Project Configuration
 
 ```bash
-node /Users/jk/gits/hub/nezha/dist/cli/index.js load-project /Users/jk/gits/hub/tools_ai/gitbrains
 ```
 
 #### 2. Check Project Status
@@ -121,17 +120,15 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js task-add \
   8
 
 # List tasks
-node /Users/jk/gits/hub/nezha/dist/cli/index.js task-list --project gitbrains
+node /Users/jk/gits/hub/nezha/dist/cli/index.js tasks
 ```
 
 #### 4. Run Quality Checks
 
 ```bash
 # Run QC
-node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 
 # Generate report
-node /Users/jk/gits/hub/nezha/dist/cli/index.js report --project gitbrains --format html
 ```
 
 ### AI Workflow
@@ -209,12 +206,10 @@ If this is your first time using Nezha with gitbrains:
 
 1. **Load the project**:
    ```bash
-   node /Users/jk/gits/hub/nezha/dist/cli/index.js load-project /Users/jk/gits/hub/tools_ai/gitbrains
    ```
 
 2. **Run initial QC**:
    ```bash
-   node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
    ```
 
 3. **Review the results** and add improvement tasks
@@ -264,13 +259,11 @@ createdb nezha_gitbrains
 ### Step 2: Load Project in Nezha
 
 ```bash
-node /Users/jk/gits/hub/nezha/dist/cli/index.js load-project /Users/jk/gits/hub/tools_ai/gitbrains
 ```
 
 ### Step 3: Run Initial QC
 
 ```bash
-node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 ```
 
 ### Step 4: Start Improving
@@ -281,7 +274,7 @@ Pick a high-priority task and start working!
 
 ```bash
 # List all tasks
-node /Users/jk/gits/hub/nezha/dist/cli/index.js task-list --project gitbrains
+node /Users/jk/gits/hub/nezha/dist/cli/index.js tasks
 
 # Add a new task
 node /Users/jk/gits/hub/nezha/dist/cli/index.js task-add \
@@ -291,10 +284,8 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js task-add \
   8
 
 # Generate report
-node /Users/jk/gits/hub/nezha/dist/cli/index.js report --project gitbrains
 
 # Run QC
-node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 ```
 
 ## Need Help?
@@ -351,13 +342,11 @@ sqlite3 nezha_gitbrains.db < /Users/jk/gits/hub/nezha/src/db/migrations/001_init
 ### 步骤 3: 加载项目
 
 ```bash
-node /Users/jk/gits/hub/nezha/dist/cli/index.js load-project /Users/jk/gits/hub/tools_ai/gitbrains
 ```
 
 ### 步骤 4: 运行初始 QC
 
 ```bash
-node /Users/jk/gits/hub/nezha/dist/cli/index.js qc --project gitbrains
 ```
 
 ---
@@ -401,3 +390,50 @@ Next steps:
 
 **创建时间**: 2026-03-16  
 **状态**: 等待执行
+
+
+---
+
+## ⚠️ 重要说明
+
+### Nezha CLI 实际可用命令
+
+当前 Nezha CLI 支持以下命令：
+
+```bash
+# 任务管理
+node /Users/jk/gits/hub/nezha/dist/cli/index.js task-add "标题" "描述" 优先级
+node /Users/jk/gits/hub/nezha/dist/cli/index.js tasks
+
+# Heartbeat 服务
+node /Users/jk/gits/hub/nezha/dist/cli/index.js start
+node /Users/jk/gits/hub/nezha/dist/cli/index.js stop
+node /Users/jk/gits/hub/nezha/dist/cli/index.js status
+node /Users/jk/gits/hub/nezha/dist/cli/index.js health
+```
+
+### 不存在的命令
+
+以下命令在当前 Nezha CLI 中**不存在**（这些是计划中的功能）：
+
+- `load-project` - 项目加载功能未实现
+- `qc` - 质量检查功能未实现
+- `report` - 报告生成功能未实现
+- `task-list` - 使用 `tasks` 代替
+
+### 手动质量检查
+
+由于 Nezha 的自动化 QC 功能尚未实现，需要手动运行质量检查：
+
+```bash
+# Python 代码质量
+cd GitBrain
+pytest --cov=. --cov-report=term-missing
+ruff check .
+black --check .
+
+# Swift 代码质量
+cd ../swiftgitbrain
+swift test
+swiftlint
+```
