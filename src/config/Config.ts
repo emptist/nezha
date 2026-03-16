@@ -134,6 +134,12 @@ export class Config implements IConfig {
     if (!this.config.db.database || this.config.db.database.trim() === '') {
       return false;
     }
+    if (!this.config.db.user || this.config.db.user.trim() === '') {
+      return false;
+    }
+    if (!this.config.db.password || this.config.db.password.trim() === '') {
+      return false;
+    }
     if (!this.config.task.heartbeatIntervalMs || this.config.task.heartbeatIntervalMs <= 0) {
       return false;
     }

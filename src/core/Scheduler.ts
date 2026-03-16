@@ -177,9 +177,10 @@ export class Scheduler {
         }
         
         // Reset to PENDING for retry (with delay handled by failure count)
+        const errorMessage = err instanceof Error ? err.message : String(err);
         await this.db.query(
           `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
-          [TASK_STATUS.PENDING, String(err), task.id]
+          [TASK_STATUS.PENDING, errorMessage, task.id]
         );
       }
     } else {
