@@ -21,10 +21,18 @@ export interface MemoryConfig {
   maxMemoryAgeMs: number;
 }
 
+export interface EmbeddingConfig {
+  provider: 'zhipu' | 'openai' | 'ollama';
+  model: string;
+  apiKey?: string;
+  apiUrl?: string;
+}
+
 export interface NezhaConfig {
   db: DbConfig;
   task: TaskConfig;
   memory: MemoryConfig;
+  embedding?: EmbeddingConfig;
   env: 'development' | 'production' | 'test';
 }
 
