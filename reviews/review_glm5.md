@@ -1023,9 +1023,10 @@ export class Cache<T> {
 2. ✅ 创建 `ROADMAP.md` 说明开发计划
 3. ✅ 为核心模块添加单元测试（目标 50% 覆盖率）
 4. ✅ 统一日志系统
-5. 实现 Learning System 工具支持
-6. 提高测试覆盖率至 80%
+5. ✅ 实现 Learning System 工具支持
+6. ⬆️ 提高测试覆盖率至 80%（当前 ~30%）
 7. 完善 EventBus 实现
+8. 修复 Config 测试失败问题
 
 #### 中优先级
 
