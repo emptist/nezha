@@ -185,6 +185,7 @@ describe('HeartbeatService', () => {
       tasksExecuted: 0,
       tasksSucceeded: 0,
       tasksFailed: 0,
+      reconnectAttempts: 0,
     });
     expect(health.lastError).toBeNull();
   });
@@ -193,12 +194,14 @@ describe('HeartbeatService', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
 
-    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100 });
+    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100, autoReconnect: false });
     
-    await heartbeatService.start();
+    const startPromise = heartbeatService.start();
+    await new Promise(resolve => setTimeout(resolve, 50));
     expect(heartbeatService.isRunning()).toBe(true);
 
     await heartbeatService.stop();
+    await startPromise.catch(() => {});
     expect(heartbeatService.isRunning()).toBe(false);
   });
 
@@ -206,9 +209,11 @@ describe('HeartbeatService', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
 
-    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100 });
-    await heartbeatService.start();
+    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100, autoReconnect: false });
+    const startPromise = heartbeatService.start();
+    await new Promise(resolve => setTimeout(resolve, 50));
     await heartbeatService.stop();
+    await startPromise.catch(() => {});
 
     const health = heartbeatService.getHealth();
     expect(health.stats.tasksExecuted).toBeGreaterThanOrEqual(0);

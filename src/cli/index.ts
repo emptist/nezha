@@ -1,3 +1,6 @@
+import { config } from 'dotenv';
+config();
+
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/HeartbeatService.js';
@@ -32,7 +35,11 @@ export class Cli {
 
   async start(): Promise<void> {
     const db = await this.getDb();
-    this.heartbeatService = new HeartbeatService(db);
+    const embeddingConfig = this.config.getEmbeddingConfig();
+    this.heartbeatService = new HeartbeatService(db, {
+      heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
+      embedding: embeddingConfig
+    });
     await this.heartbeatService.start();
     
     // Handle graceful shutdown

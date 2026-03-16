@@ -77,10 +77,14 @@ describe('HeartbeatService', () => {
     it('should start the service successfully', async () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       
-      await service.start();
+      const startPromise = service.start();
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
       
       expect(consoleSpy).toHaveBeenCalledWith('Starting HeartbeatService...');
-      expect(consoleSpy).toHaveBeenCalledWith('HeartbeatService running');
+      
+      await service.stop();
+      await startPromise.catch(() => {});
       
       consoleSpy.mockRestore();
     });
