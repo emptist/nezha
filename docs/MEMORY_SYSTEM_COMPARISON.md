@@ -1,7 +1,8 @@
 # Memory System Comparison: OpenClaw vs Nezha
 
 **创建时间**: 2026-03-16  
-**状态**: 记忆系统对比分析
+**更新时间**: 2026-03-16  
+**状态**: 记忆系统对比分析（重大更新）
 
 ---
 
@@ -11,96 +12,274 @@
 
 ---
 
-## 📊 OpenClaw 的记忆系统
+## ⚠️ 重要发现
 
-### 1. 隐式记忆系统
+**OpenClaw 有一个非常完整的记忆系统！**
 
-**OpenClaw 没有显式的"记忆系统"，但通过以下方式实现记忆**：
+之前我误以为 OpenClaw 只有隐式记忆（HEARTBEAT.md + 代码仓库），但实际上它有一个功能强大的显式记忆系统。
+
+---
+
+## 📊 OpenClaw 的记忆系统（完整分析）
+
+### 1. 核心架构
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│              OpenClaw 记忆机制                           │
+│              OpenClaw 记忆系统架构                       │
 │                                                          │
-│  1. HEARTBEAT.md (任务记忆)                              │
-│     - 当前任务清单                                       │
-│     - 任务优先级                                         │
-│     - 任务状态                                           │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │         MemoryIndexManager                       │    │
+│  │                                                   │    │
+│  │  1. 向量搜索 (Vector Search)                     │    │
+│  │     - Embedding 向量                             │    │
+│  │     - 语义相似度                                 │    │
+│  │                                                   │    │
+│  │  2. 关键词搜索 (FTS)                             │    │
+│  │     - BM25 算法                                  │    │
+│  │     - 全文搜索                                   │    │
+│  │                                                   │    │
+│  │  3. 混合搜索 (Hybrid Search)                     │    │
+│  │     - 向量 + 关键词                              │    │
+│  │     - 加权合并                                   │    │
+│  │                                                   │    │
+│  │  4. MMR 重排序                                   │    │
+│  │     - 平衡相关性和多样性                         │    │
+│  │     - 避免重复结果                               │    │
+│  │                                                   │    │
+│  │  5. 时间衰减                                     │    │
+│  │     - 根据记忆年龄调整分数                       │    │
+│  │     - 半衰期机制                                 │    │
+│  │                                                   │    │
+│  └─────────────────────────────────────────────────┘    │
+│                          │                              │
+│                          ▼                              │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │         Embedding 提供商                         │    │
+│  │                                                   │    │
+│  │  - OpenAI (text-embedding-3-small/large)        │    │
+│  │  - Gemini (text-embedding-004)                  │    │
+│  │  - Voyage (voyage-3-large)                      │    │
+│  │  - Mistral (mistral-embed)                      │    │
+│  │  - Ollama (本地模型)                             │    │
+│  │                                                   │    │
+│  └─────────────────────────────────────────────────┘    │
+│                          │                              │
+│                          ▼                              │
+│  ┌─────────────────────────────────────────────────┐    │
+│  │         SQLite 存储                              │    │
+│  │                                                   │    │
+│  │  - chunks_vec (向量表)                           │    │
+│  │  - chunks_fts (全文索引)                         │    │
+│  │  - embedding_cache (缓存)                        │    │
+│  │                                                   │    │
+│  └─────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 2. 核心功能
+
+#### 2.1 向量搜索
+
+```typescript
+// src/memory/manager-search.ts
+export async function searchVector(
+  db: DatabaseSync,
+  queryVector: number[],
+  maxResults: number,
+  minScore: number,
+): Promise<HybridVectorResult[]>
+```
+
+**特点**:
+- 使用 Embedding 向量进行语义搜索
+- 支持 cosine similarity
+- 支持向量维度配置
+
+#### 2.2 关键词搜索
+
+```typescript
+// src/memory/manager-search.ts
+export async function searchKeyword(
+  db: DatabaseSync,
+  query: string,
+  maxResults: number,
+): Promise<HybridKeywordResult[]>
+```
+
+**特点**:
+- 使用 BM25 算法
+- 全文索引
+- 查询扩展
+
+#### 2.3 混合搜索
+
+```typescript
+// src/memory/hybrid.ts
+export async function mergeHybridResults(params: {
+  vector: HybridVectorResult[];
+  keyword: HybridKeywordResult[];
+  vectorWeight: number;
+  textWeight: number;
+  mmr?: Partial<MMRConfig>;
+  temporalDecay?: Partial<TemporalDecayConfig>;
+}): Promise<HybridResult[]>
+```
+
+**特点**:
+- 结合向量和关键词搜索
+- 加权合并结果
+- 支持配置权重
+
+#### 2.4 MMR 重排序
+
+```typescript
+// src/memory/mmr.ts
+export type MMRConfig = {
+  enabled: boolean;
+  lambda: number; // 0 = max diversity, 1 = max relevance
+};
+
+export function applyMMRToHybridResults(
+  results: HybridResult[],
+  config: MMRConfig,
+): HybridResult[]
+```
+
+**特点**:
+- 平衡相关性和多样性
+- 使用 Jaccard 相似度
+- 避免重复结果
+
+#### 2.5 时间衰减
+
+```typescript
+// src/memory/temporal-decay.ts
+export type TemporalDecayConfig = {
+  enabled: boolean;
+  halfLifeDays: number;
+};
+
+export function calculateTemporalDecayMultiplier(params: {
+  ageInDays: number;
+  halfLifeDays: number;
+}): number
+```
+
+**特点**:
+- 根据记忆年龄调整分数
+- 半衰期机制
+- 支持常青记忆（MEMORY.md）
+
+### 3. Embedding 提供商
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              OpenClaw Embedding 提供商                   │
 │                                                          │
-│  2. 代码仓库 (知识记忆)                                  │
-│     - 已实现的代码                                       │
-│     - 架构决策                                           │
-│     - 最佳实践                                           │
+│  1. OpenAI                                              │
+│     - text-embedding-3-small (1536 dims)               │
+│     - text-embedding-3-large (3072 dims)               │
+│     - text-embedding-ada-002 (1536 dims)               │
 │                                                          │
-│  3. Git 历史 (历史记忆)                                  │
-│     - 提交历史                                           │
-│     - 变更记录                                           │
-│     - 问题修复                                           │
+│  2. Gemini                                              │
+│     - text-embedding-004 (768 dims)                    │
 │                                                          │
-│  4. AI Context (临时记忆)                                │
-│     - 当前会话上下文                                     │
-│     - 最近操作                                           │
-│     - 当前任务状态                                       │
+│  3. Voyage                                              │
+│     - voyage-3-large (1024 dims)                       │
+│                                                          │
+│  4. Mistral                                             │
+│     - mistral-embed (1024 dims)                        │
+│                                                          │
+│  5. Ollama (本地)                                       │
+│     - nomic-embed-text                                 │
+│     - mxbai-embed-large                                │
 │                                                          │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 2. HEARTBEAT.md 机制
+### 4. 存储结构
 
-```markdown
-# HEARTBEAT.md
+```sql
+-- SQLite 表结构
 
-## Current Tasks
+-- 向量表
+CREATE TABLE chunks_vec (
+  id TEXT PRIMARY KEY,
+  path TEXT,
+  startLine INTEGER,
+  endLine INTEGER,
+  source TEXT,
+  snippet TEXT,
+  embedding BLOB
+);
 
-- [ ] Implement feature X
-- [ ] Fix bug Y
-- [ ] Refactor module Z
+-- 全文索引
+CREATE VIRTUAL TABLE chunks_fts USING fts5(
+  id,
+  path,
+  content,
+  snippet
+);
 
-## Completed
-
-- [x] Setup project structure
-- [x] Implement core functionality
-
-## Notes
-
-- Remember to update documentation
-- Check performance optimization
+-- Embedding 缓存
+CREATE TABLE embedding_cache (
+  content_hash TEXT PRIMARY KEY,
+  embedding BLOB,
+  created_at INTEGER
+);
 ```
 
-**特点**:
-- ✅ 简单直接
-- ✅ Git 版本控制
-- ✅ 人类可读
-- ❌ 无结构化查询
-- ❌ 无知识关联
-- ❌ 无持久化记忆
+### 5. 记忆来源
 
-### 3. OpenClaw 的优势
+```typescript
+export type MemorySource = "memory" | "sessions";
+
+// memory 目录
+memory/
+├── MEMORY.md          # 常青记忆
+├── 2024-01-15.md      # 日期记忆
+├── 2024-01-16.md
+└── ...
+
+// sessions 目录
+sessions/
+├── session-001.json   # 会话记忆
+├── session-002.json
+└── ...
+```
+
+### 6. 高级特性
 
 ```
-1. 简单性
-   - 不需要复杂的记忆系统
-   - AI 通过读取文件和代码理解上下文
+1. 批量处理
+   - 批量 Embedding 生成
+   - 并发控制
+   - 错误重试
 
-2. 透明性
-   - 所有记忆都在文件中
-   - 人类可以直接查看和修改
+2. 文件监控
+   - 自动检测文件变更
+   - 增量更新索引
+   - 定期同步
 
-3. 版本控制
-   - Git 记录所有变更
-   - 可以回溯历史
+3. 缓存机制
+   - Embedding 缓存
+   - 避免重复计算
+   - 提高性能
 
-4. 自动学习
-   - AI 通过执行任务学习
-   - 学习成果体现在代码中
+4. 会话管理
+   - 会话文件监控
+   - 增量更新
+   - 自动清理
 ```
 
 ---
 
 ## 📊 Nezha 当前的记忆系统
 
-### 1. 显式记忆系统
+### 1. 基础记忆服务
 
-**Nezha 有一个基础的 Memory Service**：
+**Nezha 有一个非常基础的 Memory Service**：
 
 ```typescript
 // src/core/Memory.ts
@@ -109,7 +288,7 @@ export class MemoryService {
   // 存储
   async save(input: SaveMemoryInput): Promise<string>
   
-  // 检索
+  // 检索（简单 ILIKE 搜索）
   async search(searchTerm: string, limit?: number): Promise<Memory[]>
   
   // 按项目查询
@@ -141,269 +320,219 @@ CREATE TABLE memories (
 ```
 ✅ 基本的 CRUD 操作
 ✅ 项目关联
-✅ 元数据存储
+✅ 元数据存储（JSONB）
 ✅ 自动清理旧记忆
 
+❌ 无向量搜索
+❌ 无关键词搜索（FTS）
+❌ 无混合搜索
+❌ 无 MMR 重排序
+❌ 无时间衰减
+❌ 无 Embedding 支持
 ❌ 无标签系统
 ❌ 无知识关联
 ❌ 无重要性评分
 ❌ 无上下文管理
-❌ 无知识检索优化
+❌ 无缓存机制
+❌ 无文件监控
 ```
 
 ---
 
-## 📊 Nezha 设计的学习系统
-
-### 1. 完整的记忆系统设计
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              Nezha 学习系统记忆架构                      │
-│                                                          │
-│  1. memories 表 (知识存储)                               │
-│     - content: 知识内容                                  │
-│     - tags: 标签数组                                     │
-│     - context: 上下文                                    │
-│     - importance: 重要性评分                             │
-│     - source: 知识来源                                   │
-│                                                          │
-│  2. memory_links 表 (知识关联)                           │
-│     - source_id: 源知识                                  │
-│     - target_id: 目标知识                                │
-│     - relationship: 关系类型                             │
-│                                                          │
-│  3. Memory Skills API                                    │
-│     - memory_save: 存储知识                              │
-│     - memory_search: 检索知识                            │
-│     - memory_link: 关联知识                              │
-│     - memory_get: 获取详情                               │
-│     - memory_update: 更新知识                            │
-│     - memory_delete: 删除知识                            │
-│                                                          │
-│  4. 知识交接班机制                                       │
-│     - KNOWLEDGE.md: 知识交接文档                         │
-│     - SQL 查询: 动态知识注入                             │
-│     - 自动清理: 去知识泡沫                               │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-```
-
-### 2. 核心创新
-
-```
-1. 统一知识库
-   - PostgreSQL 打通所有项目
-   - 跨项目知识共享
-   - 灵活范围控制
-
-2. 选择性知识注入
-   - SQL 查询最重要知识
-   - Token 消耗减少 99.5%
-   - 动态知识更新
-
-3. 知识交接班
-   - MD 文档持久化
-   - 跨 Session 记忆
-   - 自动清理机制
-
-4. 去知识泡沫
-   - 重要性评分
-   - 自动清理低价值知识
-   - 定期维护
-```
-
----
-
-## 📊 对比分析
+## 📊 对比分析（重大更新）
 
 ### 1. 架构对比
 
-| 维度 | OpenClaw | Nezha (当前) | Nezha (设计) |
-|------|----------|-------------|-------------|
-| **记忆类型** | 隐式 | 显式 | 显式 + 智能 |
-| **存储方式** | 文件 | 数据库 | 数据库 + 文件 |
-| **知识关联** | ❌ 无 | ❌ 无 | ✅ 有 |
-| **重要性评分** | ❌ 无 | ❌ 无 | ✅ 有 |
-| **标签系统** | ❌ 无 | ❌ 无 | ✅ 有 |
-| **跨项目共享** | ❌ 无 | ⚠️ 基础 | ✅ 完整 |
-| **知识检索** | ❌ 无 | ⚠️ 简单 | ✅ 强大 |
-| **知识交接班** | ❌ 无 | ❌ 无 | ✅ 有 |
-| **去知识泡沫** | ❌ 无 | ❌ 无 | ✅ 有 |
+| 维度 | OpenClaw | Nezha (当前) | 差距 |
+|------|----------|-------------|------|
+| **记忆类型** | 显式 + 智能 | 显式（基础） | 🔴 巨大 |
+| **存储方式** | SQLite | PostgreSQL | 🟡 不同 |
+| **向量搜索** | ✅ 完整支持 | ❌ 无 | 🔴 缺失 |
+| **关键词搜索** | ✅ BM25 + FTS | ⚠️ 简单 ILIKE | 🔴 落后 |
+| **混合搜索** | ✅ 向量 + 关键词 | ❌ 无 | 🔴 缺失 |
+| **MMR 重排序** | ✅ 有 | ❌ 无 | 🔴 缺失 |
+| **时间衰减** | ✅ 有 | ❌ 无 | 🔴 缺失 |
+| **Embedding** | ✅ 5 种提供商 | ❌ 无 | 🔴 缺失 |
+| **知识关联** | ❌ 无 | ❌ 无 | 🟡 相同 |
+| **重要性评分** | ❌ 无 | ❌ 无 | 🟡 相同 |
+| **标签系统** | ❌ 无 | ❌ 无 | 🟡 相同 |
+| **跨项目共享** | ❌ 无 | ⚠️ 基础 | 🟢 Nezha 更好 |
+| **缓存机制** | ✅ 有 | ❌ 无 | 🔴 缺失 |
+| **文件监控** | ✅ 有 | ❌ 无 | 🔴 缺失 |
 
 ### 2. 功能对比
 
 | 功能 | OpenClaw | Nezha (当前) | Nezha (设计) |
 |------|----------|-------------|-------------|
-| **任务记忆** | ✅ HEARTBEAT.md | ✅ tasks 表 | ✅ tasks 表 |
-| **知识存储** | ⚠️ 代码仓库 | ✅ memories 表 | ✅ memories 表 |
-| **知识检索** | ❌ 无 | ⚠️ 简单搜索 | ✅ 标签 + 向量搜索 |
-| **知识关联** | ❌ 无 | ❌ 无 | ✅ memory_links |
-| **知识评分** | ❌ 无 | ❌ 无 | ✅ importance |
-| **跨 Session** | ❌ 无 | ❌ 无 | ✅ KNOWLEDGE.md |
-| **知识清理** | ❌ 无 | ✅ 自动清理 | ✅ 智能清理 |
+| **向量搜索** | ✅ | ❌ | ⚠️ 设计中 |
+| **关键词搜索** | ✅ BM25 | ⚠️ ILIKE | ⚠️ 设计中 |
+| **混合搜索** | ✅ | ❌ | ⚠️ 设计中 |
+| **MMR 重排序** | ✅ | ❌ | ❌ 未设计 |
+| **时间衰减** | ✅ | ❌ | ✅ 设计中 |
+| **Embedding** | ✅ 5 种 | ❌ | ⚠️ 设计中 |
+| **知识关联** | ❌ | ❌ | ✅ 设计中 |
+| **重要性评分** | ❌ | ❌ | ✅ 设计中 |
+| **标签系统** | ❌ | ❌ | ✅ 设计中 |
+| **跨项目共享** | ❌ | ⚠️ 基础 | ✅ 设计中 |
+| **知识交接班** | ❌ | ❌ | ✅ 设计中 |
+| **去知识泡沫** | ❌ | ❌ | ✅ 设计中 |
 
-### 3. 优劣势分析
+### 3. 关键差距分析
 
-#### OpenClaw 优势
-
-```
-✅ 简单直接
-   - 不需要复杂的记忆系统
-   - AI 通过文件和代码理解上下文
-
-✅ 透明性高
-   - 所有记忆都在文件中
-   - 人类可以直接查看和修改
-
-✅ 版本控制
-   - Git 记录所有变更
-   - 可以回溯历史
-
-✅ 无需维护
-   - 没有数据库需要维护
-   - 没有知识泡沫问题
-```
-
-#### OpenClaw 劣势
+#### OpenClaw 的优势
 
 ```
-❌ 无结构化记忆
-   - 知识散落在代码和文件中
-   - 难以系统化查询
+1. 向量搜索
+   ✅ 使用 Embedding 进行语义搜索
+   ✅ 支持多种 Embedding 提供商
+   ✅ 本地 + 云端混合
 
-❌ 无知识关联
-   - 知识之间没有关联
-   - 难以发现知识网络
+2. 混合搜索
+   ✅ 结合向量和关键词搜索
+   ✅ 加权合并结果
+   ✅ 更准确的检索
 
-❌ 无跨项目共享
-   - 每个项目独立
-   - 知识无法复用
+3. MMR 重排序
+   ✅ 平衡相关性和多样性
+   ✅ 避免重复结果
+   ✅ 提高搜索质量
 
-❌ 无持久化学习
-   - AI 每次都重新学习
-   - 学习成果无法积累
+4. 时间衰减
+   ✅ 根据记忆年龄调整分数
+   ✅ 半衰期机制
+   ✅ 支持常青记忆
+
+5. 完整的生态系统
+   ✅ 文件监控
+   ✅ 缓存机制
+   ✅ 批量处理
+   ✅ 会话管理
 ```
 
-#### Nezha (设计) 优势
+#### Nezha 的优势
 
 ```
-✅ 结构化记忆
-   - 知识存储在数据库中
-   - 支持复杂查询
+1. 跨项目共享
+   ✅ PostgreSQL 统一存储
+   ✅ 项目关联
+   ✅ 跨项目查询
 
-✅ 知识关联
-   - 建立知识网络
-   - 发现知识关系
+2. 设计中的创新
+   ✅ 知识关联
+   ✅ 重要性评分
+   ✅ 知识交接班
+   ✅ 去知识泡沫
+```
 
-✅ 跨项目共享
-   - 统一知识库
+---
+
+## 🎯 关键洞察
+
+### 1. OpenClaw 的记忆系统非常成熟
+
+**OpenClaw 不是简单的隐式记忆系统，而是一个功能完整的显式记忆系统！**
+
+核心特性：
+- ✅ 向量搜索 + 关键词搜索 + 混合搜索
+- ✅ MMR 重排序 + 时间衰减
+- ✅ 多种 Embedding 提供商
+- ✅ 完整的文件监控和缓存机制
+
+### 2. Nezha 需要学习的核心功能
+
+**Nezha 需要实现以下功能才能达到 OpenClaw 的水平**：
+
+```
+优先级 1（核心功能）:
+├── 向量搜索
+├── Embedding 支持
+└── 混合搜索
+
+优先级 2（增强功能）:
+├── MMR 重排序
+├── 时间衰减
+└── 缓存机制
+
+优先级 3（创新功能）:
+├── 知识关联
+├── 重要性评分
+├── 知识交接班
+└── 去知识泡沫
+```
+
+### 3. Nezha 的独特优势
+
+**Nezha 在以下方面有独特优势**：
+
+```
+1. 跨项目共享
+   - PostgreSQL 统一存储
+   - 项目关联
    - 知识复用
 
-✅ 持久化学习
-   - 知识积累
-   - 持续改进
-
-✅ 智能管理
+2. 知识管理创新
+   - 知识关联
    - 重要性评分
-   - 自动清理
+   - 知识交接班
    - 去知识泡沫
 ```
 
-#### Nezha (设计) 劣势
-
-```
-⚠️ 复杂性
-   - 需要数据库
-   - 需要维护
-
-⚠️ 实施成本
-   - 需要实现完整的系统
-   - 需要测试和优化
-
-⚠️ 知识泡沫风险
-   - 可能存储过多知识
-   - 需要清理机制
-```
-
 ---
 
-## 📊 关键洞察
+## 🚀 行动建议
 
-### 1. OpenClaw 的哲学
-
-**"简单即是美"**
-
-- 不需要复杂的记忆系统
-- AI 通过执行任务自然学习
-- 学习成果体现在代码中
-- Git 提供历史记忆
-
-### 2. Nezha 的哲学
-
-**"知识即力量"**
-
-- 结构化存储知识
-- 建立知识网络
-- 跨项目共享知识
-- 持久化学习成果
-
-### 3. 最佳实践
-
-**结合两者优势**：
+### 1. 短期行动（学习 OpenClaw）
 
 ```
-1. 对于简单项目
-   - 使用 OpenClaw 的方式
-   - HEARTBEAT.md + 代码仓库
-   - 简单直接
+1. 实现向量搜索
+   - 添加 Embedding 支持
+   - 使用 pgvector 扩展
+   - 实现语义搜索
 
-2. 对于复杂项目
-   - 使用 Nezha 的方式
-   - 数据库 + 知识管理
-   - 系统化学习
+2. 实现混合搜索
+   - 结合向量和关键词搜索
+   - 加权合并结果
+   - 提高检索准确性
 
-3. 对于多项目管理
-   - 必须使用 Nezha 的方式
-   - 统一知识库
-   - 跨项目共享
+3. 添加时间衰减
+   - 根据记忆年龄调整分数
+   - 实现半衰期机制
 ```
 
----
-
-## 🚀 建议
-
-### 1. 短期建议
+### 2. 中期行动（增强功能）
 
 ```
-1. 保持简单
-   - 先实现基础功能
-   - 不要过度设计
+1. 实现 MMR 重排序
+   - 平衡相关性和多样性
+   - 避免重复结果
 
-2. 学习 OpenClaw
-   - 借鉴 HEARTBEAT.md 机制
-   - 保持透明性
+2. 添加缓存机制
+   - Embedding 缓存
+   - 提高性能
 
-3. 逐步增强
-   - 先实现 Memory Skills
-   - 再实现知识关联
-   - 最后实现智能管理
+3. 文件监控
+   - 自动检测变更
+   - 增量更新
 ```
 
-### 2. 长期建议
+### 3. 长期行动（创新功能）
 
 ```
-1. 完善学习系统
-   - 实现完整的设计
-   - 测试和优化
+1. 知识关联
+   - 建立知识网络
+   - 发现知识关系
 
-2. 积累知识
-   - 在实际项目中使用
-   - 积累有价值的知识
+2. 重要性评分
+   - 知识价值评估
+   - 优先级管理
 
-3. 持续改进
-   - 根据使用情况调整
-   - 优化知识管理策略
+3. 知识交接班
+   - MD + SQL 机制
+   - 跨 Session 记忆
+
+4. 去知识泡沫
+   - 自动清理
+   - 智能管理
 ```
 
 ---
@@ -412,31 +541,47 @@ CREATE TABLE memories (
 
 ### OpenClaw 的记忆系统
 
-- **类型**: 隐式记忆
-- **优势**: 简单、透明、版本控制
-- **劣势**: 无结构化、无关联、无共享
+- **类型**: 显式记忆 + 智能搜索
+- **成熟度**: 非常成熟
+- **核心特性**: 向量搜索、混合搜索、MMR、时间衰减
+- **优势**: 功能完整、性能优秀、生态完善
 
 ### Nezha 当前的记忆系统
 
 - **类型**: 显式记忆（基础）
-- **优势**: 有数据库存储
-- **劣势**: 功能简单，缺少高级特性
+- **成熟度**: 非常基础
+- **核心特性**: 简单 CRUD
+- **优势**: 跨项目共享
 
 ### Nezha 设计的记忆系统
 
 - **类型**: 显式记忆 + 智能管理
-- **优势**: 结构化、关联、共享、智能
-- **劣势**: 复杂性、实施成本
+- **成熟度**: 设计中
+- **核心特性**: 知识关联、重要性评分、知识交接班
+- **优势**: 创新、跨项目
 
 ### 最佳策略
 
-**结合两者优势**：
-- 简单项目：使用 OpenClaw 方式
-- 复杂项目：使用 Nezha 方式
-- 多项目管理：必须使用 Nezha 方式
+**学习 OpenClaw + 创新 Nezha**：
+
+1. **学习 OpenClaw 的核心功能**
+   - 向量搜索
+   - 混合搜索
+   - MMR 重排序
+   - 时间衰减
+
+2. **保持 Nezha 的独特优势**
+   - 跨项目共享
+   - 知识关联
+   - 重要性评分
+
+3. **创新知识管理**
+   - 知识交接班
+   - 去知识泡沫
 
 ---
 
 **创建时间**: 2026-03-16  
-**状态**: 完整对比分析  
-**关键洞察**: OpenClaw 简单有效，Nezha 设计更强大，需要结合两者优势
+**更新时间**: 2026-03-16  
+**状态**: 重大更新 - 发现 OpenClaw 有完整的记忆系统  
+**关键洞察**: OpenClaw 的记忆系统非常成熟，Nezha 需要学习核心功能并保持独特创新
