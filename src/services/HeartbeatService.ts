@@ -33,9 +33,10 @@ export class HeartbeatService {
 
   constructor(
     private readonly db: DatabaseClient,
-    config?: HeartbeatServiceConfig
+    config?: HeartbeatServiceConfig,
+    scheduler?: Scheduler
   ) {
-    this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
+    this.scheduler = scheduler ?? new Scheduler(db, config?.heartbeatIntervalMs);
     this.agent = new Agent();
     this.memory = new MemoryService(db);
     this.workspaceDir = config?.workspaceDir ?? process.cwd();

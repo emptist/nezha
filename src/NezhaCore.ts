@@ -25,11 +25,11 @@ export class NezhaCore {
 
   async initialize(config?: NezhaCoreConfig): Promise<void> {
     this.db = new DatabaseClient(this.config);
+    this.scheduler = new Scheduler(this.db, config?.heartbeatIntervalMs);
     this.heartbeatService = new HeartbeatService(this.db, {
       heartbeatIntervalMs: config?.heartbeatIntervalMs,
       workspaceDir: config?.workspaceDir,
-    });
-    this.scheduler = new Scheduler(this.db, config?.heartbeatIntervalMs);
+    }, this.scheduler);
   }
 
   async start(): Promise<void> {
