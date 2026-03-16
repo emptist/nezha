@@ -33,6 +33,9 @@ export class NezhaCore {
   }
 
   async start(): Promise<void> {
+    if (!this.db || !this.heartbeatService || !this.scheduler) {
+      throw new Error('NezhaCore not initialized. Call initialize() first.');
+    }
     if (this.heartbeatService) {
       await this.heartbeatService.start();
     }

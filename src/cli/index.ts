@@ -14,11 +14,6 @@ interface CountRow {
   count: string;
 }
 
-interface CliArgs {
-  command: string;
-  options: Record<string, string>;
-}
-
 export class Cli {
   private config: Config;
   private db: DatabaseClient | null = null;

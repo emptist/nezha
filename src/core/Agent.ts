@@ -220,7 +220,7 @@ export class Agent {
   }
 
   async createSession(): Promise<AgentSession> {
-    const result = await this.httpRequest('/session', 'POST', '{}');
+    const result = await this.httpRequest('/api/session', 'POST', '{}');
 
     if (!result.ok) {
       const errorMsg = result.status > 0 
@@ -248,7 +248,7 @@ export class Agent {
       parts: [{ type: 'text', text: message }],
     });
 
-    const result = await this.httpRequest(`/session/${sessionId}/message`, 'POST', body);
+    const result = await this.httpRequest(`/api/session/${sessionId}/message`, 'POST', body);
 
     if (!result.ok) {
       const errorMsg = result.status > 0 

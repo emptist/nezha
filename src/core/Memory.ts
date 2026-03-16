@@ -22,12 +22,13 @@ export class MemoryService {
     const tableName = DATABASE_TABLES.MEMORY;
     const now = new Date();
     const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+    const projectId = input.projectId ?? null;
 
     await this.db.query(
       `INSERT INTO ${tableName} (id, project_id, content, metadata, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (id) DO UPDATE SET content = $3, metadata = $4, updated_at = $6`,
-      [input.id, input.projectId, input.content, metadata, now, now]
+      [input.id, projectId, input.content, metadata, now, now]
     );
 
     return input.id;
