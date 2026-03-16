@@ -204,16 +204,17 @@ npm run start:daemon
 nezha task-add "Review code" "Review src/core" 5
 ```
 
-#### 4. 开发计划状态不明
+#### 4. 开发计划已更新 ✅
 
-README 中的开发计划：
-- Phase 1: 基础设施 (Week 1) - 状态未知
-- Phase 2: 记忆系统 (Week 2) - 状态未知
-- Phase 3: 调度系统 (Week 3) - 状态未知
-- Phase 4: 学习系统 (Week 4) - 状态未知
-- Phase 5: 集成测试 (Week 5) - 状态未知
+**之前的问题**: README 包含时间框架的开发计划（Phase 1-5, Week 1-5），状态不明。
 
-**建议**: 使用 GitHub Projects 或更新文档标注每个阶段的完成状态。
+**已解决**: 
+- ✅ 删除了时间框架的开发计划
+- ✅ README 现在准确反映实际实现状态
+- ✅ 每个系统都标注了实现状态（✅ 已实现 / ⚠️ 基础实现）
+- ✅ 添加了架构决策记录说明设计理念
+
+**当前状态**: README 文档准确、及时，与代码实现一致。
 
 ---
 
