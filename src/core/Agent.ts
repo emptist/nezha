@@ -273,7 +273,7 @@ export class Agent {
       return await this.sendMessage(session.id, message);
     } catch (error) {
       const errorDetail = error instanceof Error ? error.message : String(error);
-      logger.error(`[Agent] executeTask failed: ${errorDetail}`);
+      logger.error(`executeTask failed: ${errorDetail}`);
       return {
         success: false,
         message: `Task execution failed: ${errorDetail}`,
