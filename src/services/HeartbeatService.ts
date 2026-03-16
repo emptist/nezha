@@ -4,12 +4,14 @@ import { MemoryService } from '../core/Memory.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { waitForever } from '../utils/wait.js';
+import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../services/embedding/index.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
   workspaceDir?: string;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
+  embedding?: EmbeddingConfig;
 }
 
 export interface HeartbeatHealth {
@@ -48,7 +50,18 @@ export class HeartbeatService {
   ) {
     this.scheduler = scheduler ?? new Scheduler(db, config?.heartbeatIntervalMs);
     this.agent = new Agent();
-    this.memory = new MemoryService(db);
+    
+    let embeddingProvider: EmbeddingProvider | undefined;
+    if (config?.embedding) {
+      try {
+        embeddingProvider = createEmbeddingProvider(config.embedding);
+        console.log(`[Heartbeat] Embedding provider initialized: ${config.embedding.provider}`);
+      } catch (error) {
+        console.error('[Heartbeat] Failed to initialize embedding provider:', error);
+      }
+    }
+    
+    this.memory = new MemoryService(db, undefined, embeddingProvider);
     this.workspaceDir = config?.workspaceDir ?? process.cwd();
     this.autoReconnect = config?.autoReconnect ?? true;
     this.maxReconnectAttempts = config?.maxReconnectAttempts ?? 5;

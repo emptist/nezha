@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Add embedding column to memory table
 ALTER TABLE memory 
-ADD COLUMN IF NOT EXISTS embedding vector(1024);
+ADD COLUMN IF NOT EXISTS embedding vector(768);
 
 -- Add metadata columns for better search
 ALTER TABLE memory
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_project_importance ON memory(project_id, i
 
 -- Function to search memories by vector similarity
 CREATE OR REPLACE FUNCTION search_memories_by_vector(
-    p_query_embedding vector(1024),
+    p_query_embedding vector(768),
     p_project_id UUID DEFAULT NULL,
     p_limit INTEGER DEFAULT 10,
     p_threshold FLOAT DEFAULT 0.7
@@ -111,7 +111,7 @@ $$ LANGUAGE plpgsql;
 -- Function to hybrid search (vector + keyword)
 CREATE OR REPLACE FUNCTION hybrid_search_memories(
     p_query TEXT,
-    p_query_embedding vector(1024),
+    p_query_embedding vector(768),
     p_project_id UUID DEFAULT NULL,
     p_limit INTEGER DEFAULT 10,
     p_vector_weight FLOAT DEFAULT 0.7,
@@ -216,7 +216,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Comment on new columns
-COMMENT ON COLUMN memory.embedding IS 'Vector embedding for semantic search (1024 dimensions from Zhipu AI)';
+COMMENT ON COLUMN memory.embedding IS 'Vector embedding for semantic search (768 dimensions from Ollama nomic-embed-text)';
 COMMENT ON COLUMN memory.tags IS 'Array of tags for categorization and filtering';
 COMMENT ON COLUMN memory.importance IS 'Importance score from 1-10 for prioritization';
 COMMENT ON COLUMN memory.source IS 'Source of the memory (e.g., "user", "ai", "system")';

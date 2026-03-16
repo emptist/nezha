@@ -107,6 +107,7 @@ export interface IConfig {
   getDbConfig(): DbConfig;
   getTaskConfig(): TaskConfig;
   getMemoryConfig(): MemoryConfig;
+  getEmbeddingConfig(): EmbeddingConfig | undefined;
   getEnv(): string;
   validate(): boolean;
 }

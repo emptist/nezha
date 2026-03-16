@@ -1,4 +1,11 @@
-import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types';
+import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
+
+interface ZhipuEmbeddingResponse {
+  data: Array<{
+    index: number;
+    embedding: number[];
+  }>;
+}
 
 export class ZhipuEmbedding implements EmbeddingProvider {
   private apiKey: string;
@@ -38,10 +45,10 @@ export class ZhipuEmbedding implements EmbeddingProvider {
       throw new Error(`Zhipu Embedding API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as ZhipuEmbeddingResponse;
     
     return data.data
-      .sort((a: any, b: any) => a.index - b.index)
-      .map((item: any) => item.embedding);
+      .sort((a, b) => a.index - b.index)
+      .map((item) => item.embedding);
   }
 }

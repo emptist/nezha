@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { ZhipuEmbedding } from '../services/embedding/ZhipuEmbedding';
+import { ZhipuEmbedding } from '../services/embedding/ZhipuEmbedding.js';
 
 describe('ZhipuEmbedding', () => {
-  let embedding: ZhipuEmbedding;
+  let embedding: ZhipuEmbedding | undefined;
 
   beforeAll(() => {
     const apiKey = process.env.ZHIPU_API_KEY;
@@ -29,7 +29,7 @@ describe('ZhipuEmbedding', () => {
 
     expect(result).toBeInstanceOf(Array);
     expect(result.length).toBe(1024);
-    expect(result.every(n => typeof n === 'number')).toBe(true);
+    expect(result.every((n: number) => typeof n === 'number')).toBe(true);
   });
 
   it('should embed multiple texts', async () => {

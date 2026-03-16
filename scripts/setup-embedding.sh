@@ -21,7 +21,26 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_NAME="${DB_NAME:-nezha}"
 DB_USER="${DB_USER:-postgres}"
-DB_PASSWORD="${DB_PASSWORD:-Podbmima.jigm}"
+
+# Get password from Keychain (stored as "Nezha PostgreSQL")
+get_password_from_keychain() {
+    security find-generic-password -s "Nezha PostgreSQL" -w 2>/dev/null
+}
+
+# Get password: Environment > Keychain
+if [ -z "$DB_PASSWORD" ]; then
+    DB_PASSWORD=$(get_password_from_keychain)
+    if [ -n "$DB_PASSWORD" ]; then
+        echo "🔑 Using password from Keychain (Nezha PostgreSQL)"
+    else
+        echo "⚠️  No password found in Keychain or environment"
+        echo "   To store password in Keychain, run:"
+        echo "   security add-generic-password -s \"Nezha PostgreSQL\" -w \"your_password\""
+        echo ""
+        echo "   Or export DB_PASSWORD before running this script"
+        exit 1
+    fi
+fi
 
 # Migration file path
 MIGRATION_FILE="src/db/migrations/003_embedding_support.sql"

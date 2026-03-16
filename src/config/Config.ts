@@ -2,6 +2,7 @@ import {
   type DbConfig,
   type TaskConfig,
   type MemoryConfig,
+  type EmbeddingConfig,
   type NezhaConfig,
   type IConfig,
 } from './types.js';
@@ -36,12 +37,14 @@ export class Config implements IConfig {
     const dbConfig = this.loadDbConfig();
     const taskConfig = this.loadTaskConfig();
     const memoryConfig = this.loadMemoryConfig();
+    const embeddingConfig = this.loadEmbeddingConfig();
     const env = this.loadEnv();
 
     return {
       db: dbConfig,
       task: taskConfig,
       memory: memoryConfig,
+      embedding: embeddingConfig,
       env,
     };
   }
@@ -96,6 +99,24 @@ export class Config implements IConfig {
     };
   }
 
+  private loadEmbeddingConfig(): EmbeddingConfig | undefined {
+    const provider = process.env[ENV_KEYS.EMBEDDING_PROVIDER];
+    if (!provider) {
+      return undefined;
+    }
+
+    if (provider !== 'ollama' && provider !== 'zhipu' && provider !== 'openai') {
+      return undefined;
+    }
+
+    return {
+      provider,
+      model: process.env[ENV_KEYS.EMBEDDING_MODEL] || (provider === 'ollama' ? 'nomic-embed-text' : 'embedding-2'),
+      apiKey: process.env[ENV_KEYS.ZHIPU_API_KEY],
+      apiUrl: process.env[ENV_KEYS.EMBEDDING_API_URL],
+    };
+  }
+
   private loadEnv(): 'development' | 'production' | 'test' {
     const env = process.env[ENV_KEYS.ENV] || ENV_DEFAULT.DEVELOPMENT;
     if (
@@ -118,6 +139,10 @@ export class Config implements IConfig {
 
   getMemoryConfig(): MemoryConfig {
     return { ...this.config.memory };
+  }
+
+  getEmbeddingConfig(): EmbeddingConfig | undefined {
+    return this.config.embedding ? { ...this.config.embedding } : undefined;
   }
 
   getEnv(): string {
