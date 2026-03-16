@@ -47,13 +47,19 @@ export class Config implements IConfig {
   }
 
   private loadDbConfig(): DbConfig {
+    const host = process.env[ENV_KEYS.DB_HOST];
+    const port = process.env[ENV_KEYS.DB_PORT];
+    const database = process.env[ENV_KEYS.DB_NAME];
+    const user = process.env[ENV_KEYS.DB_USER];
+    const password = process.env[ENV_KEYS.DB_PASSWORD];
+    const max = process.env[ENV_KEYS.DB_MAX];
     return {
-      host: process.env[ENV_KEYS.DB_HOST] || DATABASE_CONFIG.DEFAULT_HOST,
-      port: parseInt(process.env[ENV_KEYS.DB_PORT] || String(DATABASE_CONFIG.DEFAULT_PORT), 10),
-      database: process.env[ENV_KEYS.DB_NAME] || 'nezha',
-      user: process.env[ENV_KEYS.DB_USER] || 'postgres',
-      password: process.env[ENV_KEYS.DB_PASSWORD] || '',
-      max: parseInt(process.env[ENV_KEYS.DB_MAX] || String(DATABASE_CONFIG.DEFAULT_MAX), 10),
+      host: host && host.trim() !== '' ? host : DATABASE_CONFIG.DEFAULT_HOST,
+      port: port && port.trim() !== '' ? parseInt(port, 10) : DATABASE_CONFIG.DEFAULT_PORT,
+      database: database && database.trim() !== '' ? database : 'nezha',
+      user: user && user.trim() !== '' ? user : 'postgres',
+      password: password ?? '',
+      max: max && max.trim() !== '' ? parseInt(max, 10) : DATABASE_CONFIG.DEFAULT_MAX,
       idleTimeoutMillis: DATABASE_CONFIG.DEFAULT_IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: DATABASE_CONFIG.DEFAULT_CONNECTION_TIMEOUT_MS,
     };
