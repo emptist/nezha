@@ -19,6 +19,12 @@
 - [x] Commit: 提交更改
 - [x] Push: 推送到远程
 - [x] Update: 更新本清单
+- [x] Review: 分析 Scheduler.ts，发现任务抢取存在竞态条件
+- [x] Fix: 使用 PostgreSQL CTE + FOR UPDATE SKIP LOCKED 实现原子性任务锁定
+- [x] Build: 运行 npm run build 确保编译通过
+- [x] Commit: 提交更改
+- [x] Push: 推送到远程
+- [x] Update: 更新本清单
 
 ## 发现的问题
 
