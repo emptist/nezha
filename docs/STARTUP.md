@@ -38,6 +38,17 @@ tail -f .nezha.log
 node dist/cli/index.js task-add 'Test' 'Say hello' 1
 ```
 
+### 7. 添加带依赖的任务
+
+```bash
+# 首先查看任务ID
+node dist/cli/index.js tasks
+
+# 添加依赖任务
+node dist/cli/index.js task-add 'Deploy' 'Deploy to production' --priority 10 --depends-on <build-task-id>
+node dist/cli/index.js task-add 'Test' 'Run integration tests' --priority 8 --depends-on <build-task-id>
+```
+
 ## 重要说明
 
 - **OpenCode serve 必须运行**: 任务执行依赖 OpenCode API，必须先启动
