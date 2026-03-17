@@ -2,9 +2,11 @@ import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js'
 export { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
 export { ZhipuEmbedding } from './ZhipuEmbedding.js';
 export { OllamaEmbedding } from './OllamaEmbedding.js';
+export { OpenAIEmbedding } from './OpenAIEmbedding.js';
 
 import { ZhipuEmbedding } from './ZhipuEmbedding.js';
 import { OllamaEmbedding } from './OllamaEmbedding.js';
+import { OpenAIEmbedding } from './OpenAIEmbedding.js';
 
 export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvider {
   switch (config.provider) {
@@ -12,7 +14,7 @@ export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvi
       return new ZhipuEmbedding(config);
     
     case 'openai':
-      throw new Error('OpenAI embedding provider not implemented yet');
+      return new OpenAIEmbedding(config);
     
     case 'ollama':
       return new OllamaEmbedding(config);

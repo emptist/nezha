@@ -5,6 +5,7 @@ import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/HeartbeatService.js';
 import { HealthServer } from '../services/HealthServer.js';
+import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
 
 interface TaskRow {
@@ -23,9 +24,11 @@ export class Cli {
   private db: DatabaseClient | null = null;
   private heartbeatService: HeartbeatService | null = null;
   private healthServer: HealthServer | null = null;
+  private checkpointService: CheckpointService;
 
   constructor() {
     this.config = Config.getInstance();
+    this.checkpointService = new CheckpointService();
   }
 
   private async getDb(): Promise<DatabaseClient> {
@@ -88,7 +91,7 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0): Promise<void> {
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[]): Promise<void> {
     if (!title || title.trim().length === 0) {
       throw new Error('Task title is required');
     }
@@ -104,10 +107,14 @@ export class Cli {
     
     const db = await this.getDb();
     await db.query(
-      `INSERT INTO tasks (title, description, status, priority) VALUES ($1, $2, $3, $4)`,
-      [title.trim(), description.trim(), TASK_STATUS.PENDING, priority]
+      `INSERT INTO tasks (title, description, status, priority, depends_on) VALUES ($1, $2, $3, $4, $5)`,
+      [title.trim(), description.trim(), TASK_STATUS.PENDING, priority, dependsOn || []]
     );
-    console.log(`Task added: ${title}`);
+    if (dependsOn && dependsOn.length > 0) {
+      console.log(`Task added: ${title} (depends on: ${dependsOn.join(', ')})`);
+    } else {
+      console.log(`Task added: ${title}`);
+    }
   }
 
   async addContinuousImprovementTask(): Promise<void> {
@@ -158,12 +165,27 @@ async function main(): Promise<void> {
       break;
     case 'task-add':
       const title = args[1];
-      const description = args[2] ?? '';
-      const priority = parseInt(args[3] ?? '0', 10);
+      let description = args[2] ?? '';
+      let priority = parseInt(args[3] ?? '0', 10);
+      let dependsOn: string[] | undefined;
+      
+      // Check for --depends-on flag
+      const dependsOnIndex = args.indexOf('--depends-on');
+      if (dependsOnIndex !== -1 && dependsOnIndex < args.length - 1) {
+        dependsOn = args.slice(dependsOnIndex + 1).filter(a => !a.startsWith('--'));
+      }
+      
+      // Check for --priority flag
+      const priorityIndex = args.indexOf('--priority');
+      if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
+        priority = parseInt(args[priorityIndex + 1], 10);
+      }
+      
       if (title) {
-        await cli.addTask(title, description, priority);
+        await cli.addTask(title, description, priority, dependsOn);
       } else {
-        console.error('Usage: nezha task-add <title> [description] [priority]');
+        console.error('Usage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid1> <uuid2> ...]')
+  ;
       }
       break;
     case 'tasks':
@@ -185,9 +207,15 @@ Commands:
   tasks                       List pending tasks
   help                        Show this help message
 
+Options:
+  --priority <n>              Task priority (0-100)
+  --depends-on <uuid>        Task IDs this task depends on
+
 Examples:
   nezha start
-  nezha task-add "Review code" "Review src/core for issues" 5
+  nezha task-add "Review code" "Review src/core for issues" --priority 5
+  nezha task-add "Deploy" "Deploy to production" --depends-on build-task-id
+  nezha task-add "Test" "" --priority 10 --depends-on build-task-id integration-task-id
   nezha tasks
 `);
       break;

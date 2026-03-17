@@ -210,6 +210,22 @@ export class HeartbeatService {
     this.stats.tasksFailed++;
   }
 
+  private async runReflection(taskTitle: string, taskResult: string): Promise<void> {
+    try {
+      const reflectionPrompt = await this.selfImprovement.getReflectionPrompt(taskTitle, taskResult);
+      
+      const reflectionResult = await this.agent.executeTask(reflectionPrompt);
+      
+      if (reflectionResult.success) {
+        logger.debug('Reflection completed for task:', taskTitle);
+      } else {
+        logger.warn('Reflection failed:', reflectionResult.message);
+      }
+    } catch (error) {
+      logger.warn('Reflection error (non-fatal):', error);
+    }
+  }
+
   isRunning(): boolean {
     return this.scheduler.isActive();
   }

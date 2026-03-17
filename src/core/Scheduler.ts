@@ -121,20 +121,26 @@ export class Scheduler {
     );
     
     // Find and lock pending task atomically to prevent race conditions
-    const result = await this.db.query<{ id: string; title: string; description: string }>(
-      `WITH locked_task AS (
-        SELECT id, title, description 
+    // Only select tasks whose dependencies are all COMPLETED
+    const result = await this.db.query<{ id: string; title: string; description: string; depends_on: string[] }>(
+      `WITH eligible_tasks AS (
+        SELECT id, title, description, depends_on 
         FROM ${tableName} 
         WHERE status = $1 
+        AND (depends_on IS NULL OR depends_on = '{}'::uuid[] OR NOT EXISTS (
+          SELECT 1 FROM tasks t 
+          WHERE t.id = ANY(${tableName}.depends_on) 
+          AND t.status != $2
+        ))
         ORDER BY priority DESC, created_at ASC 
         LIMIT 1 
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = $2, updated_at = NOW() 
-      WHERE id = (SELECT id FROM locked_task)
-      RETURNING id, title, description`,
-      [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
+      SET status = $3, updated_at = NOW() 
+      WHERE id = (SELECT id FROM eligible_tasks)
+      RETURNING id, title, description, depends_on`,
+      [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
     );
     
     if (result.rows.length > 0) {
