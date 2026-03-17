@@ -22,6 +22,7 @@ export class Cli {
   private config: Config;
   private db: DatabaseClient | null = null;
   private heartbeatService: HeartbeatService | null = null;
+  private healthServer: HealthServer | null = null;
 
   constructor() {
     this.config = Config.getInstance();
@@ -43,6 +44,9 @@ export class Cli {
     });
     await this.heartbeatService.start();
     
+    this.healthServer = new HealthServer(db, 4097);
+    await this.healthServer.start();
+    
     // Handle graceful shutdown
     process.on('SIGINT', async () => {
       await this.stop();
@@ -58,6 +62,9 @@ export class Cli {
   async stop(): Promise<void> {
     if (this.heartbeatService) {
       await this.heartbeatService.stop();
+    }
+    if (this.healthServer) {
+      await this.healthServer.stop();
     }
   }
 
