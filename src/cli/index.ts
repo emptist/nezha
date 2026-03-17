@@ -8,6 +8,7 @@ import { HealthServer } from '../services/HealthServer.js';
 import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
+import { cli, colors } from '../utils/cli.js';
 import { 
   sanitizeTaskTitle, 
   sanitizeTaskDescription, 
@@ -179,57 +180,94 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[]): Promise<void> {
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], dryRun: boolean = false)
+  : Promise<void> {
+    cli.step('Validating task input...');
+    
     const titleResult = sanitizeTaskTitle(title);
     if (!titleResult.valid) {
-      throw new Error(titleResult.error);
+      cli.error(`Invalid title: ${titleResult.error}`);
+      process.exit(1);
     }
     
     const descResult = sanitizeTaskDescription(description);
     if (!descResult.valid) {
-      throw new Error(descResult.error);
+      cli.error(`Invalid description: ${descResult.error}`);
+      process.exit(1);
     }
     
     const priorityResult = sanitizePriority(priority);
     if (!priorityResult.valid) {
-      throw new Error(priorityResult.error);
+      cli.error(`Invalid priority: ${priorityResult.error}`);
+      process.exit(1);
     }
-    
+
+    const taskData = {
+      title: titleResult.sanitized,
+      description: descResult.sanitized || '',
+      priority: parseInt(priorityResult.sanitized || '0', 10),
+      dependsOn: dependsOn || [],
+    };
+
+    if (dryRun) {
+      cli.dryRun('Would create task:');
+      cli.dim(JSON.stringify(taskData, null, 2));
+      return;
+    }
+
     const db = await this.getDb();
     await db.query(
       `INSERT INTO tasks (title, description, status, priority, depends_on) VALUES ($1, $2, $3, $4, $5)`,
-      [titleResult.sanitized, descResult.sanitized || '', TASK_STATUS.PENDING, parseInt(priorityResult.sanitized || '0',
-   10), dependsOn || []]
+      [taskData.title, taskData.description, TASK_STATUS.PENDING, taskData.priority, taskData.dependsOn]
     );
+    
     if (dependsOn && dependsOn.length > 0) {
-      console.log(`Task added: ${titleResult.sanitized} (depends on: ${dependsOn.join(', ')})`);
+      cli.success(`Task created: "${taskData.title}" (depends on: ${dependsOn.join(', ')})`);
     } else {
-      console.log(`Task added: ${titleResult.sanitized}`);
+      cli.success(`Task created: "${taskData.title}"`);
     }
   }
 
-  async scheduleTask(name: string, description: string, cronExpression: string, priority: number = 0): Promise<void> {
+  async scheduleTask(name: string, description: string, cronExpression: string, priority: number = 0, dryRun: boolean = 
+  false): Promise<void> {
+    cli.step('Validating scheduled task...');
+    
     if (!name || name.trim().length === 0) {
-      throw new Error('Task name is required');
+      cli.error('Task name is required');
+      process.exit(1);
     }
     if (!cronExpression || cronExpression.trim().length === 0) {
-      throw new Error('Cron expression is required');
+      cli.error('Cron expression is required');
+      process.exit(1);
     }
     
-    const db = await this.getDb();
-    
-    // Validate cron expression (basic check)
     const cronParts = cronExpression.trim().split(/\s+/);
     if (cronParts.length !== 5) {
-      throw new Error('Invalid cron expression: expected 5 parts (minute hour day month weekday)');
+      cli.error(`Invalid cron expression: expected 5 parts (minute hour day month weekday), got ${cronParts.length}`);
+      process.exit(1);
     }
+
+    const taskData = {
+      name: name.trim(),
+      description: description.trim(),
+      cronExpression,
+      priority,
+    };
+
+    if (dryRun) {
+      cli.dryRun('Would create scheduled task:');
+      cli.dim(JSON.stringify(taskData, null, 2));
+      return;
+    }
+
+    const db = await this.getDb();
     
     await db.query(
       `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, next_run) 
        VALUES ($1, $2, $3, $4, NOW())`,
-      [name.trim(), description.trim(), cronExpression, priority]
+      [taskData.name, taskData.description, taskData.cronExpression, taskData.priority]
     );
-    console.log(`Scheduled task added: ${name} (cron: ${cronExpression})`);
+    cli.success(`Scheduled task created: "${name}" (cron: ${cronExpression})`);
   }
 
   async addContinuousImprovementTask(): Promise<void> {
@@ -250,7 +288,7 @@ export class Cli {
 
   async listTasks(tag?: string, status?: string): Promise<void> {
     const db = await this.getDb();
-    let query = `SELECT id, title, status, priority, tags FROM tasks WHERE 1=1`;
+    let query = `SELECT id, title, status, priority, tags, created_at FROM tasks WHERE 1=1`;
     const params: (string | number)[] = [];
     let paramIndex = 1;
 
@@ -266,13 +304,24 @@ export class Cli {
       paramIndex++;
     }
 
-    query += ` ORDER BY priority DESC, created_at DESC LIMIT 10`;
+    query += ` ORDER BY priority DESC, created_at DESC LIMIT 20`;
 
     const result = await db.query<TaskRow>(query, params);
-    for (const row of result.rows) {
-      const tagStr = row.tags && row.tags.length > 0 ? ` [${row.tags.join(', ')}]` : '';
-      console.log(`  [${row.status}] ${row.title} (priority: ${row.priority})${tagStr}`);
+
+    if (result.rows.length === 0) {
+      cli.info('No tasks found');
+      return;
     }
+
+    cli.info(`Found ${result.rows.length} task(s):\n`);
+    cli.table(['Status', 'Title', 'Priority', 'Tags'], 
+      result.rows.map(row => [
+        row.status,
+        row.title.substring(0, 40) + (row.title.length > 40 ? '...' : ''),
+        row.priority.toString(),
+        (row.tags || []).join(', ')
+      ])
+    );
   }
 }
 
@@ -280,81 +329,139 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0] ?? 'help';
   
-  const cli = new Cli();
+  const cliInstance = new Cli();
 
-  switch (command) {
-    case 'start':
-      await cli.start();
-      break;
-    case 'stop':
-      await cli.stop();
-      break;
-    case 'status':
-      await cli.status();
-      break;
-    case 'health':
-      await cli.health();
-      break;
-    case 'task-add':
-      const title = args[1];
-      let description = args[2] ?? '';
-      let priority = 0;
-      let dependsOn: string[] | undefined;
-      
-      // Check for --priority flag first (should override positional)
-      const priorityIndex = args.indexOf('--priority');
-      if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
-        priority = parseInt(args[priorityIndex + 1], 10) || 0;
-      } else if (args[3] && !args[3].startsWith('--')) {
-        // Fall back to positional argument if it's not a flag
-        priority = parseInt(args[3], 10) || 0;
+  try {
+    switch (command) {
+      case 'start':
+        cli.info('Starting Nezha...');
+        await cliInstance.start();
+        break;
+        
+      case 'stop':
+        cli.info('Stopping Nezha...');
+        await cliInstance.stop();
+        cli.success('Nezha stopped');
+        break;
+        
+      case 'status':
+        await cliInstance.status();
+        break;
+        
+      case 'health':
+        await cliInstance.health();
+        break;
+        
+      case 'task-add': {
+        const title = args[1];
+        let description = args[2] ?? '';
+        let priority = 0;
+        let dependsOn: string[] | undefined;
+        const dryRun = args.includes('--dry-run');
+        
+        const priorityIndex = args.indexOf('--priority');
+        if (priorityIndex !== -1 && priorityIndex + 1 < args.length) {
+          const priorityValue = args[priorityIndex + 1];
+          if (priorityValue && !priorityValue.startsWith('--')) {
+            priority = parseInt(priorityValue, 10) || 0;
+          }
+        }
+        
+        const dependsOnIndex = args.indexOf('--depends-on');
+        if (dependsOnIndex !== -1 && dependsOnIndex < args.length - 1) {
+          dependsOn = args.slice(dependsOnIndex + 1).filter(a => !a.startsWith('--'));
+        }
+        
+        if (!title) {
+          cli.error('Task title is required');
+          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--dry-run]');
+          console.log('\nExamples:');
+          console.log('  nezha task-add "Review PR #123" "Check for bugs" --priority 5');
+          console.log('  nezha task-add "Deploy" "Deploy to prod" --depends-on build-id --dry-run');
+          process.exit(1);
+        }
+        
+        await cliInstance.addTask(title, description, priority, dependsOn, dryRun);
+        break;
       }
       
-      // Check for --depends-on flag
-      const dependsOnIndex = args.indexOf('--depends-on');
-      if (dependsOnIndex !== -1 && dependsOnIndex < args.length - 1) {
-        dependsOn = args.slice(dependsOnIndex + 1).filter(a => !a.startsWith('--'));
+      case 'schedule': {
+        const name = args[1];
+        const description = args[2] ?? '';
+        const cronExpression = args[3];
+        let priority = 0;
+        const dryRun = args.includes('--dry-run');
+        
+        const priorityIndex = args.indexOf('--priority');
+        if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
+          priority = parseInt(args[priorityIndex + 1], 10) || 0;
+        }
+        
+        if (!name || !cronExpression) {
+          cli.error('Task name and cron expression are required');
+          console.log('\nUsage: nezha schedule <name> <description> <cron> [--priority <n>] [--dry-run]');
+          console.log('\nExamples:');
+          console.log('  nezha schedule "Daily Cleanup" "Clean up old data" "0 2 * * *"');
+          process.exit(1);
+        }
+        
+        await cliInstance.scheduleTask(name, description, cronExpression, priority, dryRun);
+        break;
       }
       
-      if (title) {
-        await cli.addTask(title, description, priority, dependsOn);
-      } else {
-        console.error('Usage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid1> <uuid2> ...]')
-  ;
+      case 'tasks': {
+        const tagIndex = args.indexOf('--tag');
+        const statusIndex = args.indexOf('--status');
+        const tag = tagIndex !== -1 ? args[tagIndex + 1] : undefined;
+        const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+        
+        await cliInstance.listTasks(tag, status);
+        break;
       }
-      break;
-    case 'tasks':
-      await cli.listTasks();
-      break;
-    case 'help':
-    default:
-      console.log(`
-Nezha CLI - Task automation with continuous improvement
-
-Usage: nezha <command>
-
-Commands:
-  start                       Start the heartbeat service
-  stop                        Stop the heartbeat service
-  status                      Show current status
-  health                      Show health information
-  task-add <title> [desc]     Add a new task
-  tasks                       List pending tasks
-  help                        Show this help message
-
-Options:
-  --priority <n>              Task priority (0-100)
-  --depends-on <uuid>        Task IDs this task depends on
-
-Examples:
-  nezha start
-  nezha task-add "Review code" "Review src/core for issues" --priority 5
-  nezha task-add "Deploy" "Deploy to production" --depends-on build-task-id
-  nezha task-add "Test" "" --priority 10 --depends-on build-task-id integration-task-id
-  nezha tasks
-`);
-      break;
+      
+      case 'help':
+      default:
+        showHelp();
+        break;
+    }
+  } catch (error) {
+    cli.error(error instanceof Error ? error.message : String(error));
+    if (process.env.DEBUG) {
+      console.error(error);
+    }
+    process.exit(1);
   }
+}
+
+function showHelp(): void {
+  cli.header('Nezha CLI - Autonomous Development System');
+  console.log(`
+${colors.bright}Usage:${colors.reset} nezha <command> [options]
+
+${colors.bright}Commands:${colors.reset}
+  start                         Start the heartbeat service
+  stop                          Stop the heartbeat service
+  status                        Show current status
+  health                        Show health information
+  task-add <title> [desc]      Add a new task
+  schedule <name> <desc> <cron> Create a scheduled task
+  tasks [--tag <tag>]          List tasks
+  help                          Show this help
+
+${colors.bright}Options:${colors.reset}
+  --priority <n>                Task priority (0-100)
+  --depends-on <uuid...>       Task IDs this task depends on
+  --tag <tag>                  Filter by tag
+  --status <status>            Filter by status
+  --dry-run                    Show what would be done without executing
+
+${colors.bright}Examples:${colors.reset}
+  ${colors.cyan}$ nezha start${colors.reset}
+  ${colors.cyan}$ nezha task-add "Review PR #123" "Check for bugs" --priority 5${colors.reset}
+  ${colors.cyan}$ nezha task-add "Deploy" "Deploy to prod" --depends-on build-uuid --dry-run${colors.reset}
+  ${colors.cyan}$ nezha schedule "Daily Cleanup" "Clean up" "0 2 * * *" --priority 10${colors.reset}
+  ${colors.cyan}$ nezha tasks --status PENDING --tag urgent${colors.reset}
+`);
 }
 
 main();

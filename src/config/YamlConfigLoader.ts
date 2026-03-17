@@ -110,8 +110,14 @@ export class YamlConfigLoader {
 
   private parseValue(value: string): unknown {
     // Parse numbers
-    if (/^\d+$/.test(value)) return parseInt(value, 10);
-    if (/^\d+\.\d+$/.test(value)) return parseFloat(value);
+    if (/^\d+$/.test(value)) {
+      const parsed = parseInt(value, 10);
+      if (!isNaN(parsed)) return parsed;
+    }
+    if (/^\d+\.\d+$/.test(value)) {
+      const parsed = parseFloat(value);
+      if (!isNaN(parsed)) return parsed;
+    }
     
     // Parse booleans
     if (value === 'true') return true;
@@ -126,20 +132,34 @@ export class YamlConfigLoader {
     return value;
   }
 
+  private parseEnvInt(key: string): number | undefined {
+    const value = process.env[key];
+    if (!value) return undefined;
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed)) {
+      throw new Error(`Invalid environment variable ${key}: "${value}" is not a valid integer`);
+    }
+    return parsed;
+  }
+
   // Merge with environment variables (env takes precedence)
   mergeWithEnv(config: NezhaYamlConfig): NezhaYamlConfig {
     const merged = { ...config };
 
     // Database env overrides
     if (process.env.DB_HOST) (merged.database ??= {}).host = process.env.DB_HOST;
-    if (process.env.DB_PORT) (merged.database ??= {}).port = parseInt(process.env.DB_PORT, 10);
+    if (process.env.DB_PORT) {
+      const port = this.parseEnvInt('DB_PORT');
+      if (port !== undefined) (merged.database ??= {}).port = port;
+    }
     if (process.env.DB_NAME) (merged.database ??= {}).database = process.env.DB_NAME;
     if (process.env.DB_USER) (merged.database ??= {}).user = process.env.DB_USER;
     if (process.env.DB_PASSWORD) (merged.database ??= {}).password = process.env.DB_PASSWORD;
 
     // Task env overrides
     if (process.env.HEARTBEAT_INTERVAL_MS) {
-      (merged.task ??= {}).heartbeatIntervalMs = parseInt(process.env.HEARTBEAT_INTERVAL_MS, 10);
+      const interval = this.parseEnvInt('HEARTBEAT_INTERVAL_MS');
+      if (interval !== undefined) (merged.task ??= {}).heartbeatIntervalMs = interval;
     }
 
     // Embedding env overrides
@@ -152,7 +172,8 @@ export class YamlConfigLoader {
 
     // Health env overrides
     if (process.env.HEALTH_PORT) {
-      (merged.health ??= {}).port = parseInt(process.env.HEALTH_PORT, 10);
+      const port = this.parseEnvInt('HEALTH_PORT');
+      if (port !== undefined) (merged.health ??= {}).port = port;
     }
 
     // Webhook env overrides

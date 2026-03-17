@@ -1,7 +1,7 @@
 import { Scheduler } from '../core/Scheduler.js';
 import { Agent } from '../core/Agent.js';
 import { MemoryService } from '../core/Memory.js';
-import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
+import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { waitForever } from '../utils/wait.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../services/embedding/index.js';
@@ -49,6 +49,8 @@ export class HeartbeatService {
     reconnectAttempts: 0,
   };
   private abortController: AbortController | null = null;
+  private memoryCleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly memoryCleanupIntervalMs: number;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -79,6 +81,7 @@ export class HeartbeatService {
     this.autoReconnect = config?.autoReconnect ?? true;
     this.maxReconnectAttempts = config?.maxReconnectAttempts ?? 5;
     this.heartbeatIntervalMs = config?.heartbeatIntervalMs ?? 60000;
+    this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     
     // Connect scheduler to task execution
     this.scheduler.onTaskReady = this.executeTask.bind(this);
@@ -88,7 +91,23 @@ export class HeartbeatService {
     logger.info('Starting HeartbeatService...');
     this.abortController = new AbortController();
     
+    this.startMemoryCleanup();
+    
     await this.runContinuousLoop();
+  }
+
+  private startMemoryCleanup(): void {
+    logger.info(`Starting memory cleanup (interval: ${this.memoryCleanupIntervalMs}ms)`);
+    this.memoryCleanupTimer = setInterval(async () => {
+      try {
+        const deleted = await this.memory.deleteOldMemories();
+        if (deleted > 0) {
+          logger.info(`Cleaned up ${deleted} old memories`);
+        }
+      } catch (error) {
+        logger.error('Memory cleanup failed:', error);
+      }
+    }, this.memoryCleanupIntervalMs);
   }
 
   private async runContinuousLoop(): Promise<void> {
@@ -146,6 +165,11 @@ export class HeartbeatService {
 
   async stop(): Promise<void> {
     logger.info('Stopping HeartbeatService...');
+    
+    if (this.memoryCleanupTimer) {
+      clearInterval(this.memoryCleanupTimer);
+      this.memoryCleanupTimer = null;
+    }
     
     this.abortController?.abort();
     

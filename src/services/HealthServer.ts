@@ -5,8 +5,15 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { getMetricsRegistry, createStandardMetrics } from './MetricsService.js';
+import { getCache } from './CacheService.js';
 
 const standardMetrics = createStandardMetrics();
+
+const HEALTH_CACHE_TTL_MS = 30000; // 30 seconds
+const METRICS_CACHE_TTL_MS = 60000; // 60 seconds
+
+const healthCache = getCache<HealthResponse>('health', { ttlMs: HEALTH_CACHE_TTL_MS, maxSize: 10 });
+const metricsCache = getCache<any>('metrics', { ttlMs: METRICS_CACHE_TTL_MS, maxSize: 10 });
 
 export interface HealthResponse {
   status: 'healthy' | 'unhealthy';
@@ -174,7 +181,15 @@ export class HealthServer {
   }
 
   async getHealth(): Promise<HealthResponse> {
+    const cached = healthCache.get('health');
+    if (cached) {
+      return cached;
+    }
+
     const uptime = Math.floor((Date.now() - this.startTime) / 1000);
+
+    const dbHealth = await this.db.healthCheck();
+    const poolStats = this.db.getPoolStats();
 
     const tasksResult = await this.db.query<{ status: string; count: string }>(
       `SELECT status, COUNT(*) as count FROM tasks GROUP BY status`
@@ -186,9 +201,6 @@ export class HealthServer {
       completed_today: 0,
       failed_today: 0,
     };
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     for (const row of tasksResult.rows) {
       const count = parseInt(row.count, 10);
@@ -215,9 +227,35 @@ export class HealthServer {
        FROM ${DATABASE_TABLES.MEMORY}`
     );
 
-    return {
-      status: 'healthy',
+    const health: HealthResponse = {
+      status: dbHealth.healthy ? 'healthy' : 'unhealthy',
       uptime,
+      checks: {
+        database: {
+          status: dbHealth.healthy ? 'ok' : 'error',
+          latency_ms: dbHealth.latency_ms,
+          pool: {
+            total: poolStats.totalConnections,
+            idle: poolStats.idleConnections,
+            active: poolStats.activeConnections,
+            waiting: poolStats.waitingClients,
+          },
+          error: dbHealth.error,
+        },
+        opencode_api: {
+          status: 'not_configured',
+        },
+        disk_space: {
+          status: 'ok',
+        },
+        task_queue: {
+          status: 'ok',
+          pending: taskCounts.pending,
+          running: taskCounts.running,
+          failed: taskCounts.failed_today,
+          queue_depth: taskCounts.pending + taskCounts.running,
+        },
+      },
       tasks: taskCounts,
       memory: {
         total_memories: parseInt(memoryResult.rows[0]?.total || '0', 10),
@@ -227,35 +265,46 @@ export class HealthServer {
         { id: 'main', status: 'idle' }
       ]
     };
+
+    healthCache.set('health', health);
+    return health;
   }
 
   async getMetrics(): Promise<MetricsResponse> {
+    const cached = metricsCache.get('metrics');
+    if (cached) {
+      return cached;
+    }
+
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    const tasksPerHourResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tasks 
-       WHERE status = $1 AND completed_at > $2`,
-      [TASK_STATUS.COMPLETED, oneHourAgo]
-    );
-
-    const totalCompletedResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
-      [TASK_STATUS.COMPLETED]
-    );
-
-    const totalFailedResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
-      [TASK_STATUS.FAILED]
-    );
-
-    const avgDurationResult = await this.db.query<{ avg: string }>(
-      `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - created_at))) as avg 
-       FROM tasks 
-       WHERE status = $1 AND completed_at IS NOT NULL`,
-      [TASK_STATUS.COMPLETED]
-    );
+    const [tasksPerHourResult, totalCompletedResult, totalFailedResult, avgDurationResult, memoryWithEmbeddings] = await Promise.all([
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks 
+         WHERE status = $1 AND completed_at > $2`,
+        [TASK_STATUS.COMPLETED, oneHourAgo]
+      ),
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
+        [TASK_STATUS.COMPLETED]
+      ),
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
+        [TASK_STATUS.FAILED]
+      ),
+      this.db.query<{ avg: string }>(
+        `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - created_at))) as avg 
+         FROM tasks 
+         WHERE status = $1 AND completed_at IS NOT NULL`,
+        [TASK_STATUS.COMPLETED]
+      ),
+      this.db.query<{ total: string; with_embedding: string }>(
+        `SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE embedding IS NOT NULL) as with_embedding
+         FROM ${DATABASE_TABLES.MEMORY}`
+      ),
+    ]);
 
     const completed = parseInt(totalCompletedResult.rows[0]?.count || '0', 10);
     const failed = parseInt(totalFailedResult.rows[0]?.count || '0', 10);
@@ -265,22 +314,18 @@ export class HealthServer {
     const avgDuration = parseFloat(avgDurationResult.rows[0]?.avg || '0') * 1000;
     const successRate = total > 0 ? completed / total : 0;
 
-    const memoryWithEmbeddings = await this.db.query<{ total: string; with_embedding: string }>(
-      `SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE embedding IS NOT NULL) as with_embedding
-       FROM ${DATABASE_TABLES.MEMORY}`
-    );
-
     const memTotal = parseInt(memoryWithEmbeddings.rows[0]?.total || '0', 10);
     const memIndexed = parseInt(memoryWithEmbeddings.rows[0]?.with_embedding || '0', 10);
     const memoryRecallRate = memTotal > 0 ? memIndexed / memTotal : 0;
 
-    return {
+    const metrics: MetricsResponse = {
       tasks_per_hour: tasksPerHour,
       avg_task_duration: Math.round(avgDuration),
       success_rate: Math.round(successRate * 100) / 100,
       memory_recall_rate: Math.round(memoryRecallRate * 100) / 100,
     };
+
+    metricsCache.set('metrics', metrics);
+    return metrics;
   }
 }

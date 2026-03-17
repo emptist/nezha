@@ -24,7 +24,15 @@
     "clean": "rm -rf dist",
     "db:reset": "tsx scripts/reset-db.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "typecheck:watch": "tsc --noEmit --watch"
+    "typecheck:watch": "tsc --noEmit --watch",
+    "dev:task": "tsx src/cli/index.ts task-add",
+    "dev:tasks": "tsx src/cli/index.ts tasks",
+    "dev:health": "curl -s http://localhost:4097/health | jq",
+    "dev:logs": "tail -f .tmp/nezha.log",
+    "dev:repl": "tsx -r tsx repl",
+    "dev:quick": "npm run typecheck && npm run build && node dist/cli/index.js",
+    "predev": "npm run typecheck",
+    "prebuild": "npm run typecheck"
   },
   "keywords": [
     "nezha",

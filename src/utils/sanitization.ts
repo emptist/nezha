@@ -8,7 +8,10 @@ export interface ValidationResult {
 
 const MAX_TITLE_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_SEARCH_LENGTH = 1000;
+const MAX_MEMORY_CONTENT = 50000;
 const MAX_TAGS = 10;
+const MAX_TAG_LENGTH = 50;
 
 export function sanitizeTaskTitle(input: string | undefined): ValidationResult {
   if (!input || input.trim().length === 0) {
@@ -44,6 +47,41 @@ export function sanitizeTaskDescription(input: string | undefined): ValidationRe
   return { valid: true, sanitized };
 }
 
+export function sanitizeSearchQuery(input: string | undefined): ValidationResult {
+  if (!input || input.trim().length === 0) {
+    return { valid: false, error: 'Search query is required' };
+  }
+
+  if (input.length > MAX_SEARCH_LENGTH) {
+    return { valid: false, error: `Search query must be less than ${MAX_SEARCH_LENGTH} characters` };
+  }
+
+  // Escape LIKE wildcards to prevent injection
+  const sanitized = input
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[%_]/g, '\\$&')
+    .trim();
+
+  return { valid: true, sanitized };
+}
+
+export function sanitizeMemoryContent(input: string | undefined): ValidationResult {
+  if (!input || input.trim().length === 0) {
+    return { valid: false, error: 'Memory content is required' };
+  }
+
+  if (input.length > MAX_MEMORY_CONTENT) {
+    return { valid: false, error: `Memory content must be less than ${MAX_MEMORY_CONTENT} characters` };
+  }
+
+  // Remove null bytes and control characters (allow extended unicode)
+  const sanitized = input
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+
+  return { valid: true, sanitized };
+}
+
 export function sanitizeTags(input: string[] | undefined): ValidationResult {
   if (!input || input.length === 0) {
     return { valid: true, sanitized: '[]' };
@@ -53,10 +91,12 @@ export function sanitizeTags(input: string[] | undefined): ValidationResult {
     return { valid: false, error: `Maximum ${MAX_TAGS} tags allowed` };
   }
 
-  // Sanitize each tag
+  // Sanitize each tag - alphanumeric, hyphens, underscores only
   const sanitized = input
     .map(tag => tag.trim().replace(/[\x00-\x1F\x7F]/g, ''))
-    .filter(tag => tag.length > 0 && tag.length <= 50);
+    .filter(tag => tag.length > 0 && tag.length <= MAX_TAG_LENGTH)
+    .map(tag => tag.replace(/[^a-zA-Z0-9\-_]/g, ''))
+    .slice(0, MAX_TAGS);
 
   return { valid: true, sanitized: JSON.stringify(sanitized) };
 }
@@ -132,4 +172,20 @@ export function sanitizeApiKey(input: string | undefined): ValidationResult {
   }
 
   return { valid: true, sanitized: input };
+}
+
+export function escapeHtml(input: string): string {
+  const htmlEntities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#x27;',
+    '/': '&#x2F;',
+  };
+  return input.replace(/[&<>"'/]/g, char => htmlEntities[char] || char);
+}
+
+export function stripHtml(input: string): string {
+  return input.replace(/<[^>]*>/g, '');
 }

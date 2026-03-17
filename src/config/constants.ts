@@ -38,6 +38,7 @@ export const SCHEDULER_CONFIG = {
 export const MEMORY_CONFIG = {
   DEFAULT_BOOTSTRAP_DIR: './bootstrap',
   DEFAULT_MAX_MEMORY_AGE_MS: 86400000 * 30,
+  DEFAULT_CLEANUP_INTERVAL_MS: 3600000,
 } as const;
 
 export const ENV_KEYS = {

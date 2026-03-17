@@ -116,11 +116,21 @@ export class WebhookService {
 
 // Environment-based webhook config
 export function createWebhookConfigFromEnv(): WebhookConfig {
+  const parseEnvInt = (key: string, fallback: number): number => {
+    const value = process.env[key];
+    if (!value) return fallback;
+    const parsed = parseInt(value, 10);
+    if (isNaN(parsed)) {
+      throw new Error(`Invalid environment variable ${key}: "${value}" is not a valid integer`);
+    }
+    return parsed;
+  };
+
   return {
     url: process.env.WEBHOOK_URL,
     secret: process.env.WEBHOOK_SECRET,
-    retryCount: parseInt(process.env.WEBHOOK_RETRY_COUNT ?? '3', 10),
-    retryDelayMs: parseInt(process.env.WEBHOOK_RETRY_DELAY ?? '1000', 10),
+    retryCount: parseEnvInt('WEBHOOK_RETRY_COUNT', 3),
+    retryDelayMs: parseEnvInt('WEBHOOK_RETRY_DELAY', 1000),
     enabled: process.env.WEBHOOK_URL ? true : false,
   };
 }

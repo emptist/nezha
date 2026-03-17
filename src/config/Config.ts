@@ -23,6 +23,15 @@ function parseIntEnv(value: string | undefined, defaultValue: number, key: strin
   return parsed;
 }
 
+function parseIntEnvOptional(value: string | undefined, key: string): number | undefined {
+  if (!value) return undefined;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    throw new Error(`Invalid value for ${key}: "${value}" is not a valid integer`);
+  }
+  return parsed;
+}
+
 export class Config implements IConfig {
   private static instance: Config | null = null;
   private readonly config: NezhaConfig;

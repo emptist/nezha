@@ -3,6 +3,11 @@ import { DATABASE_TABLES, MEMORY_CONFIG } from '../config/constants.js';
 import { type Memory, type MemoryFilter, type QueryResult } from '../config/types.js';
 import { EmbeddingProvider, ZhipuEmbedding } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
+import { sanitizeSearchQuery, sanitizeMemoryContent } from '../utils/sanitization.js';
+import { getCache } from '../services/CacheService.js';
+
+const SEARCH_CACHE_TTL_MS = 5000; // 5 seconds
+const searchCache = getCache<Memory[]>('memory-search', { ttlMs: SEARCH_CACHE_TTL_MS, maxSize: 100 });
 
 export interface SaveMemoryInput {
   id: string;
@@ -41,19 +46,24 @@ export class MemoryService {
   }
 
   async save(input: SaveMemoryInput): Promise<string> {
+    const sanitizedContent = sanitizeMemoryContent(input.content);
+    if (!sanitizedContent.valid) {
+      throw new Error(sanitizedContent.error);
+    }
+
     const tableName = DATABASE_TABLES.MEMORY;
     const now = new Date();
     const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
     const projectId = input.projectId ?? null;
     const tags = input.tags ?? null;
-    const importance = input.importance ?? 5;
+    const importance = Math.min(Math.max(input.importance ?? 5, 0), 10);
     const source = input.source ?? null;
 
     let embeddingVector: number[] | null = null;
     
     if (input.generateEmbedding !== false && this.embedding) {
       try {
-        embeddingVector = await this.embedding.embed(input.content);
+        embeddingVector = await this.embedding.embed(sanitizedContent.sanitized!);
       } catch (error) {
         logger.error('Failed to generate embedding:', error);
       }
@@ -72,16 +82,29 @@ export class MemoryService {
          source = $7, 
          embedding = $8,
          updated_at = $10`,
-      [input.id, projectId, input.content, metadata, tags, importance, source, embeddingStr, now, now]
+      [input.id, projectId, sanitizedContent.sanitized, metadata, tags, importance, source, embeddingStr, now, now]
     );
 
+    searchCache.clear();
     return input.id;
   }
 
   async search(searchTerm: string, limit?: number, offset?: number): Promise<Memory[]> {
+    const sanitized = sanitizeSearchQuery(searchTerm);
+    if (!sanitized.valid) {
+      logger.warn(`Invalid search query: ${sanitized.error}`);
+      return [];
+    }
+
     const tableName = DATABASE_TABLES.MEMORY;
-    const queryLimit = limit ?? 50;
+    const queryLimit = Math.min(limit ?? 50, 100);
     const queryOffset = offset ?? 0;
+
+    const cacheKey = `search:${sanitized.sanitized}:${queryLimit}:${queryOffset}`;
+    const cached = searchCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const result = await this.db.query<Memory>(
       `SELECT id, project_id as "projectId", content, metadata, created_at as "createdAt", updated_at as "updatedAt"
@@ -89,9 +112,10 @@ export class MemoryService {
        WHERE content ILIKE $1
        ORDER BY updated_at DESC
        LIMIT $2 OFFSET $3`,
-      [`%${searchTerm}%`, queryLimit, queryOffset]
+      [`%${sanitized.sanitized}%`, queryLimit, queryOffset]
     );
 
+    searchCache.set(cacheKey, result.rows);
     return result.rows;
   }
 
@@ -105,10 +129,16 @@ export class MemoryService {
       throw new Error('Embedding provider not configured');
     }
 
+    const sanitized = sanitizeSearchQuery(query);
+    if (!sanitized.valid) {
+      logger.warn(`Invalid vector search query: ${sanitized.error}`);
+      return [];
+    }
+
     const tableName = DATABASE_TABLES.MEMORY;
-    const queryLimit = limit ?? 10;
-    const queryThreshold = threshold ?? 0.7;
-    const queryEmbedding = await this.embedding.embed(query);
+    const queryLimit = Math.min(limit ?? 10, 100);
+    const queryThreshold = Math.min(Math.max(threshold ?? 0.7, 0), 1);
+    const queryEmbedding = await this.embedding.embed(sanitized.sanitized!);
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
     const params: (string | number)[] = [embeddingStr, queryThreshold, queryLimit];
@@ -144,10 +174,16 @@ export class MemoryService {
     projectId?: string, 
     limit?: number
   ): Promise<KeywordSearchResult[]> {
-    const tableName = DATABASE_TABLES.MEMORY;
-    const queryLimit = limit ?? 10;
+    const sanitized = sanitizeSearchQuery(query);
+    if (!sanitized.valid) {
+      logger.warn(`Invalid keyword search query: ${sanitized.error}`);
+      return [];
+    }
 
-    const params: (string | number)[] = [query, queryLimit];
+    const tableName = DATABASE_TABLES.MEMORY;
+    const queryLimit = Math.min(limit ?? 10, 100);
+
+    const params: (string | number)[] = [sanitized.sanitized!, queryLimit];
     let paramIndex = 3;
     const projectIdFilter = projectId ? `AND project_id = $${paramIndex++}` : '';
     if (projectId) {
@@ -188,11 +224,17 @@ export class MemoryService {
       throw new Error('Embedding provider not configured');
     }
 
+    const sanitized = sanitizeSearchQuery(query);
+    if (!sanitized.valid) {
+      logger.warn(`Invalid hybrid search query: ${sanitized.error}`);
+      return [];
+    }
+
     const tableName = DATABASE_TABLES.MEMORY;
-    const queryLimit = limit ?? 10;
-    const queryVectorWeight = vectorWeight ?? 0.7;
-    const queryKeywordWeight = keywordWeight ?? 0.3;
-    const queryEmbedding = await this.embedding.embed(query);
+    const queryLimit = Math.min(limit ?? 10, 100);
+    const queryVectorWeight = Math.min(Math.max(vectorWeight ?? 0.7, 0), 1);
+    const queryKeywordWeight = Math.min(Math.max(keywordWeight ?? 0.3, 0), 1);
+    const queryEmbedding = await this.embedding.embed(sanitized.sanitized!);
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
     let params: (string | number)[];
