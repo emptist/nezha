@@ -137,6 +137,12 @@ nezha/
 - **位置**: conversations/YYYY-MM-DD/session-*.jsonl
 - **索引**: conversations/index.json
 
+### 4. npm 镜像
+
+- **推荐**: 使用 cnpm 从镜像安装
+- **原因**: 国内访问 npm 官方源较慢
+- **命令**: `cnpm install`
+
 ---
 
 ## 📊 进度跟踪
