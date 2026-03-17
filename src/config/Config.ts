@@ -162,9 +162,8 @@ export class Config implements IConfig {
     if (!this.config.db.user || this.config.db.user.trim() === '') {
       return false;
     }
-    if (!this.config.db.password || this.config.db.password.trim() === '') {
-      return false;
-    }
+    // Password can be empty for Keychain/trust authentication
+    // Removed: if (!this.config.db.password || this.config.db.password.trim() === '')
     if (!this.config.task.heartbeatIntervalMs || this.config.task.heartbeatIntervalMs <= 0) {
       return false;
     }
