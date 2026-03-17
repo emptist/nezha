@@ -89,8 +89,11 @@ export class OpenCodeClient {
       const systemPrompt = `You are an AI assistant helping with software development tasks.
 You have access to the Nezha system which provides:
 - Memory system for storing and retrieving knowledge
+- Semantic search for finding relevant past experiences (use semantic_search function when you need to recall similar tasks or solutions)
 - Task scheduling and execution
 - Conversation logging for learning
+
+When you need to find relevant past experiences or similar solutions, use the semantic_search function to search through your memory.
 
 Current task: ${task.title}
 Description: ${task.description}

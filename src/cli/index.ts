@@ -4,6 +4,7 @@ config();
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/HeartbeatService.js';
+import { HealthServer } from '../services/HealthServer.js';
 import { TASK_STATUS } from '../config/constants.js';
 
 interface TaskRow {
