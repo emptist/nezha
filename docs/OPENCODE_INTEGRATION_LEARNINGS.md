@@ -47,7 +47,7 @@ The session file contains:
 |---------|----------|-----------------|----------------|
 | AI Provider | OpenCode API | ❌ Not integrated | ✅ OpenCode API |
 | Conversation Logging | ✅ JSONL files | ✅ Implemented | ✅ JSONL + DB |
-| Memory System | File + SQLite | PostgreSQL | PostgreSQL + File |
+| Memory System | File + PostgreSQL | PostgreSQL | PostgreSQL + File |
 | Continuous Work | heartbeat + cron | ✅ Implemented | ✅ Enhanced |
 | Autonomous Learning | Plugin-based | ❌ Not implemented | ✅ Built-in |
 
