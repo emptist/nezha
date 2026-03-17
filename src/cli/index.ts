@@ -7,6 +7,7 @@ import { HeartbeatService } from '../services/HeartbeatService.js';
 import { HealthServer } from '../services/HealthServer.js';
 import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
+import { logger } from '../utils/logger.js';
 
 interface TaskRow {
   id: number;
@@ -25,6 +26,8 @@ export class Cli {
   private heartbeatService: HeartbeatService | null = null;
   private healthServer: HealthServer | null = null;
   private checkpointService: CheckpointService;
+  private isShuttingDown: boolean = false;
+  private readonly SHUTDOWN_TIMEOUT_MS: number = 30000; // 30 seconds
 
   constructor() {
     this.config = Config.getInstance();
@@ -40,24 +43,42 @@ export class Cli {
 
   async start(): Promise<void> {
     const db = await this.getDb();
+    
+    // Load previous state if exists
+    const savedState = await this.checkpointService.loadState();
+    if (savedState) {
+      logger.info('Found saved state, resuming...');
+      await this.checkpointService.resetRunningTasks(db);
+    }
+    
     const embeddingConfig = this.config.getEmbeddingConfig();
     this.heartbeatService = new HeartbeatService(db, {
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
       embedding: embeddingConfig
     });
+    
+    // Pass checkpoint service to heartbeat service for state tracking
+    this.heartbeatService.setCheckpointService(this.checkpointService);
+    
     await this.heartbeatService.start();
     
     this.healthServer = new HealthServer(db, 4097);
     await this.healthServer.start();
     
-    // Handle graceful shutdown
-    process.on('SIGINT', async () => {
+    // Handle graceful shutdown - save state before exit
+    const shutdown = async () => {
+      logger.info('Graceful shutdown initiated...');
+      await this.checkpointService.saveState();
       await this.stop();
+    };
+    
+    process.on('SIGINT', async () => {
+      await shutdown();
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
-      await this.stop();
+      await shutdown();
       process.exit(0);
     });
   }
@@ -115,6 +136,30 @@ export class Cli {
     } else {
       console.log(`Task added: ${title}`);
     }
+  }
+
+  async scheduleTask(name: string, description: string, cronExpression: string, priority: number = 0): Promise<void> {
+    if (!name || name.trim().length === 0) {
+      throw new Error('Task name is required');
+    }
+    if (!cronExpression || cronExpression.trim().length === 0) {
+      throw new Error('Cron expression is required');
+    }
+    
+    const db = await this.getDb();
+    
+    // Validate cron expression (basic check)
+    const cronParts = cronExpression.trim().split(/\s+/);
+    if (cronParts.length !== 5) {
+      throw new Error('Invalid cron expression: expected 5 parts (minute hour day month weekday)');
+    }
+    
+    await db.query(
+      `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, next_run) 
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [name.trim(), description.trim(), cronExpression, priority]
+    );
+    console.log(`Scheduled task added: ${name} (cron: ${cronExpression})`);
   }
 
   async addContinuousImprovementTask(): Promise<void> {

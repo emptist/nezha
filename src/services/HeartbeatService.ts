@@ -8,6 +8,7 @@ import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../
 import { logger } from '../utils/logger.js';
 import { DailyMemoryService, memory_save } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
+import { CheckpointService } from './CheckpointService.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
@@ -34,6 +35,7 @@ export class HeartbeatService {
   private readonly memory: MemoryService;
   private readonly dailyMemory: DailyMemoryService;
   private readonly selfImprovement: SelfImprovementService;
+  private checkpointService?: CheckpointService;
   private readonly workspaceDir: string;
   private readonly autoReconnect: boolean;
   private readonly maxReconnectAttempts: number;
@@ -47,6 +49,10 @@ export class HeartbeatService {
     reconnectAttempts: 0,
   };
   private abortController: AbortController | null = null;
+
+  setCheckpointService(service: CheckpointService): void {
+    this.checkpointService = service;
+  }
 
   constructor(
     private readonly db: DatabaseClient,
