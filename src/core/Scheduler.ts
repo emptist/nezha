@@ -45,7 +45,7 @@ export class Scheduler {
   constructor(db: DatabaseClient, heartbeatIntervalMs?: number, eventBus?: EventBus) {
     this.db = db;
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS;
-    this.eventBus = eventBus ?? new EventBus();
+    this.eventBus = eventBus ?? new EventBus(db);
   }
 
   getEventBus(): EventBus {

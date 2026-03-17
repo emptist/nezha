@@ -1,12 +1,47 @@
 import http from 'http';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { getMetricsRegistry, createStandardMetrics } from './MetricsService.js';
 
+const standardMetrics = createStandardMetrics();
+
 export interface HealthResponse {
   status: 'healthy' | 'unhealthy';
   uptime: number;
+  checks: {
+    database: {
+      status: 'ok' | 'error';
+      latency_ms?: number;
+      pool?: {
+        total: number;
+        idle: number;
+        active: number;
+        waiting: number;
+      };
+      error?: string;
+    };
+    opencode_api: {
+      status: 'ok' | 'error' | 'not_configured';
+      latency_ms?: number;
+      error?: string;
+    };
+    disk_space: {
+      status: 'ok' | 'warning' | 'error';
+      free_bytes?: number;
+      path?: string;
+      error?: string;
+    };
+    task_queue: {
+      status: 'ok' | 'warning' | 'critical';
+      pending: number;
+      running: number;
+      failed: number;
+      queue_depth: number;
+    };
+  };
   tasks: {
     pending: number;
     running: number;

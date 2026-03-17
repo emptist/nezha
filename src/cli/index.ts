@@ -14,6 +14,7 @@ interface TaskRow {
   title: string;
   status: string;
   priority: number;
+  tags?: string[];
 }
 
 interface CountRow {
@@ -68,9 +69,29 @@ export class Cli {
     
     // Handle graceful shutdown - save state before exit
     const shutdown = async () => {
+      if (this.isShuttingDown) {
+        logger.warn('Shutdown already in progress, forcing exit...');
+        process.exit(1);
+      }
+      
+      this.isShuttingDown = true;
       logger.info('Graceful shutdown initiated...');
+      
+      // 1. Save checkpoint state
+      logger.info('Saving checkpoint state...');
       await this.checkpointService.saveState();
+      
+      // 2. Wait for running tasks to complete (with timeout)
+      logger.info('Waiting for running tasks to complete...');
+      const runningTasks = await this.waitForRunningTasks(this.TASK_WAIT_TIMEOUT_MS);
+      
+      // 3. Stop services
+      logger.info('Stopping services...');
       await this.stop();
+      
+      // 4. Log shutdown status
+      logger.info(`Shutdown complete. Tasks waiting: ${runningTasks}`);
+      logger.info(`State saved to: .tmp/nezha-state.json`);
     };
     
     process.on('SIGINT', async () => {
@@ -84,13 +105,51 @@ export class Cli {
     });
   }
 
+  private async waitForRunningTasks(timeoutMs: number): Promise<number> {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeoutMs) {
+      const db = await this.getDb();
+      const result = await db.query<CountRow>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
+        [TASK_STATUS.RUNNING]
+      );
+      const runningCount = parseInt(result.rows[0]?.count ?? '0', 10);
+      
+      if (runningCount === 0) {
+        return 0;
+      }
+      
+      logger.debug(`Waiting for ${runningCount} running tasks to complete...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Timeout - return remaining running tasks
+    const db = await this.getDb();
+    const result = await db.query<CountRow>(
+      `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
+      [TASK_STATUS.RUNNING]
+    );
+    return parseInt(result.rows[0]?.count ?? '0', 10);
+  }
+
   async stop(): Promise<void> {
+    logger.info('Stopping HeartbeatService...');
     if (this.heartbeatService) {
       await this.heartbeatService.stop();
     }
+    
+    logger.info('Stopping HealthServer...');
     if (this.healthServer) {
       await this.healthServer.stop();
     }
+    
+    logger.info('Closing database connection...');
+    if (this.db) {
+      await this.db.close();
+    }
+    
+    logger.info('All services stopped');
   }
 
   async status(): Promise<void> {
@@ -179,13 +238,30 @@ export class Cli {
     await this.addTask("Continuous Improvement Cycle", description, 10);
   }
 
-  async listTasks(): Promise<void> {
+  async listTasks(tag?: string, status?: string): Promise<void> {
     const db = await this.getDb();
-    const result = await db.query<TaskRow>(
-      `SELECT id, title, status, priority FROM tasks ORDER BY priority DESC, created_at DESC LIMIT 10`
-    );
+    let query = `SELECT id, title, status, priority, tags FROM tasks WHERE 1=1`;
+    const params: (string | number)[] = [];
+    let paramIndex = 1;
+
+    if (tag) {
+      query += ` AND $${paramIndex} = ANY(tags)`;
+      params.push(tag);
+      paramIndex++;
+    }
+
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY priority DESC, created_at DESC LIMIT 10`;
+
+    const result = await db.query<TaskRow>(query, params);
     for (const row of result.rows) {
-      console.log(`  [${row.status}] ${row.title} (priority: ${row.priority})`);
+      const tagStr = row.tags && row.tags.length > 0 ? ` [${row.tags.join(', ')}]` : '';
+      console.log(`  [${row.status}] ${row.title} (priority: ${row.priority})${tagStr}`);
     }
   }
 }

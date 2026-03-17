@@ -111,7 +111,9 @@ export class MemoryService {
     const queryEmbedding = await this.embedding.embed(query);
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
-    const projectIdFilter = projectId ? `AND project_id = '${projectId}'` : '';
+    const params: (string | number)[] = [embeddingStr, queryThreshold, queryLimit];
+    let paramIndex = 4;
+    const projectIdFilter = projectId ? `AND project_id = $${paramIndex++}` : '';
 
     const result = await this.db.query<VectorSearchResult>(
       `SELECT 
@@ -124,13 +126,14 @@ export class MemoryService {
         source,
         created_at as "createdAt", 
         updated_at as "updatedAt",
-        (1 - (embedding <=> '${embeddingStr}'::vector))::FLOAT as similarity
+        (1 - (embedding <=> $1::vector))::FLOAT as similarity
        FROM ${tableName}
        WHERE embedding IS NOT NULL
          ${projectIdFilter}
-         AND (1 - (embedding <=> '${embeddingStr}'::vector)) >= ${queryThreshold}
-       ORDER BY embedding <=> '${embeddingStr}'::vector
-       LIMIT ${queryLimit}`
+         AND (1 - (embedding <=> $1::vector)) >= $2
+       ORDER BY embedding <=> $1::vector
+       LIMIT $3`,
+      projectId ? [...params, projectId] : params
     );
 
     return result.rows;

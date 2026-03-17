@@ -4,6 +4,13 @@ import { DATABASE_TABLES } from '../config/constants.js';
 
 const { Pool: PgPool } = pg;
 
+export interface PoolStats {
+  totalConnections: number;
+  idleConnections: number;
+  activeConnections: number;
+  waitingClients: number;
+}
+
 export class DatabaseClient {
   private readonly pool: Pool;
   private readonly config: IConfig;
@@ -46,6 +53,26 @@ export class DatabaseClient {
 
   getPool(): Pool {
     return this.pool;
+  }
+
+  getPoolStats(): PoolStats {
+    const poolState = this.pool;
+    return {
+      totalConnections: poolState.totalCount || 0,
+      idleConnections: poolState.idleCount || 0,
+      activeConnections: poolState.busyCount || 0,
+      waitingClients: poolState.waitingCount || 0,
+    };
+  }
+
+  async healthCheck(): Promise<{ healthy: boolean; latency_ms?: number; error?: string }> {
+    const start = Date.now();
+    try {
+      await this.pool.query('SELECT 1');
+      return { healthy: true, latency_ms: Date.now() - start };
+    } catch (error) {
+      return { healthy: false, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   getTableNames(): typeof DATABASE_TABLES {
