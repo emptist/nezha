@@ -479,6 +479,822 @@ Nezha Daemon (调度者)     Trae AI (执行者)
 
 ---
 
+## 🎯 三种持续工作方法
+
+Nezha 支持三种持续工作方法，每种方法适用于不同的场景：
+
+### 方法 1: 持续改进任务（文件模式）
+
+**适用场景**: Nezha 自身项目的开发和维护
+
+**核心机制**: 使用 `HEARTBEAT.md` 文件作为任务清单，AI 读取文件并执行任务
+
+**工作流程**:
+```
+AI 读取 HEARTBEAT.md
+    ↓
+选择最高优先级任务
+    ↓
+执行任务（Review → Identify → Fix → Build → Test → Document → Commit → Push）
+    ↓
+更新 HEARTBEAT.md 状态
+    ↓
+提交到 Git
+    ↓
+循环...
+```
+
+**示例 HEARTBEAT.md**:
+```markdown
+# Nezha Development Tasks
+
+## High Priority (8-10)
+- [ ] Review: 读取 src/core/, src/services/, src/cli/ 目录，分析代码质量
+- [ ] Identify: 发现 CLI help 命令为空的问题
+- [ ] Fix: 添加 CLI help 命令输出，移除未使用变量
+- [ ] Build: 运行 npm run build 确保编译通过
+- [ ] Test: 验证修改是否正确
+- [ ] Document: 更新相关文档
+- [ ] Commit: 提交更改
+- [ ] Push: 推送到远程
+- [ ] Update: 更新本清单，标记完成的任务，添加新任务
+
+## Medium Priority (5-7)
+- [ ] Improve error messages
+- [ ] Update documentation
+- [ ] Add logging system
+
+## Low Priority (1-4)
+- [ ] Refactor code structure
+- [ ] Add code examples
+- [ ] Improve performance
+
+## Completed
+- [x] Implement heartbeat mechanism
+- [x] Add PostgreSQL support
+- [x] Create CLI interface
+```
+
+**详细 task-add 命令示例**:
+
+1. **持续改进循环任务**:
+```bash
+node dist/cli/index.js task-add "Review and improve codebase" "This is a continuous improvement cycle. Steps:
+1. Read src/core/ files and identify issues or improvements
+2. Fix at least one bug or improve one component
+3. If any changes made, run 'npm run build' and fix any errors
+4. Update relevant documentation if needed
+5. Run 'git status' and 'git diff' to see changes
+6. Commit with 'git add -A && git commit -m \"fix/improve: [description]\"'
+7. Push with 'git push'
+8. Report what was done" 10
+```
+
+2. **HEARTBEAT.md 执行任务**:
+```bash
+node dist/cli/index.js task-add "Execute HEARTBEAT.md tasks" "Read HEARTBEAT.md in the current directory. Execute the tasks listed there following the continuous improvement cycle: Review -> Identify -> Fix -> Build -> Test -> Document -> Commit -> Push -> Update HEARTBEAT.md" 10
+```
+
+3. **系统改进任务**:
+```bash
+node dist/cli/index.js task-add "Improve nezha codebase" "Analyze the src/ directory and identify issues or improvements needed. Fix at least one bug or improve one component. Read the code first to understand the architecture." 10
+```
+
+4. **真实代码改进任务**:
+```bash
+node dist/cli/index.js task-add "Real code improvement" "Do actual work:
+1. Delete src/tests/ directory (not needed)
+2. Read src/core/Scheduler.ts and add a simple but useful feature (like adding a 'lastRun' timestamp tracking)
+3. Run npm run build to verify
+4. Commit and push" 10
+```
+
+**优势**:
+- ✅ 简单直观，无需数据库配置
+- ✅ Git 版本控制，历史清晰
+- ✅ 适合单一项目的快速迭代
+- ✅ AI 可以直接修改文件
+- ✅ 任务描述可以非常详细和具体
+
+**劣势**:
+- ❌ 不支持多项目
+- ❌ 不支持多 AI 协作
+- ❌ 查询能力有限
+
+---
+
+### 方法 2: 直接插入数据库（数据库模式）
+
+**适用场景**: 管理其他项目，需要多项目、多 AI 协作
+
+**核心机制**: 使用 PostgreSQL 数据库管理任务，通过 SQL 直接插入任务
+
+**工作流程**:
+```
+AI 查询数据库
+    ↓
+获取项目任务
+    ↓
+执行任务
+    ↓
+更新数据库状态
+    ↓
+发送消息通知
+    ↓
+循环...
+```
+
+**数据库表结构**:
+```sql
+-- 项目注册表
+CREATE TABLE projects (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT UNIQUE NOT NULL,
+    description TEXT,
+    path TEXT NOT NULL,
+    language TEXT,
+    framework TEXT,
+    config JSONB,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 任务表
+CREATE TABLE tasks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES projects(id),
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT DEFAULT 'PENDING',
+    priority INTEGER DEFAULT 0,
+    result JSONB,
+    error TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+
+-- AI 通信日志
+CREATE TABLE project_communications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID REFERENCES projects(id),
+    from_ai TEXT NOT NULL,
+    to_ai TEXT NOT NULL,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    read_at TIMESTAMP
+);
+```
+
+**直接插入数据库示例**:
+
+1. **注册项目**:
+```sql
+INSERT INTO projects (name, description, path, language, framework, config)
+VALUES (
+    'my-project',
+    'My Project Description',
+    '/path/to/project',
+    'TypeScript',
+    'Node.js',
+    '{"qc": {"enabled": true}}'
+);
+
+-- 查看已注册的项目
+SELECT id, name, path, language, status FROM projects;
+```
+
+2. **添加任务**:
+```sql
+-- 添加高优先级任务
+INSERT INTO tasks (title, description, status, priority, project_id)
+VALUES (
+    'Add type hints',
+    'Add type hints to all TypeScript files in the project. Steps:
+    1. Read all TypeScript files in src/ directory
+    2. Identify files without type hints
+    3. Add appropriate type annotations
+    4. Run npm run build to verify
+    5. Commit changes with descriptive message',
+    'PENDING',
+    8,
+    (SELECT id FROM projects WHERE name = 'my-project')
+);
+
+-- 添加中优先级任务
+INSERT INTO tasks (title, description, status, priority, project_id)
+VALUES (
+    'Improve error handling',
+    'Review error handling across the codebase and improve it:
+    1. Identify files with poor error handling
+    2. Add try-catch blocks where needed
+    3. Improve error messages
+    4. Add logging for errors
+    5. Test error scenarios',
+    'PENDING',
+    5,
+    (SELECT id FROM projects WHERE name = 'my-project')
+);
+
+-- 查看项目的任务
+SELECT t.id, t.title, t.status, t.priority, p.name as project
+FROM tasks t
+JOIN projects p ON t.project_id = p.id
+WHERE p.name = 'my-project'
+ORDER BY t.priority DESC, t.created_at ASC;
+```
+
+3. **批量添加任务**:
+```sql
+-- 批量添加多个任务
+INSERT INTO tasks (title, description, status, priority, project_id) VALUES
+    ('Fix bug in authentication', 'Fix the authentication bug reported in issue #123. Steps: 1. Reproduce the bug, 2. Identify root cause, 3. Implement fix, 4. Test thoroughly, 5. Update documentation', 'PENDING', 10, (SELECT id FROM projects WHERE name = 'my-project')),
+    ('Add unit tests', 'Add unit tests for the new features. Coverage should reach at least 80%.', 'PENDING', 7, (SELECT id FROM projects WHERE name = 'my-project')),
+    ('Update dependencies', 'Update all dependencies to latest versions. Check for breaking changes and update code accordingly.', 'PENDING', 3, (SELECT id FROM projects WHERE name = 'my-project'));
+```
+
+4. **AI 通信**:
+```sql
+-- 发送消息
+SELECT add_project_communication(
+    (SELECT id FROM projects WHERE name = 'my-project'),
+    'nezha-ai',
+    'project-ai',
+    'task',
+    'Please review the code and add type hints',
+    '{"priority": 8}'
+);
+
+-- 读取未读消息
+SELECT * FROM get_unread_messages(
+    (SELECT id FROM projects WHERE name = 'my-project')
+);
+
+-- 标记消息已读
+SELECT mark_message_read('message-uuid-here');
+```
+
+5. **项目统计**:
+```sql
+-- 查看项目统计
+SELECT * FROM get_project_stats(
+    (SELECT id FROM projects WHERE name = 'my-project')
+);
+
+-- 结果：
+-- total_tasks | pending_tasks | completed_tasks | failed_tasks | avg_priority
+-- 5           | 3             | 2               | 0            | 6.5
+```
+
+**优势**:
+- ✅ 集中管理多个项目
+- ✅ 强大的查询和统计能力
+- ✅ 支持多 AI 协作
+- ✅ 跨项目任务协调
+- ✅ 完整的历史记录
+- ✅ 并发安全（使用 SKIP LOCKED）
+
+**劣势**:
+- ❌ 需要数据库配置
+- ❌ 相对复杂
+- ❌ 需要维护数据库
+
+---
+
+### 方法 3: 脚本自动化（守护进程模式）
+
+**适用场景**: 需要持续运行的后台服务，自动调度大模型执行任务
+
+**核心机制**: 使用守护进程（pm2/systemd/crontab）持续运行 Nezha，自动调度大模型工作
+
+**工作流程**:
+```
+守护进程启动
+    ↓
+定时触发（每 30 分钟）
+    ↓
+查询数据库中的待处理任务
+    ↓
+调用大模型 API 执行任务
+    ↓
+更新任务状态
+    ↓
+循环...
+```
+
+**实现方式**:
+
+#### 方式 1: PM2（推荐）
+
+```bash
+# 安装 PM2
+npm install -g pm2
+
+# 启动 Nezha Daemon
+pm2 start dist/cli/index.js --name nezha-daemon -- start
+
+# 查看状态
+pm2 status
+
+# 查看日志
+pm2 logs nezha-daemon
+
+# 停止服务
+pm2 stop nezha-daemon
+
+# 重启服务
+pm2 restart nezha-daemon
+
+# 删除服务
+pm2 delete nezha-daemon
+
+# 设置开机自启
+pm2 startup
+pm2 save
+```
+
+**PM2 配置文件** (ecosystem.config.js):
+```javascript
+module.exports = {
+  apps: [{
+    name: 'nezha-daemon',
+    script: './dist/cli/index.js',
+    args: 'start',
+    instances: 1,
+    autorestart: true,
+    watch: false,
+    max_memory_restart: '1G',
+    env: {
+      NODE_ENV: 'production',
+      DB_HOST: 'localhost',
+      DB_PORT: 5432,
+      DB_NAME: 'nezha',
+      DB_USER: 'postgres',
+      DB_PASSWORD: 'your_password',
+      NEZHA_HEARTBEAT_INTERVAL: 30000
+    },
+    error_file: './logs/nezha-error.log',
+    out_file: './logs/nezha-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true
+  }]
+};
+```
+
+**使用配置文件启动**:
+```bash
+pm2 start ecosystem.config.js
+```
+
+#### 方式 2: systemd（Linux）
+
+**创建服务文件** (/etc/systemd/system/nezha-daemon.service):
+```ini
+[Unit]
+Description=Nezha Daemon Service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=nezha
+WorkingDirectory=/path/to/nezha
+ExecStart=/usr/bin/node /path/to/nezha/dist/cli/index.js start
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=DB_HOST=localhost
+Environment=DB_PORT=5432
+Environment=DB_NAME=nezha
+Environment=DB_USER=postgres
+Environment=DB_PASSWORD=your_password
+Environment=NEZHA_HEARTBEAT_INTERVAL=30000
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**启动服务**:
+```bash
+# 重新加载 systemd
+sudo systemctl daemon-reload
+
+# 启动服务
+sudo systemctl start nezha-daemon
+
+# 查看状态
+sudo systemctl status nezha-daemon
+
+# 查看日志
+sudo journalctl -u nezha-daemon -f
+
+# 停止服务
+sudo systemctl stop nezha-daemon
+
+# 重启服务
+sudo systemctl restart nezha-daemon
+
+# 设置开机自启
+sudo systemctl enable nezha-daemon
+```
+
+#### 方式 3: crontab（定时任务）
+
+**编辑 crontab**:
+```bash
+crontab -e
+```
+
+**添加定时任务**:
+```bash
+# 每 30 分钟运行一次
+*/30 * * * * cd /path/to/nezha && /usr/bin/node dist/cli/index.js start >> /var/log/nezha.log 2>&1
+
+# 每小时运行一次
+0 * * * * cd /path/to/nezha && /usr/bin/node dist/cli/index.js start >> /var/log/nezha.log 2>&1
+
+# 每天凌晨 2 点运行
+0 2 * * * cd /path/to/nezha && /usr/bin/node dist/cli/index.js start >> /var/log/nezha.log 2>&1
+```
+
+**Heartbeat Daemon 实现示例** (src/daemon/heartbeat.ts):
+```typescript
+import { getPool, closePool } from "./db/client.js";
+import { getDbConfig } from "./db/config.js";
+
+interface HeartbeatConfig {
+  intervalMs: number;
+  workspaceDir: string;
+  opencodeUrl: string;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: "pending" | "completed" | "failed";
+}
+
+class HeartbeatDaemon {
+  private config: HeartbeatConfig;
+  private timer: NodeJS.Timeout | null = null;
+  private isRunning = false;
+
+  constructor(config: Partial<HeartbeatConfig> = {}) {
+    this.config = {
+      intervalMs: config.intervalMs ?? 30 * 60 * 1000, // 30 minutes
+      workspaceDir: config.workspaceDir ?? process.cwd(),
+      opencodeUrl: config.opencodeUrl ?? "http://127.0.0.1:4098",
+    };
+  }
+
+  async start(): Promise<void> {
+    console.log(`🚀 Starting Heartbeat Daemon (interval: ${this.config.intervalMs / 1000 / 60} min)`);
+    console.log(`   Workspace: ${this.config.workspaceDir}`);
+    console.log(`   OpenCode: ${this.config.opencodeUrl}`);
+
+    this.isRunning = true;
+    
+    // Run once immediately
+    await this.runHeartbeat();
+
+    // Then run periodically
+    this.timer = setInterval(() => {
+      this.runHeartbeat().catch(console.error);
+    }, this.config.intervalMs);
+  }
+
+  async stop(): Promise<void> {
+    this.isRunning = false;
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+    await closePool();
+    console.log("🛑 Heartbeat Daemon stopped");
+  }
+
+  private async runHeartbeat(): Promise<void> {
+    if (!this.isRunning) return;
+    
+    const startTime = Date.now();
+    console.log(`\n❤️ Heartbeat at ${new Date().toISOString()}`);
+
+    try {
+      // 1. Check for pending tasks
+      const tasks = await this.getPendingTasks();
+      
+      if (tasks.length === 0) {
+        console.log("   ✓ No pending tasks, heartbeat OK");
+        await this.logHeartbeat("ok", 0, Date.now() - startTime);
+        return;
+      }
+
+      console.log(`   📋 Found ${tasks.length} pending task(s)`);
+
+      // 2. Execute first task
+      const task = tasks[0];
+      console.log(`   ▶ Executing: ${task.title}`);
+      
+      const result = await this.executeTask(task);
+      
+      if (result.success) {
+        console.log(`   ✅ Task completed`);
+        await this.updateTaskStatus(task.id, "completed");
+      } else {
+        console.log(`   ❌ Task failed: ${result.error}`);
+        await this.updateTaskStatus(task.id, "failed");
+      }
+
+      await this.logHeartbeat("executed", tasks.length, Date.now() - startTime);
+      
+    } catch (error) {
+      console.error(`   ❌ Heartbeat error:`, error);
+      await this.logHeartbeat("error", 0, Date.now() - startTime, String(error));
+    }
+  }
+
+  private async getPendingTasks(): Promise<Task[]> {
+    const pool = getPool();
+    const result = await pool.query(
+      `SELECT id, title, description, status 
+       FROM tasks 
+       WHERE status = 'pending' 
+       ORDER BY priority DESC, created_at ASC 
+       LIMIT 1`
+    );
+    return result.rows;
+  }
+
+  private async executeTask(task: Task): Promise<{ success: boolean; error?: string }> {
+    // Call opencode API to execute the task
+    const sessionResponse = await fetch(`${this.config.opencodeUrl}/session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+
+    if (!sessionResponse.ok) {
+      return { success: false, error: "Failed to create session" };
+    }
+
+    const session = await sessionResponse.json();
+    const sessionId = session.id;
+
+    // Send task as message
+    const messageResponse = await fetch(
+      `${this.config.opencodeUrl}/session/${sessionId}/message`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          parts: [{ type: "text", text: task.description || task.title }],
+        }),
+      }
+    );
+
+    if (!messageResponse.ok) {
+      return { success: false, error: "Failed to send message" };
+    }
+
+    // For now, just return success - need to handle async response
+    return { success: true };
+  }
+
+  private async updateTaskStatus(
+    taskId: string,
+    status: "completed" | "failed"
+  ): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`,
+      [status, taskId]
+    );
+  }
+
+  private async logHeartbeat(
+    status: string,
+    tasksCount: number,
+    durationMs: number,
+    error?: string
+  ): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `INSERT INTO heartbeats (status, tasks_count, duration_ms, error) 
+       VALUES ($1, $2, $3, $4)`,
+      [status, tasksCount, durationMs, error]
+    );
+  }
+}
+
+async function main() {
+  const daemon = new HeartbeatDaemon({
+    intervalMs: 30 * 60 * 1000, // 30 minutes
+    workspaceDir: process.cwd(),
+  });
+
+  process.on("SIGINT", async () => {
+    await daemon.stop();
+    process.exit(0);
+  });
+
+  process.on("SIGTERM", async () => {
+    await daemon.stop();
+    process.exit(0);
+  });
+
+  await daemon.start();
+}
+
+main().catch(console.error);
+```
+
+**优势**:
+- ✅ 持续运行，无需人工干预
+- ✅ 自动调度大模型执行任务
+- ✅ 支持多种部署方式
+- ✅ 可配置定时间隔
+- ✅ 自动重启和故障恢复
+
+**劣势**:
+- ❌ 需要维护守护进程
+- ❌ 依赖外部工具（PM2/systemd/crontab）
+- ❌ 相对复杂
+
+---
+
+## ⚠️ 虚伪的持续工作 vs 真正的持续工作
+
+### 虚伪的持续工作（系统中的毒素）
+
+**定义**: 完成工作的主体是程序代码（循环、定时器、死程序），而不是大模型
+
+**特征**:
+- ❌ 使用 `while (true)` 循环执行固定的程序逻辑
+- ❌ 使用 `setInterval` 定时执行预定义的代码
+- ❌ 使用 `for` 循环遍历数据并执行固定操作
+- ❌ 使用 crontab 定时执行脚本，但脚本只是运行固定代码
+- ❌ 程序代码"假装"在工作，实际上没有调用大模型
+
+**示例**:
+
+```typescript
+// ❌ 虚伪的持续工作 - 循环执行死程序
+while (true) {
+  // 只是打印日志，没有调用大模型
+  console.log("Working...");
+  await sleep(1000);
+}
+
+// ❌ 虚伪的持续工作 - 定时执行固定代码
+setInterval(() => {
+  // 只是更新计数器，没有调用大模型
+  counter++;
+  console.log(`Counter: ${counter}`);
+}, 1000);
+
+// ❌ 虚伪的持续工作 - 遍历数据执行固定操作
+for (const item of items) {
+  // 只是处理数据，没有调用大模型
+  processItem(item);
+}
+```
+
+**问题**:
+- 没有真正的智能决策
+- 无法处理复杂任务
+- 无法学习和改进
+- 只是"假装"在工作
+
+### 真正的持续工作
+
+**定义**: 完成工作的主体是大模型，程序代码只是调度器
+
+**特征**:
+- ✅ 程序代码调度大模型执行任务
+- ✅ 大模型自主决策如何完成任务
+- ✅ 大模型可以调用工具、读写文件、运行命令
+- ✅ 大模型可以学习和改进
+- ✅ 程序代码只负责调度，不负责具体工作
+
+**示例**:
+
+```typescript
+// ✅ 真正的持续工作 - 调度大模型执行任务
+while (true) {
+  // 1. 从数据库获取任务
+  const task = await getTaskFromDatabase();
+  
+  if (task) {
+    // 2. 调用大模型执行任务
+    const result = await callLLM(task.description);
+    
+    // 3. 更新任务状态
+    await updateTaskStatus(task.id, result);
+  }
+  
+  await sleep(30000); // 30 秒后再次检查
+}
+
+// ✅ 真正的持续工作 - 定时调度大模型
+setInterval(async () => {
+  // 1. 读取 HEARTBEAT.md
+  const heartbeat = await readHeartbeatFile();
+  
+  // 2. 调用大模型执行任务
+  const result = await callLLM(heartbeat.tasks);
+  
+  // 3. 更新 HEARTBEAT.md
+  await updateHeartbeatFile(result);
+}, 30 * 60 * 1000); // 30 分钟
+```
+
+**关键区别**:
+
+| 维度 | 虚伪的持续工作 | 真正的持续工作 |
+|------|---------------|---------------|
+| **工作主体** | 程序代码 | 大模型 |
+| **智能程度** | 无（固定逻辑） | 高（自主决策） |
+| **学习能力** | 无 | 有 |
+| **任务适应性** | 无（固定任务） | 有（灵活处理） |
+| **程序代码作用** | 执行具体工作 | 调度大模型 |
+| **大模型调用** | ❌ 不调用 | ✅ 必须调用 |
+
+### 如何识别和排除虚伪的持续工作？
+
+**识别标准**:
+1. **检查是否有大模型调用**: 如果程序代码中没有调用大模型 API，就是虚伪的持续工作
+2. **检查工作主体**: 如果工作由程序代码完成，而不是大模型，就是虚伪的持续工作
+3. **检查智能决策**: 如果没有智能决策，只是执行固定逻辑，就是虚伪的持续工作
+
+**排除方法**:
+1. **重构代码**: 将固定逻辑改为调用大模型
+2. **添加大模型调用**: 在循环或定时器中添加大模型 API 调用
+3. **改变工作模式**: 从"程序执行工作"改为"程序调度大模型执行工作"
+
+**示例重构**:
+
+```typescript
+// ❌ 之前：虚伪的持续工作
+setInterval(() => {
+  // 固定逻辑：只是更新计数器
+  counter++;
+  console.log(`Counter: ${counter}`);
+}, 1000);
+
+// ✅ 之后：真正的持续工作
+setInterval(async () => {
+  // 调度大模型：让大模型决定做什么
+  const task = await getTaskFromDatabase();
+  if (task) {
+    const result = await callLLM(task.description);
+    await updateTaskStatus(task.id, result);
+  }
+}, 30000);
+```
+
+### Nezha 的持续工作模式
+
+Nezha 采用**真正的持续工作**模式：
+
+1. **HeartbeatService**: 调度器，负责定时触发
+2. **Scheduler**: 任务调度器，从数据库获取任务
+3. **Agent**: 大模型调用器，调用 OpenCode API 执行任务
+4. **大模型**: 实际执行工作，自主决策
+
+**工作流程**:
+```
+HeartbeatService 定时触发
+    ↓
+Scheduler 从数据库获取任务
+    ↓
+Agent 调用 OpenCode API
+    ↓
+大模型接收任务，自主决策
+    ↓
+大模型执行任务（调用工具、读写文件、运行命令）
+    ↓
+大模型返回结果
+    ↓
+Agent 更新数据库状态
+    ↓
+循环...
+```
+
+**关键点**:
+- ✅ 程序代码只负责调度
+- ✅ 大模型负责实际工作
+- ✅ 大模型可以自主决策
+- ✅ 大模型可以学习和改进
+
+---
+
+**详细说明**: 参见 [OPENCODE_VS_TRAE.md](./OPENCODE_VS_TRAE.md)
+
+---
+
 **创建时间**: 2026-03-16  
 **状态**: 完整指南  
 **维护者**: Nezha Team
