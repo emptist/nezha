@@ -10,8 +10,6 @@ describe('Agent', () => {
 
     it('should use custom config when provided', () => {
       const customAgent = new Agent({
-        host: 'custom-host',
-        port: 9999,
         timeout: 30000,
         maxRetries: 5,
         retryDelay: 2000,
@@ -19,13 +17,8 @@ describe('Agent', () => {
       expect(customAgent).toBeDefined();
     });
 
-    it('should use default host when not provided', () => {
+    it('should use default timeout when not provided', () => {
       const agent = new Agent({});
-      expect(agent).toBeDefined();
-    });
-
-    it('should use default port when not provided', () => {
-      const agent = new Agent({ host: 'localhost' });
       expect(agent).toBeDefined();
     });
   });
@@ -47,7 +40,7 @@ describe('Agent', () => {
     });
   });
 
-  describe('network error handling', () => {
+  describe('executeTask', () => {
     it('should be defined', () => {
       const agent = new Agent();
       expect(agent).toBeDefined();

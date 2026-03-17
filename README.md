@@ -363,6 +363,35 @@ cp .env.example .env
 
 ### 数据库初始化
 
+> ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！
+
+#### 标准操作流程 (SOP)
+
+```bash
+# 1. 启动 PostgreSQL
+/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18 start
+
+# 2. 创建数据库（如果不存在）
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -U postgres -c "CREATE DATABASE nezha;"
+
+# 3. 运行迁移
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -d nezha -f src/db/migrations/001_initial.sql
+
+# 4. 构建
+npm run build
+
+# 5. 启动 OpenCode serve（必需！否则任务无法执行）
+opencode serve --port 4096
+
+# 6. 启动 Nezha daemon（新终端）
+node dist/cli/index.js start
+
+# 7. 添加任务（新终端）
+node dist/cli/index.js task-add "Review code" "Review src/core for issues" 5
+```
+
+#### 旧版方式（仅参考）
+
 ```bash
 # 连接到 PostgreSQL
 psql -U postgres

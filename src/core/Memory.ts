@@ -62,8 +62,7 @@ export class MemoryService {
     const embeddingStr = embeddingVector ? `[${embeddingVector.join(',')}]` : null;
 
     await this.db.query(
-      `INSERT INTO ${tableName} (id, project_id, content, metadata, tags, importance, source, embedding, created_at, upd
-  ated_at)
+      `INSERT INTO ${tableName} (id, project_id, content, metadata, tags, importance, source, embedding, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO UPDATE SET 
          content = $3, 

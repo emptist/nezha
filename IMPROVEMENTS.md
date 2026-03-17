@@ -1,141 +1,473 @@
-# Code Improvements
+# Nezha Systemic Improvement Plan
 
-## Critical Issues
+> Last Updated: 2026-03-18
+> Status: Planning
 
-### 1. API Endpoint Mismatch in Agent.ts (FIXED)
-- **Location**: `src/core/Agent.ts:223, 251`
-- **Issue**: Agent uses `/session` and `/session/${sessionId}/message` but `constants.ts` defines `OPENCODE_API.ENDPOINTS.SESSION` as `/api/session`
-- **Impact**: API calls may fail or route to wrong endpoints
-- **Fix**: Updated Agent.ts to use `/api/session` and `/api/session/${sessionId}/message`
+## Executive Summary
 
-### 2. Duplicate Task Completion Logic (FIXED)
-- **Location**: `src/services/HeartbeatService.ts:77-80` and `src/core/Scheduler.ts:123-126`
-- **Issue**: Both HeartbeatService.executeTask() and Scheduler.heartbeat() mark tasks as COMPLETED
-- **Impact**: Redundant database operations, potential race conditions
-
-### 3. Unused Import in db/index.ts (FIXED)
-- **Location**: `src/db/index.ts:2`
-- **Issue**: Config is imported but never used
-- **Impact**: Wasted import, potential confusion
-
-### 4. Missing null checks before service start (FIXED)
-- **Location**: `src/NezhaCore.ts:35-39`
-- **Issue**: The `start()` method doesn't verify that `initialize()` was called first. If `start()` is called without `initialize()`, `this.heartbeatService` will be null, causing a runtime error.
-- **Impact**: Potential null reference errors
-- **Fix**: Added validation in start() to check db, heartbeatService, and scheduler are initialized
-
-### 5. Async function in setInterval without proper error handling (FIXED)
-- **Location**: `src/core/Scheduler.ts:180-192`
-- **Issue**: The setInterval callback is an async function that returns a Promise. If an error occurs, it will be an unhandled promise rejection.
-- **Impact**: Unhandled promise rejections, potential memory leaks
-- **Fix**: Added try-catch in setInterval callback and in scheduleRecurringTask
-
-## Type Safety Issues
-
-### 6. Implicit Any Type in CLI
-- **Location**: `src/cli/index.ts:100`
-- **Issue**: `row` variable has implicit any type from database query
-- **Impact**: TypeScript type safety compromised
-
-### 7. Duplicate DatabaseClient Interface
-- **Location**: `src/config/types.ts:93-96` and `src/db/DatabaseClient.ts`
-- **Issue**: DatabaseClient interface defined in both files
-- **Impact**: Potential inconsistencies, code duplication
-
-### 8. Optional projectId Not Handled in Memory
-- **Location**: `src/core/Memory.ts:27-30`
-- **Issue**: Insert uses `projectId` which can be undefined, but column may not allow null
-- **Impact**: Database constraint violations
-
-### 9. Type mismatch in AgentSession
-- **Location**: `src/core/Agent.ts:239-248`
-- **Issue**: The response type expects `projectID` but returns `projectId`. Works but could cause confusion.
-- **Impact**: Inconsistent naming, potential bugs
-
-### 10. Unused interface in CLI
-- **Location**: `src/cli/index.ts:6-9`
-- **Issue**: `CliArgs` interface is defined but never used.
-- **Impact**: Dead code
-
-## Logic Issues
-
-### 11. Blocking Task Execution in Scheduler
-- **Location**: `src/core/Scheduler.ts:117`
-- **Issue**: `await this.onTaskReady?.()` blocks the heartbeat cycle until task completes
-- **Impact**: Heartbeat cannot check for new tasks while executing long-running tasks
-
-### 12. Missing Database Connection Initialization
-- **Location**: `src/NezhaCore.ts:27`
-- **Issue**: DatabaseClient is instantiated but no explicit connection/ping to verify connectivity
-- **Impact**: Connection errors may not surface until first query
-
-### 13. Task Status Reset Without Error Details
-- **Location**: `src/core/Scheduler.ts:141-144`
-- **Issue**: When task fails, status reset to PENDING but previous error may persist in database
-- **Impact**: Error messages from failed attempts may be lost
-
-### 14. Retry logic off-by-one in Agent
-- **Location**: `src/core/Agent.ts:115, 125, 148`
-- **Issue**: The loop runs `maxRetries + 1` times, but the retry condition is `attempt > this.maxRetries`. Effectively, only `maxRetries` attempts are made, not `maxRetries + 1`
-- **Impact**: Unexpected retry behavior
-
-### 15. HeartbeatService creates duplicate Scheduler
-- **Location**: `src/services/HeartbeatService.ts:38`
-- **Issue**: In NezhaCore.initialize(), a Scheduler is already created with the db. Then HeartbeatService constructor creates its own Scheduler instance with the same db.
-- **Impact**: Two independent schedulers, wasted resources
-
-### 16. Error object to string conversion
-- **Location**: `src/core/Scheduler.ts:149`
-- **Issue**: Using `String(err)` to convert error to string is unreliable.
-- **Impact**: Poor error logging
-
-### 17. Missing validation for database password
-- **Location**: `src/config/Config.ts:121-138`
-- **Issue**: The `validate()` method doesn't check if the database password is empty
-- **Impact**: Silent connection failures
-
-## Minor Issues
-
-### 18. No Password Validation in Config
-- **Location**: `src/config/Config.ts`
-- **Issue**: Empty passwords are allowed without warning
-- **Impact**: Security risk, silent failures
-
-### 19. No Request Abort Capability in Agent
-- **Location**: `src/core/Agent.ts`
-- **Issue**: HTTP requests have timeout but no way to abort mid-flight
-- **Impact**: Resources may be wasted on cancelled operations
-
-### 20. Return Type Mismatch in getTableNames
-- **Location**: `src/db/DatabaseClient.ts:50-52`
-- **Issue**: Returns internal constant type instead of proper abstraction
-- **Impact**: Leaks internal implementation details
-
-### 21. Duplicate MemoryService import path
-- **Location**: `src/services/MemoryService.ts:1-4`
-- **Issue**: This file re-exports MemoryService from core. It's a pass-through file that adds an extra layer of indirection without value.
-- **Impact**: Unnecessary complexity
-
-### 22. AgentSystem is completely unimplemented
-- **Location**: `src/core/AgentSystem.ts:1-29`
-- **Issue**: The entire class is stubbed with TODO comments.
-- **Impact**: Dead code, potential confusion
-
-### 23. Inconsistent error message formatting
-- **Location**: `src/core/Agent.ts:235, 263`
-- **Issue**: Error messages use `[Agent]` prefix but helper methods use it too, causing double prefixes like `[Agent] [Agent] Failed to create session`.
-- **Impact**: Confusing log messages
-
-### 24. Inconsistent use of optional properties
-- **Location**: `src/services/HeartbeatService.ts:85`
-- **Issue**: `projectId: undefined` is explicitly set instead of simply omitting the property
-- **Impact**: Code clarity
-
-### 25. Empty test file
-- **Location**: `src/tests/NezhaCore.test.ts:1-7`
-- **Issue**: The test file only has a placeholder test that passes. No actual functionality is tested.
-- **Impact**: No test coverage
+This document outlines the systemic improvements needed to transform Nezha from a basic task queue into an autonomous AI agent system similar to OpenClaw. Based on comparison with OpenClaw's architecture, we identify key missing capabilities and their implementation priorities.
 
 ---
 
-## Total Issues: 25
+## Part 1: Comparison Analysis
+
+### OpenClaw vs Nezha Feature Matrix
+
+| Feature | OpenClaw | Nezha | Priority |
+|---------|----------|-------|----------|
+| **Daily Memory** | ✅ memory/YYYY-MM-DD.md | ❌ | P0 |
+| **Curated Long-term Memory** | ✅ MEMORY.md integrated in prompt | ⚠️ Static file only | P0 |
+| **Searchable Memory (Vector)** | ✅ pgvector + semantic search | ❌ Basic JSON match | P0 |
+| **Multi-brain Parallel Tasks** | ✅ ACP protocol, multiple agents | ❌ Sequential only | P1 |
+| **Self-Learning via Prompts** | ✅ Can update own prompts | ⚠️ Stub exists, unimplemented | P1 |
+| **Health Monitoring** | ✅ Web dashboard, metrics | ❌ Basic logs only | P2 |
+| **Task Dependencies** | ✅ DAG-based | ❌ Flat queue only | P2 |
+| **Persistent Sessions** | ✅ ACP with state | ❌ HTTP session per task | P2 |
+
+### Root Cause Analysis
+
+**Why Nezha lacks continuous learning:**
+1. Memory is stored in PostgreSQL but never retrieved contextually
+2. No embedding-based search to find relevant past experiences
+3. Agent has no way to "remember" solutions to similar problems
+4. No daily reflection/learning loop
+
+---
+
+## Part 2: Implementation Roadmap
+
+### Phase 0: Memory System (P0) ⚠️ CRITICAL
+
+**Goal:** Enable Nezha to remember and retrieve past experiences semantically
+
+#### 0.1 Daily Memory (memory/YYYY-MM-DD.md)
+
+```
+Directory: .tmp/nezha-memory/
+Files: 2026-03-18.md, 2026-03-17.md, ...
+```
+
+**Format:**
+```markdown
+# 2026-03-18
+
+## Tasks Executed
+- "Review Agent.ts" → Found race condition in timeout handling
+- "Fix stdin issue" → Root cause: opencode run expects TTY
+
+## Learnings
+- opencode serve (HTTP) works better than opencode run (CLI) for daemon
+- execSync blocks event loop - use HTTP API instead
+
+## Decisions
+- Use opencode serve --port 4096 for task execution
+- Session reuse for efficiency
+```
+
+**Implementation:**
+- Create `.tmp/nezha-memory/` directory on startup
+- Append to today's file after each task completes
+- Include: task prompt, result, errors, solutions found
+
+#### 0.2 Curated Memory (MEMORY.md)
+
+```
+Location: .tmp/nezha-memory/MEMORY.md
+```
+
+**Format:**
+```markdown
+# Nezha Long-term Memory
+
+## Core Identity
+- I'm Nezha, an autonomous AI agent
+- I execute tasks from PostgreSQL queue via heartbeat
+- I use opencode serve HTTP API for task execution
+
+## How I Work
+1. Heartbeat polls DB every 30s for PENDING tasks
+2. Tasks are sent to opencode serve via HTTP
+3. Results stored in DB with full response JSON
+
+## Key Learnings
+- opencode run (CLI) hangs in daemon - use opencode serve instead
+- execSync blocks event loop - use HTTP API or exec with callback
+- stdin must be redirected to /dev/null for non-TTY execution
+- Session reuse improves efficiency (avoid creating new session per task)
+
+## Tools Available
+- memory_save(id, content, metadata) - Save to memory
+- memory_search(query) - Semantic search via embeddings
+- memory_link(source, target) - Link related memories
+```
+
+**Implementation:**
+- Load MEMORY.md content into agent system prompt
+- Allow AI to update it via tool calls
+- Include at start of every task context
+
+#### 0.3 Semantic Search Memory
+
+**Current Problem:** MemoryService uses naive `JSON.stringify().includes()` - useless for retrieval
+
+**Solution:** Use embeddings (Ollama already configured)
+
+**Database Schema:**
+```sql
+-- Add to memory table or create new table
+ALTER TABLE memory ADD COLUMN embedding vector(1536);
+CREATE INDEX idx_memory_embedding ON memory USING ivfflat (embedding vector_cosine_ops);
+```
+
+**API:**
+```typescript
+interface MemorySearchResult {
+  id: string;
+  content: string;
+  similarity: number;
+  metadata: Record<string, unknown>;
+}
+
+// Tool: memory_search(query: string) → MemorySearchResult[]
+```
+
+**Implementation Steps:**
+1. Enable pgvector or use simple cosine similarity with Ollama embeddings
+2. Add embedding column to memory table
+3. On task completion: generate embedding and store
+4. On new task: embed prompt, search top-K similar memories
+5. Include results in task context
+
+---
+
+### Phase 1: Parallel Execution (P1)
+
+**Goal:** Execute multiple tasks concurrently
+
+**Current State:**
+- Scheduler awaits each task before checking next
+- setInterval heartbeat blocked during task execution
+
+**Solution:**
+```typescript
+interface TaskWorker {
+  id: string;
+  status: 'idle' | 'busy';
+  currentTask?: string;
+}
+
+class TaskPool {
+  private workers: TaskWorker[] = [];
+  private maxConcurrent: number = 3;
+
+  async schedule(tasks: Task[]): Promise<void> {
+    const pending = tasks.filter(t => t.status === 'PENDING');
+    const slots = this.maxConcurrent - this.workers.filter(w => w.status === 'busy').length;
+    
+    for (const task of pending.slice(0, slots)) {
+      this.executeInWorker(task);
+    }
+  }
+}
+```
+
+**Database Update:**
+```sql
+ALTER TABLE tasks ADD COLUMN worker_id UUID;
+ALTER TABLE tasks ADD COLUMN parallel_group INT;
+```
+
+---
+
+### Phase 2: Self-Learning (P1)
+
+**Goal:** AI can improve its own prompts and configuration
+
+**Current State:**
+- `ContinuousImprovementLoop.ts` exists but is stubbed
+- No mechanism for AI to modify its own behavior
+
+**Solution:**
+```typescript
+// Tools for AI
+interface SelfImprovement {
+  // Update system prompt
+  update_prompt(new_prompt: string): void;
+  
+  // Add to memory
+  learn(insight: string, context: string): void;
+  
+  // Mark lesson learned
+  remember(lesson: string, from_task: string): void;
+}
+```
+
+**Workflow:**
+1. After task completes, AI reviews its own performance
+2. If novel solution found → save to MEMORY.md
+3. If repeated pattern → suggest prompt improvement
+4. Human approves → update system prompt
+
+---
+
+### Phase 3: Monitoring (P2)
+
+**Goal:** Real-time visibility into Nezha's operation
+
+**Endpoints to Add:**
+```typescript
+// GET /health
+{
+  "status": "healthy",
+  "uptime": 3600,
+  "tasks": {
+    "pending": 5,
+    "running": 2,
+    "completed_today": 15,
+    "failed_today": 1
+  },
+  "memory": {
+    "total_memories": 150,
+    "search_indexed": 120
+  },
+  "workers": [
+    { "id": "w1", "status": "idle" },
+    { "id": "w2", "status": "busy", "task": "Review code" }
+  ]
+}
+
+// GET /metrics
+{
+  "tasks_per_hour": 12,
+  "avg_task_duration": 45000,
+  "success_rate": 0.95,
+  "memory_recall_rate": 0.3
+}
+```
+
+---
+
+### Phase 4: Task Dependencies (P2)
+
+**Goal:** Support DAG-based task execution
+
+**Schema:**
+```sql
+ALTER TABLE tasks ADD COLUMN depends_on UUID[];
+ALTER TABLE tasks ADD COLUMN blocking UUID[];
+
+-- Task only runs when all depends_on are COMPLETED
+-- Task blocks all tasks in blocking[]
+```
+
+**CLI Enhancement:**
+```bash
+node cli/index.js task-add "Phase 2" "Do phase 2" --depends-on <phase1-id>
+```
+
+---
+
+## Part 3: Technical Specifications
+
+### 3.1 Memory Search Algorithm
+
+```typescript
+class SemanticMemory {
+  async search(query: string, topK: number = 5): Promise<MemorySearchResult[]> {
+    // 1. Embed query
+    const queryEmbedding = await this.embedding.embed(query);
+    
+    // 2. Search in DB (pgvector or manual)
+    const results = await this.db.query(`
+      SELECT id, content, metadata,
+        (embedding <=> $1) as distance
+      FROM memory
+      ORDER BY embedding <=> $1
+      LIMIT $2
+    `, [queryEmbedding, topK]);
+    
+    // 3. Filter by threshold
+    return results.rows
+      .filter(r => r.distance < 0.3)
+      .map(r => ({
+        id: r.id,
+        content: r.content,
+        similarity: 1 - r.distance,
+        metadata: r.metadata
+      }));
+  }
+}
+```
+
+### 3.2 Context Injection
+
+```typescript
+async function buildTaskContext(task: Task): Promise<string> {
+  // 1. Get relevant memories
+  const memories = await memory.search(task.description, topK: 3);
+  
+  // 2. Build context string
+  const context = `
+## Relevant Past Experience
+${memories.map(m => `- ${m.content} (similarity: ${m.similarity})`).join('\n')}
+
+## Today's Memory
+${todayMemoryContent}
+
+## Task
+${task.description}
+  `.trim();
+  
+  return context;
+}
+```
+
+### 3.3 Daily Memory Format
+
+```typescript
+interface DailyMemoryEntry {
+  date: string; // YYYY-MM-DD
+  tasks: Array<{
+    id: string;
+    title: string;
+    prompt: string;
+    result: string;
+    errors?: string[];
+    solution?: string;
+  }>;
+  learnings: string[];
+  reflections: string[];
+}
+
+class DailyMemory {
+  private filePath: string;
+  
+  async append(task: Task, result: TaskResult): Promise<void> {
+    const entry = {
+      task_id: task.id,
+      title: task.title,
+      prompt: task.description,
+      result: result.message?.substring(0, 500),
+      errors: result.error ? [result.error] : [],
+    };
+    
+    // Append to day's markdown file
+    await fs.appendFile(
+      this.filePath, 
+      `\n- **${task.title}**: ${result.success ? '✅' : '❌'} ${entry.result}`
+    );
+  }
+}
+```
+
+---
+
+## Part 4: Implementation Order
+
+```
+Week 1: Daily Memory + MEMORY.md integration
+  └─> Enable AI to remember daily activities
+  
+Week 2: Semantic Search
+  └─> Enable retrieval of relevant past experiences
+  
+Week 3: Parallel Execution  
+  └─> Execute multiple tasks concurrently
+  
+Week 4: Self-Learning Loop
+  └─> AI can update its own prompts
+  
+Week 5: Monitoring Dashboard
+  └─> Real-time visibility
+  
+Week 6: Task Dependencies
+  └─> DAG-based execution
+```
+
+---
+
+## Part 5: Success Metrics
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Task completion rate | ~80% | >95% |
+| Memory recall | 0% | >30% of tasks use relevant memories |
+| Parallel tasks | 1 | 3-5 concurrent |
+| Self-improvement | 0 | AI suggests improvements weekly |
+| Mean time to complete | Varies | Decreasing over time |
+
+---
+
+## Appendix A: File Structure
+
+```
+.tmp/nezha-memory/
+├── 2026-03-18.md      # Daily logs
+├── 2026-03-17.md
+├── MEMORY.md           # Curated long-term memory
+└── embeddings/         # Vector cache
+
+src/
+├── services/
+│   ├── MemoryService.ts      # Existing, needs upgrade
+│   ├── DailyMemory.ts        # NEW: Daily log
+│   ├── SemanticSearch.ts     # NEW: Vector search
+│   └── ContextBuilder.ts     # NEW: Build task context
+├── tools/
+│   ├── memory_save.ts        # NEW
+│   ├── memory_search.ts      # NEW
+│   └── memory_learn.ts       # NEW: Self-improvement
+└── cli/
+    └── index.ts              # Add memory commands
+```
+
+---
+
+## Appendix B: Database Schema Updates
+
+```sql
+-- Memory with embeddings
+ALTER TABLE memory ADD COLUMN embedding vector(1536);
+CREATE INDEX idx_memory_embedding ON memory USING ivfflat (embedding vector_cosine_ops);
+
+-- Daily memory table
+CREATE TABLE daily_memory (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  date DATE NOT NULL,
+  content TEXT NOT NULL,
+  task_id UUID REFERENCES tasks(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_daily_memory_date ON daily_memory(date DESC);
+
+-- Task dependencies
+ALTER TABLE tasks ADD COLUMN depends_on UUID[] DEFAULT '{}';
+ALTER TABLE tasks ADD COLUMN blocking UUID[] DEFAULT '{}';
+
+-- Worker pool
+CREATE TABLE workers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  status TEXT DEFAULT 'idle',
+  current_task_id UUID REFERENCES tasks(id),
+  started_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+## Appendix C: OpenClaw Reference
+
+Key files studied:
+- `/Users/jk/.openclaw/workspace/AGENTS.md` - Workspace structure
+- `/Users/jk/.openclaw/workspace/SOUL.md` - Agent identity
+- `/Users/jk/.openclaw/workspace/memory/` - Daily memory (to be implemented)
+- `/Users/jk/.openclaw/workspace/TASKS.md` - Task tracking
+
+Key insights from OpenClaw:
+1. Memory is file-based (markdown) not DB-only
+2. Daily reflection is key to learning
+3. Agent has explicit identity (SOUL.md)
+4. Tools are documented and discoverable
+5. Human approval required for self-modification

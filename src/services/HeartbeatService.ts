@@ -6,6 +6,7 @@ import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { waitForever } from '../utils/wait.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
+import { DailyMemoryService, memory_save } from './DailyMemory.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
@@ -30,6 +31,7 @@ export class HeartbeatService {
   private readonly scheduler: Scheduler;
   private readonly agent: Agent;
   private readonly memory: MemoryService;
+  private readonly dailyMemory: DailyMemoryService;
   private readonly workspaceDir: string;
   private readonly autoReconnect: boolean;
   private readonly maxReconnectAttempts: number;
@@ -63,6 +65,7 @@ export class HeartbeatService {
     }
     
     this.memory = new MemoryService(db, undefined, embeddingProvider);
+    this.dailyMemory = new DailyMemoryService();
     this.workspaceDir = config?.workspaceDir ?? process.cwd();
     this.autoReconnect = config?.autoReconnect ?? true;
     this.maxReconnectAttempts = config?.maxReconnectAttempts ?? 5;
@@ -170,6 +173,11 @@ export class HeartbeatService {
           projectId: undefined,
           content: `Task: ${title}\nResult: ${result.message}`,
           metadata: { type: 'task_result', success: true },
+        });
+
+        await this.dailyMemory.save({
+          task: title,
+          result: result.message || 'Completed',
         });
         
         this.stats.tasksSucceeded++;

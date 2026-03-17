@@ -1,81 +1,25 @@
-import * as http from 'http';
-import { OPENCODE_API } from '../config/constants.js';
-import { type AgentResponse, type AgentSession } from '../config/types.js';
+import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 
-const NETWORK_ERRORS: Record<string, string> = {
-  ECONNREFUSED: 'Connection refused - server may be down or port incorrect',
-  ETIMEDOUT: 'Connection timed out - server took too long to respond',
-  ENOTFOUND: 'Host not found - check DNS or hostname configuration',
-  ECONNRESET: 'Connection reset by peer - server closed connection unexpectedly',
-  EHOSTUNREACH: 'Host unreachable - network or firewall issue',
-  EPIPE: 'Broken pipe - connection closed while writing',
-  ENETUNREACH: 'Network unreachable - check network connectivity',
-  EAI_NONAME: 'Name resolution failed - hostname cannot be resolved',
-};
-
-const RETRYABLE_HTTP_STATUSES = new Set([429, 502, 503, 504]);
-
-function isRetryableHttpStatus(status: number): boolean {
-  return RETRYABLE_HTTP_STATUSES.has(status);
-}
-
-function getHttpStatusMessage(status: number): string {
-  const messages: Record<number, string> = {
-    429: 'Too Many Requests - rate limit exceeded',
-    502: 'Bad Gateway - server received invalid response',
-    503: 'Service Unavailable - server is temporarily overloaded',
-    504: 'Gateway Timeout - server took too long to respond',
-  };
-  return messages[status] || `HTTP error (${status})`;
-}
-
-function isNetworkError(code: string): boolean {
-  return code in NETWORK_ERRORS;
-}
-
-function getNetworkErrorMessage(code: string): string {
-  return NETWORK_ERRORS[code] || `Network error (${code})`;
-}
-
-class NetworkError extends Error {
-  code: string;
-  attempt: number;
-  url: string;
-  constructor(message: string, code: string, attempt: number, url: string) {
-    super(message);
-    this.name = 'NetworkError';
-    this.code = code;
-    this.attempt = attempt;
-    this.url = url;
-  }
-}
-
 export interface AgentConfig {
-  host?: string;
-  port?: number;
   timeout?: number;
   maxRetries?: number;
   retryDelay?: number;
+  serverUrl?: string;
 }
 
 export class Agent {
-  private readonly host: string;
-  private readonly port: number;
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly retryDelay: number;
+  private readonly serverUrl: string;
+  private sessionId: string | null = null;
 
   constructor(config?: AgentConfig) {
-    this.host = config?.host ?? OPENCODE_API.DEFAULT_HOST;
-    this.port = config?.port ?? OPENCODE_API.DEFAULT_PORT;
-    this.timeout = config?.timeout ?? 60000;
+    this.timeout = config?.timeout ?? 300000;
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
-  }
-
-  public getBaseUrl(): string {
-    return `http://${this.host}:${this.port}`;
+    this.serverUrl = config?.serverUrl ?? 'http://127.0.0.1:4096';
   }
 
   private async sleep(ms: number): Promise<void> {
@@ -88,195 +32,120 @@ export class Agent {
     return Math.min(baseDelay + jitter, 30000);
   }
 
-  private formatErrorMessage(requestId: string, method: string, url: string, error: string, details?: string): string {
-    return `[Agent] ${error} [${requestId}] ${method} ${url}${details ? ` - ${details}` : ''}`;
-  }
-
-  private formatNetworkError(error: NetworkError): string {
-    const baseMsg = getNetworkErrorMessage(error.code);
-    return `${baseMsg} (attempt ${error.attempt}/${this.maxRetries})`;
-  }
-
-  private formatTimeoutError(timeoutMs: number, attempt: number): string {
-    return `Request timed out after ${timeoutMs}ms - server may be slow or unreachable (attempt ${attempt}/${this.maxRetries})`;
-  }
-
-  private async httpRequest(path: string, method: string, body?: string): Promise<{ ok: boolean; data?: unknown; status: number }> {
-    const requestId = Math.random().toString(36).substring(2, 9);
-    const url = `${this.getBaseUrl()}${path}`;
-    let lastError: NetworkError | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const result = await this.executeRequest(requestId, path, method, url, body, attempt);
-        
-        if (result.ok) {
-          return result;
-        }
-
-        const isRetryableStatus = result.status > 0 && isRetryableHttpStatus(result.status);
-        
-        if (!isRetryableStatus || attempt > this.maxRetries) {
-          const errorDetails = [
-            `Status: ${result.status}`,
-            `URL: ${url}`,
-            `Host: ${this.host}:${this.port}`,
-          ].join(' | ');
-          const statusMsg = result.status > 0 ? getHttpStatusMessage(result.status) : 'Connection failed';
-          logger.error(this.formatErrorMessage(requestId, method, url, `HTTP request failed: ${statusMsg}`, errorDetails));
-          return result;
-        }
-
-        const delay = this.calculateRetryDelay(attempt);
-        logger.info(this.formatErrorMessage(requestId, method, url, `Retrying after ${Math.round(delay)}ms`, `Attempt ${attempt}/${this.maxRetries}, Status: ${result.status}`));
-        await this.sleep(delay);
-      } catch (error) {
-        if (!(error instanceof NetworkError)) {
-          logger.error(this.formatErrorMessage(requestId, method, url, 'Unexpected error', error instanceof Error ? error.message : String(error)));
-          return { ok: false, status: 0 };
-        }
-
-        lastError = error;
-        const isRetryable = isNetworkError(error.code);
-
-        if (!isRetryable || attempt > this.maxRetries) {
-          const errorDetails = [
-            this.formatNetworkError(error),
-            `URL: ${url}`,
-            `Host: ${this.host}:${this.port}`,
-          ].join(' | ');
-          logger.error(this.formatErrorMessage(requestId, method, url, 'Network request failed', errorDetails));
-          return { ok: false, status: 0 };
-        }
-
-        const delay = this.calculateRetryDelay(attempt);
-        logger.info(this.formatErrorMessage(
-          requestId, method, url,
-          `Network error, retrying after ${Math.round(delay)}ms`,
-          `${getNetworkErrorMessage(error.code)} - Attempt ${attempt}/${this.maxRetries}`
-        ));
-        await this.sleep(delay);
-      }
+  private async ensureSession(): Promise<string> {
+    if (this.sessionId) {
+      return this.sessionId;
     }
 
-    if (lastError) {
-      const errorMsg = `Failed after ${this.maxRetries} attempts: ${this.formatNetworkError(lastError)}`;
-      logger.error(this.formatErrorMessage(requestId, method, url, 'Max retries exceeded', errorMsg));
-    }
-
-    return { ok: false, status: 0 };
-  }
-
-  private async executeRequest(requestId: string, path: string, method: string, url: string, body: string | undefined, attempt: number): Promise<{ ok: boolean; data?: unknown; status: number }> {
-    return new Promise((resolve) => {
-      const options = {
-        hostname: this.host,
-        port: this.port,
-        path: path,
-        method: method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      };
-
-      const req = http.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          try {
-            const parsed = JSON.parse(data);
-            if (res.statusCode !== 200) {
-              logger.error(this.formatErrorMessage(requestId, method, url, `Request failed`, `Status: ${res.statusCode} - ${getHttpStatusMessage(res.statusCode || 0)}`), parsed);
-            }
-            resolve({ ok: res.statusCode === 200, data: parsed, status: res.statusCode ?? 0 });
-          } catch {
-            const truncatedData = data.length > 200 ? data.substring(0, 200) + '...' : data;
-            logger.error(this.formatErrorMessage(requestId, method, url, `Response parse error`, `Invalid JSON response (status: ${res.statusCode}, body: "${truncatedData}")`));
-            resolve({ ok: false, status: res.statusCode ?? 0 });
-          }
-        });
-      });
-
-      req.on('error', (e: NodeJS.ErrnoException) => {
-        const code = e.code || 'UNKNOWN';
-        const errorType = code.startsWith('E') ? 'Connection error' : 'Request error';
-        logger.error(this.formatErrorMessage(requestId, method, url, errorType, `${e.message} (code: ${code})`));
-        throw new NetworkError(e.message, code, attempt, url);
-      });
-
-      req.setTimeout(this.timeout, () => {
-        const timeoutMsg = this.formatTimeoutError(this.timeout, attempt);
-        logger.error(this.formatErrorMessage(requestId, method, url, 'Request timeout', timeoutMsg));
-        req.destroy();
-        throw new NetworkError(timeoutMsg, 'ETIMEDOUT', attempt, url);
-      });
-
-      if (body) {
-        req.write(body);
-      }
-      req.end();
-    });
-  }
-
-  async createSession(): Promise<AgentSession> {
-    const result = await this.httpRequest('/api/session', 'POST', '{}');
-
-    if (!result.ok) {
-      const errorMsg = result.status > 0 
-        ? `Failed to create session: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
-        : 'Failed to create session: network error - check server connectivity';
-      logger.error(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    const data = result.data as {
-      id: string;
-      projectID: string;
-      time: { created: number };
-    };
-    
-    return {
-      id: data.id,
-      projectId: data.projectID,
-      createdAt: new Date(data.time.created),
-    };
-  }
-
-  async sendMessage(sessionId: string, message: string): Promise<AgentResponse> {
-    const body = JSON.stringify({
-      parts: [{ type: 'text', text: message }],
+    const response = await fetch(`${this.serverUrl}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'nezha-daemon-session' }),
     });
 
-    const result = await this.httpRequest(`/api/session/${sessionId}/message`, 'POST', body);
-
-    if (!result.ok) {
-      const errorMsg = result.status > 0 
-        ? `Failed to send message: server returned status ${result.status} (${getHttpStatusMessage(result.status) || 'unknown error'})`
-        : 'Failed to send message: network error - check server connectivity';
-      logger.error(errorMsg);
-      return {
-        success: false,
-        message: errorMsg,
-      };
+    if (!response.ok) {
+      throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
     }
 
-    return {
-      success: true,
-      sessionId,
-    };
+    const data = await response.json() as { id: string };
+    this.sessionId = data.id;
+    logger.info(`Created session: ${this.sessionId}`);
+    return this.sessionId!;
   }
 
   async executeTask(message: string): Promise<AgentResponse> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        logger.info(`Executing task (attempt ${attempt}/${this.maxRetries}): ${message.substring(0, 100)}...`);
+        
+        const result = await this.runOpenCode(message);
+        
+        if (result.success) {
+          logger.info(`Task completed successfully`);
+          return result;
+        } else {
+          logger.warn(`Task failed: ${result.message}`);
+          lastError = new Error(result.message);
+          
+          if (attempt < this.maxRetries) {
+            const delay = this.calculateRetryDelay(attempt);
+            logger.info(`Retrying after ${Math.round(delay)}ms...`);
+            await this.sleep(delay);
+          }
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.error(`Task execution error: ${lastError.message}`);
+        
+        if (attempt < this.maxRetries) {
+          const delay = this.calculateRetryDelay(attempt);
+          logger.info(`Retrying after ${Math.round(delay)}ms...`);
+          await this.sleep(delay);
+        }
+      }
+    }
+
+    return {
+      success: false,
+      message: `Task failed after ${this.maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`,
+    };
+  }
+
+  private async runOpenCode(message: string): Promise<AgentResponse> {
+    const startTime = Date.now();
+
     try {
-      const session = await this.createSession();
-      return await this.sendMessage(session.id, message);
+      const sessionId = await this.ensureSession();
+      
+      logger.debug(`Sending message to session ${sessionId}: ${message}`);
+      
+      const response = await fetch(`${this.serverUrl}/session/${sessionId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parts: [{ type: 'text', text: message }]
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+    const data = await response.json() as { id?: string; result?: { parts?: Array<{ type: string; text: string }> }; message?: { parts?: Array<{ type: string; text: string }> } };
+      const elapsed = Date.now() - startTime;
+      
+      let responseText = '';
+      if (data.result?.parts) {
+        responseText = data.result.parts
+          .filter((p: { type: string }) => p.type === 'text')
+          .map((p: { text: string }) => p.text)
+          .join('\n');
+      } else if (data.message?.parts) {
+        responseText = data.message.parts
+          .filter((p: { type: string }) => p.type === 'text')
+          .map((p: { text: string }) => p.text)
+          .join('\n');
+      } else {
+        responseText = JSON.stringify(data);
+      }
+
+      logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
+      
+      return {
+        success: true,
+        message: responseText,
+      };
     } catch (error) {
-      const errorDetail = error instanceof Error ? error.message : String(error);
-      logger.error(`executeTask failed: ${errorDetail}`);
+      const elapsed = Date.now() - startTime;
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error(`Task failed after ${elapsed}ms: ${err.message}`);
+      
       return {
         success: false,
-        message: `Task execution failed: ${errorDetail}`,
+        message: err.message,
       };
     }
   }
