@@ -146,7 +146,13 @@ export class MemoryService {
   ): Promise<KeywordSearchResult[]> {
     const tableName = DATABASE_TABLES.MEMORY;
     const queryLimit = limit ?? 10;
-    const projectIdFilter = projectId ? `AND project_id = '${projectId}'` : '';
+
+    const params: (string | number)[] = [query, queryLimit];
+    let paramIndex = 3;
+    const projectIdFilter = projectId ? `AND project_id = $${paramIndex++}` : '';
+    if (projectId) {
+      params.push(projectId);
+    }
 
     const result = await this.db.query<KeywordSearchResult>(
       `SELECT 
@@ -159,12 +165,13 @@ export class MemoryService {
         source,
         created_at as "createdAt", 
         updated_at as "updatedAt",
-        ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', '${query}'))::FLOAT as rank
+        ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', $1))::FLOAT as rank
        FROM ${tableName}
-       WHERE to_tsvector('english', content) @@ plainto_tsquery('english', '${query}')
+       WHERE to_tsvector('english', content) @@ plainto_tsquery('english', $1)
          ${projectIdFilter}
        ORDER BY rank DESC
-       LIMIT ${queryLimit}`
+       LIMIT $2`,
+      params
     );
 
     return result.rows;
@@ -187,7 +194,29 @@ export class MemoryService {
     const queryKeywordWeight = keywordWeight ?? 0.3;
     const queryEmbedding = await this.embedding.embed(query);
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
-    const projectIdFilter = projectId ? `AND project_id = '${projectId}'` : '';
+
+    let params: (string | number)[];
+    let vectorLimitIdx: string;
+    let keywordQueryIdx: string;
+    let keywordLimitIdx: string;
+    let vectorWeightIdx: string;
+    let keywordWeightIdx: string;
+
+    if (projectId) {
+      params = [embeddingStr, projectId, queryLimit * 2, query, queryVectorWeight, queryKeywordWeight];
+      vectorLimitIdx = '$3';
+      keywordQueryIdx = '$4';
+      keywordLimitIdx = '$3';
+      vectorWeightIdx = '$5';
+      keywordWeightIdx = '$6';
+    } else {
+      params = [embeddingStr, queryLimit * 2, query, queryVectorWeight, queryKeywordWeight];
+      vectorLimitIdx = '$2';
+      keywordQueryIdx = '$3';
+      keywordLimitIdx = '$2';
+      vectorWeightIdx = '$4';
+      keywordWeightIdx = '$5';
+    }
 
     const result = await this.db.query<HybridSearchResult>(
       `WITH vector_results AS (
@@ -199,15 +228,15 @@ export class MemoryService {
           tags,
           importance,
           source,
-          (1 - (embedding <=> '${embeddingStr}'::vector))::FLOAT as vector_similarity,
+          (1 - (embedding <=> $1::vector))::FLOAT as vector_similarity,
           0.0::FLOAT as keyword_rank,
           created_at as "createdAt", 
           updated_at as "updatedAt"
         FROM ${tableName}
         WHERE embedding IS NOT NULL
-          ${projectIdFilter}
-        ORDER BY embedding <=> '${embeddingStr}'::vector
-        LIMIT ${queryLimit * 2}
+          ${projectId ? 'AND project_id = $2' : ''}
+        ORDER BY embedding <=> $1::vector
+        LIMIT ${vectorLimitIdx}
       ),
       keyword_results AS (
         SELECT 
@@ -219,14 +248,14 @@ export class MemoryService {
           importance,
           source,
           0.0::FLOAT as vector_similarity,
-          ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', '${query}'))::FLOAT as keyword_rank,
+          ts_rank_cd(to_tsvector('english', content), plainto_tsquery('english', ${keywordQueryIdx}))::FLOAT as keyword_rank,
           created_at as "createdAt", 
           updated_at as "updatedAt"
         FROM ${tableName}
-        WHERE to_tsvector('english', content) @@ plainto_tsquery('english', '${query}')
-          ${projectIdFilter}
+        WHERE to_tsvector('english', content) @@ plainto_tsquery('english', ${keywordQueryIdx})
+          ${projectId ? 'AND project_id = $2' : ''}
         ORDER BY keyword_rank DESC
-        LIMIT ${queryLimit * 2}
+        LIMIT ${keywordLimitIdx}
       ),
       combined AS (
         SELECT * FROM vector_results
@@ -243,12 +272,13 @@ export class MemoryService {
         source,
         vector_similarity as "vectorSimilarity",
         keyword_rank as "keywordRank",
-        (vector_similarity * ${queryVectorWeight} + keyword_rank * ${queryKeywordWeight})::FLOAT as "combinedScore",
+        (vector_similarity * ${vectorWeightIdx} + keyword_rank * ${keywordWeightIdx})::FLOAT as "combinedScore",
         "createdAt",
         "updatedAt"
       FROM combined
       ORDER BY "combinedScore" DESC
-      LIMIT ${queryLimit}`
+      LIMIT ${projectId ? '$3' : '$2'}`,
+      params
     );
 
     return result.rows;

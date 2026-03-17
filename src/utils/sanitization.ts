@@ -1,0 +1,135 @@
+// Input validation and sanitization utilities
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  sanitized?: string;
+}
+
+const MAX_TITLE_LENGTH = 500;
+const MAX_DESCRIPTION_LENGTH = 5000;
+const MAX_TAGS = 10;
+
+export function sanitizeTaskTitle(input: string | undefined): ValidationResult {
+  if (!input || input.trim().length === 0) {
+    return { valid: false, error: 'Title is required' };
+  }
+
+  if (input.length > MAX_TITLE_LENGTH) {
+    return { valid: false, error: `Title must be less than ${MAX_TITLE_LENGTH} characters` };
+  }
+
+  // Remove null bytes and control characters
+  const sanitized = input
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+
+  return { valid: true, sanitized };
+}
+
+export function sanitizeTaskDescription(input: string | undefined): ValidationResult {
+  if (!input) {
+    return { valid: true, sanitized: '' };
+  }
+
+  if (input.length > MAX_DESCRIPTION_LENGTH) {
+    return { valid: false, error: `Description must be less than ${MAX_DESCRIPTION_LENGTH} characters` };
+  }
+
+  // Remove null bytes and control characters
+  const sanitized = input
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+
+  return { valid: true, sanitized };
+}
+
+export function sanitizeTags(input: string[] | undefined): ValidationResult {
+  if (!input || input.length === 0) {
+    return { valid: true, sanitized: '[]' };
+  }
+
+  if (input.length > MAX_TAGS) {
+    return { valid: false, error: `Maximum ${MAX_TAGS} tags allowed` };
+  }
+
+  // Sanitize each tag
+  const sanitized = input
+    .map(tag => tag.trim().replace(/[\x00-\x1F\x7F]/g, ''))
+    .filter(tag => tag.length > 0 && tag.length <= 50);
+
+  return { valid: true, sanitized: JSON.stringify(sanitized) };
+}
+
+export function sanitizeUUID(input: string | undefined): ValidationResult {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  
+  if (!input) {
+    return { valid: false, error: 'UUID is required' };
+  }
+
+  if (!uuidRegex.test(input)) {
+    return { valid: false, error: 'Invalid UUID format' };
+  }
+
+  return { valid: true, sanitized: input.toLowerCase() };
+}
+
+export function sanitizePriority(input: number | string | undefined): ValidationResult {
+  if (input === undefined || input === null || input === '') {
+    return { valid: true, sanitized: '0' };
+  }
+
+  const num = typeof input === 'string' ? parseInt(input, 10) : input;
+
+  if (isNaN(num)) {
+    return { valid: false, error: 'Priority must be a number' };
+  }
+
+  if (num < 0 || num > 100) {
+    return { valid: false, error: 'Priority must be between 0 and 100' };
+  }
+
+  return { valid: true, sanitized: String(num) };
+}
+
+export function sanitizeCronExpression(input: string | undefined): ValidationResult {
+  if (!input || input.trim().length === 0) {
+    return { valid: false, error: 'Cron expression is required' };
+  }
+
+  const parts = input.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    return { valid: false, error: 'Cron expression must have 5 parts (minute hour day month weekday)' };
+  }
+
+  // Basic validation
+  const patterns = [
+    /^(\*|[0-9]|[1-5][0-9])(-(\*|[0-9]|[1-5][0-9]))?(\/(\d+))?$/, // minute
+    /^(\*|[0-9]|1[0-9]|2[0-3])(-(\*|[0-9]|1[0-9]|2[0-3]))?(\/(\d+))?$/, // hour
+    /^(\*|[1-9]|[12][0-9]|3[01])(-(\*|[1-9]|[12][0-9]|3[01]))?(\/(\d+))?$/, // day
+    /^(\*|[1-9]|1[0-2])(-(\*|[1-9]|1[0-2]))?(\/(\d+))?$/, // month
+    /^(\*|[0-6])(-(\*|[0-6]))?(\/(\d+))?$/, // weekday
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    if (!patterns[i].test(parts[i])) {
+      return { valid: false, error: `Invalid cron part ${i + 1}: ${parts[i]}` };
+    }
+  }
+
+  return { valid: true, sanitized: input.trim() };
+}
+
+export function sanitizeApiKey(input: string | undefined): ValidationResult {
+  if (!input) {
+    return { valid: false, error: 'API key is required' };
+  }
+
+  // Must be hex string of at least 32 characters
+  if (!/^[a-f0-9]{32,}$/i.test(input)) {
+    return { valid: false, error: 'Invalid API key format' };
+  }
+
+  return { valid: true, sanitized: input };
+}

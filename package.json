@@ -11,13 +11,20 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
+    "dev:watch": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "start:daemon": "node dist/cli/index.js start",
+    "start:cli": "tsx src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:clean": "bash scripts/kill-vitest.sh",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "lint": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "db:reset": "tsx scripts/reset-db.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "typecheck:watch": "tsc --noEmit --watch"
   },
   "keywords": [
     "nezha",

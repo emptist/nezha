@@ -14,6 +14,15 @@ import {
   ENV_DEFAULT,
 } from './constants.js';
 
+function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
+  if (!value) return defaultValue;
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    throw new Error(`Invalid value for ${key}: "${value}" is not a valid integer`);
+  }
+  return parsed;
+}
+
 export class Config implements IConfig {
   private static instance: Config | null = null;
   private readonly config: NezhaConfig;
@@ -58,11 +67,11 @@ export class Config implements IConfig {
     const max = process.env[ENV_KEYS.DB_MAX];
     return {
       host: host || DATABASE_CONFIG.DEFAULT_HOST,
-      port: port ? parseInt(port, 10) : DATABASE_CONFIG.DEFAULT_PORT,
+      port: parseIntEnv(port, DATABASE_CONFIG.DEFAULT_PORT, ENV_KEYS.DB_PORT),
       database: database || 'nezha',
       user: user || 'postgres',
       password: password || '',
-      max: max ? parseInt(max, 10) : DATABASE_CONFIG.DEFAULT_MAX,
+      max: parseIntEnv(max, DATABASE_CONFIG.DEFAULT_MAX, ENV_KEYS.DB_MAX),
       idleTimeoutMillis: DATABASE_CONFIG.DEFAULT_IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: DATABASE_CONFIG.DEFAULT_CONNECTION_TIMEOUT_MS,
     };
@@ -70,21 +79,25 @@ export class Config implements IConfig {
 
   private loadTaskConfig(): TaskConfig {
     return {
-      heartbeatIntervalMs: parseInt(
-        process.env[ENV_KEYS.HEARTBEAT_INTERVAL] || String(TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS),
-        10
+      heartbeatIntervalMs: parseIntEnv(
+        process.env[ENV_KEYS.HEARTBEAT_INTERVAL],
+        TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS,
+        ENV_KEYS.HEARTBEAT_INTERVAL
       ),
-      maxRetries: parseInt(
-        process.env[ENV_KEYS.MAX_RETRIES] || String(TASK_CONFIG.DEFAULT_MAX_RETRIES),
-        10
+      maxRetries: parseIntEnv(
+        process.env[ENV_KEYS.MAX_RETRIES],
+        TASK_CONFIG.DEFAULT_MAX_RETRIES,
+        ENV_KEYS.MAX_RETRIES
       ),
-      retryDelayMs: parseInt(
-        process.env[ENV_KEYS.RETRY_DELAY] || String(TASK_CONFIG.DEFAULT_RETRY_DELAY_MS),
-        10
+      retryDelayMs: parseIntEnv(
+        process.env[ENV_KEYS.RETRY_DELAY],
+        TASK_CONFIG.DEFAULT_RETRY_DELAY_MS,
+        ENV_KEYS.RETRY_DELAY
       ),
-      taskTimeoutMs: parseInt(
-        process.env[ENV_KEYS.TASK_TIMEOUT] || String(TASK_CONFIG.DEFAULT_TASK_TIMEOUT_MS),
-        10
+      taskTimeoutMs: parseIntEnv(
+        process.env[ENV_KEYS.TASK_TIMEOUT],
+        TASK_CONFIG.DEFAULT_TASK_TIMEOUT_MS,
+        ENV_KEYS.TASK_TIMEOUT
       ),
     };
   }
@@ -92,9 +105,10 @@ export class Config implements IConfig {
   private loadMemoryConfig(): MemoryConfig {
     return {
       bootstrapDir: process.env[ENV_KEYS.MEMORY_BOOTSTRAP_DIR] || MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR,
-      maxMemoryAgeMs: parseInt(
-        process.env[ENV_KEYS.MAX_MEMORY_AGE] || String(MEMORY_CONFIG.DEFAULT_MAX_MEMORY_AGE_MS),
-        10
+      maxMemoryAgeMs: parseIntEnv(
+        process.env[ENV_KEYS.MAX_MEMORY_AGE],
+        MEMORY_CONFIG.DEFAULT_MAX_MEMORY_AGE_MS,
+        ENV_KEYS.MAX_MEMORY_AGE
       ),
     };
   }

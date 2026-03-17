@@ -32,8 +32,10 @@ export class Scheduler {
   private readonly heartbeatIntervalMs: number;
   private readonly eventBus: EventBus;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private isHeartbeatRunning: boolean = false;
   private recurringTaskTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
   private isRunning: boolean = false;
+  private isExecuting: boolean = false;
   private consecutiveFailures: number = 0;
   private isPaused: boolean = false;
   private pauseUntil: Date | null = null;
@@ -65,11 +67,49 @@ export class Scheduler {
     await this.heartbeat();
   }
 
-  async stop(): Promise<void> {
+  async stop(options?: { gracePeriodMs?: number; waitForRunningTasks?: boolean }): Promise<void> {
     if (!this.isRunning) {
       return;
     }
+
+    const gracePeriodMs = options?.gracePeriodMs ?? 30000;
+    const waitForRunning = options?.waitForRunningTasks ?? true;
+
+    // Signal stop first to prevent new tasks
     this.isRunning = false;
+
+    // Wait for running tasks if requested
+    if (waitForRunning) {
+      logger.info(`Waiting up to ${gracePeriodMs}ms for running tasks to complete...`);
+      const startTime = Date.now();
+      let timedOut = false;
+      
+      while (Date.now() - startTime < gracePeriodMs) {
+        const result = await this.db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM tasks WHERE status = 'RUNNING'`
+        );
+        const runningCount = parseInt(result.rows[0]?.count || '0', 10);
+        
+        if (runningCount === 0) {
+          logger.info('All running tasks completed');
+          break;
+        }
+        
+        logger.debug(`Waiting for ${runningCount} running tasks...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+
+      // Check if we timed out
+      const result = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'RUNNING'`
+      );
+      const remainingTasks = parseInt(result.rows[0]?.count || '0', 10);
+      if (remainingTasks > 0) {
+        logger.warn(`Grace period expired, ${remainingTasks} tasks still running`);
+      }
+    }
+
+    // Clear timers
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -92,6 +132,21 @@ export class Scheduler {
   }
 
   private async heartbeat(): Promise<void> {
+    // Prevent concurrent heartbeat execution
+    if (this.isHeartbeatRunning) {
+      logger.debug('Scheduler heartbeat: Skipping - already running');
+      return;
+    }
+
+    // Respect stop signal - don't start new tasks
+    if (!this.isRunning) {
+      logger.debug('Scheduler heartbeat: Skipping - scheduler is stopping');
+      return;
+    }
+
+    this.isHeartbeatRunning = true;
+    
+    try {
     // Check if paused
     if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {
       logger.info(`Scheduler heartbeat: Paused until ${this.pauseUntil.toISOString()}`);
@@ -119,6 +174,12 @@ export class Scheduler {
        WHERE status = $2 AND updated_at < NOW() - INTERVAL '5 minutes'`,
       [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
     );
+
+    // Prevent concurrent task execution
+    if (this.isExecuting) {
+      logger.debug('Scheduler heartbeat: Task already executing, skipping');
+      return;
+    }
     
     // Find and lock pending task atomically to prevent race conditions
     // Only select tasks whose dependencies are all COMPLETED
@@ -155,6 +216,7 @@ export class Scheduler {
       });
       
       // Execute task and wait for completion
+      this.isExecuting = true;
       try {
         await this.onTaskReady?.(task.id, task.title, task.description);
         this.totalTasksExecuted++;
@@ -199,9 +261,14 @@ export class Scheduler {
           `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
           [TASK_STATUS.PENDING, errorMessage, task.id]
         );
+      } finally {
+        this.isExecuting = false;
       }
     } else {
       logger.info('Scheduler heartbeat: No pending tasks found');
+    }
+    } finally {
+      this.isHeartbeatRunning = false;
     }
   }
 
@@ -245,6 +312,10 @@ export class Scheduler {
 
   isActive(): boolean {
     return this.isRunning;
+  }
+
+  isExecutingTask(): boolean {
+    return this.isExecuting;
   }
 
   getLastHeartbeat(): Date | null {

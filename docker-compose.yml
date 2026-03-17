@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nezha-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nezha
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nezha:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nezha-daemon
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: nezha
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      EMBEDDING_PROVIDER: ollama
+      OPENCODE_API_URL: http://host.docker.internal:4096
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./.tmp:/app/.tmp
+    ports:
+      - "4097:4097"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

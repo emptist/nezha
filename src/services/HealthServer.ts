@@ -66,16 +66,42 @@ export interface MetricsResponse {
   memory_recall_rate: number;
 }
 
+export interface HealthServerConfig {
+  requireAuth?: boolean;
+  adminUsername?: string;
+  adminPassword?: string;
+}
+
 export class HealthServer {
   private server: http.Server | null = null;
   private startTime: number;
   private db: DatabaseClient;
   private port: number;
+  private requireAuth: boolean;
+  private adminUsername?: string;
+  private adminPassword?: string;
 
-  constructor(db: DatabaseClient, port: number = 4097) {
+  constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
     this.port = port;
     this.startTime = Date.now();
+    this.requireAuth = config?.requireAuth ?? false;
+    this.adminUsername = config?.adminUsername;
+    this.adminPassword = config?.adminPassword;
+  }
+
+  private authenticate(req: http.IncomingMessage): boolean {
+    if (!this.requireAuth) return true;
+    if (!this.adminUsername || !this.adminPassword) return true;
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Basic ')) return false;
+
+    const base64 = authHeader.slice(6);
+    const decoded = Buffer.from(base64, 'base64').toString();
+    const [username, password] = decoded.split(':');
+
+    return username === this.adminUsername && password === this.adminPassword;
   }
 
   async start(): Promise<void> {
@@ -83,10 +109,17 @@ export class HealthServer {
       this.server = http.createServer(async (req, res) => {
         const url = new URL(req.url || '/', `http://localhost:${this.port}`);
         
+        // Check authentication for protected endpoints
+        if ((url.pathname === '/health' || url.pathname === '/metrics') && !this.authenticate(req)) {
+          res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Nezha"' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
+        
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
         if (req.method === 'OPTIONS') {
           res.writeHead(204);

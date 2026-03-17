@@ -56,8 +56,7 @@ export class YamlConfigLoader {
       if (fs.existsSync(this.configPath)) {
         const content = fs.readFileSync(this.configPath, 'utf-8');
         this.config = this.parseYaml(content);
-        console.log(`Loaded config from: ${this.configPath}`);
-      }
+              }
     } catch (error) {
       console.warn(`Failed to load config from ${this.configPath}:`, error);
     }

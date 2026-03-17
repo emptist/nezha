@@ -8,6 +8,13 @@ import { HealthServer } from '../services/HealthServer.js';
 import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
+import { 
+  sanitizeTaskTitle, 
+  sanitizeTaskDescription, 
+  sanitizePriority,
+  sanitizeUUID,
+  sanitizeTags 
+} from '../utils/sanitization.js';
 
 interface TaskRow {
   id: number;
@@ -68,14 +75,14 @@ export class Cli {
     await this.healthServer.start();
     
     // Handle graceful shutdown - save state before exit
-    const shutdown = async () => {
+    const shutdown = async (signal: string) => {
       if (this.isShuttingDown) {
         logger.warn('Shutdown already in progress, forcing exit...');
         process.exit(1);
       }
       
       this.isShuttingDown = true;
-      logger.info('Graceful shutdown initiated...');
+      logger.info(`Graceful shutdown initiated (${signal})...`);
       
       // 1. Save checkpoint state
       logger.info('Saving checkpoint state...');
@@ -95,12 +102,12 @@ export class Cli {
     };
     
     process.on('SIGINT', async () => {
-      await shutdown();
+      await shutdown('SIGINT');
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
-      await shutdown();
+      await shutdown('SIGTERM');
       process.exit(0);
     });
   }
@@ -173,28 +180,31 @@ export class Cli {
   }
 
   async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[]): Promise<void> {
-    if (!title || title.trim().length === 0) {
-      throw new Error('Task title is required');
+    const titleResult = sanitizeTaskTitle(title);
+    if (!titleResult.valid) {
+      throw new Error(titleResult.error);
     }
-    if (title.length > 500) {
-      throw new Error('Task title must be less than 500 characters');
+    
+    const descResult = sanitizeTaskDescription(description);
+    if (!descResult.valid) {
+      throw new Error(descResult.error);
     }
-    if (description && description.length > 5000) {
-      throw new Error('Task description must be less than 5000 characters');
-    }
-    if (priority < 0 || priority > 100) {
-      throw new Error('Priority must be between 0 and 100');
+    
+    const priorityResult = sanitizePriority(priority);
+    if (!priorityResult.valid) {
+      throw new Error(priorityResult.error);
     }
     
     const db = await this.getDb();
     await db.query(
       `INSERT INTO tasks (title, description, status, priority, depends_on) VALUES ($1, $2, $3, $4, $5)`,
-      [title.trim(), description.trim(), TASK_STATUS.PENDING, priority, dependsOn || []]
+      [titleResult.sanitized, descResult.sanitized || '', TASK_STATUS.PENDING, parseInt(priorityResult.sanitized || '0',
+   10), dependsOn || []]
     );
     if (dependsOn && dependsOn.length > 0) {
-      console.log(`Task added: ${title} (depends on: ${dependsOn.join(', ')})`);
+      console.log(`Task added: ${titleResult.sanitized} (depends on: ${dependsOn.join(', ')})`);
     } else {
-      console.log(`Task added: ${title}`);
+      console.log(`Task added: ${titleResult.sanitized}`);
     }
   }
 
@@ -288,19 +298,22 @@ async function main(): Promise<void> {
     case 'task-add':
       const title = args[1];
       let description = args[2] ?? '';
-      let priority = parseInt(args[3] ?? '0', 10);
+      let priority = 0;
       let dependsOn: string[] | undefined;
+      
+      // Check for --priority flag first (should override positional)
+      const priorityIndex = args.indexOf('--priority');
+      if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
+        priority = parseInt(args[priorityIndex + 1], 10) || 0;
+      } else if (args[3] && !args[3].startsWith('--')) {
+        // Fall back to positional argument if it's not a flag
+        priority = parseInt(args[3], 10) || 0;
+      }
       
       // Check for --depends-on flag
       const dependsOnIndex = args.indexOf('--depends-on');
       if (dependsOnIndex !== -1 && dependsOnIndex < args.length - 1) {
         dependsOn = args.slice(dependsOnIndex + 1).filter(a => !a.startsWith('--'));
-      }
-      
-      // Check for --priority flag
-      const priorityIndex = args.indexOf('--priority');
-      if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
-        priority = parseInt(args[priorityIndex + 1], 10);
       }
       
       if (title) {
