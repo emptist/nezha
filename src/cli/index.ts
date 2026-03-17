@@ -27,7 +27,8 @@ export class Cli {
   private healthServer: HealthServer | null = null;
   private checkpointService: CheckpointService;
   private isShuttingDown: boolean = false;
-  private readonly SHUTDOWN_TIMEOUT_MS: number = 30000; // 30 seconds
+  private readonly SHUTDOWN_TIMEOUT_MS: number = 30000;
+  private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
 
   constructor() {
     this.config = Config.getInstance();

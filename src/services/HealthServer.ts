@@ -2,6 +2,7 @@ import http from 'http';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
+import { getMetricsRegistry, createStandardMetrics } from './MetricsService.js';
 
 export interface HealthResponse {
   status: 'healthy' | 'unhealthy';
