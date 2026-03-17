@@ -1,0 +1,126 @@
+// Webhook service for task notifications
+
+import { logger } from '../utils/logger.js';
+
+export interface WebhookConfig {
+  url: string;
+  secret?: string;
+  retryCount?: number;
+  retryDelayMs?: number;
+  enabled?: boolean;
+}
+
+export interface WebhookPayload {
+  event: 'task:completed' | 'task:failed';
+  timestamp: string;
+  task: {
+    id: string;
+    title: string;
+    description?: string;
+    status: string;
+    result?: string;
+    error?: string;
+    duration_ms?: number;
+  };
+}
+
+export class WebhookService {
+  private config: WebhookConfig;
+  private retryCount: number;
+  private retryDelayMs: number;
+
+  constructor(config: WebhookConfig) {
+    this.config = config;
+    this.retryCount = config.retryCount ?? 3;
+    this.retryDelayMs = config.retryDelayMs ?? 1000;
+  }
+
+  isEnabled(): boolean {
+    return this.config.enabled ?? false;
+  }
+
+  async sendTaskCompleted(taskId: string, title: string, description: string | undefined, result: string): Promise<boolean> {
+    return this.send('task:completed', {
+      event: 'task:completed',
+      timestamp: new Date().toISOString(),
+      task: {
+        id: taskId,
+        title,
+        description,
+        status: 'COMPLETED',
+        result,
+      },
+    });
+  }
+
+  async sendTaskFailed(taskId: string, title: string, description: string | undefined, error: string): Promise<boolean> {
+    return this.send('task:failed', {
+      event: 'task:failed',
+      timestamp: new Date().toISOString(),
+      task: {
+        id: taskId,
+        title,
+        description,
+        status: 'FAILED',
+        error,
+      },
+    });
+  }
+
+  private async send(event: string, payload: WebhookPayload): Promise<boolean> {
+    if (!this.isEnabled()) {
+      logger.debug('Webhook disabled, skipping');
+      return false;
+    }
+
+    if (!this.config.url) {
+      logger.warn('Webhook URL not configured');
+      return false;
+    }
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.config.secret) {
+      headers['X-Webhook-Secret'] = this.config.secret;
+    }
+
+    for (let attempt = 1; attempt <= this.retryCount; attempt++) {
+      try {
+        const response = await fetch(this.config.url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+        });
+
+        if (response.ok) {
+          logger.info(`Webhook sent successfully: ${event}`);
+          return true;
+        }
+
+        logger.warn(`Webhook failed (attempt ${attempt}/${this.retryCount}): ${response.status} ${response.statusText}`);
+      } catch (error) {
+        logger.error(`Webhook error (attempt ${attempt}/${this.retryCount}):`, error);
+      }
+
+      if (attempt < this.retryCount) {
+        await new Promise(resolve => setTimeout(resolve, this.retryDelayMs * attempt));
+      }
+    }
+
+    logger.error(`Webhook failed after ${this.retryCount} attempts: ${event}`);
+    return false;
+  }
+}
+
+// Environment-based webhook config
+export function createWebhookConfigFromEnv(): WebhookConfig {
+  return {
+    url: process.env.WEBHOOK_URL,
+    secret: process.env.WEBHOOK_SECRET,
+    retryCount: parseInt(process.env.WEBHOOK_RETRY_COUNT ?? '3', 10),
+    retryDelayMs: parseInt(process.env.WEBHOOK_RETRY_DELAY ?? '1000', 10),
+    enabled: process.env.WEBHOOK_URL ? true : false,
+  };
+}
