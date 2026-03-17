@@ -17,7 +17,8 @@ export class DatabaseClient {
       port: dbConfig.port,
       database: dbConfig.database,
       user: dbConfig.user,
-      password: dbConfig.password,
+      // Only include password if it's not empty (for trust authentication)
+      ...(dbConfig.password && dbConfig.password.trim() !== '' && { password: dbConfig.password }),
       max: dbConfig.max,
       idleTimeoutMillis: dbConfig.idleTimeoutMillis,
       connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,
