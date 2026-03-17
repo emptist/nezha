@@ -7,6 +7,7 @@ import { waitForever } from '../utils/wait.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
 import { DailyMemoryService, memory_save } from './DailyMemory.js';
+import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
 
 export interface HeartbeatServiceConfig {
   heartbeatIntervalMs?: number;
@@ -32,6 +33,7 @@ export class HeartbeatService {
   private readonly agent: Agent;
   private readonly memory: MemoryService;
   private readonly dailyMemory: DailyMemoryService;
+  private readonly selfImprovement: SelfImprovementService;
   private readonly workspaceDir: string;
   private readonly autoReconnect: boolean;
   private readonly maxReconnectAttempts: number;
@@ -66,6 +68,7 @@ export class HeartbeatService {
     
     this.memory = new MemoryService(db, undefined, embeddingProvider);
     this.dailyMemory = new DailyMemoryService();
+    this.selfImprovement = getSelfImprovement(db, config?.embedding);
     this.workspaceDir = config?.workspaceDir ?? process.cwd();
     this.autoReconnect = config?.autoReconnect ?? true;
     this.maxReconnectAttempts = config?.maxReconnectAttempts ?? 5;
@@ -181,6 +184,10 @@ export class HeartbeatService {
         });
         
         this.stats.tasksSucceeded++;
+        
+        // Run reflection for self-improvement
+        await this.runReflection(title, result.message || 'Completed');
+        
         return;
       } else {
         logger.error(`Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
