@@ -16,7 +16,7 @@ CREATE OR REPLACE FUNCTION schedule_task_retry(
     p_max_retries INTEGER,
     p_base_delay_ms INTEGER DEFAULT 300000
 )
-RETURvoid AS $$
+RETURNS void AS $$
 DECLARE
     v_delay_ms INTEGER;
     v_next_retry_at TIMESTAMPTZ;
