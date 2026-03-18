@@ -23,11 +23,10 @@ export default defineConfig({
     hookTimeout: 30000,
     teardownTimeout: 30000,
     slowTestThreshold: 500,
-    include: ['src/tests/integration.test.ts'],
-    exclude: ['node_modules', 'dist', 'src/tests/*.test.ts'],
+    include: ['src/tests/**/*.integration.ts'],
+    exclude: ['node_modules', 'dist'],
     cache: {
       dir: 'node_modules/.vitest',
     },
-    poolStrategy: 'single',
   },
 });
