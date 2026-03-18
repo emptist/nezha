@@ -39,4 +39,4 @@ coverage/
 .secrets/
 AI_providers.md
 !AI_providers.md.example
-.secretes/
+.secretes/conversations/
