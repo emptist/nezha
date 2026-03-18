@@ -114,8 +114,10 @@ describe('Scheduler', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     
     // First call: reset stuck tasks
-    // Second call: get pending task
+    // Second call: check running tasks count
+    // Third call: get pending task
     mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test description' }],
         rowCount: 1,
@@ -138,6 +140,7 @@ describe('Scheduler', () => {
     
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test' }],
         rowCount: 1,
