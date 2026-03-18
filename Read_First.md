@@ -1,6 +1,29 @@
 # Nezha - Continuous AI Improvement System
 
-> **IMPORTANT**: Read this file first before continuing any work!
+> **IMPORTANT**: Think of these MD files as the ROM for Nezha - essential for booting, minimal in size, foundational for everything else.
+
+## ROM Analogy
+
+```
+These MD files = ROM (essential boot instructions)
+        │
+        ├── README.md     → How to start/boot
+        ├── PHILOSOPHY.md → Why it works this way  
+        ├── Read_First.md → Emergency recovery
+        └── .env.example  → Default config
+
+PostgreSQL = BIOS (initializes system)
+        │
+        └── Tables: tasks, skills, memory, etc.
+
+Runtime = OS
+        │
+        └── opencode serve + Node.js
+
+Apps = Tasks (AI doing work)
+```
+
+## Quick Start (For New AI Session)
 
 ## Quick Start (For New AI Session)
 

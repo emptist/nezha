@@ -1,6 +1,30 @@
 # Nezha Architecture Philosophy
 
-> **IMPORTANT**: Read this to understand Nezha's design decisions
+> **IMPORTANT**: Just like a computer needs ROM to boot, Nezha needs these basic MD files to start.
+
+## The ROM Analogy
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    NEZHA SYSTEM                             │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │  COMPUTER   │    │   NEZHA     │    │   PURPOSE   │  │
+│  ├─────────────┼────┼─────────────┼────┼──────────────┤  │
+│  │ ROM         │ →  │ Basic MD    │ →  │ Boot/Start  │  │
+│  │ BIOS/UEFI   │ →  │ PostgreSQL   │ →  │ Schema init │  │
+│  │ OS          │ →  │ opencode     │ →  │ Runtime     │  │
+│  │ Apps        │ →  │ Tasks        │ →  │ AI work     │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Just Like ROM:
+
+- **Essential** - Can't start without it
+- **Minimal** - Only what's needed to boot
+- **Instructions** - How to start everything
+- **Foundation** - All else builds on it
 
 ## The Core Question
 
