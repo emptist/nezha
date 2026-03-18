@@ -107,7 +107,11 @@ export class HealthServer {
     this.diskWarningThreshold = config?.diskWarningThreshold ?? 1024 * 1024 * 1024; // 1GB default
   }
 
-  private async checkOpenCodeApi(): Promise<{ status: 'ok' | 'error' | 'not_configured'; latency_ms?: number; error?: string }> {
+  private async checkOpenCodeApi(): Promise<{
+    status: 'ok' | 'error' | 'not_configured';
+    latency_ms?: number;
+    error?: string;
+  }> {
     if (!this.opencodeApiUrl) {
       return { status: 'not_configured' };
     }
@@ -119,7 +123,7 @@ export class HealthServer {
         signal: AbortSignal.timeout(5000),
       });
       const latency = Date.now() - start;
-      
+
       if (response.ok) {
         return { status: 'ok', latency_ms: latency };
       }
@@ -129,17 +133,26 @@ export class HealthServer {
     }
   }
 
-  private async checkDiskSpace(): Promise<{ status: 'ok' | 'warning' | 'error'; free_bytes?: number; path?: string; error?: string }> {
+  private async checkDiskSpace(): Promise<{
+    status: 'ok' | 'warning' | 'error';
+    free_bytes?: number;
+    path?: string;
+    error?: string;
+  }> {
     try {
       const stats = await fs.statfs(this.memoryDir);
       const freeBytes = stats.bsize * stats.blocks;
-      
+
       if (freeBytes < this.diskWarningThreshold) {
         return { status: 'warning', free_bytes: freeBytes, path: this.memoryDir };
       }
       return { status: 'ok', free_bytes: freeBytes, path: this.memoryDir };
     } catch (error) {
-      return { status: 'error', path: this.memoryDir, error: error instanceof Error ? error.message : String(error) };
+      return {
+        status: 'error',
+        path: this.memoryDir,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 
@@ -158,17 +171,20 @@ export class HealthServer {
   }
 
   async start(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       this.server = http.createServer(async (req, res) => {
         const url = new URL(req.url || '/', `http://localhost:${this.port}`);
-        
+
         // Check authentication for protected endpoints
-        if ((url.pathname === '/health' || url.pathname === '/metrics') && !this.authenticate(req)) {
+        if (
+          (url.pathname === '/health' || url.pathname === '/metrics') &&
+          !this.authenticate(req)
+        ) {
           res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Nezha"' });
           res.end(JSON.stringify({ error: 'Unauthorized' }));
           return;
         }
-        
+
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -192,10 +208,12 @@ export class HealthServer {
             res.end(registry.export());
           } else if (url.pathname === '/') {
             res.writeHead(200);
-            res.end(JSON.stringify({ 
-              name: 'Nezha Health Server', 
-              endpoints: ['/health', '/metrics'] 
-            }));
+            res.end(
+              JSON.stringify({
+                name: 'Nezha Health Server',
+                endpoints: ['/health', '/metrics'],
+              })
+            );
           } else {
             res.writeHead(404);
             res.end(JSON.stringify({ error: 'Not found' }));
@@ -215,7 +233,7 @@ export class HealthServer {
   }
 
   async stop(): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       if (this.server) {
         this.server.close(() => {
           logger.info('Health server stopped');
@@ -310,9 +328,7 @@ export class HealthServer {
         total_memories: parseInt(memoryResult.rows[0]?.total || '0', 10),
         search_indexed: parseInt(memoryResult.rows[0]?.indexed || '0', 10),
       },
-      workers: [
-        { id: 'main', status: 'idle' }
-      ]
+      workers: [{ id: 'main', status: 'idle' }],
     };
 
     healthCache.set('health', health);
@@ -327,20 +343,24 @@ export class HealthServer {
 
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    const [tasksPerHourResult, totalCompletedResult, totalFailedResult, avgDurationResult, memoryWithEmbeddings] = await Promise.all([
+    const [
+      tasksPerHourResult,
+      totalCompletedResult,
+      totalFailedResult,
+      avgDurationResult,
+      memoryWithEmbeddings,
+    ] = await Promise.all([
       this.db.query<{ count: string }>(
         `SELECT COUNT(*) as count FROM tasks 
          WHERE status = $1 AND completed_at > $2`,
         [TASK_STATUS.COMPLETED, oneHourAgo]
       ),
-      this.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
-        [TASK_STATUS.COMPLETED]
-      ),
-      this.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM tasks WHERE status = $1`,
-        [TASK_STATUS.FAILED]
-      ),
+      this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+        TASK_STATUS.COMPLETED,
+      ]),
+      this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+        TASK_STATUS.FAILED,
+      ]),
       this.db.query<{ avg: string }>(
         `SELECT AVG(EXTRACT(EPOCH FROM (completed_at - created_at))) as avg 
          FROM tasks 
@@ -381,10 +401,18 @@ export class HealthServer {
   private async updateMetricsFromDb(): Promise<void> {
     try {
       const [pendingResult, runningResult, completedResult, failedResult] = await Promise.all([
-        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.PENDING]),
-        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.RUNNING]),
-        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.COMPLETED]),
-        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.FAILED]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+          TASK_STATUS.PENDING,
+        ]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+          TASK_STATUS.RUNNING,
+        ]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+          TASK_STATUS.COMPLETED,
+        ]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [
+          TASK_STATUS.FAILED,
+        ]),
       ]);
 
       const pending = parseInt(pendingResult.rows[0]?.count || '0', 10);
@@ -396,7 +424,9 @@ export class HealthServer {
       standardMetrics.activeTasks.set(running);
 
       const totalTasks = completed + failed;
-      standardMetrics.tasksTotal.inc(totalTasks - (standardMetrics.tasksTotal as any)._lastValue || 0);
+      standardMetrics.tasksTotal.inc(
+        totalTasks - (standardMetrics.tasksTotal as any)._lastValue || 0
+      );
       (standardMetrics.tasksTotal as any)._lastValue = totalTasks;
 
       const memUsage = process.memoryUsage();

@@ -33,7 +33,10 @@ export class DatabaseClient {
     this.pool = new PgPool(poolConfig);
   }
 
-  async query<T extends QueryResultRow = QueryResultRow>(sql: string, params?: unknown[]): Promise<QueryResult<T>> {
+  async query<T extends QueryResultRow = QueryResultRow>(
+    sql: string,
+    params?: unknown[]
+  ): Promise<QueryResult<T>> {
     if (this.isClosed) {
       throw new Error('DatabaseClient is closed');
     }

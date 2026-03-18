@@ -57,7 +57,7 @@ export class YamlConfigLoader {
       if (fs.existsSync(this.configPath)) {
         const content = fs.readFileSync(this.configPath, 'utf-8');
         this.config = this.parseYaml(content);
-              }
+      }
     } catch (error) {
       console.warn(`Failed to load config from ${this.configPath}:`, error);
     }
@@ -74,7 +74,7 @@ export class YamlConfigLoader {
 
     for (const line of lines) {
       const trimmed = line.trim();
-      
+
       // Skip comments and empty lines
       if (!trimmed || trimmed.startsWith('#')) continue;
 
@@ -119,17 +119,19 @@ export class YamlConfigLoader {
       const parsed = parseFloat(value);
       if (!isNaN(parsed)) return parsed;
     }
-    
+
     // Parse booleans
     if (value === 'true') return true;
     if (value === 'false') return false;
-    
+
     // Remove quotes
-    if ((value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
       return value.slice(1, -1);
     }
-    
+
     return value;
   }
 
@@ -165,7 +167,10 @@ export class YamlConfigLoader {
 
     // Embedding env overrides
     if (process.env.EMBEDDING_PROVIDER) {
-      (merged.embedding ??= {}).provider = process.env.EMBEDDING_PROVIDER as 'ollama' | 'openai' | 'zhipu';
+      (merged.embedding ??= {}).provider = process.env.EMBEDDING_PROVIDER as
+        | 'ollama'
+        | 'openai'
+        | 'zhipu';
     }
     if (process.env.EMBEDDING_API_KEY) {
       (merged.embedding ??= {}).apiKey = process.env.EMBEDDING_API_KEY;
@@ -197,7 +202,8 @@ export class YamlConfigLoader {
     // Database validation
     if (config.database) {
       if (!config.database.host) errors.push('database.host is required');
-      if (!config.database.port || isNaN(config.database.port)) errors.push('database.port must be a number');
+      if (!config.database.port || isNaN(config.database.port))
+        errors.push('database.port must be a number');
       if (!config.database.database) errors.push('database.database is required');
     }
 
@@ -227,6 +233,6 @@ export function loadYamlConfig(): { config: NezhaYamlConfig; valid: boolean; err
   const config = loader.load();
   const merged = loader.mergeWithEnv(config);
   const validation = loader.validate(merged);
-  
+
   return { config: merged, ...validation };
 }

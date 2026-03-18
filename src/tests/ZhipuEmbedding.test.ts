@@ -14,7 +14,7 @@ describe('ZhipuEmbedding', () => {
     embedding = new ZhipuEmbedding({
       provider: 'zhipu',
       model: 'embedding-2',
-      apiKey
+      apiKey,
     });
   });
 
@@ -38,10 +38,7 @@ describe('ZhipuEmbedding', () => {
       return;
     }
 
-    const texts = [
-      '持续运行机制很重要',
-      'OpenCode 使用 while(true) 实现持续运行'
-    ];
+    const texts = ['持续运行机制很重要', 'OpenCode 使用 while(true) 实现持续运行'];
     const results = await embedding.embedBatch(texts);
 
     expect(results).toBeInstanceOf(Array);
@@ -53,11 +50,9 @@ describe('ZhipuEmbedding', () => {
   it('should throw error without API key', async () => {
     const noKeyEmbedding = new ZhipuEmbedding({
       provider: 'zhipu',
-      model: 'embedding-2'
+      model: 'embedding-2',
     });
 
-    await expect(noKeyEmbedding.embed('test')).rejects.toThrow(
-      'ZHIPU_API_KEY is required'
-    );
+    await expect(noKeyEmbedding.embed('test')).rejects.toThrow('ZHIPU_API_KEY is required');
   });
 });

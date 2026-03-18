@@ -36,7 +36,8 @@ export class CheckpointService {
   private pauseUntil?: Date;
 
   constructor(config?: CheckpointServiceConfig) {
-    this.stateFilePath = config?.stateFilePath || path.join(process.cwd(), '.tmp', 'nezha-state.json');
+    this.stateFilePath =
+      config?.stateFilePath || path.join(process.cwd(), '.tmp', 'nezha-state.json');
   }
 
   setSessionId(sessionId: string): void {
@@ -83,7 +84,10 @@ export class CheckpointService {
 
   async loadState(): Promise<DaemonState | null> {
     try {
-      const exists = await fs.access(this.stateFilePath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(this.stateFilePath)
+        .then(() => true)
+        .catch(() => false);
       if (!exists) {
         logger.debug('No saved state found');
         return null;
@@ -91,12 +95,12 @@ export class CheckpointService {
 
       const content = await fs.readFile(this.stateFilePath, 'utf-8');
       const state = JSON.parse(content) as DaemonState;
-      
+
       this.currentSessionId = state.opencodeSessionId;
       this.stats = { ...state.stats };
       this.isPaused = state.isPaused;
       this.pauseUntil = state.pauseUntil ? new Date(state.pauseUntil) : undefined;
-      
+
       logger.info(`State loaded from ${this.stateFilePath}`);
       return state;
     } catch (error) {

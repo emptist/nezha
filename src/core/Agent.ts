@@ -1,4 +1,3 @@
-import { execSync, exec } from 'child_process';
 import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -13,7 +12,8 @@ export class Agent {
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly retryDelay: number;
-  private serverUrl: string;
+  private readonly serverUrl: string;
+  private sessionId: string | null = null;
 
   constructor(config?: AgentConfig) {
     this.timeout = config?.timeout ?? 300000;
@@ -72,68 +72,106 @@ export class Agent {
     };
   }
 
-  private runOpenCode(message: string): Promise<AgentResponse> {
-    return new Promise((resolve) => {
-      const startTime = Date.now();
-
-      try {
-        const cmd = `opencode run --attach ${this.serverUrl} --format json "${message.replace(/"/g, '\\"')}"`;
-        
-        logger.debug(`Running: ${cmd.substring(0, 100)}...`);
-        
-        const output = execSync(cmd, {
-          timeout: 120000,
-          encoding: 'utf-8',
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: { ...process.env },
-          shell: '/bin/bash',
-        });
-
-        const elapsed = Date.now() - startTime;
-        const responseText = this.parseJsonOutput(output);
-        
-        logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
-        
-        resolve({
-          success: true,
-          message: responseText,
-        });
-      } catch (error) {
-        const elapsed = Date.now() - startTime;
-        
-        if (error instanceof Error && error.message.includes('timeout')) {
-          logger.error(`Task timed out after ${elapsed}ms`);
-          resolve({
-            success: false,
-            message: `Task timed out after 120000ms`,
-          });
-        } else {
-          const errMsg = error instanceof Error ? error.message : String(error);
-          logger.error(`Task failed after ${elapsed}ms: ${errMsg}`);
-          resolve({
-            success: false,
-            message: errMsg,
-          });
-        }
-      }
+  private async createSession(): Promise<string> {
+    const response = await fetch(`${this.serverUrl}/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'nezha-task-session' }),
     });
-  }
 
-  private parseJsonOutput(output: string): string {
-    const lines = output.trim().split('\n');
-    const textParts: string[] = [];
-
-    for (const line of lines) {
-      try {
-        const event = JSON.parse(line);
-        if (event.type === 'text' && event.part?.text) {
-          textParts.push(event.part.text);
-        }
-      } catch {
-        continue;
-      }
+    if (!response.ok) {
+      throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
     }
 
-    return textParts.join('');
+    const data = await response.json() as { id: string };
+    logger.info(`Created session: ${data.id}`);
+    return data.id;
+  }
+
+  private async sendMessage(sessionId: string, message: string): Promise<string> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.serverUrl}/session/${sessionId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          parts: [{ type: 'text', text: message }]
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json() as { 
+        parts?: Array<{ type: string; text: string }> 
+      };
+
+      if (data.parts) {
+        return data.parts
+          .filter(p => p.type === 'text')
+          .map(p => p.text)
+          .join('\n');
+      }
+
+      return JSON.stringify(data);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
+  }
+
+  private async runOpenCode(message: string): Promise<AgentResponse> {
+    const startTime = Date.now();
+
+    try {
+      let sessionId = this.sessionId;
+      
+      if (!sessionId) {
+        sessionId = await this.createSession();
+        this.sessionId = sessionId;
+      }
+
+      logger.debug(`Sending message to session ${sessionId}: ${message.substring(0, 50)}...`);
+      
+      const responseText = await this.sendMessage(sessionId, message);
+      
+      const elapsed = Date.now() - startTime;
+      logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
+      
+      return {
+        success: true,
+        message: responseText,
+      };
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      const err = error instanceof Error ? error : new Error(String(error));
+      
+      if (err.name === 'AbortError') {
+        logger.error(`Task timed out after ${elapsed}ms`);
+        this.sessionId = null;
+        return {
+          success: false,
+          message: `Task timed out after ${this.timeout}ms`,
+        };
+      }
+      
+      logger.error(`Task failed after ${elapsed}ms: ${err.message}`);
+      
+      if (err.message.includes('session')) {
+        this.sessionId = null;
+      }
+      
+      return {
+        success: false,
+        message: err.message,
+      };
+    }
   }
 }

@@ -60,7 +60,7 @@ export class SemanticSearchService {
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    
+
     if (denominator === 0) {
       return 0;
     }
@@ -132,7 +132,7 @@ export class SemanticSearchService {
 
     for (const row of result.rows) {
       const memoryEmbedding = this.parseEmbedding(row.embedding);
-      
+
       if (!memoryEmbedding) {
         continue;
       }
@@ -163,7 +163,10 @@ export class SemanticSearchService {
 
 let semanticSearchInstance: SemanticSearchService | null = null;
 
-export function getSemanticSearch(db: DatabaseClient, config?: SemanticSearchConfig): SemanticSearchService {
+export function getSemanticSearch(
+  db: DatabaseClient,
+  config?: SemanticSearchConfig
+): SemanticSearchService {
   if (!semanticSearchInstance) {
     semanticSearchInstance = new SemanticSearchService(db, config);
   }
@@ -181,9 +184,11 @@ export async function semantic_search(query: string, projectId?: string): Promis
     return `No relevant memories found for query: "${query}"`;
   }
 
-  const formatted = results.map((r, i) => {
-    return `${i + 1}. [${r.similarity.toFixed(2)}] ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
-  }).join('\n');
+  const formatted = results
+    .map((r, i) => {
+      return `${i + 1}. [${r.similarity.toFixed(2)}] ${r.content.substring(0, 200)}${r.content.length > 200 ? '...' : ''}`;
+    })
+    .join('\n');
 
   return `Found ${results.length} relevant memories:\n${formatted}`;
 }

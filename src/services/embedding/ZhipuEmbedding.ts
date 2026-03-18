@@ -32,12 +32,12 @@ export class ZhipuEmbedding implements EmbeddingProvider {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
+        Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
         model: this.model,
-        input: texts
-      })
+        input: texts,
+      }),
     });
 
     if (!response.ok) {
@@ -45,10 +45,8 @@ export class ZhipuEmbedding implements EmbeddingProvider {
       throw new Error(`Zhipu Embedding API error: ${response.status} ${error}`);
     }
 
-    const data = await response.json() as ZhipuEmbeddingResponse;
-    
-    return data.data
-      .sort((a, b) => a.index - b.index)
-      .map((item) => item.embedding);
+    const data = (await response.json()) as ZhipuEmbeddingResponse;
+
+    return data.data.sort((a, b) => a.index - b.index).map(item => item.embedding);
   }
 }

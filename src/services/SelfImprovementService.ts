@@ -42,7 +42,7 @@ export class SelfImprovementService {
     const id = crypto.randomUUID();
     const importance = input.importance ?? 7;
     const tags = input.tags ?? ['learning', 'insight'];
-    const content = input.context 
+    const content = input.context
       ? `Insight: ${input.insight}\nContext: ${input.context}`
       : input.insight;
 
@@ -59,7 +59,15 @@ export class SelfImprovementService {
     await this.db.query(
       `INSERT INTO ${DATABASE_TABLES.MEMORY} (id, content, metadata, tags, importance, source, embedding, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-      [id, content, JSON.stringify({ type: 'insight', source: 'self-improvement' }), tags, importance, 'ai', embeddingStr]
+      [
+        id,
+        content,
+        JSON.stringify({ type: 'insight', source: 'self-improvement' }),
+        tags,
+        importance,
+        'ai',
+        embeddingStr,
+      ]
     );
 
     logger.info(`Insight learned and saved: ${id}`);
@@ -75,9 +83,13 @@ export class SelfImprovementService {
     });
   }
 
-  async suggestPromptUpdate(currentPrompt: string, suggestedChanges: string, reason: string): Promise<string> {
+  async suggestPromptUpdate(
+    currentPrompt: string,
+    suggestedChanges: string,
+    reason: string
+  ): Promise<string> {
     const id = crypto.randomUUID();
-    
+
     await this.db.query(
       `INSERT INTO ${SelfImprovementService.SUGGESTIONS_TABLE} (id, current_prompt, suggested_prompt, reason, status, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
@@ -152,7 +164,10 @@ If you found a pattern that suggests a system prompt improvement, use suggest_pr
 
 let selfImprovementInstance: SelfImprovementService | null = null;
 
-export function getSelfImprovement(db: DatabaseClient, embeddingConfig?: EmbeddingConfig): SelfImprovementService {
+export function getSelfImprovement(
+  db: DatabaseClient,
+  embeddingConfig?: EmbeddingConfig
+): SelfImprovementService {
   if (!selfImprovementInstance) {
     selfImprovementInstance = new SelfImprovementService(db, embeddingConfig);
   }

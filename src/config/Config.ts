@@ -6,13 +6,7 @@ import {
   type NezhaConfig,
   type IConfig,
 } from './types.js';
-import {
-  DATABASE_CONFIG,
-  TASK_CONFIG,
-  MEMORY_CONFIG,
-  ENV_KEYS,
-  ENV_DEFAULT,
-} from './constants.js';
+import { DATABASE_CONFIG, TASK_CONFIG, MEMORY_CONFIG, ENV_KEYS, ENV_DEFAULT } from './constants.js';
 import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
 
 function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
@@ -55,7 +49,7 @@ export class Config implements IConfig {
   private loadConfig(): NezhaConfig {
     const yamlResult = loadYamlConfig();
     const yamlConfig = yamlResult.config;
-    
+
     if (!yamlResult.valid) {
       console.warn('YAML config validation warnings:', yamlResult.errors);
     }
@@ -84,7 +78,11 @@ export class Config implements IConfig {
     const max = process.env[ENV_KEYS.DB_MAX];
     return {
       host: host || DATABASE_CONFIG.DEFAULT_HOST,
-      port: parseIntEnv(port, yaml?.database?.port || DATABASE_CONFIG.DEFAULT_PORT, ENV_KEYS.DB_PORT),
+      port: parseIntEnv(
+        port,
+        yaml?.database?.port || DATABASE_CONFIG.DEFAULT_PORT,
+        ENV_KEYS.DB_PORT
+      ),
       database: database || 'nezha',
       user: user || 'postgres',
       password: password || '',
@@ -121,7 +119,8 @@ export class Config implements IConfig {
 
   private loadMemoryConfig(): MemoryConfig {
     return {
-      bootstrapDir: process.env[ENV_KEYS.MEMORY_BOOTSTRAP_DIR] || MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR,
+      bootstrapDir:
+        process.env[ENV_KEYS.MEMORY_BOOTSTRAP_DIR] || MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR,
       maxMemoryAgeMs: parseIntEnv(
         process.env[ENV_KEYS.MAX_MEMORY_AGE],
         MEMORY_CONFIG.DEFAULT_MAX_MEMORY_AGE_MS,
@@ -142,7 +141,10 @@ export class Config implements IConfig {
 
     return {
       provider,
-      model: process.env[ENV_KEYS.EMBEDDING_MODEL] || yaml?.embedding?.model || (provider === 'ollama' ? 'nomic-embed-text' : 'embedding-2'),
+      model:
+        process.env[ENV_KEYS.EMBEDDING_MODEL] ||
+        yaml?.embedding?.model ||
+        (provider === 'ollama' ? 'nomic-embed-text' : 'embedding-2'),
       apiKey: process.env[ENV_KEYS.ZHIPU_API_KEY] || yaml?.embedding?.apiKey,
       apiUrl: process.env[ENV_KEYS.EMBEDDING_API_URL] || yaml?.embedding?.apiUrl,
     };

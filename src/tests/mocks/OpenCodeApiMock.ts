@@ -38,13 +38,13 @@ export class OpenCodeApiMock {
     this.calls = [];
     this.callCount = 0;
     this.responseSequence = [];
-    
+
     this.mockExecSync = vi.fn((command: string, options: Record<string, unknown>) => {
       const messageMatch = command.match(/--format json "(.*)"/);
       const urlMatch = command.match(/--attach (\S+)/);
-      
+
       this.callCount++;
-      
+
       this.calls.push({
         message: messageMatch ? messageMatch[1] : '',
         timestamp: new Date(),
@@ -54,7 +54,7 @@ export class OpenCodeApiMock {
       });
 
       if (this.config.delay) {
-        return new Promise((resolve) => setTimeout(resolve, this.config.delay));
+        return new Promise(resolve => setTimeout(resolve, this.config.delay));
       }
 
       if (!this.config.success) {
@@ -137,7 +137,7 @@ export const createOpenCodeMock = (config?: MockOpenCodeConfig) => {
     setup: (cfg?: MockOpenCodeConfig) => OpenCodeApiMock.setup(cfg || config),
     setupSequence: (responses: MockResponse[]) => OpenCodeApiMock.setupSequence(responses),
     addResponse: (response: MockResponse) => OpenCodeApiMock.addResponse(response),
-    formatResponse: (text: string, metadata?: Record<string, unknown>) => 
+    formatResponse: (text: string, metadata?: Record<string, unknown>) =>
       OpenCodeApiMock.formatResponse(text, metadata),
     formatError: (error: string, code?: number) => OpenCodeApiMock.formatError(error, code),
     getMock: () => OpenCodeApiMock.getMock(),

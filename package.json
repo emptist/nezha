@@ -20,7 +20,10 @@
     "test:clean": "bash scripts/kill-vitest.sh",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "clean": "rm -rf dist",
     "db:reset": "tsx scripts/reset-db.ts",
     "db:migrate": "tsx scripts/migrate.ts",
@@ -52,12 +55,19 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.11.0",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.57.1",
     "vitest": "^3.0.0"
   },
   "engines": {

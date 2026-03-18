@@ -1,5 +1,9 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { EncryptionService, getEncryptionService, type EncryptedData } from './EncryptionService.js';
+import {
+  EncryptionService,
+  getEncryptionService,
+  type EncryptedData,
+} from './EncryptionService.js';
 import { logger } from '../utils/logger.js';
 
 export interface StoredApiKey {
@@ -102,10 +106,7 @@ export class ApiKeyService {
   }
 
   async deleteApiKey(provider: string): Promise<void> {
-    await this.db.query(
-      `DELETE FROM provider_api_keys WHERE provider = $1`,
-      [provider]
-    );
+    await this.db.query(`DELETE FROM provider_api_keys WHERE provider = $1`, [provider]);
     logger.info(`API key for provider '${provider}' deleted`);
   }
 
@@ -180,18 +181,20 @@ export class ApiKeyService {
     return this.encryption.decrypt(encryptedData);
   }
 
-  async listUserApiKeys(userRole: string): Promise<Omit<UserApiKey, 'encryptedValue' | 'encryptedIv' | 'encryptedTag' | 'encryptedSalt'>[]> {
+  async listUserApiKeys(
+    userRole: string
+  ): Promise<
+    Omit<UserApiKey, 'encryptedValue' | 'encryptedIv' | 'encryptedTag' | 'encryptedSalt'>[]
+  > {
     const canDecrypt = userRole === 'admin' || userRole === 'superadmin';
-    
+
     const result = await this.db.query<{
       id: string;
       name: string;
       key_hash: string;
       role: string;
       enabled: boolean;
-    }>(
-      `SELECT id, name, key_hash, role, enabled FROM api_keys ORDER BY created_at DESC`
-    );
+    }>(`SELECT id, name, key_hash, role, enabled FROM api_keys ORDER BY created_at DESC`);
 
     return result.rows.map(r => ({
       id: r.id,

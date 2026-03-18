@@ -30,13 +30,17 @@ export class NezhaCore {
   async initialize(config?: NezhaCoreConfig): Promise<void> {
     const encryptionService = EncryptionService.getInstance();
     await encryptionService.initialize();
-    
+
     this.db = new DatabaseClient(this.config);
     this.scheduler = new Scheduler(this.db, config?.heartbeatIntervalMs);
-    this.heartbeatService = new HeartbeatService(this.db, {
-      heartbeatIntervalMs: config?.heartbeatIntervalMs,
-      workspaceDir: config?.workspaceDir,
-    }, this.scheduler);
+    this.heartbeatService = new HeartbeatService(
+      this.db,
+      {
+        heartbeatIntervalMs: config?.heartbeatIntervalMs,
+        workspaceDir: config?.workspaceDir,
+      },
+      this.scheduler
+    );
     this.agentSystem = new AgentSystem(config?.agentSystemConfig, this.eventBus);
   }
 

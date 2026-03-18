@@ -18,7 +18,7 @@ export const TASK_TYPE = {
   MAINTENANCE: 'maintenance' as const,
 } as const;
 
-export type TaskType = typeof TASK_TYPE[keyof typeof TASK_TYPE];
+export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE];
 
 export const DATABASE_TABLES = {
   TASKS: 'tasks',

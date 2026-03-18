@@ -30,7 +30,7 @@ export class AlertService {
   trackFailure(taskId: string, error: string): void {
     const now = Date.now();
     const failures = this.recentFailures.get(taskId) ?? [];
-    
+
     // Add current failure and clean old ones
     failures.push(now);
     const recentFailures = failures.filter(t => now - t < this.failureWindowMs);
@@ -86,8 +86,9 @@ export class AlertService {
     }
 
     this.alerts.set(alert.id, fullAlert);
-    
-    const severityEmoji = alert.severity === 'critical' ? '🔴' : alert.severity === 'error' ? '🟠' : '🟡';
+
+    const severityEmoji =
+      alert.severity === 'critical' ? '🔴' : alert.severity === 'error' ? '🟠' : '🟡';
     logger.warn(`ALERT ${severityEmoji} [${alert.severity.toUpperCase()}]: ${alert.message}`);
   }
 

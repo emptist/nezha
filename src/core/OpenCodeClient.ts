@@ -51,38 +51,33 @@ export class OpenCodeClient {
   ): Promise<string> {
     const systemMsg = messages.find(m => m.role === 'system')?.content || '';
     const userMsg = messages.find(m => m.role === 'user')?.content || '';
-    
+
     const fullPrompt = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
-    
+
     return this.runOpenCode(fullPrompt);
   }
 
   private runOpenCode(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const args = [
-        'run',
-        '--attach', this.serverUrl,
-        '--format', 'json',
-        prompt
-      ];
+      const args = ['run', '--attach', this.serverUrl, '--format', 'json', prompt];
 
       const proc = spawn('opencode', args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env }
+        env: { ...process.env },
       });
 
       let output = '';
       let errorOutput = '';
 
-      proc.stdout.on('data', (data) => {
+      proc.stdout.on('data', data => {
         output += data.toString();
       });
 
-      proc.stderr.on('data', (data) => {
+      proc.stderr.on('data', data => {
         errorOutput += data.toString();
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', code => {
         if (code === 0) {
           try {
             const response = this.parseJsonOutput(output);
@@ -95,7 +90,7 @@ export class OpenCodeClient {
         }
       });
 
-      proc.on('error', (err) => {
+      proc.on('error', err => {
         reject(new Error(`Failed to spawn opencode: ${err.message}`));
       });
     });
@@ -158,7 +153,7 @@ Please analyze the task and provide a detailed solution.`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Please help me with this task: ${task.description}` },
       ]);
-      
+
       this.conversationLogger.addMessage('assistant', response);
 
       const result = {
@@ -193,27 +188,29 @@ Please analyze the task and provide a detailed solution.`;
   ): Promise<string> {
     const systemMsg = messages.find(m => m.role === 'system')?.content || '';
     const userMsg = messages.find(m => m.role === 'user')?.content || '';
-    
+
     const fullPrompt = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
 
     return new Promise((resolve, reject) => {
       const args = [
         'run',
-        '--attach', this.serverUrl,
-        '--format', 'json',
+        '--attach',
+        this.serverUrl,
+        '--format',
+        'json',
         '--thinking',
-        fullPrompt
+        fullPrompt,
       ];
 
       const proc = spawn('opencode', args, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env }
+        env: { ...process.env },
       });
 
       let output = '';
       let buffer = '';
 
-      proc.stdout.on('data', (data) => {
+      proc.stdout.on('data', data => {
         buffer += data.toString();
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
@@ -231,11 +228,11 @@ Please analyze the task and provide a detailed solution.`;
         }
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', code => {
         resolve(output);
       });
 
-      proc.on('error', (err) => {
+      proc.on('error', err => {
         reject(new Error(`Failed to spawn opencode: ${err.message}`));
       });
     });
@@ -243,14 +240,14 @@ Please analyze the task and provide a detailed solution.`;
 
   private extractArtifacts(content: string): string[] {
     const artifacts: string[] = [];
-    
+
     const filePattern = /(?:file|created|modified|updated):\s*([^\s]+\.(ts|js|json|md|txt))/gi;
     let match;
-    
+
     while ((match = filePattern.exec(content)) !== null) {
       artifacts.push(match[1]);
     }
-    
+
     return artifacts;
   }
 }

@@ -28,7 +28,10 @@ export class MetricsRegistry {
   private histograms: Map<string, HistogramMetric> = new Map();
 
   private getKey(name: string, labels: Record<string, string>): string {
-    const labelStr = Object.entries(labels).sort().map(([k, v]) => `${k}="${v}"`).join(',');
+    const labelStr = Object.entries(labels)
+      .sort()
+      .map(([k, v]) => `${k}="${v}"`)
+      .join(',');
     return labelStr ? `${name}{${labelStr}}` : name;
   }
 
@@ -55,7 +58,11 @@ export class MetricsRegistry {
   }
 
   // Histogram: distribution of values
-  histogram(name: string, help: string = '', buckets: number[] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]): Histogram {
+  histogram(
+    name: string,
+    help: string = '',
+    buckets: number[] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+  ): Histogram {
     const key = this.getKey(name, {});
     if (!this.histograms.has(key)) {
       const histogramMetric: HistogramMetric = {
@@ -93,7 +100,7 @@ export class MetricsRegistry {
     for (const metric of this.histograms.values()) {
       lines.push(`# HELP ${metric.name} ${metric.help}`);
       lines.push(`# TYPE ${metric.name} histogram`);
-      
+
       for (const bucket of metric.buckets) {
         lines.push(`${metric.name}_bucket{le="${bucket.le}"} ${bucket.count}`);
       }
@@ -122,7 +129,10 @@ export class MetricsRegistry {
 }
 
 class Counter {
-  constructor(private metrics: Map<string, Metric>, private key: string) {}
+  constructor(
+    private metrics: Map<string, Metric>,
+    private key: string
+  ) {}
 
   inc(value: number = 1): void {
     const metric = this.metrics.get(this.key);
@@ -133,7 +143,10 @@ class Counter {
 }
 
 class Gauge {
-  constructor(private metrics: Map<string, Metric>, private key: string) {}
+  constructor(
+    private metrics: Map<string, Metric>,
+    private key: string
+  ) {}
 
   inc(value: number = 1): void {
     const metric = this.metrics.get(this.key);
@@ -158,7 +171,10 @@ class Gauge {
 }
 
 class Histogram {
-  constructor(private metrics: Map<string, HistogramMetric>, private key: string) {}
+  constructor(
+    private metrics: Map<string, HistogramMetric>,
+    private key: string
+  ) {}
 
   observe(value: number): void {
     const metric = this.metrics.get(this.key);
@@ -197,10 +213,7 @@ export function createStandardMetrics() {
     ),
 
     // Tasks total counter by status
-    tasksTotal: registry.counter(
-      'nezha_tasks_total',
-      'Total number of tasks processed'
-    ),
+    tasksTotal: registry.counter('nezha_tasks_total', 'Total number of tasks processed'),
 
     // Worker utilization gauge (0-1)
     workerUtilization: registry.gauge(
@@ -209,16 +222,10 @@ export function createStandardMetrics() {
     ),
 
     // Active tasks gauge
-    activeTasks: registry.gauge(
-      'nezha_active_tasks',
-      'Number of currently running tasks'
-    ),
+    activeTasks: registry.gauge('nezha_active_tasks', 'Number of currently running tasks'),
 
     // Queue size gauge
-    queueSize: registry.gauge(
-      'nezha_queue_size',
-      'Number of pending tasks in queue'
-    ),
+    queueSize: registry.gauge('nezha_queue_size', 'Number of pending tasks in queue'),
 
     // Heartbeat interval gauge
     heartbeatDurationSeconds: registry.histogram(
@@ -227,9 +234,6 @@ export function createStandardMetrics() {
     ),
 
     // Memory usage gauge (bytes)
-    memoryUsageBytes: registry.gauge(
-      'nezha_memory_usage_bytes',
-      'Process memory usage in bytes'
-    ),
+    memoryUsageBytes: registry.gauge('nezha_memory_usage_bytes', 'Process memory usage in bytes'),
   };
 }

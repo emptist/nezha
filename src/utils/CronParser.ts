@@ -52,7 +52,7 @@ export class CronParser {
   }
 
   nextRun(from: Date = new Date()): Date {
-    let next = new Date(from);
+    const next = new Date(from);
     next.setSeconds(0);
     next.setMilliseconds(0);
     next.setMinutes(next.getMinutes() + 1);
@@ -79,7 +79,11 @@ export class CronParser {
         continue;
       }
 
-      if (dayOfWeek !== next.getDay() && this.parts.dayOfWeek !== '*' && this.parts.dayOfMonth === '*') {
+      if (
+        dayOfWeek !== next.getDay() &&
+        this.parts.dayOfWeek !== '*' &&
+        this.parts.dayOfMonth === '*'
+      ) {
         next.setDate(next.getDate() + 1);
         next.setHours(0);
         next.setMinutes(0);
@@ -109,16 +113,40 @@ export class CronParser {
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
 
-    if (minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    if (
+      minute === '0' &&
+      hour === '*' &&
+      dayOfMonth === '*' &&
+      month === '*' &&
+      dayOfWeek === '*'
+    ) {
       return 'Every hour';
     }
-    if (minute === '0' && hour === '9' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    if (
+      minute === '0' &&
+      hour === '9' &&
+      dayOfMonth === '*' &&
+      month === '*' &&
+      dayOfWeek === '*'
+    ) {
       return 'Daily at 9:00 AM';
     }
-    if (minute === '0' && hour === '0' && dayOfMonth === '*' && month === '*' && dayOfWeek === '*') {
+    if (
+      minute === '0' &&
+      hour === '0' &&
+      dayOfMonth === '*' &&
+      month === '*' &&
+      dayOfWeek === '*'
+    ) {
       return 'Daily at midnight';
     }
-    if (minute === '0' && hour === '*' && dayOfMonth === '*' && month === '*' && dayOfWeek === '0') {
+    if (
+      minute === '0' &&
+      hour === '*' &&
+      dayOfMonth === '*' &&
+      month === '*' &&
+      dayOfWeek === '0'
+    ) {
       return 'Every hour on Sunday';
     }
     if (dayOfMonth === '*' && month === '*' && dayOfWeek === '1-5') {

@@ -103,20 +103,21 @@ describe('Scheduler', () => {
     };
 
     await scheduler.scheduleTask(task);
-    
+
     // Wait for recurring task to trigger
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     expect(mockQuery).toHaveBeenCalled();
   });
 
   it('should execute task callback when task is ready', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     // First call: reset stuck tasks
     // Second call: check running tasks count
     // Third call: get pending task
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test description' }],
@@ -127,17 +128,24 @@ describe('Scheduler', () => {
     scheduler.onTaskReady = callback;
 
     await scheduler.start();
-    
+
     // Wait for heartbeat to execute
     await new Promise(resolve => setTimeout(resolve, 150));
 
-    expect(callback).toHaveBeenCalledWith('task-1', 'Test Task', 'Test description', expect.any(Number), expect.any(Number), expect.any(Number));
+    expect(callback).toHaveBeenCalledWith(
+      'task-1',
+      'Test Task',
+      'Test description',
+      expect.any(Number),
+      expect.any(Number),
+      expect.any(Number)
+    );
     expect(scheduler.getTotalTasksExecuted()).toBe(1);
   });
 
   it('should handle task execution failure', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
@@ -197,8 +205,11 @@ describe('HeartbeatService', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
 
-    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100, autoReconnect: false });
-    
+    heartbeatService = new HeartbeatService(mockDb, {
+      heartbeatIntervalMs: 100,
+      autoReconnect: false,
+    });
+
     const startPromise = heartbeatService.start();
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(heartbeatService.isRunning()).toBe(true);
@@ -212,7 +223,10 @@ describe('HeartbeatService', () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
 
-    heartbeatService = new HeartbeatService(mockDb, { heartbeatIntervalMs: 100, autoReconnect: false });
+    heartbeatService = new HeartbeatService(mockDb, {
+      heartbeatIntervalMs: 100,
+      autoReconnect: false,
+    });
     const startPromise = heartbeatService.start();
     await new Promise(resolve => setTimeout(resolve, 50));
     await heartbeatService.stop();
@@ -258,13 +272,13 @@ describe('Scheduler - Additional Edge Cases', () => {
   it('should update lastRun on each heartbeat', async () => {
     await scheduler.start();
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     expect(scheduler.getLastRun()).not.toBeNull();
   });
 
   it('should track lastTaskRun after successful task execution', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
@@ -283,7 +297,7 @@ describe('Scheduler - Additional Edge Cases', () => {
 
   it('should set pauseUntil when pausing after consecutive failures', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     const failingTask = {
       rows: [{ id: 'task-1', title: 'Task 1', description: 'Test' }],
       rowCount: 1,
@@ -298,7 +312,7 @@ describe('Scheduler - Additional Edge Cases', () => {
     scheduler.onTaskReady = vi.fn().mockRejectedValue(new Error('Failure'));
 
     await scheduler.start();
-    
+
     for (let i = 0; i < 5; i++) {
       mockQuery
         .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
@@ -326,19 +340,19 @@ describe('Scheduler - Additional Edge Cases', () => {
 
     await scheduler.scheduleTask(task);
     await new Promise(resolve => setTimeout(resolve, 60));
-    
+
     await scheduler.stop();
-    
+
     const task2: ScheduledTask = {
       id: 'recurring-task-2',
       data: { foo: 'bar' },
       scheduledAt: new Date(),
       intervalMs: 50,
     };
-    
+
     await scheduler.scheduleTask(task2);
     await scheduler.stop();
-    
+
     expect(scheduler.isActive()).toBe(false);
   });
 
@@ -383,9 +397,9 @@ describe('Scheduler - Task Operations', () => {
 
   it('should complete task with result', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     await scheduler.completeTaskWithResult('task-1', { result: 'success' });
-    
+
     expect(mockQuery).toHaveBeenCalled();
     const callArgs = mockQuery.mock.calls[0];
     expect(callArgs[0]).toContain('UPDATE');
@@ -394,9 +408,9 @@ describe('Scheduler - Task Operations', () => {
 
   it('should fail task with error', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     await scheduler.failTaskWithError('task-1', 'Task failed');
-    
+
     expect(mockQuery).toHaveBeenCalled();
     const callArgs = mockQuery.mock.calls[0];
     expect(callArgs[0]).toContain('UPDATE');
@@ -409,9 +423,9 @@ describe('Scheduler - Task Operations', () => {
       rows: [{ result: '{"foo":"bar"}', encrypted_result: null, status: 'COMPLETED' }],
       rowCount: 1,
     } as QueryResult<unknown>);
-    
+
     const result = await scheduler.getTaskResult('task-1');
-    
+
     expect(mockQuery).toHaveBeenCalled();
     expect(result).toEqual({ foo: 'bar' });
   });
@@ -419,27 +433,27 @@ describe('Scheduler - Task Operations', () => {
   it('should return null for non-existent task result', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
-    
+
     const result = await scheduler.getTaskResult('non-existent');
-    
+
     expect(result).toBeNull();
   });
 
   it('should emit heartbeat event on start', async () => {
     const eventBus = scheduler.getEventBus();
     const callback = vi.fn();
-    
+
     eventBus.subscribe('scheduler:heartbeat', callback);
-    
+
     await scheduler.start();
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     expect(callback).toHaveBeenCalled();
   });
 
   it('should emit task started event', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
@@ -451,12 +465,12 @@ describe('Scheduler - Task Operations', () => {
     const eventBus = scheduler.getEventBus();
     const callback = vi.fn();
     eventBus.subscribe('scheduler:task:started', callback);
-    
+
     scheduler.onTaskReady = vi.fn().mockResolvedValue(undefined);
-    
+
     await scheduler.start();
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: 'task-1',
@@ -467,24 +481,33 @@ describe('Scheduler - Task Operations', () => {
 
   it('should emit task completed event on success', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
-        rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
+        rows: [
+          {
+            id: 'task-1',
+            title: 'Test Task',
+            description: 'Test',
+            retry_count: 0,
+            max_retries: 3,
+            timeout_seconds: 300,
+          },
+        ],
         rowCount: 1,
       } as QueryResult<unknown>);
 
     const eventBus = scheduler.getEventBus();
     const callback = vi.fn();
     eventBus.subscribe('scheduler:task:completed', callback);
-    
+
     scheduler.onTaskReady = vi.fn().mockResolvedValue(undefined);
-    
+
     await scheduler.start();
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: 'task-1',
@@ -495,24 +518,33 @@ describe('Scheduler - Task Operations', () => {
 
   it('should emit task failed event on error', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    
+
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
       .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
-        rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
+        rows: [
+          {
+            id: 'task-1',
+            title: 'Test Task',
+            description: 'Test',
+            retry_count: 0,
+            max_retries: 3,
+            timeout_seconds: 300,
+          },
+        ],
         rowCount: 1,
       } as QueryResult<unknown>);
 
     const eventBus = scheduler.getEventBus();
     const callback = vi.fn();
     eventBus.subscribe('scheduler:task:failed', callback);
-    
+
     scheduler.onTaskReady = vi.fn().mockRejectedValue(new Error('Task failed'));
-    
+
     await scheduler.start();
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     expect(callback).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: 'task-1',
@@ -524,23 +556,23 @@ describe('Scheduler - Task Operations', () => {
   it('should respect pause until time', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
-    
+
     await scheduler.start();
     await scheduler.stop();
-    
+
     expect(scheduler.isActive()).toBe(false);
   });
 
   it('should handle waitUntilStopped', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
-    
+
     await scheduler.start();
-    
+
     const stopPromise = scheduler.stop();
     await scheduler.waitUntilStopped();
     await stopPromise;
-    
+
     expect(scheduler.isActive()).toBe(false);
   });
 

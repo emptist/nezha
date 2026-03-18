@@ -7,7 +7,10 @@ import { sanitizeSearchQuery, sanitizeMemoryContent } from '../utils/sanitizatio
 import { getCache } from '../services/CacheService.js';
 
 const SEARCH_CACHE_TTL_MS = 5000; // 5 seconds
-const searchCache = getCache<Memory[]>('memory-search', { ttlMs: SEARCH_CACHE_TTL_MS, maxSize: 100 });
+const searchCache = getCache<Memory[]>('memory-search', {
+  ttlMs: SEARCH_CACHE_TTL_MS,
+  maxSize: 100,
+});
 
 export interface SaveMemoryInput {
   id: string;
@@ -60,7 +63,7 @@ export class MemoryService {
     const source = input.source ?? null;
 
     let embeddingVector: number[] | null = null;
-    
+
     if (input.generateEmbedding !== false && this.embedding) {
       try {
         embeddingVector = await this.embedding.embed(sanitizedContent.sanitized!);
@@ -82,7 +85,18 @@ export class MemoryService {
          source = $7, 
          embedding = $8,
          updated_at = $10`,
-      [input.id, projectId, sanitizedContent.sanitized, metadata, tags, importance, source, embeddingStr, now, now]
+      [
+        input.id,
+        projectId,
+        sanitizedContent.sanitized,
+        metadata,
+        tags,
+        importance,
+        source,
+        embeddingStr,
+        now,
+        now,
+      ]
     );
 
     searchCache.clear();
@@ -120,9 +134,9 @@ export class MemoryService {
   }
 
   async vectorSearch(
-    query: string, 
-    projectId?: string, 
-    limit?: number, 
+    query: string,
+    projectId?: string,
+    limit?: number,
     threshold?: number
   ): Promise<VectorSearchResult[]> {
     if (!this.embedding) {
@@ -170,8 +184,8 @@ export class MemoryService {
   }
 
   async keywordSearch(
-    query: string, 
-    projectId?: string, 
+    query: string,
+    projectId?: string,
     limit?: number
   ): Promise<KeywordSearchResult[]> {
     const sanitized = sanitizeSearchQuery(query);
@@ -214,8 +228,8 @@ export class MemoryService {
   }
 
   async hybridSearch(
-    query: string, 
-    projectId?: string, 
+    query: string,
+    projectId?: string,
     limit?: number,
     vectorWeight?: number,
     keywordWeight?: number
@@ -245,7 +259,14 @@ export class MemoryService {
     let keywordWeightIdx: string;
 
     if (projectId) {
-      params = [embeddingStr, projectId, queryLimit * 2, query, queryVectorWeight, queryKeywordWeight];
+      params = [
+        embeddingStr,
+        projectId,
+        queryLimit * 2,
+        query,
+        queryVectorWeight,
+        queryKeywordWeight,
+      ];
       vectorLimitIdx = '$3';
       keywordQueryIdx = '$4';
       keywordLimitIdx = '$3';
@@ -360,10 +381,9 @@ export class MemoryService {
     const tableName = DATABASE_TABLES.MEMORY;
     const cutoffDate = new Date(Date.now() - this.maxMemoryAgeMs);
 
-    const result = await this.db.query(
-      `DELETE FROM ${tableName} WHERE updated_at < $1`,
-      [cutoffDate]
-    );
+    const result = await this.db.query(`DELETE FROM ${tableName} WHERE updated_at < $1`, [
+      cutoffDate,
+    ]);
 
     return result.rowCount;
   }
@@ -384,7 +404,9 @@ export class MemoryService {
     const totalBefore = parseInt(beforeResult.rows[0]?.count || '0', 10);
 
     if (totalBefore <= maxMemories) {
-      logger.debug(`Memory compaction skipped: ${totalBefore} memories within limit of ${maxMemories}`);
+      logger.debug(
+        `Memory compaction skipped: ${totalBefore} memories within limit of ${maxMemories}`
+      );
       return { archived: 0, deleted: 0, totalBefore, totalAfter: totalBefore };
     }
 
@@ -408,10 +430,7 @@ export class MemoryService {
     // Delete archived memories from main table
     if (archiveResult.rows.length > 0) {
       const archivedIds = archiveResult.rows.map(r => r.id);
-      await this.db.query(
-        `DELETE FROM ${tableName} WHERE id = ANY($1)`,
-        [archivedIds]
-      );
+      await this.db.query(`DELETE FROM ${tableName} WHERE id = ANY($1)`, [archivedIds]);
     }
 
     // Delete very old archived memories (keep last 30 days)
@@ -426,7 +445,9 @@ export class MemoryService {
     );
     const totalAfter = parseInt(afterResult.rows[0]?.count || '0', 10);
 
-    logger.info(`Memory compaction complete: archived ${archiveResult.rows.length}, deleted ${deleteResult.rowCount}, before ${totalBefore}, after ${totalAfter}`);
+    logger.info(
+      `Memory compaction complete: archived ${archiveResult.rows.length}, deleted ${deleteResult.rowCount}, before ${totalBefore}, after ${totalAfter}`
+    );
 
     return {
       archived: archiveResult.rows.length,

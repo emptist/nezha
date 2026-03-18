@@ -41,7 +41,7 @@ export class CacheService<T> {
 
   get(key: string): T | undefined {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       this.misses++;
       return undefined;

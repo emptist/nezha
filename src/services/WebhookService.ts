@@ -39,7 +39,12 @@ export class WebhookService {
     return this.config.enabled ?? false;
   }
 
-  async sendTaskCompleted(taskId: string, title: string, description: string | undefined, result: string): Promise<boolean> {
+  async sendTaskCompleted(
+    taskId: string,
+    title: string,
+    description: string | undefined,
+    result: string
+  ): Promise<boolean> {
     return this.send('task:completed', {
       event: 'task:completed',
       timestamp: new Date().toISOString(),
@@ -53,7 +58,12 @@ export class WebhookService {
     });
   }
 
-  async sendTaskFailed(taskId: string, title: string, description: string | undefined, error: string): Promise<boolean> {
+  async sendTaskFailed(
+    taskId: string,
+    title: string,
+    description: string | undefined,
+    error: string
+  ): Promise<boolean> {
     return this.send('task:failed', {
       event: 'task:failed',
       timestamp: new Date().toISOString(),
@@ -99,7 +109,9 @@ export class WebhookService {
           return true;
         }
 
-        logger.warn(`Webhook failed (attempt ${attempt}/${this.retryCount}): ${response.status} ${response.statusText}`);
+        logger.warn(
+          `Webhook failed (attempt ${attempt}/${this.retryCount}): ${response.status} ${response.statusText}`
+        );
       } catch (error) {
         logger.error(`Webhook error (attempt ${attempt}/${this.retryCount}):`, error);
       }

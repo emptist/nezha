@@ -27,7 +27,7 @@ export class OpenAIEmbedding implements EmbeddingProvider {
     this.apiUrl = config.apiUrl || 'https://api.openai.com/v1';
     this.model = config.model || 'text-embedding-3-small';
     this.timeout = 30000;
-    
+
     if (this.model === 'text-embedding-3-small' || this.model === 'text-embedding-3-large') {
       this.dimensions = 1536;
     }
@@ -47,7 +47,7 @@ export class OpenAIEmbedding implements EmbeddingProvider {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
           model: this.model,
@@ -63,7 +63,7 @@ export class OpenAIEmbedding implements EmbeddingProvider {
       }
 
       const data = (await response.json()) as OpenAIEmbeddingResponse;
-      
+
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response from OpenAI: missing data array');
       }

@@ -23,9 +23,7 @@ export function sanitizeTaskTitle(input: string | undefined): ValidationResult {
   }
 
   // Remove null bytes and control characters
-  const sanitized = input
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .trim();
+  const sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
 
   return { valid: true, sanitized };
 }
@@ -36,13 +34,14 @@ export function sanitizeTaskDescription(input: string | undefined): ValidationRe
   }
 
   if (input.length > MAX_DESCRIPTION_LENGTH) {
-    return { valid: false, error: `Description must be less than ${MAX_DESCRIPTION_LENGTH} characters` };
+    return {
+      valid: false,
+      error: `Description must be less than ${MAX_DESCRIPTION_LENGTH} characters`,
+    };
   }
 
   // Remove null bytes and control characters
-  const sanitized = input
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .trim();
+  const sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
 
   return { valid: true, sanitized };
 }
@@ -53,7 +52,10 @@ export function sanitizeSearchQuery(input: string | undefined): ValidationResult
   }
 
   if (input.length > MAX_SEARCH_LENGTH) {
-    return { valid: false, error: `Search query must be less than ${MAX_SEARCH_LENGTH} characters` };
+    return {
+      valid: false,
+      error: `Search query must be less than ${MAX_SEARCH_LENGTH} characters`,
+    };
   }
 
   // Escape LIKE wildcards to prevent injection
@@ -71,13 +73,14 @@ export function sanitizeMemoryContent(input: string | undefined): ValidationResu
   }
 
   if (input.length > MAX_MEMORY_CONTENT) {
-    return { valid: false, error: `Memory content must be less than ${MAX_MEMORY_CONTENT} characters` };
+    return {
+      valid: false,
+      error: `Memory content must be less than ${MAX_MEMORY_CONTENT} characters`,
+    };
   }
 
   // Remove null bytes and control characters (allow extended unicode)
-  const sanitized = input
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    .trim();
+  const sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
 
   return { valid: true, sanitized };
 }
@@ -103,7 +106,7 @@ export function sanitizeTags(input: string[] | undefined): ValidationResult {
 
 export function sanitizeUUID(input: string | undefined): ValidationResult {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  
+
   if (!input) {
     return { valid: false, error: 'UUID is required' };
   }
@@ -140,7 +143,10 @@ export function sanitizeCronExpression(input: string | undefined): ValidationRes
 
   const parts = input.trim().split(/\s+/);
   if (parts.length !== 5) {
-    return { valid: false, error: 'Cron expression must have 5 parts (minute hour day month weekday)' };
+    return {
+      valid: false,
+      error: 'Cron expression must have 5 parts (minute hour day month weekday)',
+    };
   }
 
   // Basic validation

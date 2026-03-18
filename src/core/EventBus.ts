@@ -77,7 +77,7 @@ export class EventBus {
     if (!handlers) return;
 
     const promises: Promise<void>[] = [];
-    handlers.forEach((handler) => {
+    handlers.forEach(handler => {
       try {
         const result = handler(data);
         if (result instanceof Promise) {
@@ -105,13 +105,8 @@ export class EventBus {
   }
 
   private shouldLogToDb(event: string): boolean {
-    const loggedEvents = [
-      'task:started',
-      'task:completed',
-      'task:failed',
-      'scheduler:heartbeat',
-    ];
-    return loggedEvents.some((e) => event.includes(e));
+    const loggedEvents = ['task:started', 'task:completed', 'task:failed', 'scheduler:heartbeat'];
+    return loggedEvents.some(e => event.includes(e));
   }
 
   private async logToDatabase(event: Event): Promise<void> {
@@ -131,7 +126,7 @@ export class EventBus {
   getHistory(eventType?: string, limit: number = 50): Event[] {
     let events = this.eventHistory;
     if (eventType) {
-      events = events.filter((e) => e.type === eventType);
+      events = events.filter(e => e.type === eventType);
     }
     return events.slice(-limit);
   }
@@ -174,4 +169,4 @@ export const NEZHA_EVENTS = {
   HEALTH_CHECK: 'system:health:check',
 } as const;
 
-export type NezhaEventType = typeof NEZHA_EVENTS[keyof typeof NEZHA_EVENTS];
+export type NezhaEventType = (typeof NEZHA_EVENTS)[keyof typeof NEZHA_EVENTS];

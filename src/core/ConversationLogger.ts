@@ -142,14 +142,14 @@ export class ConversationLogger {
 
     const date = new Date().toISOString().split('T')[0];
     const dateDir = path.join(this.logDir, date);
-    
+
     if (!fs.existsSync(dateDir)) {
       fs.mkdirSync(dateDir, { recursive: true });
     }
 
     const logPath = path.join(dateDir, `session-${this.currentConversation.session_id}.jsonl`);
     const logEntry = JSON.stringify(this.currentConversation) + '\n';
-    
+
     fs.writeFileSync(logPath, logEntry, 'utf-8');
     this.updateIndex();
   }
@@ -206,7 +206,7 @@ export class ConversationLogger {
 
       const date = entry.timestamp.split('T')[0];
       const logPath = path.join(this.logDir, date, `session-${sessionId}.jsonl`);
-      
+
       if (!fs.existsSync(logPath)) {
         return null;
       }

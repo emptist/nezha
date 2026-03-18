@@ -81,7 +81,14 @@ describe('MemoryService', () => {
     it('should search memories', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
       const mockMemories: Memory[] = [
-        { id: 'mem-1', projectId: 'proj-1', content: 'Hello world', metadata: {}, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 'mem-1',
+          projectId: 'proj-1',
+          content: 'Hello world',
+          metadata: {},
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ];
       mockQuery.mockResolvedValue({ rows: mockMemories, rowCount: 1 } as QueryResult<Memory>);
 
@@ -114,7 +121,14 @@ describe('MemoryService', () => {
     it('should get memories by project', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
       const mockMemories: Memory[] = [
-        { id: 'mem-1', projectId: 'proj-1', content: 'Content 1', metadata: {}, createdAt: new Date(), updatedAt: new Date() },
+        {
+          id: 'mem-1',
+          projectId: 'proj-1',
+          content: 'Content 1',
+          metadata: {},
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
       ];
       mockQuery.mockResolvedValue({ rows: mockMemories, rowCount: 1 } as QueryResult<Memory>);
 
@@ -135,7 +149,14 @@ describe('MemoryService', () => {
   describe('getById', () => {
     it('should get memory by id', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-      const mockMemory: Memory = { id: 'mem-1', projectId: 'proj-1', content: 'Test', metadata: {}, createdAt: new Date(), updatedAt: new Date() };
+      const mockMemory: Memory = {
+        id: 'mem-1',
+        projectId: 'proj-1',
+        content: 'Test',
+        metadata: {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       mockQuery.mockResolvedValue({ rows: [mockMemory], rowCount: 1 } as QueryResult<Memory>);
 
       const result = await memoryService.getById('mem-1');
@@ -173,7 +194,9 @@ describe('MemoryService', () => {
   describe('compactMemories', () => {
     it('should skip compaction when under limit', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-      mockQuery.mockResolvedValue({ rows: [{ count: '100' }], rowCount: 1 } as QueryResult<{ count: string }>);
+      mockQuery.mockResolvedValue({ rows: [{ count: '100' }], rowCount: 1 } as QueryResult<{
+        count: string;
+      }>);
 
       const result = await memoryService.compactMemories(10000);
       expect(result.archived).toBe(0);
@@ -183,11 +206,18 @@ describe('MemoryService', () => {
     it('should archive memories exceeding limit', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
       mockQuery
-        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ id: 'mem-1' }, { id: 'mem-2' }], rowCount: 2 } as QueryResult<{ id: string }>)
+        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({
+          rows: [{ id: 'mem-1' }, { id: 'mem-2' }],
+          rowCount: 2,
+        } as QueryResult<{ id: string }>)
         .mockResolvedValueOnce({ rows: [], rowCount: 2 } as QueryResult<unknown>)
         .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{ count: string }>);
+        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>);
 
       const result = await memoryService.compactMemories(10000);
       expect(result.archived).toBe(2);
@@ -198,10 +228,14 @@ describe('MemoryService', () => {
     it('should clean up old archived memories', async () => {
       const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
       mockQuery
-        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{ count: string }>)
+        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
         .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<{ id: string }>)
         .mockResolvedValueOnce({ rows: [], rowCount: 10 } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{ count: string }>);
+        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>);
 
       const result = await memoryService.compactMemories(10000);
       expect(result.deleted).toBe(10);

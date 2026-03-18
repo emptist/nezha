@@ -9,13 +9,13 @@ describe('OllamaEmbedding', () => {
     embedding = new OllamaEmbedding({
       provider: 'ollama',
       model: 'nomic-embed-text',
-      apiUrl: 'http://localhost:11434'
+      apiUrl: 'http://localhost:11434',
     });
 
     try {
       const response = await fetch('http://localhost:11434/api/tags', {
         method: 'GET',
-        signal: AbortSignal.timeout(5000)
+        signal: AbortSignal.timeout(5000),
       });
       ollamaAvailable = response.ok;
     } catch {
@@ -61,7 +61,7 @@ describe('OllamaEmbedding', () => {
     const badEmbedding = new OllamaEmbedding({
       provider: 'ollama',
       model: 'nomic-embed-text',
-      apiUrl: 'http://localhost:99999'
+      apiUrl: 'http://localhost:99999',
     });
 
     await expect(badEmbedding.embed('test')).rejects.toThrow();
@@ -76,7 +76,7 @@ describe('OllamaEmbedding', () => {
     const badEmbedding = new OllamaEmbedding({
       provider: 'ollama',
       model: 'non-existent-model',
-      apiUrl: 'http://localhost:11434'
+      apiUrl: 'http://localhost:11434',
     });
 
     await expect(badEmbedding.embed('test')).rejects.toThrow();

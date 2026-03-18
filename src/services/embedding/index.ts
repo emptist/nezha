@@ -12,10 +12,10 @@ export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvi
   switch (config.provider) {
     case 'zhipu':
       return new ZhipuEmbedding(config);
-    
+
     case 'openai':
       return new OpenAIEmbedding(config);
-    
+
     case 'ollama':
       return new OllamaEmbedding(config);
   }

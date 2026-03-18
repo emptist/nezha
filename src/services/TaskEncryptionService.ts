@@ -1,5 +1,12 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { EncryptionService, getEncryptionService, containsSensitiveData, encryptSensitiveFields, decryptSensitiveFields, type EncryptedData } from './EncryptionService.js';
+import {
+  EncryptionService,
+  getEncryptionService,
+  containsSensitiveData,
+  encryptSensitiveFields,
+  decryptSensitiveFields,
+  type EncryptedData,
+} from './EncryptionService.js';
 import { logger } from '../utils/logger.js';
 import { TASK_STATUS } from '../config/constants.js';
 import type { TaskStatus } from '../config/types.js';
@@ -39,24 +46,21 @@ export class TaskEncryptionService {
     return TaskEncryptionService.instance;
   }
 
-  async storeTaskResult(
-    taskId: string,
-    result: Record<string, unknown>
-  ): Promise<void> {
+  async storeTaskResult(taskId: string, result: Record<string, unknown>): Promise<void> {
     if (!this.encryption.isInitialized()) {
       await this.storeTaskResultPlain(taskId, result);
       return;
     }
 
     const hasSensitive = containsSensitiveData(result);
-    
+
     if (!hasSensitive) {
       await this.storeTaskResultPlain(taskId, result);
       return;
     }
 
     const encrypted = encryptSensitiveFields(result, this.encryption);
-    
+
     await this.db.query(
       `UPDATE tasks SET 
         result = $1, 
@@ -77,13 +81,16 @@ export class TaskEncryptionService {
     taskId: string,
     result: Record<string, unknown>
   ): Promise<void> {
-    await this.db.query(
-      `UPDATE tasks SET result = $1, updated_at = NOW() WHERE id = $2`,
-      [JSON.stringify(result), taskId]
-    );
+    await this.db.query(`UPDATE tasks SET result = $1, updated_at = NOW() WHERE id = $2`, [
+      JSON.stringify(result),
+      taskId,
+    ]);
   }
 
-  async getTaskResult(taskId: string, userRole: string = 'user'): Promise<Record<string, unknown> | null> {
+  async getTaskResult(
+    taskId: string,
+    userRole: string = 'user'
+  ): Promise<Record<string, unknown> | null> {
     const task = await this.db.query<{
       result: string | null;
       encrypted_result: string | null;
@@ -133,10 +140,7 @@ export class TaskEncryptionService {
     return false;
   }
 
-  async completeTaskWithEncryption(
-    taskId: string,
-    result: Record<string, unknown>
-  ): Promise<void> {
+  async completeTaskWithEncryption(taskId: string, result: Record<string, unknown>): Promise<void> {
     await this.storeTaskResult(taskId, result);
     await this.db.query(
       `UPDATE tasks SET status = $1, completed_at = NOW(), updated_at = NOW() WHERE id = $2`,
@@ -144,10 +148,7 @@ export class TaskEncryptionService {
     );
   }
 
-  async failTaskWithEncryption(
-    taskId: string,
-    error: string
-  ): Promise<void> {
+  async failTaskWithEncryption(taskId: string, error: string): Promise<void> {
     await this.db.query(
       `UPDATE tasks SET status = $1, error = $2, completed_at = NOW(), updated_at = NOW() WHERE id = $3`,
       [TASK_STATUS.FAILED, error, taskId]

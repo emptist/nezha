@@ -77,16 +77,16 @@ export class ContinuousImprovementLoop {
   }
 
   async start(): Promise<void> {
-            this.isRunning = true;
-    
+    this.isRunning = true;
+
     await this.logStatus('Continuous improvement system started');
 
     while (this.isRunning) {
       try {
         this.cycleCount++;
-                await this.runOneCycle();
-        
-                await this.sleep(30000);
+        await this.runOneCycle();
+
+        await this.sleep(30000);
       } catch (error) {
         console.error(`Cycle ${this.cycleCount} failed:`, error);
         await this.logError(error as Error);
@@ -96,21 +96,21 @@ export class ContinuousImprovementLoop {
   }
 
   stop(): void {
-        this.isRunning = false;
+    this.isRunning = false;
   }
 
   private async runOneCycle(): Promise<void> {
-        const improvements = await this.identifier.identify();
-        if (improvements.length === 0) {
-            return;
+    const improvements = await this.identifier.identify();
+    if (improvements.length === 0) {
+      return;
     }
 
-        const tasks = await this.convertImprovementsToTasks(improvements);
-            const results = await this.executeTasks(tasks);
-            const reviews = await this.reviewResults(tasks, results);
-            await this.recordLearning(tasks, results, reviews);
-            await this.commitAndPush();
-      }
+    const tasks = await this.convertImprovementsToTasks(improvements);
+    const results = await this.executeTasks(tasks);
+    const reviews = await this.reviewResults(tasks, results);
+    await this.recordLearning(tasks, results, reviews);
+    await this.commitAndPush();
+  }
 
   private async convertImprovementsToTasks(improvements: Improvement[]): Promise<Task[]> {
     const tasks: Task[] = [];
@@ -136,7 +136,7 @@ export class ContinuousImprovementLoop {
     const results: TaskResult[] = [];
 
     for (const task of tasks) {
-            task.status = 'running';
+      task.status = 'running';
       task.startedAt = new Date();
 
       const result = await this.executeTask(task);
@@ -208,14 +208,14 @@ export class ContinuousImprovementLoop {
   private async executeCommitTask(): Promise<string> {
     try {
       const { stdout: status } = await execAsync('git status --porcelain');
-      
+
       if (status.trim().length === 0) {
         return 'No changes to commit';
       }
 
       await execAsync('git add -A');
       await execAsync(`git commit -m "auto: continuous improvement - ${new Date().toISOString()}"`);
-      
+
       return 'Changes committed successfully';
     } catch (error) {
       return `Commit failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
@@ -242,14 +242,18 @@ export class ContinuousImprovementLoop {
         success: result.success,
         score: this.calculateScore(result),
         feedback: this.generateFeedback(result),
-        improvements: result.success ? [] : [{
-          type: 'improvement',
-          title: `Retry: ${task.title}`,
-          description: `Task failed: ${result.error || 'Unknown error'}`,
-          priority: task.priority,
-          category: task.category as any,
-          autoFixable: false,
-        }],
+        improvements: result.success
+          ? []
+          : [
+              {
+                type: 'improvement',
+                title: `Retry: ${task.title}`,
+                description: `Task failed: ${result.error || 'Unknown error'}`,
+                priority: task.priority,
+                category: task.category as any,
+                autoFixable: false,
+              },
+            ],
       };
 
       reviews.push(review);
@@ -282,7 +286,7 @@ export class ContinuousImprovementLoop {
     if (result.success) {
       feedback.push('Task completed successfully');
       feedback.push(`Duration: ${result.duration}ms`);
-      
+
       if (result.artifacts.length > 0) {
         feedback.push(`Artifacts: ${result.artifacts.join(', ')}`);
       }
@@ -385,13 +389,13 @@ export class ContinuousImprovementLoop {
   private async commitAndPush(): Promise<void> {
     try {
       const { stdout: status } = await execAsync('git status --porcelain');
-      
+
       if (status.trim().length > 0) {
         await execAsync('git add -A');
         await execAsync(`git commit -m "auto: continuous improvement cycle ${this.cycleCount}"`);
         await execAsync('git push');
-              } else {
-              }
+      } else {
+      }
     } catch (error) {
       console.error('   Failed to commit and push:', error);
     }
@@ -399,19 +403,19 @@ export class ContinuousImprovementLoop {
 
   private async logStatus(message: string): Promise<void> {
     const statusFile = path.join(this.projectRoot, 'CONTINUOUS_WORK_STATUS.md');
-    
+
     const timestamp = new Date().toISOString();
     const logEntry = `\n### ${timestamp}\n${message}\n`;
-    
+
     await fs.appendFile(statusFile, logEntry);
   }
 
   private async logError(error: Error): Promise<void> {
     const statusFile = path.join(this.projectRoot, 'CONTINUOUS_WORK_STATUS.md');
-    
+
     const timestamp = new Date().toISOString();
     const logEntry = `\n### ${timestamp} - ERROR\n\`\`\`\n${error.message}\n${error.stack}\n\`\`\`\n`;
-    
+
     await fs.appendFile(statusFile, logEntry);
   }
 

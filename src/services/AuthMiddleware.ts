@@ -52,8 +52,10 @@ export class AuthMiddleware {
     }
 
     // Check for API key in header
-    const apiKey = request.headers.get('X-API-Key') || request.headers.get('Authorization')?.replace('Bearer ', '');
-    
+    const apiKey =
+      request.headers.get('X-API-Key') ||
+      request.headers.get('Authorization')?.replace('Bearer ', '');
+
     if (!apiKey) {
       return { authorized: false, error: 'Missing API key' };
     }
@@ -66,12 +68,14 @@ export class AuthMiddleware {
     // Check database for API key
     if (this.db) {
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-      
+
       try {
-        const result = await this.db.query<{ id: string; name: string; enabled: boolean; role: string }>(
-          `SELECT id, name, enabled, role FROM api_keys WHERE key_hash = $1`,
-          [keyHash]
-        );
+        const result = await this.db.query<{
+          id: string;
+          name: string;
+          enabled: boolean;
+          role: string;
+        }>(`SELECT id, name, enabled, role FROM api_keys WHERE key_hash = $1`, [keyHash]);
 
         if (result.rows.length === 0) {
           return { authorized: false, error: 'Invalid API key' };
@@ -110,7 +114,9 @@ export class AuthMiddleware {
 }
 
 // Basic Auth helper
-export function parseBasicAuth(authHeader: string | null): { username: string; password: string } | null {
+export function parseBasicAuth(
+  authHeader: string | null
+): { username: string; password: string } | null {
   if (!authHeader || !authHeader.startsWith('Basic ')) {
     return null;
   }

@@ -11,7 +11,7 @@ export class CircuitBreaker {
   private lastFailureTime: number = 0;
   private state: 'closed' | 'open' | 'half-open' = 'closed';
   private halfOpenAttempts: number = 0;
-  
+
   private readonly failureThreshold: number;
   private readonly resetTimeoutMs: number;
   private readonly halfOpenAttemptsLimit: number;
@@ -59,11 +59,15 @@ export class CircuitBreaker {
       this.halfOpenAttempts++;
       if (this.halfOpenAttempts >= this.halfOpenAttemptsLimit) {
         this.state = 'open';
-        logger.warn(`Circuit breaker: opened after half-open failure (will retry in ${this.resetTimeoutMs / 1000}s)`);
+        logger.warn(
+          `Circuit breaker: opened after half-open failure (will retry in ${this.resetTimeoutMs / 1000}s)`
+        );
       }
     } else if (this.failureCount >= this.failureThreshold) {
       this.state = 'open';
-      logger.warn(`Circuit breaker: opened after ${this.failureCount} failures (will retry in ${this.resetTimeoutMs / 1000}s)`);
+      logger.warn(
+        `Circuit breaker: opened after ${this.failureCount} failures (will retry in ${this.resetTimeoutMs / 1000}s)`
+      );
     }
   }
 

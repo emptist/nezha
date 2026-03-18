@@ -49,7 +49,7 @@ export class OllamaEmbedding implements EmbeddingProvider {
       }
 
       const data = (await response.json()) as OllamaEmbeddingResponse;
-      
+
       if (!data.embedding || !Array.isArray(data.embedding)) {
         throw new Error('Invalid response from Ollama: missing embedding array');
       }

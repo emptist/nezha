@@ -52,14 +52,14 @@ export const cli = {
   },
 
   table(headers: string[], rows: string[][]): void {
-    const colWidths = headers.map((h, i) => 
+    const colWidths = headers.map((h, i) =>
       Math.max(h.length, ...rows.map(r => (r[i] || '').length))
     );
 
     const headerRow = headers.map((h, i) => h.padEnd(colWidths[i])).join('  ');
     console.log(`${colors.bright}${headerRow}${colors.reset}`);
     console.log(colWidths.map(w => '-'.repeat(w)).join('  '));
-    
+
     for (const row of rows) {
       console.log(row.map((c, i) => (c || '').padEnd(colWidths[i])).join('  '));
     }
@@ -68,7 +68,9 @@ export const cli = {
   progress(current: number, total: number, msg?: string): void {
     const percent = Math.round((current / total) * 100);
     const bar = '█'.repeat(Math.floor(percent / 5)).padEnd(20, '░');
-    process.stdout.write(`\r${colors.cyan}[${bar}]${colors.reset} ${percent}%${msg ? ` ${msg}` : ''}`);
+    process.stdout.write(
+      `\r${colors.cyan}[${bar}]${colors.reset} ${percent}%${msg ? ` ${msg}` : ''}`
+    );
     if (current === total) {
       process.stdout.write('\n');
     }

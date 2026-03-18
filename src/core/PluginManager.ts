@@ -66,7 +66,7 @@ export class PluginManager {
   // Task lifecycle hooks
   async executeBeforeTask(context: TaskContext): Promise<void> {
     this.taskContexts.set(context.taskId, context);
-    
+
     for (const plugin of this.plugins.values()) {
       try {
         await plugin.hooks.beforeTask?.(context);
@@ -79,7 +79,7 @@ export class PluginManager {
   async executeAfterTask(context: TaskContext): Promise<void> {
     const stored = this.taskContexts.get(context.taskId);
     const fullContext = { ...stored, ...context, endTime: new Date() };
-    
+
     for (const plugin of this.plugins.values()) {
       try {
         await plugin.hooks.afterTask?.(fullContext);
@@ -87,14 +87,14 @@ export class PluginManager {
         logger.error(`Plugin ${plugin.name} afterTask error:`, error);
       }
     }
-    
+
     this.taskContexts.delete(context.taskId);
   }
 
   async executeOnError(context: TaskContext, error: Error): Promise<void> {
     const stored = this.taskContexts.get(context.taskId);
     const fullContext = { ...stored, ...context, error: error.message, endTime: new Date() };
-    
+
     for (const plugin of this.plugins.values()) {
       try {
         await plugin.hooks.onError?.(fullContext, error);

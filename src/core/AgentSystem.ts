@@ -49,7 +49,7 @@ export class AgentSystem {
     }
 
     this.isRunning = true;
-    
+
     this.heartbeatTimer = setInterval(() => {
       this.checkAgentsHealth();
     }, this.heartbeatIntervalMs);
@@ -148,7 +148,10 @@ export class AgentSystem {
     return this.agents.size;
   }
 
-  async executeWithAgent(agentId: string, task: string): Promise<{ success: boolean; message?: string }> {
+  async executeWithAgent(
+    agentId: string,
+    task: string
+  ): Promise<{ success: boolean; message?: string }> {
     const info = this.agents.get(agentId);
     if (!info) {
       throw new Error(`Agent ${agentId} not found`);
@@ -171,7 +174,7 @@ export class AgentSystem {
 
     try {
       const result = await info.agent.executeTask(task);
-      
+
       info.taskCount++;
       info.status = result.success ? 'idle' : 'error';
       info.lastActivity = new Date();
@@ -197,7 +200,7 @@ export class AgentSystem {
       info.lastActivity = new Date();
 
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       this.eventBus.publish(AGENT_EVENTS.AGENT_ERROR, {
         agentId,
         error: errorMessage,
@@ -225,7 +228,7 @@ export class AgentSystem {
       if (timeSinceLastActivity > timeoutMs && info.status !== 'idle') {
         logger.warn(`Agent ${id} may be stuck (status: ${info.status}, last activity: ${info.lastActivity.toISOString()}
   )`);
-        
+
         if (info.status === 'busy') {
           info.status = 'error';
           this.eventBus.publish(AGENT_EVENTS.AGENT_STATUS_CHANGED, {

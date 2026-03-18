@@ -51,13 +51,13 @@ export class ImprovementIdentifier {
 
     improvements.push(...this.analyzeSystemStatus(status));
 
-    improvements.push(...await this.identifyCodeImprovements());
+    improvements.push(...(await this.identifyCodeImprovements()));
 
-    improvements.push(...await this.identifyDocumentationImprovements());
+    improvements.push(...(await this.identifyDocumentationImprovements()));
 
-    improvements.push(...await this.identifyTestImprovements());
+    improvements.push(...(await this.identifyTestImprovements()));
 
-    improvements.push(...await this.identifyFeatureImprovements());
+    improvements.push(...(await this.identifyFeatureImprovements()));
 
     return this.prioritizeImprovements(improvements);
   }
@@ -152,9 +152,8 @@ export class ImprovementIdentifier {
     const srcFiles = await this.findFiles(srcDir, '.ts');
     const testFiles = await this.findFiles(testDir, '.test.ts');
 
-    const percentage = srcFiles.length > 0 
-      ? Math.round((testFiles.length / srcFiles.length) * 100)
-      : 0;
+    const percentage =
+      srcFiles.length > 0 ? Math.round((testFiles.length / srcFiles.length) * 100) : 0;
 
     return {
       percentage,
@@ -167,9 +166,7 @@ export class ImprovementIdentifier {
       const { stdout: status } = await execAsync('git status --porcelain');
       const hasUncommittedChanges = status.trim().length > 0;
 
-      const { stdout: unpushed } = await execAsync(
-        'git log @{u}..HEAD --oneline 2>&1 || echo ""'
-      );
+      const { stdout: unpushed } = await execAsync('git log @{u}..HEAD --oneline 2>&1 || echo ""');
       const hasUnpushedCommits = unpushed.trim().length > 0;
 
       return {
@@ -264,7 +261,7 @@ export class ImprovementIdentifier {
 
     for (const file of files.slice(0, 10)) {
       const content = await fs.readFile(file, 'utf-8');
-      
+
       if (content.includes('TODO') || content.includes('FIXME')) {
         improvements.push({
           type: 'improvement',
@@ -368,7 +365,7 @@ export class ImprovementIdentifier {
       const fullPath = path.join(dir, entry.name);
 
       if (entry.isDirectory()) {
-        files.push(...await this.findFiles(fullPath, ext));
+        files.push(...(await this.findFiles(fullPath, ext)));
       } else if (entry.isFile() && entry.name.endsWith(ext)) {
         files.push(fullPath);
       }

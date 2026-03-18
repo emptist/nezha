@@ -42,8 +42,8 @@ export class GitAutoCommitPlugin implements Plugin {
       const status = execSync('git status --porcelain', { encoding: 'utf-8' });
       return status
         .split('\n')
-        .filter((line) => line.trim())
-        .map((line) => line.substring(3).trim());
+        .filter(line => line.trim())
+        .map(line => line.substring(3).trim());
     } catch {
       return [];
     }
@@ -56,9 +56,10 @@ export class GitAutoCommitPlugin implements Plugin {
     }
 
     const changedFiles = this.getChangedFiles();
-    const filesStr = changedFiles.length > 5 
-      ? `${changedFiles.slice(0, 5).join(', ')}...` 
-      : changedFiles.join(', ');
+    const filesStr =
+      changedFiles.length > 5
+        ? `${changedFiles.slice(0, 5).join(', ')}...`
+        : changedFiles.join(', ');
 
     try {
       if (this.autoAdd) {
@@ -75,11 +76,17 @@ export class GitAutoCommitPlugin implements Plugin {
           execSync('git push', { encoding: 'utf-8' });
           logger.info('[GitAutoCommit] Pushed to remote');
         } catch (pushError) {
-          logger.warn('[GitAutoCommit] Push failed (可能是分支保护或无远程仓库):', pushError instanceof Error ? pushError.message : String(pushError));
+          logger.warn(
+            '[GitAutoCommit] Push failed (可能是分支保护或无远程仓库):',
+            pushError instanceof Error ? pushError.message : String(pushError)
+          );
         }
       }
     } catch (error) {
-      logger.warn('[GitAutoCommit] Commit failed:', error instanceof Error ? error.message : String(error));
+      logger.warn(
+        '[GitAutoCommit] Commit failed:',
+        error instanceof Error ? error.message : String(error)
+      );
     }
   }
 

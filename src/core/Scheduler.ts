@@ -1,10 +1,20 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, SCHEDULER_CONFIG, TASK_CONFIG, TASK_STATUS } from '../config/constants.js';
+import {
+  DATABASE_TABLES,
+  SCHEDULER_CONFIG,
+  TASK_CONFIG,
+  TASK_STATUS,
+} from '../config/constants.js';
 import { type Task, type TaskStatus, type QueryResult } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
-import { EncryptionService, containsSensitiveData, encryptSensitiveFields, decryptSensitiveFields } from '../services/EncryptionService.js';
+import {
+  EncryptionService,
+  containsSensitiveData,
+  encryptSensitiveFields,
+  decryptSensitiveFields,
+} from '../services/EncryptionService.js';
 
 const standardMetrics = createStandardMetrics();
 
@@ -65,8 +75,8 @@ export class Scheduler {
       return;
     }
     this.isRunning = true;
-      this.heartbeatTimer = setInterval(() => {
-      this.heartbeat().catch((err) => {
+    this.heartbeatTimer = setInterval(() => {
+      this.heartbeat().catch(err => {
         logger.error('Scheduler heartbeat failed:', err);
       });
     }, this.heartbeatIntervalMs);
@@ -88,19 +98,19 @@ export class Scheduler {
     if (waitForRunning) {
       logger.info(`Waiting up to ${gracePeriodMs}ms for running tasks to complete...`);
       const startTime = Date.now();
-      let timedOut = false;
-      
+      const timedOut = false;
+
       while (Date.now() - startTime < gracePeriodMs) {
         const result = await this.db.query<{ count: string }>(
           `SELECT COUNT(*) as count FROM tasks WHERE status = 'RUNNING'`
         );
         const runningCount = parseInt(result.rows[0]?.count || '0', 10);
-        
+
         if (runningCount === 0) {
           logger.info('All running tasks completed');
           break;
         }
-        
+
         logger.debug(`Waiting for ${runningCount} running tasks...`);
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
@@ -127,7 +137,7 @@ export class Scheduler {
   }
 
   async waitUntilStopped(): Promise<void> {
-    return new Promise<void>((resolve) => {
+    return new Promise<void>(resolve => {
       const checkInterval = setInterval(() => {
         if (!this.isRunning) {
           clearInterval(checkInterval);
@@ -151,78 +161,101 @@ export class Scheduler {
     }
 
     this.isHeartbeatRunning = true;
-    
+
     try {
-    // Check if paused
-    if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {
-      logger.info(`Scheduler heartbeat: Paused until ${this.pauseUntil.toISOString()}`);
-      this.isHeartbeatRunning = false;
-      return;
-    }
-    
-    // Resume if pause time is over
-    if (this.isPaused) {
-      logger.info('Scheduler heartbeat: Resuming after pause');
-      this.isPaused = false;
-      this.pauseUntil = null;
-      this.consecutiveFailures = 0;
-      this.eventBus.publish(SCHEDULER_EVENTS.RESUMED, { timestamp: new Date() });
-    }
-    
-    logger.info('Scheduler heartbeat: Checking for pending tasks');
-    this.lastHeartbeat = new Date();
-    this.lastRun = new Date();
-    this.eventBus.publish(SCHEDULER_EVENTS.HEARTBEAT, { timestamp: this.lastHeartbeat });
-    const tableName = DATABASE_TABLES.TASKS;
-    
-    // Check for timed-out RUNNING tasks - fail them and schedule retry
-    const timeoutResult = await this.db.query<{ id: string; title: string; timeout_seconds: number | null }>(
-      `SELECT id, title, timeout_seconds 
+      // Check if paused
+      if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {
+        logger.info(`Scheduler heartbeat: Paused until ${this.pauseUntil.toISOString()}`);
+        this.isHeartbeatRunning = false;
+        return;
+      }
+
+      // Resume if pause time is over
+      if (this.isPaused) {
+        logger.info('Scheduler heartbeat: Resuming after pause');
+        this.isPaused = false;
+        this.pauseUntil = null;
+        this.consecutiveFailures = 0;
+        this.eventBus.publish(SCHEDULER_EVENTS.RESUMED, { timestamp: new Date() });
+      }
+
+      logger.info('Scheduler heartbeat: Checking for pending tasks');
+      this.lastHeartbeat = new Date();
+      this.lastRun = new Date();
+      this.eventBus.publish(SCHEDULER_EVENTS.HEARTBEAT, { timestamp: this.lastHeartbeat });
+      const tableName = DATABASE_TABLES.TASKS;
+
+      // Check for timed-out RUNNING tasks - fail them and schedule retry
+      const timeoutResult = await this.db.query<{
+        id: string;
+        title: string;
+        timeout_seconds: number | null;
+      }>(
+        `SELECT id, title, timeout_seconds 
        FROM ${tableName} 
        WHERE status = $1 
        AND started_at IS NOT NULL 
        AND timeout_seconds IS NOT NULL
        AND NOW() - started_at > (timeout_seconds || ' seconds')::INTERVAL`,
-      [TASK_STATUS.RUNNING]
-    );
-    
-    for (const timedOutTask of timeoutResult.rows) {
-      const timeoutSec = timedOutTask.timeout_seconds ?? 300;
-      logger.warn(`Task "${timedOutTask.title}" (${timedOutTask.id}) timed out after ${timeoutSec}s`);
-      
-      await this.db.query(
-        `UPDATE ${tableName} SET status = $1, error = $2, updated_at = NOW() 
-         WHERE id = $3`,
-        [TASK_STATUS.PENDING, `Timeout after ${timeoutSec} seconds`, timedOutTask.id]
+        [TASK_STATUS.RUNNING]
       );
-      
-      await this.logTaskStateChange(timedOutTask.id, timedOutTask.title, TASK_STATUS.RUNNING, TASK_STATUS.PENDING, `Timeout after ${timeoutSec}s - will retry`, { timeoutSec });
-    }
 
-    // Prevent concurrent task execution - double check with database state
-    if (this.isExecuting) {
-      logger.debug('Scheduler heartbeat: Task already executing, skipping');
-      return;
-    }
-    
-    // Also check database for any running tasks as additional protection
-    const runningCheck = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM ${tableName} WHERE status = $1`,
-      [TASK_STATUS.RUNNING]
-    );
-    const runningCount = parseInt(runningCheck.rows[0]?.count || '0', 10);
-    if (runningCount > 0) {
-      logger.debug(`Scheduler heartbeat: ${runningCount} task(s) running in DB, skipping`);
-    }
-    
-    standardMetrics.workerUtilization.set(runningCount > 0 ? 1 : 0);
-    
-    // Find and lock pending task atomically to prevent race conditions
-    // Only select tasks whose dependencies are all COMPLETED
-    // Also consider next_retry_at for scheduled retries
-    // Priority: base priority + retry boost + aging factor + category weight
-    const result = await this.db.query<{ id: string; title: string; description: string; depends_on: string[]; retry_count: number; max_retries: number; timeout_seconds: number | null; priority: number; created_at: Date }>(
-      `WITH eligible_tasks AS (
+      for (const timedOutTask of timeoutResult.rows) {
+        const timeoutSec = timedOutTask.timeout_seconds ?? 300;
+        logger.warn(
+          `Task "${timedOutTask.title}" (${timedOutTask.id}) timed out after ${timeoutSec}s`
+        );
+
+        await this.db.query(
+          `UPDATE ${tableName} SET status = $1, error = $2, updated_at = NOW() 
+         WHERE id = $3`,
+          [TASK_STATUS.PENDING, `Timeout after ${timeoutSec} seconds`, timedOutTask.id]
+        );
+
+        await this.logTaskStateChange(
+          timedOutTask.id,
+          timedOutTask.title,
+          TASK_STATUS.RUNNING,
+          TASK_STATUS.PENDING,
+          `Timeout after ${timeoutSec}s - will retry`,
+          { timeoutSec }
+        );
+      }
+
+      // Prevent concurrent task execution - double check with database state
+      if (this.isExecuting) {
+        logger.debug('Scheduler heartbeat: Task already executing, skipping');
+        return;
+      }
+
+      // Also check database for any running tasks as additional protection
+      const runningCheck = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${tableName} WHERE status = $1`,
+        [TASK_STATUS.RUNNING]
+      );
+      const runningCount = parseInt(runningCheck.rows[0]?.count || '0', 10);
+      if (runningCount > 0) {
+        logger.debug(`Scheduler heartbeat: ${runningCount} task(s) running in DB, skipping`);
+      }
+
+      standardMetrics.workerUtilization.set(runningCount > 0 ? 1 : 0);
+
+      // Find and lock pending task atomically to prevent race conditions
+      // Only select tasks whose dependencies are all COMPLETED
+      // Also consider next_retry_at for scheduled retries
+      // Priority: base priority + retry boost + aging factor + category weight
+      const result = await this.db.query<{
+        id: string;
+        title: string;
+        description: string;
+        depends_on: string[];
+        retry_count: number;
+        max_retries: number;
+        timeout_seconds: number | null;
+        priority: number;
+        created_at: Date;
+      }>(
+        `WITH eligible_tasks AS (
         SELECT 
           id, title, description, depends_on, retry_count, max_retries, timeout_seconds, priority, created_at,
           LEAST(FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) / 300), 10) as age_boost,
@@ -261,89 +294,133 @@ export class Scheduler {
       SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked)
       WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, depends_on, retry_count, max_retries, timeout_seconds`,
-      [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
-    );
-    
-    if (result.rows.length > 0) {
-      const task = result.rows[0];
-      const retryCount = task.retry_count ?? 0;
-      const maxRetries = task.max_retries ?? 3;
-      const timeoutSec = task.timeout_seconds ?? 300;
-      const timeoutInfo = task.timeout_seconds ? ` (timeout: ${timeoutSec}s)` : ' (default timeout: 300s)';
-      logger.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution (retry ${retryCount}/${maxRetries})${timeoutInfo}`);
-      
-      await this.logTaskStateChange(task.id, task.title, TASK_STATUS.PENDING, TASK_STATUS.RUNNING, retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Task started', { retryCount, maxRetries, timeoutSec });
-      
-      this.eventBus.publish(SCHEDULER_EVENTS.TASK_STARTED, {
-        taskId: task.id,
-        title: task.title,
-        description: task.description,
-        timestamp: new Date(),
-      });
-      
-      // Execute task and wait for completion
-      this.isExecuting = true;
-      try {
-        await this.onTaskReady?.(task.id, task.title, task.description, retryCount, maxRetries, timeoutSec);
-        this.totalTasksExecuted++;
-        logger.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`);
-        this.lastTaskRun.set(task.id, new Date());
-        
-        this.consecutiveFailures = 0; // Reset failure count on success
-        
-        this.eventBus.publish(SCHEDULER_EVENTS.TASK_COMPLETED, {
+        [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
+      );
+
+      if (result.rows.length > 0) {
+        const task = result.rows[0];
+        const retryCount = task.retry_count ?? 0;
+        const maxRetries = task.max_retries ?? 3;
+        const timeoutSec = task.timeout_seconds ?? 300;
+        const timeoutInfo = task.timeout_seconds
+          ? ` (timeout: ${timeoutSec}s)`
+          : ' (default timeout: 300s)';
+        logger.info(
+          `Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution (retry ${retryCount}/${maxRetries})${timeoutInfo}`
+        );
+
+        await this.logTaskStateChange(
+          task.id,
+          task.title,
+          TASK_STATUS.PENDING,
+          TASK_STATUS.RUNNING,
+          retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Task started',
+          { retryCount, maxRetries, timeoutSec }
+        );
+
+        this.eventBus.publish(SCHEDULER_EVENTS.TASK_STARTED, {
           taskId: task.id,
           title: task.title,
           description: task.description,
           timestamp: new Date(),
         });
-      } catch (err) {
-        logger.error(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`, err);
-        this.consecutiveFailures++;
-        
-        this.eventBus.publish(SCHEDULER_EVENTS.TASK_FAILED, {
-          taskId: task.id,
-          title: task.title,
-          description: task.description,
-          timestamp: new Date(),
-        });
-        
-        // Check if we need to pause
-        if (this.consecutiveFailures >= SCHEDULER_CONFIG.MAX_CONSECUTIVE_FAILURES) {
-          this.isPaused = true;
-          this.pauseUntil = new Date(Date.now() + SCHEDULER_CONFIG.PAUSE_DURATION_MS);
-          logger.warn(`Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for ${SCHEDULER_CONFIG.PAUSE_DURATION_MS / 1000} seconds`);
-          this.eventBus.publish(SCHEDULER_EVENTS.PAUSED, {
+
+        // Execute task and wait for completion
+        this.isExecuting = true;
+        try {
+          await this.onTaskReady?.(
+            task.id,
+            task.title,
+            task.description,
+            retryCount,
+            maxRetries,
+            timeoutSec
+          );
+          this.totalTasksExecuted++;
+          logger.info(
+            `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`
+          );
+          this.lastTaskRun.set(task.id, new Date());
+
+          this.consecutiveFailures = 0; // Reset failure count on success
+
+          this.eventBus.publish(SCHEDULER_EVENTS.TASK_COMPLETED, {
             taskId: task.id,
             title: task.title,
-            pauseUntil: this.pauseUntil,
+            description: task.description,
             timestamp: new Date(),
           });
+        } catch (err) {
+          logger.error(
+            `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`,
+            err
+          );
+          this.consecutiveFailures++;
+
+          this.eventBus.publish(SCHEDULER_EVENTS.TASK_FAILED, {
+            taskId: task.id,
+            title: task.title,
+            description: task.description,
+            timestamp: new Date(),
+          });
+
+          // Check if we need to pause
+          if (this.consecutiveFailures >= SCHEDULER_CONFIG.MAX_CONSECUTIVE_FAILURES) {
+            this.isPaused = true;
+            this.pauseUntil = new Date(Date.now() + SCHEDULER_CONFIG.PAUSE_DURATION_MS);
+            logger.warn(
+              `Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for ${SCHEDULER_CONFIG.PAUSE_DURATION_MS / 1000} seconds`
+            );
+            this.eventBus.publish(SCHEDULER_EVENTS.PAUSED, {
+              taskId: task.id,
+              title: task.title,
+              pauseUntil: this.pauseUntil,
+              timestamp: new Date(),
+            });
+          }
+
+          // Reset to PENDING for retry (with delay handled by failure count)
+          // Also boost priority to prevent starvation
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const retryCountForLog = (task.retry_count ?? 0) + 1;
+          const priorityBoost = retryCountForLog * 2; // +2 per retry
+          await this.db.query(
+            `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
+            [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
+          );
+
+          await this.logTaskStateChange(
+            task.id,
+            task.title,
+            TASK_STATUS.RUNNING,
+            TASK_STATUS.PENDING,
+            `Retry needed: ${errorMessage}`,
+            {
+              retryCount: retryCountForLog,
+              maxRetries: task.max_retries ?? 3,
+              error: errorMessage,
+              priorityBoost,
+            }
+          );
+        } finally {
+          this.isExecuting = false;
         }
-        
-        // Reset to PENDING for retry (with delay handled by failure count)
-        // Also boost priority to prevent starvation
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const retryCountForLog = (task.retry_count ?? 0) + 1;
-        const priorityBoost = retryCountForLog * 2; // +2 per retry
-        await this.db.query(
-          `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
-          [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
-        );
-        
-        await this.logTaskStateChange(task.id, task.title, TASK_STATUS.RUNNING, TASK_STATUS.PENDING, `Retry needed: ${errorMessage}`, { retryCount: retryCountForLog, maxRetries: task.max_retries ?? 3, error: errorMessage, priorityBoost });
-      } finally {
-        this.isExecuting = false;
+      } else {
+        logger.info('Scheduler heartbeat: No pending tasks found');
       }
-    } else {
-      logger.info('Scheduler heartbeat: No pending tasks found');
-    }
     } finally {
       this.isHeartbeatRunning = false;
     }
   }
 
-  onTaskReady?: (taskId: string, title: string, description?: string, retryCount?: number, maxRetries?: number, timeoutSeconds?: number) => void;
+  onTaskReady?: (
+    taskId: string,
+    title: string,
+    description?: string,
+    retryCount?: number,
+    maxRetries?: number,
+    timeoutSeconds?: number
+  ) => void;
 
   async scheduleTask(task: ScheduledTask, maxRetries?: number): Promise<string> {
     const tableName = DATABASE_TABLES.TASKS;
@@ -410,7 +487,12 @@ export class Scheduler {
     return this.totalTasksExecuted;
   }
 
-  getStats(): { totalTasks: number; lastHeartbeat: Date | null; isPaused: boolean; pauseUntil: Date | null } {
+  getStats(): {
+    totalTasks: number;
+    lastHeartbeat: Date | null;
+    isPaused: boolean;
+    pauseUntil: Date | null;
+  } {
     return {
       totalTasks: this.totalTasksExecuted,
       lastHeartbeat: this.lastHeartbeat,
@@ -419,12 +501,26 @@ export class Scheduler {
     };
   }
 
-  private async logTaskStateChange(taskId: string, taskTitle: string, previousStatus: string | null, newStatus: string, reason?: string, metadata?: Record<string, unknown>): Promise<void> {
+  private async logTaskStateChange(
+    taskId: string,
+    taskTitle: string,
+    previousStatus: string | null,
+    newStatus: string,
+    reason?: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
     try {
       await this.db.query(
         `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
          VALUES ($1, $2, $3, $4, $5, $6)`,
-        [taskId, taskTitle, previousStatus, newStatus, reason || null, metadata ? JSON.stringify(metadata) : '{}']
+        [
+          taskId,
+          taskTitle,
+          previousStatus,
+          newStatus,
+          reason || null,
+          metadata ? JSON.stringify(metadata) : '{}',
+        ]
       );
     } catch (error) {
       logger.warn('Failed to log task state change:', error);
@@ -433,7 +529,7 @@ export class Scheduler {
 
   async completeTaskWithResult(taskId: string, result: Record<string, unknown>): Promise<void> {
     const tableName = DATABASE_TABLES.TASKS;
-    
+
     if (this.encryption.isInitialized() && containsSensitiveData(result)) {
       const encrypted = encryptSensitiveFields(result, this.encryption);
       await this.db.query(
@@ -446,32 +542,32 @@ export class Scheduler {
         [TASK_STATUS.COMPLETED, JSON.stringify(result), taskId]
       );
     }
-    
+
     logger.info(`Task ${taskId} completed with result`);
   }
 
   async failTaskWithError(taskId: string, error: string): Promise<void> {
     const tableName = DATABASE_TABLES.TASKS;
-    
+
     await this.db.query(
       `UPDATE ${tableName} SET status = $1, error = $2, completed_at = NOW(), updated_at = NOW() WHERE id = $3`,
       [TASK_STATUS.FAILED, error, taskId]
     );
-    
+
     logger.info(`Task ${taskId} failed with error: ${error}`);
   }
 
-  async getTaskResult(taskId: string, userRole: string = 'user'): Promise<Record<string, unknown> | null> {
+  async getTaskResult(
+    taskId: string,
+    userRole: string = 'user'
+  ): Promise<Record<string, unknown> | null> {
     const tableName = DATABASE_TABLES.TASKS;
-    
+
     const result = await this.db.query<{
       result: string | null;
       encrypted_result: string | null;
       status: TaskStatus;
-    }>(
-      `SELECT result, encrypted_result, status FROM ${tableName} WHERE id = $1`,
-      [taskId]
-    );
+    }>(`SELECT result, encrypted_result, status FROM ${tableName} WHERE id = $1`, [taskId]);
 
     if (result.rows.length === 0) {
       return null;

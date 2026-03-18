@@ -76,9 +76,9 @@ describe('HeartbeatService', () => {
   describe('start', () => {
     it('should start and stop without error', async () => {
       const startPromise = service.start();
-      
+
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       await service.stop();
       await startPromise.catch(() => {});
     });
@@ -87,7 +87,7 @@ describe('HeartbeatService', () => {
   describe('stop', () => {
     it('should close database connection on stop', async () => {
       await service.stop();
-      
+
       expect(mockDb.close).toHaveBeenCalled();
     });
   });
@@ -107,10 +107,10 @@ describe('HeartbeatService', () => {
         getStats: vi.fn(),
         getLastHeartbeat: vi.fn(),
       } as unknown as Scheduler;
-      
+
       const inactiveService = new HeartbeatService(mockDb, {}, inactiveScheduler);
       const result = inactiveService.isRunning();
-      
+
       expect(result).toBe(false);
     });
   });
@@ -118,7 +118,7 @@ describe('HeartbeatService', () => {
   describe('getHealth', () => {
     it('should return correct health status when running', () => {
       const health = service.getHealth();
-      
+
       expect(health.isRunning).toBe(true);
       expect(health.stats).toHaveProperty('tasksExecuted');
       expect(health.stats).toHaveProperty('tasksSucceeded');
@@ -135,10 +135,10 @@ describe('HeartbeatService', () => {
         getStats: vi.fn(),
         getLastHeartbeat: vi.fn(),
       } as unknown as Scheduler;
-      
+
       const inactiveService = new HeartbeatService(mockDb, {}, inactiveScheduler);
       const health = inactiveService.getHealth();
-      
+
       expect(health.isRunning).toBe(false);
     });
   });
@@ -146,20 +146,20 @@ describe('HeartbeatService', () => {
   describe('executeTask', () => {
     it('should execute task and mark as completed on success', async () => {
       mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 1 } as QueryResult<unknown>);
-      
+
       await service.executeTask('task-123', 'Test Task', 'Test description');
-      
+
       expect(mockDb.query).toHaveBeenCalled();
     });
 
     it('should increment tasksExecuted counter', async () => {
       mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 1 } as QueryResult<unknown>);
-      
+
       const healthBefore = service.getHealth();
       const initialExecuted = healthBefore.stats.tasksExecuted;
-      
+
       await service.executeTask('task-123', 'Test Task');
-      
+
       const healthAfter = service.getHealth();
       expect(healthAfter.stats.tasksExecuted).toBe(initialExecuted + 1);
     });

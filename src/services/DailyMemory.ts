@@ -58,7 +58,7 @@ export class DailyMemoryService {
 
     try {
       const exists = await this.fileExists(filePath);
-      
+
       if (exists) {
         await fs.appendFile(filePath, entry);
       } else {
@@ -84,7 +84,7 @@ export class DailyMemoryService {
 
   async readToday(): Promise<string> {
     const filePath = this.getFilePath();
-    
+
     try {
       const exists = await this.fileExists(filePath);
       if (!exists) {

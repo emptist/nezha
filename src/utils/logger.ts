@@ -42,15 +42,15 @@ class FileWriter {
   constructor(outputDir: string, maxFileSize: number, maxFiles: number) {
     this.maxFileSize = maxFileSize;
     this.maxFiles = maxFiles;
-    
+
     const dir = outputDir || path.join(process.cwd(), '.tmp', 'logs');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    
+
     this.logFile = path.join(dir, 'nezha.log');
     this.errorFile = path.join(dir, 'nezha-error.log');
-    
+
     this.rotateIfNeeded();
   }
 
@@ -59,7 +59,7 @@ class FileWriter {
       if (fs.existsSync(this.logFile)) {
         const stats = fs.statSync(this.logFile);
         this.currentSize = stats.size;
-        
+
         if (this.currentSize >= this.maxFileSize) {
           this.rotateFiles();
         }
@@ -77,7 +77,7 @@ class FileWriter {
         const rotatedFile = path.join(path.dirname(this.logFile), `nezha-${timestamp}.log`);
         fs.renameSync(this.logFile, rotatedFile);
       }
-      
+
       // Clean old files
       this.cleanOldFiles();
       this.currentSize = 0;
@@ -89,11 +89,12 @@ class FileWriter {
   private cleanOldFiles(): void {
     try {
       const dir = path.dirname(this.logFile);
-      const files = fs.readdirSync(dir)
+      const files = fs
+        .readdirSync(dir)
         .filter(f => f.startsWith('nezha-') && f.endsWith('.log'))
         .sort()
         .reverse();
-      
+
       for (let i = this.maxFiles; i < files.length; i++) {
         fs.unlinkSync(path.join(dir, files[i]));
       }
@@ -105,10 +106,10 @@ class FileWriter {
   write(entry: LogEntry, isError: boolean): void {
     try {
       this.rotateIfNeeded();
-      
+
       const filePath = isError ? this.errorFile : this.logFile;
       const line = JSON.stringify(entry) + '\n';
-      
+
       fs.appendFileSync(filePath, line);
       this.currentSize += Buffer.byteLength(line, 'utf8');
     } catch (e) {
@@ -125,7 +126,8 @@ class Logger {
   constructor(config: LoggerConfig = {}) {
     this.config = {
       level: config.level || (process.env.LOG_LEVEL as LogLevel) || 'info',
-      outputDir: config.outputDir || process.env.LOG_DIR || path.join(process.cwd(), '.tmp', 'logs'),
+      outputDir:
+        config.outputDir || process.env.LOG_DIR || path.join(process.cwd(), '.tmp', 'logs'),
       maxFileSize: config.maxFileSize || 10 * 1024 * 1024, // 10MB
       maxFiles: config.maxFiles || 5,
       json: config.json ?? process.env.LOG_JSON === 'true',
@@ -133,7 +135,11 @@ class Logger {
     };
 
     if (this.config.outputDir) {
-      this.fileWriter = new FileWriter(this.config.outputDir, this.config.maxFileSize, this.config.maxFiles);
+      this.fileWriter = new FileWriter(
+        this.config.outputDir,
+        this.config.maxFileSize,
+        this.config.maxFiles
+      );
     }
   }
 
@@ -165,7 +171,9 @@ class Logger {
     }
 
     // Add extra context from args
-    const contextArgs = args.filter(a => typeof a === 'object' && a !== null && !(a instanceof Error));
+    const contextArgs = args.filter(
+      a => typeof a === 'object' && a !== null && !(a instanceof Error)
+    );
     if (contextArgs.length > 0) {
       entry.context = { ...entry.context, ...Object.assign({}, ...contextArgs) };
     }
@@ -189,15 +197,12 @@ class Logger {
       }
     } else {
       const timestamp = entry.timestamp;
-      const contextStr = Object.keys(entry.context || {}).length > 0 
-        ? ' ' + JSON.stringify(entry.context) 
-        : '';
-      const errorStr = entry.error 
-        ? `\n  ${entry.error.name}: ${entry.error.message}` 
-        : '';
-      
+      const contextStr =
+        Object.keys(entry.context || {}).length > 0 ? ' ' + JSON.stringify(entry.context) : '';
+      const errorStr = entry.error ? `\n  ${entry.error.name}: ${entry.error.message}` : '';
+
       const output = `[${timestamp}] [${level.toUpperCase()}] ${message}${contextStr}${errorStr}`;
-      
+
       if (level === 'error') {
         console.error(output);
       } else if (level === 'warn') {

@@ -31,7 +31,7 @@ export class EncryptionService {
 
   async initialize(secret?: string): Promise<void> {
     const encryptionSecret = secret ?? process.env.NEZHA_SECRET;
-    
+
     if (!encryptionSecret) {
       logger.warn('NEZHA_SECRET not set, encryption disabled');
       return;
@@ -89,10 +89,7 @@ export class EncryptionService {
       authTagLength: TAG_LENGTH,
     });
 
-    const encrypted = Buffer.concat([
-      cipher.update(plaintextBytes),
-      cipher.final(),
-    ]);
+    const encrypted = Buffer.concat([cipher.update(plaintextBytes), cipher.final()]);
 
     const tag = cipher.getAuthTag();
 
@@ -120,10 +117,7 @@ export class EncryptionService {
 
     decipher.setAuthTag(tag);
 
-    const decrypted = Buffer.concat([
-      decipher.update(data),
-      decipher.final(),
-    ]);
+    const decrypted = Buffer.concat([decipher.update(data), decipher.final()]);
 
     const decoder = new TextDecoder();
     return decoder.decode(decrypted);
@@ -170,7 +164,10 @@ export function containsSensitiveData(obj: Record<string, unknown>): boolean {
   return false;
 }
 
-export function encryptSensitiveFields(obj: Record<string, unknown>, encryption: EncryptionService): Record<string, unknown> {
+export function encryptSensitiveFields(
+  obj: Record<string, unknown>,
+  encryption: EncryptionService
+): Record<string, unknown> {
   if (!encryption.isInitialized()) {
     return obj;
   }
@@ -187,7 +184,10 @@ export function encryptSensitiveFields(obj: Record<string, unknown>, encryption:
   return result;
 }
 
-export function decryptSensitiveFields(obj: Record<string, unknown>, encryption: EncryptionService): Record<string, unknown> {
+export function decryptSensitiveFields(
+  obj: Record<string, unknown>,
+  encryption: EncryptionService
+): Record<string, unknown> {
   if (!encryption.isInitialized()) {
     return obj;
   }
@@ -195,7 +195,10 @@ export function decryptSensitiveFields(obj: Record<string, unknown>, encryption:
   const result: Record<string, unknown> = { ...obj };
 
   for (const key of Object.keys(result)) {
-    if ((result as Record<string, unknown>)[`${key}_encrypted`] === true && typeof result[key] === 'string') {
+    if (
+      (result as Record<string, unknown>)[`${key}_encrypted`] === true &&
+      typeof result[key] === 'string'
+    ) {
       try {
         result[key] = encryption.decryptString(result[key] as string);
         delete (result as Record<string, unknown>)[`${key}_encrypted`];
@@ -213,8 +216,10 @@ export function isEncryptedData(data: unknown): boolean {
     return false;
   }
   const obj = data as Record<string, unknown>;
-  return typeof obj.iv === 'string' && 
-         typeof obj.encryptedData === 'string' && 
-         typeof obj.tag === 'string' && 
-         typeof obj.salt === 'string';
+  return (
+    typeof obj.iv === 'string' &&
+    typeof obj.encryptedData === 'string' &&
+    typeof obj.tag === 'string' &&
+    typeof obj.salt === 'string'
+  );
 }

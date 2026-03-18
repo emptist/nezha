@@ -55,10 +55,12 @@ describe('Agent', () => {
   describe('executeTask - Integration Tests', () => {
     it('should execute task successfully', async () => {
       const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce(JSON.stringify({
-        type: 'text',
-        part: { text: 'Task completed successfully' }
-      }));
+      mockExecSync.mockReturnValueOnce(
+        JSON.stringify({
+          type: 'text',
+          part: { text: 'Task completed successfully' },
+        })
+      );
 
       const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
       const result = await agent.executeTask('test task');
@@ -273,8 +275,8 @@ describe('Agent', () => {
         type: 'text',
         part: {
           text: 'Complex response with data',
-          metadata: { status: 'ok', code: 200 }
-        }
+          metadata: { status: 'ok', code: 200 },
+        },
       };
       mockExecSync.mockReturnValueOnce(JSON.stringify(complexResponse));
 
