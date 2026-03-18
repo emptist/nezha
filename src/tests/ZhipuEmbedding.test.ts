@@ -43,8 +43,14 @@ describe('ZhipuEmbedding', () => {
 
     expect(results).toBeInstanceOf(Array);
     expect(results.length).toBe(2);
-    expect(results[0].length).toBe(1024);
-    expect(results[1].length).toBe(1024);
+    const firstResult = results[0];
+    const secondResult = results[1];
+    if (firstResult) {
+      expect(firstResult.length).toBe(1024);
+    }
+    if (secondResult) {
+      expect(secondResult.length).toBe(1024);
+    }
   });
 
   it('should throw error without API key', async () => {

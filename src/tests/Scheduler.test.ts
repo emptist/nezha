@@ -402,8 +402,10 @@ describe('Scheduler - Task Operations', () => {
 
     expect(mockQuery).toHaveBeenCalled();
     const callArgs = mockQuery.mock.calls[0];
-    expect(callArgs[0]).toContain('UPDATE');
-    expect(callArgs[1]).toContain('task-1');
+    if (callArgs) {
+      expect(callArgs[0]).toContain('UPDATE');
+      expect(callArgs[1]).toContain('task-1');
+    }
   });
 
   it('should fail task with error', async () => {
@@ -413,8 +415,10 @@ describe('Scheduler - Task Operations', () => {
 
     expect(mockQuery).toHaveBeenCalled();
     const callArgs = mockQuery.mock.calls[0];
-    expect(callArgs[0]).toContain('UPDATE');
-    expect(callArgs[1]).toContain('task-1');
+    if (callArgs) {
+      expect(callArgs[0]).toContain('UPDATE');
+      expect(callArgs[1]).toContain('task-1');
+    }
   });
 
   it('should get task result', async () => {
