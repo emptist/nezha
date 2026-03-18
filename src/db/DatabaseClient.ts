@@ -57,10 +57,12 @@ export class DatabaseClient {
 
   getPoolStats(): PoolStats {
     const poolState = this.pool;
+    const total = poolState.totalCount || 0;
+    const idle = poolState.idleCount || 0;
     return {
-      totalConnections: poolState.totalCount || 0,
-      idleConnections: poolState.idleCount || 0,
-      activeConnections: poolState.busyCount || 0,
+      totalConnections: total,
+      idleConnections: idle,
+      activeConnections: total - idle,
       waitingClients: poolState.waitingCount || 0,
     };
   }

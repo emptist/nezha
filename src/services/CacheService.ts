@@ -23,6 +23,10 @@ export class CacheService<T> {
   }
 
   set(key: string, value: T, ttlMs?: number): void {
+    if (ttlMs !== undefined && (typeof ttlMs !== 'number' || ttlMs <= 0)) {
+      throw new Error(`Invalid TTL value: ${ttlMs}. TTL must be a positive number.`);
+    }
+
     // Evict oldest if at capacity
     if (this.cache.size >= this.maxSize && !this.cache.has(key)) {
       const firstKey = this.cache.keys().next().value;

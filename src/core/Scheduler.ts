@@ -3,6 +3,9 @@ import { DATABASE_TABLES, SCHEDULER_CONFIG, TASK_CONFIG, TASK_STATUS } from '../
 import { type Task, type TaskStatus, type QueryResult } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { EventBus } from './EventBus.js';
+import { createStandardMetrics } from '../services/MetricsService.js';
+
+const standardMetrics = createStandardMetrics();
 
 export interface ScheduledTask {
   id: string;
@@ -169,12 +172,29 @@ export class Scheduler {
     this.eventBus.publish(SCHEDULER_EVENTS.HEARTBEAT, { timestamp: this.lastHeartbeat });
     const tableName = DATABASE_TABLES.TASKS;
     
-    // Check for stuck RUNNING tasks - reset to PENDING for retry
-    await this.db.query(
-      `UPDATE ${tableName} SET status = $1, updated_at = NOW() 
-       WHERE status = $2 AND updated_at < NOW() - INTERVAL '5 minutes'`,
-      [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
+    // Check for timed-out RUNNING tasks - fail them and schedule retry
+    const timeoutResult = await this.db.query<{ id: string; title: string; timeout_seconds: number | null }>(
+      `SELECT id, title, timeout_seconds 
+       FROM ${tableName} 
+       WHERE status = $1 
+       AND started_at IS NOT NULL 
+       AND timeout_seconds IS NOT NULL
+       AND NOW() - started_at > (timeout_seconds || ' seconds')::INTERVAL`,
+      [TASK_STATUS.RUNNING]
     );
+    
+    for (const timedOutTask of timeoutResult.rows) {
+      const timeoutSec = timedOutTask.timeout_seconds ?? 300;
+      logger.warn(`Task "${timedOutTask.title}" (${timedOutTask.id}) timed out after ${timeoutSec}s`);
+      
+      await this.db.query(
+        `UPDATE ${tableName} SET status = $1, error = $2, updated_at = NOW() 
+         WHERE id = $3`,
+        [TASK_STATUS.PENDING, `Timeout after ${timeoutSec} seconds`, timedOutTask.id]
+      );
+      
+      await this.logTaskStateChange(timedOutTask.id, timedOutTask.title, TASK_STATUS.RUNNING, TASK_STATUS.PENDING, `Timeout after ${timeoutSec}s - will retry`, { timeoutSec });
+    }
 
     // Prevent concurrent task execution - double check with database state
     if (this.isExecuting) {
@@ -190,35 +210,58 @@ export class Scheduler {
     const runningCount = parseInt(runningCheck.rows[0]?.count || '0', 10);
     if (runningCount > 0) {
       logger.debug(`Scheduler heartbeat: ${runningCount} task(s) running in DB, skipping`);
-      return;
     }
+    
+    standardMetrics.workerUtilization.set(runningCount > 0 ? 1 : 0);
     
     // Find and lock pending task atomically to prevent race conditions
     // Only select tasks whose dependencies are all COMPLETED
-    const result = await this.db.query<{ id: string; title: string; description: string; depends_on: string[] }>(
+    // Also consider next_retry_at for scheduled retries
+    // Priority: base priority + retry boost + aging factor
+    const result = await this.db.query<{ id: string; title: string; description: string; depends_on: string[]; retry_count: number; max_retries: number; timeout_seconds: number | null; priority: number; created_at: Date }>(
       `WITH eligible_tasks AS (
-        SELECT id, title, description, depends_on 
+        SELECT 
+          id, title, description, depends_on, retry_count, max_retries, timeout_seconds, priority, created_at,
+          -- Aging factor: +1 priority for every 5 minutes waiting (max +10)
+          LEAST(FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) / 300), 10) as age_boost,
+          -- Retry boost: +2 priority per retry attempt
+          COALESCE(retry_count, 0) * 2 as retry_boost,
+          -- Weighted fair queue: type-based adjustment
+          CASE 
+            WHEN type = 'bugfix' THEN 5
+            WHEN type = 'deployment' THEN 3
+            WHEN type = 'analysis' THEN 2
+            WHEN type = 'research' THEN -1
+            ELSE 0
+          end as type_weight
         FROM ${tableName} 
         WHERE status = $1 
+        AND (next_retry_at IS NULL OR next_retry_at <= NOW())
         AND (depends_on IS NULL OR depends_on = '{}'::uuid[] OR NOT EXISTS (
           SELECT 1 FROM tasks t 
           WHERE t.id = ANY(${tableName}.depends_on) 
           AND t.status != $2
         ))
-        ORDER BY priority DESC, created_at ASC 
+        ORDER BY (priority + age_boost + retry_boost + type_weight) DESC, created_at ASC 
         LIMIT 1 
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = $3, updated_at = NOW() 
+      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight FROM eligible_tasks)
       WHERE id = (SELECT id FROM eligible_tasks)
-      RETURNING id, title, description, depends_on`,
+      RETURNING id, title, description, depends_on, retry_count, max_retries, timeout_seconds`,
       [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
     );
     
     if (result.rows.length > 0) {
       const task = result.rows[0];
-      logger.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution`);
+      const retryCount = task.retry_count ?? 0;
+      const maxRetries = task.max_retries ?? 3;
+      const timeoutSec = task.timeout_seconds ?? 300;
+      const timeoutInfo = task.timeout_seconds ? ` (timeout: ${timeoutSec}s)` : ' (default timeout: 300s)';
+      logger.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution (retry ${retryCount}/${maxRetries})${timeoutInfo}`);
+      
+      await this.logTaskStateChange(task.id, task.title, TASK_STATUS.PENDING, TASK_STATUS.RUNNING, retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Task started', { retryCount, maxRetries, timeoutSec });
       
       this.eventBus.publish(SCHEDULER_EVENTS.TASK_STARTED, {
         taskId: task.id,
@@ -230,7 +273,7 @@ export class Scheduler {
       // Execute task and wait for completion
       this.isExecuting = true;
       try {
-        await this.onTaskReady?.(task.id, task.title, task.description);
+        await this.onTaskReady?.(task.id, task.title, task.description, retryCount, maxRetries, timeoutSec);
         this.totalTasksExecuted++;
         logger.info(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`);
         this.lastTaskRun.set(task.id, new Date());
@@ -268,11 +311,16 @@ export class Scheduler {
         }
         
         // Reset to PENDING for retry (with delay handled by failure count)
+        // Also boost priority to prevent starvation
         const errorMessage = err instanceof Error ? err.message : String(err);
+        const retryCountForLog = (task.retry_count ?? 0) + 1;
+        const priorityBoost = retryCountForLog * 2; // +2 per retry
         await this.db.query(
-          `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
-          [TASK_STATUS.PENDING, errorMessage, task.id]
+          `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
+          [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
         );
+        
+        await this.logTaskStateChange(task.id, task.title, TASK_STATUS.RUNNING, TASK_STATUS.PENDING, `Retry needed: ${errorMessage}`, { retryCount: retryCountForLog, maxRetries: task.max_retries ?? 3, error: errorMessage, priorityBoost });
       } finally {
         this.isExecuting = false;
       }
@@ -284,19 +332,20 @@ export class Scheduler {
     }
   }
 
-  onTaskReady?: (taskId: string, title: string, description?: string) => void;
+  onTaskReady?: (taskId: string, title: string, description?: string, retryCount?: number, maxRetries?: number, timeoutSeconds?: number) => void;
 
-  async scheduleTask(task: ScheduledTask): Promise<string> {
+  async scheduleTask(task: ScheduledTask, maxRetries?: number): Promise<string> {
     const tableName = DATABASE_TABLES.TASKS;
     const id = task.id;
     const data = JSON.stringify(task.data);
     const now = new Date();
+    const retries = maxRetries ?? TASK_CONFIG.DEFAULT_MAX_RETRIES;
 
     await this.db.query(
-      `INSERT INTO ${tableName} (id, status, data, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO UPDATE SET data = $3, updated_at = $5`,
-      [id, TASK_STATUS.PENDING, data, now, now]
+      `INSERT INTO ${tableName} (id, status, data, max_retries, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO UPDATE SET data = $3, max_retries = $4, updated_at = $6`,
+      [id, TASK_STATUS.PENDING, data, retries, now, now]
     );
 
     if (task.intervalMs) {
@@ -357,5 +406,17 @@ export class Scheduler {
       isPaused: this.isPaused,
       pauseUntil: this.pauseUntil,
     };
+  }
+
+  private async logTaskStateChange(taskId: string, taskTitle: string, previousStatus: string | null, newStatus: string, reason?: string, metadata?: Record<string, unknown>): Promise<void> {
+    try {
+      await this.db.query(
+        `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [taskId, taskTitle, previousStatus, newStatus, reason || null, metadata ? JSON.stringify(metadata) : '{}']
+      );
+    } catch (error) {
+      logger.warn('Failed to log task state change:', error);
+    }
   }
 }

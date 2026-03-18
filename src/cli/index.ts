@@ -174,7 +174,7 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], dryRun: boolean = false)
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false)
   : Promise<void> {
     cli.step('Validating task input...');
     
@@ -196,11 +196,25 @@ export class Cli {
       process.exit(1);
     }
 
+    if (timeoutSeconds !== undefined && (isNaN(timeoutSeconds) || timeoutSeconds <= 0)) {
+      cli.error(`Invalid timeout: ${timeoutSeconds}. Must be a positive number.`);
+      process.exit(1);
+    }
+
+    const validTypes = ['analysis', 'implementation', 'documentation', 'bugfix', 'research', 'testing', 'deployment', 'maintenance'];
+    if (taskType && !validTypes.includes(taskType)) {
+      cli.error(`Invalid type: ${taskType}. Valid types: ${validTypes.join(', ')}`);
+      process.exit(1);
+    }
+
     const taskData = {
       title: titleResult.sanitized,
       description: descResult.sanitized || '',
       priority: parseInt(priorityResult.sanitized || '0', 10),
       dependsOn: dependsOn || [],
+      timeoutSeconds,
+      taskType: taskType || 'implementation',
+      assignedTo: assignedTo || null,
     };
 
     if (dryRun) {
@@ -210,16 +224,28 @@ export class Cli {
     }
 
     const db = await this.getDb();
+    const maxRetries = this.config.getTaskConfig().maxRetries;
+    const taskId = crypto.randomUUID();
     await db.query(
-      `INSERT INTO tasks (title, description, status, priority, depends_on) VALUES ($1, $2, $3, $4, $5)`,
-      [taskData.title, taskData.description, TASK_STATUS.PENDING, taskData.priority, taskData.dependsOn]
+      `INSERT INTO tasks (id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [taskId, taskData.title, taskData.description, TASK_STATUS.PENDING, taskData.priority, taskData.dependsOn, maxRetries, taskData.timeoutSeconds, taskData.timeoutSeconds && taskData.timeoutSeconds > 600, taskData.taskType, taskData.assignedTo]
     );
     
-    if (dependsOn && dependsOn.length > 0) {
-      cli.success(`Task created: "${taskData.title}" (depends on: ${dependsOn.join(', ')})`);
-    } else {
-      cli.success(`Task created: "${taskData.title}"`);
-    }
+    await db.query(
+      `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [taskId, taskData.title, null, TASK_STATUS.PENDING, 'Task created', JSON.stringify({ type: taskData.taskType, assignedTo: taskData.assignedTo, priority: taskData.priority })]
+    );
+    
+    await db.query(`SELECT auto_tag_task($1)`, [taskId]);
+    
+    let extras = '';
+    if (dependsOn && dependsOn.length > 0) extras += ` (depends on: ${dependsOn.join(', ')})`;
+    if (timeoutSeconds) extras += `, timeout: ${timeoutSeconds}s`;
+    if (taskType) extras += `, type: ${taskType}`;
+    if (assignedTo) extras += `, assigned: ${assignedTo}`;
+    
+    cli.success(`Task created: "${taskData.title}"${extras}`);
   }
 
   async scheduleTask(name: string, description: string, cronExpression: string, priority: number = 0, dryRun: boolean = 
@@ -317,6 +343,113 @@ export class Cli {
       ])
     );
   }
+
+  async createApiKey(name: string, rateLimit: number = 100): Promise<void> {
+    const db = await this.getDb();
+    
+    cli.step('Creating API key...');
+    
+    const result = await db.query<{ key: string }>(
+      `SELECT create_api_key($1, $2) as key`,
+      [name, rateLimit]
+    );
+    
+    const apiKey = result.rows[0]?.key;
+    
+    if (apiKey) {
+      cli.success(`API key created for "${name}"`);
+      console.log(`\n${colors.yellow}IMPORTANT:${colors.reset} Save this key - it will not be shown again!`);
+      console.log(`API Key: ${colors.cyan}${apiKey}${colors.reset}`);
+      console.log(`Rate Limit: ${rateLimit} requests/minute\n`);
+    } else {
+      cli.error('Failed to create API key');
+    }
+  }
+
+  async listApiKeys(): Promise<void> {
+    const db = await this.getDb();
+    
+    const result = await db.query<{ id: string; name: string; rate_limit: number; enabled: boolean; last_used: Date | null; created_at: Date }>(
+      `SELECT id, name, rate_limit, enabled, last_used, created_at FROM api_keys ORDER BY created_at DESC`
+    );
+    
+    if (result.rows.length === 0) {
+      cli.info('No API keys found');
+      return;
+    }
+    
+    cli.info(`Found ${result.rows.length} API key(s):\n`);
+    cli.table(['Name', 'Rate Limit', 'Enabled', 'Last Used', 'Created'],
+      result.rows.map(row => [
+        row.name,
+        `${row.rate_limit}/min`,
+        row.enabled ? 'Yes' : 'No',
+        row.last_used ? new Date(row.last_used).toLocaleString() : 'Never',
+        new Date(row.created_at).toLocaleString()
+      ])
+    );
+  }
+
+  async revokeApiKey(name: string): Promise<void> {
+    const db = await this.getDb();
+    
+    cli.step('Revoking API key...');
+    
+    const result = await db.query<{ count: string }>(
+      `UPDATE api_keys SET enabled = false WHERE name = $1 RETURNING id`,
+      [name]
+    );
+    
+    if (result.rows.length > 0) {
+      cli.success(`API key "${name}" has been revoked`);
+    } else {
+      cli.error(`API key "${name}" not found`);
+    }
+  }
+
+  async createAutoTagRule(keyword: string, tag: string): Promise<void> {
+    const db = await this.getDb();
+    
+    cli.step('Creating auto-tag rule...');
+    
+    await db.query(
+      `INSERT INTO auto_tag_rules (keyword, tag) VALUES ($1, $2) ON CONFLICT (keyword) DO UPDATE SET tag = $2`,
+      [keyword.toLowerCase(), tag.toLowerCase()]
+    );
+    
+    cli.success(`Auto-tag rule created: "${keyword}" -> "${tag}"`);
+  }
+
+  async listAutoTagRules(): Promise<void> {
+    const db = await this.getDb();
+    
+    const result = await db.query<{ keyword: string; tag: string; enabled: boolean; created_at: Date }>(
+      `SELECT keyword, tag, enabled, created_at FROM auto_tag_rules ORDER BY created_at DESC`
+    );
+    
+    if (result.rows.length === 0) {
+      cli.info('No auto-tag rules found');
+      return;
+    }
+    
+    cli.info(`Found ${result.rows.length} auto-tag rule(s):\n`);
+    cli.table(['Keyword', 'Tag', 'Enabled'],
+      result.rows.map(row => [row.keyword, row.tag, row.enabled ? 'Yes' : 'No'])
+    );
+  }
+
+  async deleteAutoTagRule(keyword: string): Promise<void> {
+    const db = await this.getDb();
+    
+    cli.step('Deleting auto-tag rule...');
+    
+    const result = await db.query(
+      `DELETE FROM auto_tag_rules WHERE keyword = $1`,
+      [keyword.toLowerCase()]
+    );
+    
+    cli.success(`Auto-tag rule "${keyword}" deleted`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -351,6 +484,9 @@ async function main(): Promise<void> {
         let description = args[2] ?? '';
         let priority = 0;
         let dependsOn: string[] | undefined;
+        let timeoutSeconds: number | undefined;
+        let taskType: string | undefined;
+        let assignedTo: string | undefined;
         const dryRun = args.includes('--dry-run');
         
         const priorityIndex = args.indexOf('--priority');
@@ -366,16 +502,42 @@ async function main(): Promise<void> {
           dependsOn = args.slice(dependsOnIndex + 1).filter(a => !a.startsWith('--'));
         }
         
+        const timeoutIndex = args.indexOf('--timeout');
+        if (timeoutIndex !== -1 && timeoutIndex + 1 < args.length) {
+          const timeoutValue = args[timeoutIndex + 1];
+          if (timeoutValue && !timeoutValue.startsWith('--')) {
+            timeoutSeconds = parseInt(timeoutValue, 10) || undefined;
+          }
+        }
+        
+        const typeIndex = args.indexOf('--type');
+        if (typeIndex !== -1 && typeIndex + 1 < args.length) {
+          const typeValue = args[typeIndex + 1];
+          if (typeValue && !typeValue.startsWith('--')) {
+            taskType = typeValue.toLowerCase();
+          }
+        }
+        
+        const assignIndex = args.indexOf('--assign');
+        if (assignIndex !== -1 && assignIndex + 1 < args.length) {
+          const assignValue = args[assignIndex + 1];
+          if (assignValue && !assignValue.startsWith('--')) {
+            assignedTo = assignValue;
+          }
+        }
+        
         if (!title) {
           cli.error('Task title is required');
-          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--dry-run]');
+          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--timeout <seconds>] [--type <type>] [--assign <owner>] [--dry-run]');
+          console.log('\nValid types: analysis, implementation, documentation, bugfix, research, testing, deployment, maintenance');
           console.log('\nExamples:');
           console.log('  nezha task-add "Review PR #123" "Check for bugs" --priority 5');
-          console.log('  nezha task-add "Deploy" "Deploy to prod" --depends-on build-id --dry-run');
+          console.log('  nezha task-add "Fix login" "Users cannot login" --type bugfix --assign agent-1');
+          console.log('  nezha task-add "Write docs" "API documentation" --type documentation');
           process.exit(1);
         }
         
-        await cliInstance.addTask(title, description, priority, dependsOn, dryRun);
+        await cliInstance.addTask(title, description, priority, dependsOn, timeoutSeconds, taskType, assignedTo, dryRun);
         break;
       }
       
@@ -413,6 +575,82 @@ async function main(): Promise<void> {
         break;
       }
       
+      case 'api-key': {
+        const subcommand = args[1];
+        
+        if (subcommand === 'create') {
+          const name = args[2];
+          const rateIndex = args.indexOf('--rate');
+          const rateLimit = rateIndex !== -1 && args[rateIndex + 1] ? parseInt(args[rateIndex + 1], 10) : 100;
+          
+          if (!name) {
+            cli.error('API key name is required');
+            console.log('Usage: nezha api-key create <name> [--rate <limit>]');
+            process.exit(1);
+          }
+          
+          await cliInstance.createApiKey(name, rateLimit);
+        } else if (subcommand === 'list') {
+          await cliInstance.listApiKeys();
+        } else if (subcommand === 'revoke') {
+          const name = args[2];
+          
+          if (!name) {
+            cli.error('API key name is required');
+            console.log('Usage: nezha api-key revoke <name>');
+            process.exit(1);
+          }
+          
+          await cliInstance.revokeApiKey(name);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha api-key <create|list|revoke> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha api-key create myapp --rate 100');
+          console.log('  nezha api-key list');
+          console.log('  nezha api-key revoke myapp');
+        }
+        break;
+      }
+      
+      case 'auto-tag-rules': {
+        const subcommand = args[1];
+        
+        if (subcommand === 'create') {
+          const keyword = args[2];
+          const tag = args[3];
+          
+          if (!keyword || !tag) {
+            cli.error('Keyword and tag are required');
+            console.log('Usage: nezha auto-tag-rules create <keyword> <tag>');
+            console.log('Example: nezha auto-tag-rules create "fix" bugfix');
+            process.exit(1);
+          }
+          
+          await cliInstance.createAutoTagRule(keyword, tag);
+        } else if (subcommand === 'list') {
+          await cliInstance.listAutoTagRules();
+        } else if (subcommand === 'delete') {
+          const keyword = args[2];
+          
+          if (!keyword) {
+            cli.error('Keyword is required');
+            console.log('Usage: nezha auto-tag-rules delete <keyword>');
+            process.exit(1);
+          }
+          
+          await cliInstance.deleteAutoTagRule(keyword);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha auto-tag-rules <create|list|delete> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha auto-tag-rules create "fix" bugfix');
+          console.log('  nezha auto-tag-rules list');
+          console.log('  nezha auto-tag-rules delete "fix"');
+        }
+        break;
+      }
+      
       case 'help':
       default:
         showHelp();
@@ -430,19 +668,24 @@ async function main(): Promise<void> {
 function showHelp(): void {
   cli.header('Nezha CLI - Autonomous Development System');
   console.log(`
-${colors.bright}Usage:${colors.reset} nezha <command> [options]
+ ${colors.bright}Usage:${colors.reset} nezha <command> [options]
 
-${colors.bright}Commands:${colors.reset}
-  start                         Start the heartbeat service
-  stop                          Stop the heartbeat service
-  status                        Show current status
-  health                        Show health information
-  task-add <title> [desc]      Add a new task
-  schedule <name> <desc> <cron> Create a scheduled task
-  tasks [--tag <tag>]          List tasks
-  help                          Show this help
+ ${colors.bright}Commands:${colors.reset}
+   start                         Start the heartbeat service
+   stop                          Stop the heartbeat service
+   status                        Show current status
+   health                        Show health information
+   task-add <title> [desc]      Add a new task
+   schedule <name> <desc> <cron> Create a scheduled task
+   tasks [--tag <tag>]          List tasks (filter by tag)
+   auto-tag-rules <cmd>         Manage auto-tagging rules
+   tasks [--tag <tag>]          List tasks
+   api-key create <name>        Create API key
+   api-key list                  List API keys
+   api-key revoke <name>         Revoke API key
+   help                          Show this help
 
-${colors.bright}Options:${colors.reset}
+ ${colors.bright}Options:${colors.reset}
   --priority <n>                Task priority (0-100)
   --depends-on <uuid...>       Task IDs this task depends on
   --tag <tag>                  Filter by tag

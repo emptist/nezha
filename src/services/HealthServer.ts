@@ -186,9 +186,10 @@ export class HealthServer {
             res.writeHead(200);
             res.end(JSON.stringify(health));
           } else if (url.pathname === '/metrics') {
-            const metrics = await this.getMetrics();
-            res.writeHead(200);
-            res.end(JSON.stringify(metrics));
+            const registry = getMetricsRegistry();
+            this.updateMetricsFromDb();
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(registry.export());
           } else if (url.pathname === '/') {
             res.writeHead(200);
             res.end(JSON.stringify({ 
@@ -375,5 +376,33 @@ export class HealthServer {
 
     metricsCache.set('metrics', metrics);
     return metrics;
+  }
+
+  private async updateMetricsFromDb(): Promise<void> {
+    try {
+      const [pendingResult, runningResult, completedResult, failedResult] = await Promise.all([
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.PENDING]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.RUNNING]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.COMPLETED]),
+        this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM tasks WHERE status = $1`, [TASK_STATUS.FAILED]),
+      ]);
+
+      const pending = parseInt(pendingResult.rows[0]?.count || '0', 10);
+      const running = parseInt(runningResult.rows[0]?.count || '0', 10);
+      const completed = parseInt(completedResult.rows[0]?.count || '0', 10);
+      const failed = parseInt(failedResult.rows[0]?.count || '0', 10);
+
+      standardMetrics.queueSize.set(pending);
+      standardMetrics.activeTasks.set(running);
+
+      const totalTasks = completed + failed;
+      standardMetrics.tasksTotal.inc(totalTasks - (standardMetrics.tasksTotal as any)._lastValue || 0);
+      (standardMetrics.tasksTotal as any)._lastValue = totalTasks;
+
+      const memUsage = process.memoryUsage();
+      standardMetrics.memoryUsageBytes.set(memUsage.heapUsed);
+    } catch (error) {
+      logger.warn('Failed to update metrics from DB:', error);
+    }
   }
 }

@@ -127,8 +127,8 @@ export function createWebhookConfigFromEnv(): WebhookConfig {
   };
 
   return {
-    url: process.env.WEBHOOK_URL,
-    secret: process.env.WEBHOOK_SECRET,
+    url: process.env.WEBHOOK_URL ?? '',
+    secret: process.env.WEBHOOK_SECRET ?? '',
     retryCount: parseEnvInt('WEBHOOK_RETRY_COUNT', 3),
     retryDelayMs: parseEnvInt('WEBHOOK_RETRY_DELAY', 1000),
     enabled: process.env.WEBHOOK_URL ? true : false,

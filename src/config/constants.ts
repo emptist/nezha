@@ -7,6 +7,19 @@ export const TASK_STATUS = {
   FAILED: 'FAILED' as const,
 } satisfies Record<TaskStatus, string>;
 
+export const TASK_TYPE = {
+  ANALYSIS: 'analysis' as const,
+  IMPLEMENTATION: 'implementation' as const,
+  DOCUMENTATION: 'documentation' as const,
+  BUGFIX: 'bugfix' as const,
+  RESEARCH: 'research' as const,
+  TESTING: 'testing' as const,
+  DEPLOYMENT: 'deployment' as const,
+  MAINTENANCE: 'maintenance' as const,
+} as const;
+
+export type TaskType = typeof TASK_TYPE[keyof typeof TASK_TYPE];
+
 export const DATABASE_TABLES = {
   TASKS: 'tasks',
   MEMORY: 'memory',
@@ -27,6 +40,8 @@ export const TASK_CONFIG = {
   DEFAULT_MAX_RETRIES: 3,
   DEFAULT_RETRY_DELAY_MS: 5000,
   DEFAULT_TASK_TIMEOUT_MS: 300000,
+  RETRY_BASE_DELAY_MS: 300000, // 5 minutes base delay
+  RETRY_MAX_DELAY_MS: 1800000, // 30 minutes max delay
 } as const;
 
 export const SCHEDULER_CONFIG = {
