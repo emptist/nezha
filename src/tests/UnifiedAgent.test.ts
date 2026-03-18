@@ -175,12 +175,6 @@ describe('Transport Classes', () => {
       await expect(transport.sendMessage('test')).rejects.toThrow('ENOENT');
     });
 
-      const transport = new CliTransport('http://localhost:4096', 60000);
-      await expect(transport.sendMessage('test')).rejects.toThrow(
-        'Failed to spawn opencode: ENOENT'
-      );
-    });
-
     it('should include --thinking for streaming', async () => {
       const mockProc = {
         stdout: { on: vi.fn() },
