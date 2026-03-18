@@ -137,8 +137,8 @@ describe('Transport Classes', () => {
 
       const dataCallback = mockProc.stdout.on.mock.calls.find(
         (c: unknown[]) => c[0] === 'data'
-      )?.[1] as (data: string) => void;
-      dataCallback?.('{"type":"text","part":{"text":"response"}}');
+      )?.[1] as (data: Buffer) => void;
+      dataCallback?.(Buffer.from('{"type":"text","part":{"text":"response"}}'));
 
       closeCb?.(0);
 
