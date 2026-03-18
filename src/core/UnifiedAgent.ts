@@ -1,12 +1,14 @@
 import {
   createTransport,
   type TransportMode,
-  type StreamingCallback,
+  type StreamingCallback as TransportStreamingCallback,
   HttpTransport,
   CliTransport,
 } from './transports/index.js';
 import { ConversationLogger } from './ConversationLogger.js';
 import { logger } from '../utils/logger.js';
+
+export { type StreamingCallback } from './transports/index.js';
 
 /**
  * Configuration options for UnifiedAgent.
