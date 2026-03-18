@@ -36,7 +36,7 @@ export class OpenAIEmbedding implements EmbeddingProvider {
 
   async embed(text: string): Promise<number[]> {
     const results = await this.embedBatch([text]);
-    return results[0];
+    return results[0] ?? [];
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
@@ -64,13 +64,31 @@ export class OpenAIEmbedding implements EmbeddingProvider {
       const responseText = await response.text();
 
       if (!response.ok) {
-        logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, new Error(`HTTP ${response.status}`), startTime);
+        logApiRequest(
+          'embedBatch',
+          'POST',
+          `${this.apiUrl}/embeddings`,
+          requestBody,
+          response.status,
+          responseText,
+          new Error(`HTTP ${response.status}`),
+          startTime
+        );
         throw new Error(`OpenAI Embedding API error (${response.status}): ${responseText}`);
       }
 
       const data = JSON.parse(responseText) as OpenAIEmbeddingResponse;
 
-      logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, undefined, startTime);
+      logApiRequest(
+        'embedBatch',
+        'POST',
+        `${this.apiUrl}/embeddings`,
+        requestBody,
+        response.status,
+        responseText,
+        undefined,
+        startTime
+      );
 
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response from OpenAI: missing data array');

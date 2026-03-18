@@ -299,112 +299,113 @@ export class Scheduler {
 
       if (result.rows.length > 0) {
         const task = result.rows[0];
-        if (!task) continue;
-        const retryCount = task.retry_count ?? 0;
-        const maxRetries = task.max_retries ?? 3;
-        const timeoutSec = task.timeout_seconds ?? 300;
-        const timeoutInfo = task.timeout_seconds
-          ? ` (timeout: ${timeoutSec}s)`
-          : ' (default timeout: 300s)';
-        logger.info(
-          `Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution (retry ${retryCount}/${maxRetries})${timeoutInfo}`
-        );
-
-        await this.logTaskStateChange(
-          task.id,
-          task.title,
-          TASK_STATUS.PENDING,
-          TASK_STATUS.RUNNING,
-          retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Task started',
-          { retryCount, maxRetries, timeoutSec }
-        );
-
-        this.eventBus.publish(SCHEDULER_EVENTS.TASK_STARTED, {
-          taskId: task.id,
-          title: task.title,
-          description: task.description,
-          timestamp: new Date(),
-        });
-
-        // Execute task and wait for completion
-        this.isExecuting = true;
-        try {
-          await this.onTaskReady?.(
-            task.id,
-            task.title,
-            task.description,
-            retryCount,
-            maxRetries,
-            timeoutSec
-          );
-          this.totalTasksExecuted++;
+        if (task) {
+          const retryCount = task.retry_count ?? 0;
+          const maxRetries = task.max_retries ?? 3;
+          const timeoutSec = task.timeout_seconds ?? 300;
+          const timeoutInfo = task.timeout_seconds
+            ? ` (timeout: ${timeoutSec}s)`
+            : ' (default timeout: 300s)';
           logger.info(
-            `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`
-          );
-          this.lastTaskRun.set(task.id, new Date());
-
-          this.consecutiveFailures = 0; // Reset failure count on success
-
-          this.eventBus.publish(SCHEDULER_EVENTS.TASK_COMPLETED, {
-            taskId: task.id,
-            title: task.title,
-            description: task.description,
-            timestamp: new Date(),
-          });
-        } catch (err) {
-          logger.error(
-            `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`,
-            err
-          );
-          this.consecutiveFailures++;
-
-          this.eventBus.publish(SCHEDULER_EVENTS.TASK_FAILED, {
-            taskId: task.id,
-            title: task.title,
-            description: task.description,
-            timestamp: new Date(),
-          });
-
-          // Check if we need to pause
-          if (this.consecutiveFailures >= SCHEDULER_CONFIG.MAX_CONSECUTIVE_FAILURES) {
-            this.isPaused = true;
-            this.pauseUntil = new Date(Date.now() + SCHEDULER_CONFIG.PAUSE_DURATION_MS);
-            logger.warn(
-              `Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for ${SCHEDULER_CONFIG.PAUSE_DURATION_MS / 1000} seconds`
-            );
-            this.eventBus.publish(SCHEDULER_EVENTS.PAUSED, {
-              taskId: task.id,
-              title: task.title,
-              pauseUntil: this.pauseUntil,
-              timestamp: new Date(),
-            });
-          }
-
-          // Reset to PENDING for retry (with delay handled by failure count)
-          // Also boost priority to prevent starvation
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          const retryCountForLog = (task.retry_count ?? 0) + 1;
-          const priorityBoost = retryCountForLog * 2; // +2 per retry
-          await this.db.query(
-            `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
-            [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
+            `Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution (retry ${retryCount}/${maxRetries})${timeoutInfo}`
           );
 
           await this.logTaskStateChange(
             task.id,
             task.title,
-            TASK_STATUS.RUNNING,
             TASK_STATUS.PENDING,
-            `Retry needed: ${errorMessage}`,
-            {
-              retryCount: retryCountForLog,
-              maxRetries: task.max_retries ?? 3,
-              error: errorMessage,
-              priorityBoost,
-            }
+            TASK_STATUS.RUNNING,
+            retryCount > 0 ? `Retry ${retryCount}/${maxRetries}` : 'Task started',
+            { retryCount, maxRetries, timeoutSec }
           );
-        } finally {
-          this.isExecuting = false;
+
+          this.eventBus.publish(SCHEDULER_EVENTS.TASK_STARTED, {
+            taskId: task.id,
+            title: task.title,
+            description: task.description,
+            timestamp: new Date(),
+          });
+
+          // Execute task and wait for completion
+          this.isExecuting = true;
+          try {
+            await this.onTaskReady?.(
+              task.id,
+              task.title,
+              task.description,
+              retryCount,
+              maxRetries,
+              timeoutSec
+            );
+            this.totalTasksExecuted++;
+            logger.info(
+              `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`
+            );
+            this.lastTaskRun.set(task.id, new Date());
+
+            this.consecutiveFailures = 0; // Reset failure count on success
+
+            this.eventBus.publish(SCHEDULER_EVENTS.TASK_COMPLETED, {
+              taskId: task.id,
+              title: task.title,
+              description: task.description,
+              timestamp: new Date(),
+            });
+          } catch (err) {
+            logger.error(
+              `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`,
+              err
+            );
+            this.consecutiveFailures++;
+
+            this.eventBus.publish(SCHEDULER_EVENTS.TASK_FAILED, {
+              taskId: task.id,
+              title: task.title,
+              description: task.description,
+              timestamp: new Date(),
+            });
+
+            // Check if we need to pause
+            if (this.consecutiveFailures >= SCHEDULER_CONFIG.MAX_CONSECUTIVE_FAILURES) {
+              this.isPaused = true;
+              this.pauseUntil = new Date(Date.now() + SCHEDULER_CONFIG.PAUSE_DURATION_MS);
+              logger.warn(
+                `Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for ${SCHEDULER_CONFIG.PAUSE_DURATION_MS / 1000} seconds`
+              );
+              this.eventBus.publish(SCHEDULER_EVENTS.PAUSED, {
+                taskId: task.id,
+                title: task.title,
+                pauseUntil: this.pauseUntil,
+                timestamp: new Date(),
+              });
+            }
+
+            // Reset to PENDING for retry (with delay handled by failure count)
+            // Also boost priority to prevent starvation
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            const retryCountForLog = (task.retry_count ?? 0) + 1;
+            const priorityBoost = retryCountForLog * 2; // +2 per retry
+            await this.db.query(
+              `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
+              [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
+            );
+
+            await this.logTaskStateChange(
+              task.id,
+              task.title,
+              TASK_STATUS.RUNNING,
+              TASK_STATUS.PENDING,
+              `Retry needed: ${errorMessage}`,
+              {
+                retryCount: retryCountForLog,
+                maxRetries: task.max_retries ?? 3,
+                error: errorMessage,
+                priorityBoost,
+              }
+            );
+          } finally {
+            this.isExecuting = false;
+          }
         }
       } else {
         logger.info('Scheduler heartbeat: No pending tasks found');

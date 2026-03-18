@@ -10,9 +10,7 @@ export async function runConversationLoggerBenchmarks(): Promise<BenchmarkResult
 
   await fs.mkdir(testDir, { recursive: true });
 
-  console.log('\n=== ConversationLogger Benchmarks ===\n');
-
-  results.push(
+    results.push(
     await benchmarkAsync('ConversationLogger: startConversation', async () => {
       const logger = new ConversationLogger(testDir);
       logger.startConversation({
@@ -91,8 +89,7 @@ export async function runConversationLoggerBenchmarks(): Promise<BenchmarkResult
     })
   );
 
-  console.log('\n--- Results ---\n');
-  for (const result of results) {
+    for (const result of results) {
     console.log(formatResult(result));
   }
 

@@ -21,7 +21,7 @@ export class ZhipuEmbedding implements EmbeddingProvider {
 
   async embed(text: string): Promise<number[]> {
     const results = await this.embedBatch([text]);
-    return results[0];
+    return results[0] ?? [];
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
@@ -44,12 +44,30 @@ export class ZhipuEmbedding implements EmbeddingProvider {
     const responseText = await response.text();
 
     if (!response.ok) {
-      logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, new Error(`HTTP ${response.status}`), startTime);
+      logApiRequest(
+        'embedBatch',
+        'POST',
+        `${this.apiUrl}/embeddings`,
+        requestBody,
+        response.status,
+        responseText,
+        new Error(`HTTP ${response.status}`),
+        startTime
+      );
       throw new Error(`Zhipu Embedding API error: ${response.status} ${responseText}`);
     }
 
     const data = JSON.parse(responseText) as ZhipuEmbeddingResponse;
-    logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, undefined, startTime);
+    logApiRequest(
+      'embedBatch',
+      'POST',
+      `${this.apiUrl}/embeddings`,
+      requestBody,
+      response.status,
+      responseText,
+      undefined,
+      startTime
+    );
 
     return data.data.sort((a, b) => a.index - b.index).map(item => item.embedding);
   }
