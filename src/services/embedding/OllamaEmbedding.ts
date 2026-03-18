@@ -1,4 +1,5 @@
 import { EmbeddingProvider, EmbeddingConfig } from './types.js';
+import { logApiRequest, isVerboseMode } from '../../utils/verboseLogger.js';
 
 interface OllamaEmbeddingResponse {
   embedding: number[];
@@ -29,26 +30,29 @@ export class OllamaEmbedding implements EmbeddingProvider {
   private async embedSingle(text: string, index: number): Promise<number[]> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const startTime = isVerboseMode() ? Date.now() : undefined;
 
     try {
+      const requestBody = { model: this.model, prompt: text };
+
       const response = await fetch(`${this.apiUrl}/api/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: this.model,
-          prompt: text,
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
+      const responseText = await response.text();
+
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Ollama Embedding API error (${response.status}): ${error}`);
+        logApiRequest('embedSingle', 'POST', `${this.apiUrl}/api/embeddings`, requestBody, response.status, responseText, new Error(`HTTP ${response.status}`), startTime);
+        throw new Error(`Ollama Embedding API error (${response.status}): ${responseText}`);
       }
 
-      const data = (await response.json()) as OllamaEmbeddingResponse;
+      const data = JSON.parse(responseText) as OllamaEmbeddingResponse;
+      logApiRequest('embedSingle', 'POST', `${this.apiUrl}/api/embeddings`, requestBody, response.status, responseText, undefined, startTime);
 
       if (!data.embedding || !Array.isArray(data.embedding)) {
         throw new Error('Invalid response from Ollama: missing embedding array');

@@ -329,7 +329,214 @@ curl -X DELETE "http://localhost:4096/session/$SESSION_ID"
 
 ---
 
-## 参考资料
+## 常用命令大全
+
+### 1. 查看任务状态（最常用！）
+
+```bash
+# 查看所有任务状态统计
+/Applications/Postgres.app/Contents/VersIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+```
+
+**输出示例：**
+```
+  status   | count 
+-----------+-------
+ COMPLETED |    71
+ PENDING   |    13
+ RUNNING   |     1
+(3 rows)
+```
+
+---
+
+### 2. 查看当前正在执行的任务
+
+```bash
+# 查看正在运行的任务
+/Applications/Postgres.app/Contents/VersIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status, started_at FROM tasks WHERE status = 'RUNNING';"
+```
+
+---
+
+### 3. 查看最近完成的任务
+
+```bash
+# 查看最近5个完成的任务
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 5;"
+```
+
+---
+
+### 4. 查看任务详情
+
+```bash
+# 用任务 ID 查看具体任务
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT * FROM tasks WHERE id = '任务ID';"
+```
+
+---
+
+### 5. 重置卡住的任务
+
+```bash
+# 将 RUNNING 状态的任务重置为 PENDING
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE tasks SET status = 'PENDING', started_at = NULL, retry_count = 0 WHERE status = 'RUNNING';"
+```
+
+---
+
+### 6. 查看 Nezha 日志
+
+```bash
+# 查看最近日志
+tail -20 .nezha.log
+
+# 实时查看日志
+tail -f .nezha.log
+
+# 查看特定时间后的日志
+tail -n 1000 .nezha.log | grep "ERROR"
+```
+
+---
+
+### 7. 启动/重启服务
+
+```bash
+# 重启 Nezha daemon
+pkill -f "node dist/cli/index.js start" 2>/dev/null
+sleep 1
+nohup node dist/cli/index.js start > .nezha.log 2>&1 &
+
+# 查看 daemon 是否运行
+ps aux | grep "dist/cli/index.js" | grep -v grep
+```
+
+---
+
+### 8. OpenCode Server 相关
+
+```bash
+# 启动 OpenCode server
+opencode serve --port 4096
+
+# 查看 OpenCode 是否运行
+ps aux | grep "opencode serve" | grep -v grep
+
+# 重启 OpenCode server
+pkill -f "opencode serve"
+sleep 2
+nohup opencode serve --port 4096 > /tmp/opencode.log 2>&1 &
+
+# 测试 OpenCode API
+curl http://localhost:4096/global/health
+```
+
+---
+
+### 9. PostgreSQL 相关
+
+```bash
+# 检查 PostgreSQL 是否运行
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT 1;"
+
+# 查看数据库表
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "\dt"
+
+# 查看任务表结构
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "\d tasks"
+```
+
+---
+
+### 10. Git 相关
+
+```bash
+# 查看未提交的更改
+git status
+
+# 查看最近的提交
+git log --oneline -10
+
+# 查看当前分支
+git branch
+
+# 强制推送（谨慎使用！）
+git push -f
+```
+
+---
+
+## 一键重启脚本
+
+```bash
+#!/bin/bash
+# 重启所有服务
+
+echo "=== 重启 Nezha ==="
+
+# 1. 重启 PostgreSQL（如果需要）
+# /Applications/Postgres.app/Contents/VERSIONS/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18 restart
+
+# 2. 重启 OpenCode server
+echo "重启 OpenCode server..."
+pkill -f "opencode serve"
+sleep 2
+nohup opencode serve --port 4096 > /tmp/opencode.log 2>&1 &
+sleep 3
+
+# 3. 重启 Nezha daemon
+echo "重启 Nezha daemon..."
+pkill -f "node dist/cli/index.js start"
+sleep 1
+nohup node dist/cli/index.js start > .nezha.log 2>&1 &
+sleep 3
+
+# 4. 检查状态
+echo "=== 服务状态 ==="
+curl -s http://localhost:4096/global/health
+echo ""
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+
+echo "=== 完成 ==="
+```
+
+---
+
+## 快速调试流程
+
+遇到问题时，按顺序执行以下命令：
+
+```bash
+# 1. 检查 OpenCode server
+curl http://localhost:4096/global/health
+
+# 2. 检查 PostgreSQL
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT 1;"
+
+# 3. 检查任务状态
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+
+# 4. 查看最新日志
+tail -30 .nezha.log
+
+# 5. 如果任务卡住，重置它
+/Applications/Postgres.app/Contents/VERSIONS/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE tasks SET status = 'PENDING', started_at = NULL, retry_count = 0 WHERE status = 'RUNNING';"
+```
+
+---
+
+## 常用命令速查表
+
+| 操作 | 命令 |
+|------|------|
+| 查看任务状态 | `psql ... -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"` |
+| 查看运行中任务 | `psql ... -c "SELECT * FROM tasks WHERE status = 'RUNNING';"` |
+| 重置卡住任务 | `psql ... -c "UPDATE tasks SET status = 'PENDING' WHERE status = 'RUNNING';"` |
+| 查看日志 | `tail -20 .nezha.log` |
+| 重启 daemon | `pkill -f "node dist/cli/index.js start" && nohup node dist/cli/index.js start > .nezha.log 2>&1 &` |
+| 测试 API | `curl http://localhost:4096/global/health` |
 
 - OpenCode 官方文档: https://opencode.ai/docs/server
 - API 完整规范: http://localhost:4096/doc

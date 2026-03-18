@@ -1,4 +1,5 @@
 import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
+import { logApiRequest, isVerboseMode } from '../../utils/verboseLogger.js';
 
 interface OpenAIEmbeddingResponse {
   data: Array<{
@@ -41,28 +42,35 @@ export class OpenAIEmbedding implements EmbeddingProvider {
   async embedBatch(texts: string[]): Promise<number[][]> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const startTime = isVerboseMode() ? Date.now() : undefined;
 
     try {
+      const requestBody = {
+        model: this.model,
+        input: texts,
+        ...(this.dimensions ? { dimensions: this.dimensions } : {}),
+      };
+
       const response = await fetch(`${this.apiUrl}/embeddings`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: this.model,
-          input: texts,
-          ...(this.dimensions ? { dimensions: this.dimensions } : {}),
-        }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
+      const responseText = await response.text();
+
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`OpenAI Embedding API error (${response.status}): ${error}`);
+        logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, new Error(`HTTP ${response.status}`), startTime);
+        throw new Error(`OpenAI Embedding API error (${response.status}): ${responseText}`);
       }
 
-      const data = (await response.json()) as OpenAIEmbeddingResponse;
+      const data = JSON.parse(responseText) as OpenAIEmbeddingResponse;
+
+      logApiRequest('embedBatch', 'POST', `${this.apiUrl}/embeddings`, requestBody, response.status, responseText, undefined, startTime);
 
       if (!data.data || !Array.isArray(data.data)) {
         throw new Error('Invalid response from OpenAI: missing data array');

@@ -9,6 +9,9 @@ import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
+import { verboseLogger, setVerboseMode } from '../utils/verboseLogger.js';
+
+export let isVerbose = false;
 import {
   sanitizeTaskTitle,
   sanitizeTaskDescription,
@@ -710,6 +713,12 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const command = args[0] ?? 'help';
 
+  isVerbose = args.includes('--verbose');
+  if (isVerbose) {
+    setVerboseMode(true);
+    logger.setContext({ verbose: true });
+  }
+
   const cliInstance = new Cli();
 
   try {
@@ -1110,14 +1119,15 @@ function showHelp(): void {
     help                          Show this help
 
   ${colors.bright}Options:${colors.reset}
-   --priority <n>                Task priority (0-100)
-   --depends-on <uuid...>       Task IDs this task depends on
-   --tag <tag>                  Filter by tag
+    --priority <n>                Task priority (0-100)
+    --depends-on <uuid...>       Task IDs this task depends on
+    --tag <tag>                  Filter by tag
     --status <status>            Filter by status
     --category <category>       Filter by category (security, performance, feature, bugfix)
     --dry-run                    Show what would be done without executing
     --json                       Output as JSON
     --format=json                Output as JSON
+    --verbose                    Log all DB queries and API calls
 
  ${colors.bright}Examples:${colors.reset}
    ${colors.cyan}$ nezha start${colors.reset}

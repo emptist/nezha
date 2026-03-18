@@ -1,6 +1,7 @@
 import pg, { type Pool, type PoolConfig, type QueryResultRow } from 'pg';
 import { type IConfig, type QueryResult } from '../config/types.js';
 import { DATABASE_TABLES } from '../config/constants.js';
+import { logDbQuery, isVerboseMode } from '../utils/verboseLogger.js';
 
 const { Pool: PgPool } = pg;
 
@@ -40,11 +41,27 @@ export class DatabaseClient {
     if (this.isClosed) {
       throw new Error('DatabaseClient is closed');
     }
-    const result = await this.pool.query<T>(sql, params);
-    return {
-      rows: result.rows,
-      rowCount: result.rowCount || 0,
-    };
+
+    const startTime = isVerboseMode() ? Date.now() : undefined;
+    try {
+      const result = await this.pool.query<T>(sql, params);
+      logDbQuery(this.sanitizeSql(sql), params, { rowCount: result.rowCount ?? undefined }, undefined, startTime);
+      return {
+        rows: result.rows,
+        rowCount: result.rowCount || 0,
+      };
+    } catch (error) {
+      logDbQuery(this.sanitizeSql(sql), params, undefined, error as Error, startTime);
+      throw error;
+    }
+  }
+
+  private sanitizeSql(sql: string): string {
+    const trimmed = sql.trim();
+    if (trimmed.length > 60) {
+      return trimmed.substring(0, 60) + '...';
+    }
+    return trimmed;
   }
 
   async close(): Promise<void> {

@@ -69,13 +69,19 @@ nohup node dist/cli/index.js start > .nezha.log 2>&1 &
 ### 2. Check Current Status
 
 ```bash
-# Check task status
+# 查看任务状态（最常用！）
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
 
-# Check daemon logs
+# 查看当前运行的任务
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT title, started_at FROM tasks WHERE status = 'RUNNING';"
+
+# 查看最近完成的任务
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 5;"
+
+# 查看 daemon 日志
 tail -20 .nezha.log
 
-# Check if services are running
+# 检查服务是否运行
 ps aux | grep "opencode serve"
 ps aux | grep "dist/cli/index.js start"
 ```
@@ -96,6 +102,8 @@ The system stores everything in PostgreSQL. To continue:
 ```
 
 ### 4. If System Crashed - Recovery Steps
+
+> 📖 **详细命令说明**: 参见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)
 
 ```bash
 # 1. Rebuild if needed (after code changes)
