@@ -23,6 +23,7 @@ interface TaskRow {
   status: string;
   priority: number;
   tags?: string[];
+  category?: string;
 }
 
 interface CountRow {
@@ -390,9 +391,9 @@ export class Cli {
     await this.addTask("Continuous Improvement Cycle", description, 10);
   }
 
-  async listTasks(tag?: string, status?: string): Promise<void> {
+  async listTasks(tag?: string, status?: string, category?: string): Promise<void> {
     const db = await this.getDb();
-    let query = `SELECT id, title, status, priority, tags, created_at FROM tasks WHERE 1=1`;
+    let query = `SELECT id, title, status, priority, tags, category, created_at FROM tasks WHERE 1=1`;
     const params: (string | number)[] = [];
     let paramIndex = 1;
 
@@ -408,6 +409,12 @@ export class Cli {
       paramIndex++;
     }
 
+    if (category) {
+      query += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+
     query += ` ORDER BY priority DESC, created_at DESC LIMIT 20`;
 
     const result = await db.query<TaskRow>(query, params);
@@ -418,10 +425,11 @@ export class Cli {
     }
 
     cli.info(`Found ${result.rows.length} task(s):\n`);
-    cli.table(['Status', 'Title', 'Priority', 'Tags'], 
+    cli.table(['Status', 'Category', 'Title', 'Priority', 'Tags'], 
       result.rows.map(row => [
         row.status,
-        row.title.substring(0, 40) + (row.title.length > 40 ? '...' : ''),
+        row.category || '-',
+        row.title.substring(0, 35) + (row.title.length > 35 ? '...' : ''),
         row.priority.toString(),
         (row.tags || []).join(', ')
       ])
