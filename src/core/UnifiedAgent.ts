@@ -144,6 +144,25 @@ export interface ResilienceStats {
   lastError?: CategorizedError;
 }
 
+/**
+ * UnifiedAgent - Main agent class that provides a unified interface for AI task execution
+ * with support for both HTTP and CLI transports, with automatic failover and caching.
+ *
+ * @example
+ * ```typescript
+ * import { UnifiedAgent } from './core/UnifiedAgent';
+ *
+ * const agent = new UnifiedAgent({
+ *   mode: 'http',
+ *   serverUrl: 'http://localhost:4096',
+ *   enableFallback: true,
+ *   fallbackMode: 'cli',
+ * });
+ *
+ * const result = await agent.executeTask('Fix the login bug');
+ * console.log(result.message);
+ * ```
+ */
 export class UnifiedAgent {
   protected readonly timeout: number;
   protected readonly maxRetries: number;
@@ -172,6 +191,25 @@ export class UnifiedAgent {
 
   private static readonly healthChecks = new Map<string, () => Promise<boolean>>();
 
+  /**
+   * Creates a new UnifiedAgent instance with the specified configuration.
+   *
+   * @param config - Optional configuration object
+   * @param config.mode - Transport mode: 'http' or 'cli' (default: 'http')
+   * @param config.timeout - Request timeout in milliseconds (default: 600000)
+   * @param config.maxRetries - Maximum retry attempts (default: 3)
+   * @param config.retryDelay - Initial retry delay in milliseconds (default: 1000)
+   * @param config.serverUrl - Server URL for HTTP transport (default: 'http://localhost:4096')
+   * @param config.logDir - Directory for conversation logs (default: 'conversations')
+   * @param config.enableLogging - Enable conversation logging (default: true)
+   * @param config.enableFallback - Enable automatic fallback (default: true)
+   * @param config.fallbackMode - Fallback transport mode when primary fails
+   * @param config.enableCache - Enable response caching (default: true)
+   * @param config.cacheTtlMs - Cache TTL in milliseconds (default: 300000)
+   * @param config.circuitBreakerThreshold - Circuit breaker failure threshold (default: 3)
+   * @param config.circuitBreakerResetMs - Circuit breaker reset timeout (default: 300000)
+   * @param config.enableObservability - Enable metrics and health checks (default: true)
+   */
   constructor(config?: UnifiedAgentConfig) {
     this.timeout = config?.timeout ?? 600000;
     this.maxRetries = config?.maxRetries ?? 3;
@@ -286,6 +324,12 @@ export class UnifiedAgent {
     }
   }
 
+  /**
+   * Returns the health status of the agent and its transports.
+   * Checks server connectivity and transport health.
+   *
+   * @returns Promise resolving to agent health status
+   */
   async getHealth(): Promise<AgentHealth> {
     const transports: TransportHealth[] = [];
     let serverConnectivity = false;
@@ -337,6 +381,11 @@ export class UnifiedAgent {
     };
   }
 
+  /**
+   * Returns execution metrics for the agent.
+   *
+   * @returns Object containing totalExecutions, avgDurationMs, activeConnections, tokenUsageTotal
+   */
   getMetrics(): {
     totalExecutions: number;
     avgDurationMs: number;
@@ -357,10 +406,21 @@ export class UnifiedAgent {
     };
   }
 
+  /**
+   * Exports all metrics in Prometheus format.
+   *
+   * @returns Metrics in Prometheus text format
+   */
   exportMetrics(): string {
     return getMetricsRegistry().export();
   }
 
+  /**
+   * Returns the correlation ID for this agent instance.
+   * Used for request tracing across services.
+   *
+   * @returns The correlation ID string
+   */
   getCorrelationId(): string {
     return this.agentMetrics.correlationId;
   }
@@ -372,7 +432,10 @@ export class UnifiedAgent {
     let totalTokens = 0;
 
     while ((match = tokenPattern.exec(response)) !== null) {
-      totalTokens += parseInt(match[1], 10);
+      const tokenCount = match[1];
+      if (tokenCount) {
+        totalTokens += parseInt(tokenCount, 10);
+      }
     }
 
     if (totalTokens > 0) {
@@ -406,6 +469,12 @@ export class UnifiedAgent {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Calculates retry delay with exponential backoff and jitter.
+   *
+   * @param attempt - The current retry attempt number (1-indexed)
+   * @returns The delay in milliseconds before the next retry
+   */
   public calculateRetryDelay(attempt: number): number {
     const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.3 * baseDelay;
@@ -416,11 +485,31 @@ export class UnifiedAgent {
     return `msg_${Buffer.from(message).toString('base64').slice(0, 64)}`;
   }
 
+  /**
+   * Executes a task by sending a message to the AI agent.
+   * Implements retry logic, circuit breaker, and caching.
+   *
+   * @param message - The task description or instruction (max 100000 chars)
+   * @returns Promise resolving to the unified agent response
+   * @throws Error if input exceeds maximum length
+   */
   async executeTask(message: string): Promise<UnifiedAgentResponse> {
     validateInputLength(message, MAX_MESSAGE_LENGTH);
     return this.executeWithRetry(message);
   }
 
+  /**
+   * Executes a structured task with title, description, and optional context.
+   * Builds a prompt from the task structure and executes it.
+   *
+   * @param task - The structured task object
+   * @param task.title - Task title (max 500 chars)
+   * @param task.description - Task description (max 5000 chars)
+   * @param task.context - Optional additional context
+   * @param systemPrompt - Optional system prompt to prepend
+   * @returns Promise resolving to the unified agent response
+   * @throws Error if title or description exceeds maximum length
+   */
   async executeStructuredTask(
     task: AgentTask,
     systemPrompt?: string
@@ -435,6 +524,15 @@ export class UnifiedAgent {
     return this.executeWithRetry(fullPrompt, task);
   }
 
+  /**
+   * Executes a task with streaming response callback.
+   * Only available in CLI transport mode.
+   *
+   * @param message - The task description or instruction
+   * @param onChunk - Callback function invoked for each streaming chunk
+   * @returns Promise resolving to the unified agent response
+   * @throws Error if not using CLI transport mode
+   */
   async executeTaskStreaming(
     message: string,
     onChunk: TransportStreamingCallback
@@ -686,8 +784,9 @@ Please analyze the task and provide a detailed solution.`;
     let match;
 
     while ((match = filePattern.exec(content)) !== null) {
-      if (!artifacts.includes(match[1])) {
-        artifacts.push(match[1]);
+      const filename = match[1];
+      if (filename && !artifacts.includes(filename)) {
+        artifacts.push(filename);
       }
     }
 
@@ -698,15 +797,30 @@ Please analyze the task and provide a detailed solution.`;
     return UnifiedAgent.extractArtifactsStatic(content);
   }
 
+  /**
+   * Clears the current session for both primary and fallback transports.
+   * Useful for resetting state when authentication expires or server restarts.
+   */
   clearSession(): void {
     this.transport.clearSession();
     this.fallbackTransport?.clearSession();
   }
 
+  /**
+   * Returns the current session ID from the active transport.
+   *
+   * @returns The session ID or null if no session exists
+   */
   getSessionId(): string | null {
     return this.getCurrentTransport().getSessionId();
   }
 
+  /**
+   * Returns resilience statistics including circuit breaker state,
+   * cache hit rate, and retry count.
+   *
+   * @returns Object containing circuitBreaker state, cacheHitRate, retryCount, lastError
+   */
   getResilienceStats(): ResilienceStats {
     return {
       circuitBreaker: this.circuitBreaker.getState().state,
@@ -716,6 +830,14 @@ Please analyze the task and provide a detailed solution.`;
     };
   }
 
+  /**
+   * Resets all resilience mechanisms:
+   * - Circuit breaker
+   * - Retry executor
+   * - Response cache
+   * - Stale cache
+   * - Transport mode to primary
+   */
   resetCircuits(): void {
     this.circuitBreaker.reset();
     this.retryExecutor.reset();

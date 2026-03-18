@@ -162,7 +162,8 @@ export class ConversationLogger {
 
     await this.ensureInitialized();
 
-    const date = new Date().toISOString().split('T')[0];
+    const dateParts = new Date().toISOString().split('T');
+    const date = dateParts[0] ?? '';
     const dateDir = path.join(this.logDir, date);
 
     try {
@@ -297,8 +298,13 @@ export class ConversationLogger {
   }
 
   private async getConversationLogFromDisk(entry: IndexEntry): Promise<ConversationLog | null> {
-    const date = entry.timestamp.split('T')[0];
-    const logPath = path.join(this.logDir, date, `session-${entry.session_id}.jsonl`);
+    const dateParts = entry.timestamp.split('T');
+    const date = dateParts[0] ?? '';
+    const sessionId = entry.session_id;
+    if (!sessionId) {
+      return null;
+    }
+    const logPath = path.join(this.logDir, date, `session-${sessionId}.jsonl`);
 
     try {
       const logContent = await fs.promises.readFile(logPath, 'utf-8');

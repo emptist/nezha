@@ -2,6 +2,9 @@ import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { ConversationLogger } from './ConversationLogger.js';
 
+/**
+ * Configuration options for creating an Agent instance.
+ */
 export interface AgentConfig {
   timeout?: number;
   maxRetries?: number;
@@ -9,6 +12,22 @@ export interface AgentConfig {
   serverUrl?: string;
 }
 
+/**
+ * @deprecated Use UnifiedAgent instead for new code. Agent provides HTTP-only transport
+ * for backward compatibility.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from './core/Agent';
+ *
+ * const agent = new Agent({
+ *   serverUrl: 'http://localhost:4096',
+ *   timeout: 600000,
+ * });
+ *
+ * const result = await agent.executeTask('Create a new API endpoint');
+ * ```
+ */
 export class Agent {
   private readonly timeout: number;
   private readonly maxRetries: number;
@@ -17,6 +36,10 @@ export class Agent {
   private sessionId: string | null = null;
   private readonly conversationLogger: ConversationLogger;
 
+  /**
+   * Creates a new Agent instance with optional configuration.
+   * @param config - Optional configuration object
+   */
   constructor(config?: AgentConfig) {
     this.timeout = config?.timeout ?? 600000; // 10 minutes
     this.maxRetries = config?.maxRetries ?? 3;
@@ -35,6 +58,13 @@ export class Agent {
     return Math.min(baseDelay + jitter, 30000);
   }
 
+  /**
+   * Executes a task by sending a message to the AI agent.
+   * Automatically retries on failure up to maxRetries times.
+   *
+   * @param message - The task description or instruction
+   * @returns Promise resolving to the agent's response
+   */
   async executeTask(message: string): Promise<AgentResponse> {
     let lastError: Error | null = null;
 
@@ -77,6 +107,11 @@ export class Agent {
     };
   }
 
+  /**
+   * Creates a new session with the server.
+   * @returns The session ID
+   * @throws Error if session creation fails
+   */
   private async createSession(): Promise<string> {
     const response = await fetch(`${this.serverUrl}/session`, {
       method: 'POST',

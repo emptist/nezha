@@ -1,0 +1,144 @@
+import { benchmarkAsync, formatResult, type BenchmarkResult } from './timing.js';
+import { HttpTransport, CliTransport } from '../core/transports/index.js';
+
+const SERVER_URL = process.env.OPENCODE_SERVER_URL ?? 'http://localhost:4096';
+const TIMEOUT = 30000;
+
+const TEST_MESSAGES = {
+  short: 'Hello, how are you?',
+  medium:
+    'Please help me understand the difference between synchronous and asynchronous programming in JavaScript.',
+  long: `I need to refactor a large codebase that currently uses callbacks extensively. 
+The codebase handles file operations, database queries, and API calls using nested callbacks.
+Please explain the best approach to migrate this to modern async/await patterns while maintaining backward compatibility.`,
+};
+
+export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
+  const results: BenchmarkResult[] = [];
+
+  console.log('\n=== Transport Latency Benchmarks ===\n');
+  console.log(`Server URL: ${SERVER_URL}\n`);
+
+  const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
+  const cliTransport = new CliTransport(SERVER_URL, TIMEOUT);
+
+  console.log('--- HttpTransport Benchmarks ---\n');
+
+  results.push(
+    await benchmarkAsync(
+      'HttpTransport: createSession',
+      async () => {
+        httpTransport.clearSession();
+        await httpTransport.createSession();
+      },
+      { iterations: 50 }
+    )
+  );
+
+  results.push(
+    await benchmarkAsync(
+      'HttpTransport: sendMessage (short)',
+      async () => {
+        await httpTransport.sendMessage(TEST_MESSAGES.short);
+      },
+      { iterations: 20 }
+    )
+  );
+
+  results.push(
+    await benchmarkAsync(
+      'HttpTransport: sendMessage (medium)',
+      async () => {
+        await httpTransport.sendMessage(TEST_MESSAGES.medium);
+      },
+      { iterations: 20 }
+    )
+  );
+
+  console.log('\n--- CliTransport Benchmarks ---\n');
+
+  results.push(
+    await benchmarkAsync(
+      'CliTransport: sendMessage (short)',
+      async () => {
+        await cliTransport.sendMessage(TEST_MESSAGES.short);
+      },
+      { iterations: 10 }
+    )
+  );
+
+  results.push(
+    await benchmarkAsync(
+      'CliTransport: sendMessage (medium)',
+      async () => {
+        await cliTransport.sendMessage(TEST_MESSAGES.medium);
+      },
+      { iterations: 10 }
+    )
+  );
+
+  console.log('\n--- Results ---\n');
+  for (const result of results) {
+    console.log(formatResult(result));
+  }
+
+  console.log('\n--- Comparison Summary ---\n');
+  const httpShortResult = results.find(r => r.name === 'HttpTransport: sendMessage (short)');
+  const cliShortResult = results.find(r => r.name === 'CliTransport: sendMessage (short)');
+
+  if (httpShortResult && cliShortResult) {
+    const diff = ((cliShortResult.avgMs - httpShortResult.avgMs) / httpShortResult.avgMs) * 100;
+    console.log(`HttpTransport (short) avg: ${httpShortResult.avgMs.toFixed(2)}ms`);
+    console.log(`CliTransport (short) avg: ${cliShortResult.avgMs.toFixed(2)}ms`);
+    console.log(
+      `Difference: ${diff > 0 ? '+' : ''}${diff.toFixed(1)}% (${diff > 0 ? 'Cli slower' : 'Http slower'})`
+    );
+  }
+
+  return results;
+}
+
+export async function runTransportComparison(): Promise<void> {
+  console.log('\n=== Transport Mode Comparison ===\n');
+
+  const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
+  const cliTransport = new CliTransport(SERVER_URL, TIMEOUT);
+
+  const iterations = 5;
+  const httpTimes: number[] = [];
+  const cliTimes: number[] = [];
+
+  console.log('Running HttpTransport tests...');
+  for (let i = 0; i < iterations; i++) {
+    const start = performance.now();
+    try {
+      await httpTransport.sendMessage(TEST_MESSAGES.short);
+      httpTimes.push(performance.now() - start);
+    } catch {
+      console.log(`  Attempt ${i + 1}: failed`);
+    }
+  }
+
+  console.log('Running CliTransport tests...');
+  for (let i = 0; i < iterations; i++) {
+    const start = performance.now();
+    try {
+      await cliTransport.sendMessage(TEST_MESSAGES.short);
+      cliTimes.push(performance.now() - start);
+    } catch {
+      console.log(`  Attempt ${i + 1}: failed`);
+    }
+  }
+
+  if (httpTimes.length > 0 && cliTimes.length > 0) {
+    const httpAvg = httpTimes.reduce((a, b) => a + b, 0) / httpTimes.length;
+    const cliAvg = cliTimes.reduce((a, b) => a + b, 0) / cliTimes.length;
+
+    console.log('\n--- Results ---\n');
+    console.log(
+      `HttpTransport avg latency: ${httpAvg.toFixed(2)}ms (${httpTimes.length} successful)`
+    );
+    console.log(`CliTransport avg latency: ${cliAvg.toFixed(2)}ms (${cliTimes.length} successful)`);
+    console.log(`\nDifference: ${(((cliAvg - httpAvg) / httpAvg) * 100).toFixed(1)}%`);
+  }
+}
