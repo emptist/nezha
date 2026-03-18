@@ -1,5 +1,6 @@
 import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
+import { ConversationLogger } from './ConversationLogger.js';
 
 export interface AgentConfig {
   timeout?: number;
@@ -14,16 +15,18 @@ export class Agent {
   private readonly retryDelay: number;
   private readonly serverUrl: string;
   private sessionId: string | null = null;
+  private readonly conversationLogger: ConversationLogger;
 
   constructor(config?: AgentConfig) {
-    this.timeout = config?.timeout ?? 600000;  // 10 minutes
+    this.timeout = config?.timeout ?? 600000; // 10 minutes
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
     this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';
+    this.conversationLogger = new ConversationLogger('conversations');
   }
 
   private async sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   public calculateRetryDelay(attempt: number): number {
@@ -37,17 +40,19 @@ export class Agent {
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        logger.info(`Executing task (attempt ${attempt}/${this.maxRetries}): ${message.substring(0, 100)}...`);
-        
+        logger.info(
+          `Executing task (attempt ${attempt}/${this.maxRetries}): ${message.substring(0, 100)}...`
+        );
+
         const result = await this.runOpenCode(message);
-        
+
         if (result.success) {
           logger.info(`Task completed successfully`);
           return result;
         } else {
           logger.warn(`Task failed: ${result.message}`);
           lastError = new Error(result.message);
-          
+
           if (attempt < this.maxRetries) {
             const delay = this.calculateRetryDelay(attempt);
             logger.info(`Retrying after ${Math.round(delay)}ms...`);
@@ -57,7 +62,7 @@ export class Agent {
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
         logger.error(`Task execution error: ${lastError.message}`);
-        
+
         if (attempt < this.maxRetries) {
           const delay = this.calculateRetryDelay(attempt);
           logger.info(`Retrying after ${Math.round(delay)}ms...`);
@@ -83,7 +88,7 @@ export class Agent {
       throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
     }
 
-    const data = await response.json() as { id: string };
+    const data = (await response.json()) as { id: string };
     logger.info(`Created session: ${data.id}`);
     return data.id;
   }
@@ -97,7 +102,7 @@ export class Agent {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          parts: [{ type: 'text', text: message }]
+          parts: [{ type: 'text', text: message }],
         }),
         signal: controller.signal,
       });
@@ -109,8 +114,8 @@ export class Agent {
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      const data = await response.json() as { 
-        parts?: Array<{ type: string; text: string }> 
+      const data = (await response.json()) as {
+        parts?: Array<{ type: string; text: string }>;
       };
 
       if (data.parts) {
@@ -132,19 +137,19 @@ export class Agent {
 
     try {
       let sessionId = this.sessionId;
-      
+
       if (!sessionId) {
         sessionId = await this.createSession();
         this.sessionId = sessionId;
       }
 
       logger.debug(`Sending message to session ${sessionId}: ${message.substring(0, 50)}...`);
-      
+
       const responseText = await this.sendMessage(sessionId, message);
-      
+
       const elapsed = Date.now() - startTime;
       logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
-      
+
       return {
         success: true,
         message: responseText,
@@ -152,7 +157,7 @@ export class Agent {
     } catch (error) {
       const elapsed = Date.now() - startTime;
       const err = error instanceof Error ? error : new Error(String(error));
-      
+
       if (err.name === 'AbortError') {
         logger.error(`Task timed out after ${elapsed}ms`);
         this.sessionId = null;
@@ -161,13 +166,13 @@ export class Agent {
           message: `Task timed out after ${this.timeout}ms`,
         };
       }
-      
+
       logger.error(`Task failed after ${elapsed}ms: ${err.message}`);
-      
+
       if (err.message.includes('session')) {
         this.sessionId = null;
       }
-      
+
       return {
         success: false,
         message: err.message,

@@ -1,20 +1,30 @@
 import { Agent, type AgentConfig } from './Agent.js';
+import {
+  UnifiedAgent,
+  type UnifiedAgentConfig,
+  type UnifiedAgentResponse,
+} from './UnifiedAgent.js';
 import { EventBus } from './EventBus.js';
 import { logger } from '../utils/logger.js';
+import type { TransportMode } from './transports/index.js';
 
 export interface AgentSystemConfig {
   maxAgents?: number;
   heartbeatIntervalMs?: number;
   agentConfig?: AgentConfig;
+  unifiedAgentConfig?: UnifiedAgentConfig;
+  defaultMode?: TransportMode;
 }
 
 export interface AgentInfo {
   id: string;
   agent: Agent;
+  unifiedAgent?: UnifiedAgent;
   registeredAt: Date;
   lastActivity: Date;
   taskCount: number;
   status: 'idle' | 'busy' | 'error';
+  mode: TransportMode;
 }
 
 export const AGENT_EVENTS = {
@@ -30,6 +40,8 @@ export class AgentSystem {
   private readonly maxAgents: number;
   private readonly heartbeatIntervalMs: number;
   private readonly agentConfig: AgentConfig;
+  private readonly unifiedAgentConfig: UnifiedAgentConfig;
+  private readonly defaultMode: TransportMode;
   private readonly eventBus: EventBus;
   private readonly agents: Map<string, AgentInfo> = new Map();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -39,6 +51,8 @@ export class AgentSystem {
     this.maxAgents = config?.maxAgents ?? 10;
     this.heartbeatIntervalMs = config?.heartbeatIntervalMs ?? 30000;
     this.agentConfig = config?.agentConfig ?? {};
+    this.unifiedAgentConfig = config?.unifiedAgentConfig ?? {};
+    this.defaultMode = config?.defaultMode ?? 'http';
     this.eventBus = eventBus ?? new EventBus();
   }
 
@@ -84,7 +98,7 @@ export class AgentSystem {
     });
   }
 
-  registerAgent(agentId: string, config?: AgentConfig): Agent {
+  registerAgent(agentId: string, config?: AgentConfig & { mode?: TransportMode }): Agent {
     if (this.agents.has(agentId)) {
       throw new Error(`Agent ${agentId} already registered`);
     }
@@ -93,24 +107,38 @@ export class AgentSystem {
       throw new Error(`Maximum number of agents (${this.maxAgents}) reached`);
     }
 
+    const mode = config?.mode ?? this.defaultMode;
     const agent = new Agent({ ...this.agentConfig, ...config });
+    let unifiedAgent: UnifiedAgent | undefined;
+
+    if (mode === 'cli') {
+      unifiedAgent = new UnifiedAgent({
+        ...this.unifiedAgentConfig,
+        mode: 'cli',
+        serverUrl: config?.serverUrl ?? this.unifiedAgentConfig.serverUrl,
+      });
+    }
+
     const now = new Date();
 
     const info: AgentInfo = {
       id: agentId,
       agent,
+      unifiedAgent,
       registeredAt: now,
       lastActivity: now,
       taskCount: 0,
       status: 'idle',
+      mode,
     };
 
     this.agents.set(agentId, info);
 
-    logger.info(`Agent ${agentId} registered`);
+    logger.info(`Agent ${agentId} registered (mode: ${mode})`);
     this.eventBus.publish(AGENT_EVENTS.AGENT_REGISTERED, {
       agentId,
       timestamp: now,
+      mode,
     });
 
     return agent;
@@ -134,6 +162,10 @@ export class AgentSystem {
 
   getAgent(agentId: string): Agent | undefined {
     return this.agents.get(agentId)?.agent;
+  }
+
+  getUnifiedAgent(agentId: string): UnifiedAgent | undefined {
+    return this.agents.get(agentId)?.unifiedAgent;
   }
 
   getAgentInfo(agentId: string): AgentInfo | undefined {
@@ -173,7 +205,14 @@ export class AgentSystem {
     });
 
     try {
-      const result = await info.agent.executeTask(task);
+      let result: { success: boolean; message?: string };
+
+      if (info.mode === 'cli' && info.unifiedAgent) {
+        const unifiedResult: UnifiedAgentResponse = await info.unifiedAgent.executeTask(task);
+        result = { success: unifiedResult.success, message: unifiedResult.message };
+      } else {
+        result = await info.agent.executeTask(task);
+      }
 
       info.taskCount++;
       info.status = result.success ? 'idle' : 'error';
@@ -248,14 +287,17 @@ export class AgentSystem {
     busyAgents: number;
     errorAgents: number;
     totalTasksExecuted: number;
+    agentsByMode: Record<TransportMode, number>;
   } {
     let idleAgents = 0;
     let busyAgents = 0;
     let errorAgents = 0;
     let totalTasksExecuted = 0;
+    const agentsByMode: Record<TransportMode, number> = { http: 0, cli: 0 };
 
     for (const info of this.agents.values()) {
       totalTasksExecuted += info.taskCount;
+      agentsByMode[info.mode]++;
       switch (info.status) {
         case 'idle':
           idleAgents++;
@@ -275,6 +317,7 @@ export class AgentSystem {
       busyAgents,
       errorAgents,
       totalTasksExecuted,
+      agentsByMode,
     };
   }
 
@@ -284,5 +327,13 @@ export class AgentSystem {
 
   getEventBus(): EventBus {
     return this.eventBus;
+  }
+
+  registerCliAgent(agentId: string, config?: Omit<UnifiedAgentConfig, 'mode'>): Agent {
+    return this.registerAgent(agentId, { ...config, mode: 'cli' } as AgentConfig & { mode: 'cli' });
+  }
+
+  getDefaultMode(): TransportMode {
+    return this.defaultMode;
   }
 }
