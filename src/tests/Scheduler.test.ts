@@ -267,6 +267,7 @@ describe('Scheduler - Additional Edge Cases', () => {
     
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-123', title: 'Test Task', description: 'Test' }],
         rowCount: 1,
@@ -290,6 +291,7 @@ describe('Scheduler - Additional Edge Cases', () => {
 
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce(failingTask)
       .mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
 
@@ -300,6 +302,7 @@ describe('Scheduler - Additional Edge Cases', () => {
     for (let i = 0; i < 5; i++) {
       mockQuery
         .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
         .mockResolvedValueOnce(failingTask);
       await new Promise(resolve => setTimeout(resolve, 120));
     }
@@ -495,6 +498,7 @@ describe('Scheduler - Task Operations', () => {
     
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
         rowCount: 1,
