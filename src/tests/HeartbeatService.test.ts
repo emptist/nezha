@@ -37,6 +37,14 @@ vi.mock('../core/UnifiedAgent.js', () => ({
     getSessionId: vi.fn().mockReturnValue(null),
     clearSession: vi.fn(),
   })),
+  CliAgent: vi.fn().mockImplementation(() => ({
+    executeTask: vi.fn().mockResolvedValue({ success: true, message: 'Task completed' }),
+    executeTaskStreaming: vi
+      .fn()
+      .mockResolvedValue({ success: true, message: 'Streaming task completed' }),
+    getSessionId: vi.fn().mockReturnValue(null),
+    clearSession: vi.fn(),
+  })),
 }));
 
 vi.mock('../core/Memory.js', () => ({

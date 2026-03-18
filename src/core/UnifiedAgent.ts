@@ -73,8 +73,7 @@ export interface UnifiedAgentResponse {
  * // CLI mode with streaming
  * const cliAgent = new CliAgent();
  * await cliAgent.executeTaskStreaming('Deploy', (chunk, type) => {
- *   console.log(`[${type}]`, chunk);
- * });
+ *    * });
  * ```
  */
 export class UnifiedAgent {
@@ -160,7 +159,7 @@ export class UnifiedAgent {
    */
   async executeTaskStreaming(
     message: string,
-    onChunk: StreamingCallback
+    onChunk: TransportStreamingCallback
   ): Promise<UnifiedAgentResponse> {
     if (this.transportMode !== 'cli') {
       throw new Error('Streaming is only supported in CLI mode');
