@@ -3,7 +3,20 @@
 > Last Updated: 2026-03-18
 > Status: Planning
 
-> **Note**: Core architecture decisions (PostgreSQL vs files, hybrid storage) are documented in [PHILOSOPHY.md](../PHILOSOPHY.md). This file focuses on improvements beyond the baseline.
+## Design Foundation
+
+**重要**: 核心架构决策文档见 [PHILOSOPHY.md](../PHILOSOPHY.md)
+
+本文档聚焦于基线之上的改进。存储设计的基础原则：
+
+| 问题 | 解决方案 |
+|------|----------|
+| 为什么用 PostgreSQL？ | 可查询、可并发、可靠 |
+| 什么存数据库？ | tasks, memory, skills, audit_log |
+| 什么存文件？ | 每日记忆、MEMORY.md、配置 |
+| 如何迁移？ | pg_dump/pg_restore |
+
+**详细说明**: 参见 [PHILOSOPHY.md](../PHILOSOPHY.md#critical-design-rule)
 
 ## Executive Summary
 
@@ -36,7 +49,7 @@ This document outlines the systemic improvements needed to transform Nezha from 
 
 ### Storage Architecture (Reference)
 
-See [PHILOSOPHY.md](../PHILOSOPHY.md) for the complete design rationale:
+> 完整设计: [PHILOSOPHY.md](../PHILOSOPHY.md#how-we-compare-to-openclaw)
 
 | Data Type | Storage | Reason |
 |-----------|---------|--------|
@@ -47,6 +60,7 @@ See [PHILOSOPHY.md](../PHILOSOPHY.md) for the complete design rationale:
 | Curated Knowledge | MEMORY.md | Human editable, AI reference |
 
 **Import/Export for Knowledge Base:**
+
 ```bash
 # Export entire DB
 pg_dump nezha > backup.sql
@@ -56,6 +70,10 @@ pg_dump -t memory -t skills nezha > knowledge.sql
 
 # Import on new machine
 psql nezha-new < backup.sql
+
+# Cross-machine migration
+# 1. Source: pg_dump nezha > migration.sql
+# 2. Target: createdb nezha && psql nezha < migration.sql
 ```
 
 ---

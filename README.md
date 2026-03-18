@@ -858,33 +858,43 @@ while (true) 循环
 
 ### 数据存储策略
 
-详细设计原则见 [PHILOSOPHY.md](./PHILOSOPHY.md)。
+> **详细设计原则**: 完整的设计说明见 [PHILOSOPHY.md](./PHILOSOPHY.md)
 
-#### 为什么选择 PostgreSQL 而非纯文件存储？
+#### 为什么选择 PostgreSQL 而非文件存储？
 
-| 维度 | PostgreSQL | 文件存储 |
-|------|-----------|----------|
-| **查询能力** | SQL 强大查询 | grep/sed 有限 |
-| **并发安全** | ACID 事务 | 文件锁不可靠 |
-| **语义搜索** | pgvector 向量搜索 | 不支持 |
-| **可移植性** | pg_dump 一键导出 | 文件复制依赖路径 |
-| **多实例** | 原生支持 | 需额外机制 |
+**核心原因**: PostgreSQL 解决了文件存储无法克服的根本问题
+
+| 问题 | 文件存储 | PostgreSQL |
+|------|---------|-----------|
+| **查询能力** | grep/sed 有限 | SQL 强大查询 |
+| **并发安全** | 文件锁不可靠 | ACID 事务 |
+| **语义搜索** | 不支持 | pgvector 向量搜索 |
+| **可移植性** | 文件复制依赖路径 | pg_dump 一键导出 |
+| **多实例** | 需额外机制 | 原生支持 |
 
 #### 什么数据存数据库？什么存文件？
 
-**数据库 (PostgreSQL)**:
-- `tasks` - 任务队列（必须可查询、可并发）
-- `memory` - 知识库（向量搜索必需）
-- `skills` - 技能注册表（复用、版本追踪）
-- `task_audit_log` - 操作日志（可靠记录）
+> 详细分类见 [PHILOSOPHY.md](./PHILOSOPHY.md#what-goes-in-postgresql)
 
-**文件**:
-- `.tmp/nezha-memory/` - 每日记忆（人类可读、append-only）
-- `.tmp/nezha-memory/MEMORY.md` - 长期记忆（人类编辑）
-- `.env` - 配置（机器特定、安全）
-- `docs/` - 文档（人类参考）
+**PostgreSQL (操作数据 - 必须可查询)**:
+| 表 | 用途 | 为什么必须存 DB |
+|---|------|----------------|
+| `tasks` | 任务队列 | 必须可查询、可并发、可追踪状态 |
+| `memory` | 知识库 | 向量搜索必需 |
+| `skills` | 技能注册表 | 复用、版本追踪 |
+| `task_audit_log` | 操作日志 | 可靠记录 |
+
+**文件 (人类可读/机器特定)**:
+| 路径 | 用途 | 为什么存文件 |
+|------|------|-------------|
+| `.tmp/nezha-memory/` | 每日记忆 | 人类可读、append-only |
+| `.tmp/nezha-memory/MEMORY.md` | 长期记忆 | 人类编辑、AI 参考 |
+| `.env` | 配置 | 机器特定、安全 |
+| `docs/` | 文档 | 纯人类参考 |
 
 #### 导入/导出知识库
+
+> 完整指南见 [PHILOSOPHY.md](./PHILOSOPHY.md#how-we-compare-to-openclaw)
 
 **导出整个数据库**:
 ```bash
@@ -907,9 +917,9 @@ psql nezha-new < nezha-backup-20260318.sql
 gunzip < nezha-backup-20260318.sql.gz | psql nezha-new
 ```
 
-**仅导出特定表**:
+**仅导出特定表（知识库）**:
 ```bash
-# 导出 memory 表
+# 导出 memory 和 skills 表
 pg_dump -t memory -t skills nezha > knowledge-backup.sql
 
 # 导入到另一个数据库
@@ -928,7 +938,13 @@ createdb nezha
 psql nezha < migration.sql
 ```
 
-**参考文档**: 详见 [PHILOSOPHY.md](./PHILOSOPHY.md) - 包含完整的设计原则和数据分类。
+#### 设计原则总结
+
+> 详见 [PHILOSOPHY.md](./PHILOSOPHY.md#critical-design-rule)
+
+1. **所有操作数据必须在 PostgreSQL** - 可查询、可并发、可靠
+2. **文件仅用于人类参考或机器特定配置**
+3. **混合架构**: PostgreSQL (操作) + Files (人类可读)
 
 ## 贡献指南
 
