@@ -2,49 +2,54 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Scheduler } from '../core/Scheduler.js';
 import { Config } from '../config/Config.js';
+import { readdir, readFile } from 'fs/promises';
+import { join } from 'path';
 import type { QueryResult } from '../config/types.js';
 
 const TEST_DB_NAME = 'nezha_test';
 
-async function createTestDatabase(db: DatabaseClient): Promise<void> {
-  await db.query(`DROP TABLE IF EXISTS tasks CASCADE`);
-  await db.query(`DROP TABLE IF EXISTS memory CASCADE`);
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      title TEXT NOT NULL,
-      description TEXT,
-      status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
-      priority INTEGER DEFAULT 0,
-      result JSONB,
-      error TEXT,
-      retry_count INTEGER DEFAULT 0,
-      max_retries INTEGER DEFAULT 3,
-      depends_on UUID[],
-      timeout_seconds INTEGER DEFAULT 300,
-      started_at TIMESTAMPTZ,
-      is_long_running BOOLEAN DEFAULT false,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW(),
-      completed_at TIMESTAMPTZ
-    )
-  `);
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS memory (
-      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-      project_id UUID,
-      content TEXT NOT NULL,
-      source TEXT,
-      tags TEXT[],
-      metadata JSONB DEFAULT '{}',
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+async function runMigrations(db: DatabaseClient): Promise<void> {
+  const migrationsDir = join(process.cwd(), 'src/db/migrations');
+  const files = await readdir(migrationsDir);
+  const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+
+  for (const file of sqlFiles) {
+    const content = await readFile(join(migrationsDir, file), 'utf-8');
+    const statements = content.split(';').filter(s => s.trim());
+    for (const stmt of statements) {
+      if (stmt.trim()) {
+        try {
+          await db.query(stmt);
+        } catch (e) {
+          console.error(`Migration ${file} statement failed:`, e);
+        }
+      }
+    }
+  }
+}
+
+async function setupTestDatabase(db: DatabaseClient): Promise<void> {
+  try {
+    await db.query(`DROP TABLE IF EXISTS tasks CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS memory CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS projects CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS skill_registry CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS event_log CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS conversation_log CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS dead_letter_queue CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS task_audit_log CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS task_templates CASCADE`);
+  } catch {
+  }
+
+  await runMigrations(db);
 }
 
 async function cleanupTasks(db: DatabaseClient): Promise<void> {
-  await db.query('DELETE FROM tasks');
+  try {
+    await db.query('DELETE FROM tasks');
+  } catch {
+  }
 }
 
 describe('Database Integration Tests', () => {
