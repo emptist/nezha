@@ -135,26 +135,38 @@ export async function runTransportComparison(): Promise<void> {
     }
   }
 
-  console.log('Running CliTransport tests...');
-  for (let i = 0; i < iterations; i++) {
-    const start = performance.now();
-    try {
-      await cliTransport.sendMessage(TEST_MESSAGES.short);
-      cliTimes.push(performance.now() - start);
-    } catch {
-      console.log(`  Attempt ${i + 1}: failed`);
+  const cliAvailable = isOpenCodeAvailable();
+  if (cliAvailable) {
+    console.log('Running CliTransport tests...');
+    for (let i = 0; i < iterations; i++) {
+      const start = performance.now();
+      try {
+        await cliTransport.sendMessage(TEST_MESSAGES.short);
+        cliTimes.push(performance.now() - start);
+      } catch {
+        console.log(`  Attempt ${i + 1}: failed`);
+      }
     }
+  } else {
+    console.log('CliTransport tests skipped (opencode not available)');
   }
 
-  if (httpTimes.length > 0 && cliTimes.length > 0) {
+  if (httpTimes.length > 0) {
     const httpAvg = httpTimes.reduce((a, b) => a + b, 0) / httpTimes.length;
-    const cliAvg = cliTimes.reduce((a, b) => a + b, 0) / cliTimes.length;
 
     console.log('\n--- Results ---\n');
     console.log(
       `HttpTransport avg latency: ${httpAvg.toFixed(2)}ms (${httpTimes.length} successful)`
     );
-    console.log(`CliTransport avg latency: ${cliAvg.toFixed(2)}ms (${cliTimes.length} successful)`);
-    console.log(`\nDifference: ${(((cliAvg - httpAvg) / httpAvg) * 100).toFixed(1)}%`);
+
+    if (cliTimes.length > 0) {
+      const cliAvg = cliTimes.reduce((a, b) => a + b, 0) / cliTimes.length;
+      console.log(
+        `CliTransport avg latency: ${cliAvg.toFixed(2)}ms (${cliTimes.length} successful)`
+      );
+      console.log(`\nDifference: ${(((cliAvg - httpAvg) / httpAvg) * 100).toFixed(1)}%`);
+    } else {
+      console.log('CliTransport: not available');
+    }
   }
 }
