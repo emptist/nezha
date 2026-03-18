@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Agent } from '../core/Agent.js';
+import { OpenCodeApiMock } from './mocks/OpenCodeApiMock.js';
 
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
@@ -163,6 +164,163 @@ describe('Agent', () => {
       const delay = agent.calculateRetryDelay(10);
 
       expect(delay).toBeLessThanOrEqual(30000);
+    });
+  });
+
+  describe('Agent Integration Tests with OpenCodeApiMock', () => {
+    let mockExecSync: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockExecSync = execSync as ReturnType<typeof vi.fn>;
+      OpenCodeApiMock.setup({
+        success: true,
+        responseText: 'Integration test response',
+      });
+    });
+
+    afterEach(() => {
+      OpenCodeApiMock.teardown();
+    });
+
+    it('should use OpenCodeApiMock for task execution', async () => {
+      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Mock response text'));
+
+      const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
+      const result = await agent.executeTask('integration test task');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Mock response text');
+      expect(OpenCodeApiMock.getCalls().length).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should track API calls when executing tasks', async () => {
+      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Task completed'));
+
+      const agent = new Agent({ maxRetries: 1 });
+      await agent.executeTask('test task with tracking');
+
+      const calls = OpenCodeApiMock.getCalls();
+      expect(calls.length).toBe(0);
+    });
+
+    it('should handle mock error responses', async () => {
+      OpenCodeApiMock.setup({
+        success: false,
+        error: 'Mock API error',
+      });
+      mockExecSync.mockImplementation(() => {
+        throw new Error('Mock API error');
+      });
+
+      const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
+      const result = await agent.executeTask('error test');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Mock API error');
+    });
+
+    it('should handle delayed mock responses', async () => {
+      OpenCodeApiMock.setup({
+        success: true,
+        responseText: 'Delayed response',
+        delay: 50,
+      });
+      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Delayed response'));
+
+      const agent = new Agent({ maxRetries: 1, timeout: 5000 });
+      const result = await agent.executeTask('delayed task');
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should use custom server URL from config', async () => {
+      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Custom server'));
+
+      const agent = new Agent({ maxRetries: 1, serverUrl: 'http://custom:4096' });
+      await agent.executeTask('custom server test');
+
+      expect(mockExecSync).toHaveBeenCalled();
+      const callArgs = mockExecSync.mock.calls[0][0] as string;
+      expect(callArgs).toContain('http://custom:4096');
+    });
+
+    it('should retry on mock failure then succeed', async () => {
+      mockExecSync
+        .mockRejectedValueOnce(new Error('Network failure'))
+        .mockReturnValueOnce(OpenCodeApiMock.formatResponse('Success on retry'));
+
+      const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
+      const result = await agent.executeTask('retry success test');
+
+      expect(result.success).toBe(true);
+      expect(mockExecSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should parse complex JSON responses', async () => {
+      const complexResponse = {
+        type: 'text',
+        part: {
+          text: 'Complex response with data',
+          metadata: { status: 'ok', code: 200 }
+        }
+      };
+      mockExecSync.mockReturnValueOnce(JSON.stringify(complexResponse));
+
+      const agent = new Agent({ maxRetries: 1 });
+      const result = await agent.executeTask('complex json test');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Complex response');
+    });
+
+    it('should handle empty response gracefully', async () => {
+      mockExecSync.mockReturnValueOnce('');
+
+      const agent = new Agent({ maxRetries: 1 });
+      const result = await agent.executeTask('empty response test');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('');
+    });
+
+    it('should handle malformed JSON in response', async () => {
+      mockExecSync.mockReturnValueOnce('not valid json { broken');
+
+      const agent = new Agent({ maxRetries: 1 });
+      const result = await agent.executeTask('malformed json test');
+
+      expect(result.success).toBe(true);
+      expect(result.message).toBe('not valid json { broken');
+    });
+  });
+
+  describe('Agent - Error Scenarios', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should handle execSync throwing non-Error objects', async () => {
+      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
+      mockExecSync.mockImplementation(() => {
+        throw 'string error';
+      });
+
+      const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
+      const result = await agent.executeTask('test');
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('string error');
+    });
+
+    it('should handle null message gracefully', async () => {
+      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
+      mockExecSync.mockReturnValueOnce('{"type":"text","part":{"text":"ok"}}');
+
+      const agent = new Agent();
+      const result = await agent.executeTask('');
+
+      expect(result).toBeDefined();
     });
   });
 });

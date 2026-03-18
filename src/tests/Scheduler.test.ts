@@ -534,4 +534,184 @@ describe('Scheduler - Task Operations', () => {
     
     expect(scheduler.isActive()).toBe(false);
   });
+
+  it('should return correct isExecutingTask state', () => {
+    expect(scheduler.isExecutingTask()).toBe(false);
+  });
+});
+
+describe('Scheduler - Database Error Handling', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    const mockDb = {
+      query: mockQuery,
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should handle database query errors on heartbeat', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockRejectedValueOnce(new Error('Database connection lost'));
+
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    expect(scheduler.getLastHeartbeat()).toBeNull();
+  });
+
+  it('should handle database errors when getting task result', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+    const result = await scheduler.getTaskResult('task-1');
+    expect(result).toBeNull();
+  });
+
+  it('should handle database errors when completing task', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+    await expect(scheduler.completeTaskWithResult('task-1', { result: 'test' })).rejects.toThrow();
+  });
+
+  it('should handle database errors when failing task', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+    await expect(scheduler.failTaskWithError('task-1', 'error')).rejects.toThrow();
+  });
+});
+
+describe('Scheduler - Encryption Integration', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    const mockDb = {
+      query: mockQuery,
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should get task result without encryption when not initialized', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({
+      rows: [{ result: '{"foo":"bar"}', encrypted_result: null, status: 'COMPLETED' }],
+      rowCount: 1,
+    } as QueryResult<unknown>);
+
+    const result = await scheduler.getTaskResult('task-1');
+    expect(result).toEqual({ foo: 'bar' });
+  });
+
+  it('should return null when task does not exist', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    const result = await scheduler.getTaskResult('non-existent-task');
+    expect(result).toBeNull();
+  });
+});
+
+describe('Scheduler - Task Dependencies', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    const mockDb = {
+      query: mockQuery,
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should not execute task with incomplete dependencies', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    scheduler.onTaskReady = vi.fn();
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    expect(scheduler.onTaskReady).not.toHaveBeenCalled();
+  });
+});
+
+describe('Scheduler - Timeout Task Handling', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    const mockDb = {
+      query: mockQuery,
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should detect and handle timed out tasks', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [{ id: 'timeout-task', title: 'Timeout Task', timeout_seconds: 1 }],
+        rowCount: 1,
+      } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    const updateCall = mockQuery.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('UPDATE')
+    );
+    expect(updateCall).toBeDefined();
+  });
 });
