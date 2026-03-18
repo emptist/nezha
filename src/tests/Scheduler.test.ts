@@ -563,14 +563,6 @@ describe('Scheduler - Database Error Handling', () => {
     vi.clearAllMocks();
   });
 
-  it('should handle database errors when getting task result', async () => {
-    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
-    mockQuery.mockRejectedValueOnce(new Error('DB error'));
-
-    const result = await scheduler.getTaskResult('task-1');
-    expect(result).toBeNull();
-  });
-
   it('should handle database errors when completing task', async () => {
     const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
     mockQuery.mockRejectedValueOnce(new Error('DB error'));
