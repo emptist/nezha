@@ -3,9 +3,6 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Scheduler } from '../core/Scheduler.js';
 import { Config } from '../config/Config.js';
 import { execSync } from 'child_process';
-import type { QueryResult } from '../config/types.js';
-
-const TEST_DB_NAME = 'nezha_test';
 
 function runMigrations(): void {
   const dbName = process.env.NEZHA_DB_NAME || 'nezha';
@@ -28,22 +25,23 @@ function runMigrations(): void {
         stdio: 'pipe',
       });
     } catch {
+      // Migration may fail if already applied
     }
   }
 }
 
 async function setupTestDatabase(db: DatabaseClient): Promise<void> {
-  try {
-    await db.query(`DROP TABLE IF EXISTS task_audit_log CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS dead_letter_queue CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS event_log CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS conversation_log CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS task_templates CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS skill_registry CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS projects CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS memory CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS tasks CASCADE`);
-  } catch {
+  const tables = [
+    'task_audit_log', 'dead_letter_queue', 'event_log', 'conversation_log',
+    'task_templates', 'skill_registry', 'projects', 'memory', 'tasks'
+  ];
+
+  for (const table of tables) {
+    try {
+      await db.query(`DROP TABLE IF EXISTS ${table} CASCADE`);
+    } catch {
+      // Table may not exist
+    }
   }
 
   runMigrations();
@@ -53,6 +51,7 @@ async function cleanupTasks(db: DatabaseClient): Promise<void> {
   try {
     await db.query('DELETE FROM tasks');
   } catch {
+    // Tasks may not exist
   }
 }
 
@@ -363,7 +362,7 @@ describe('Scheduler Integration Tests', () => {
     });
 
     it('should emit events during task lifecycle', async () => {
-      const insertResult = await db.query<{ id: string }>(
+      await db.query<{ id: string }>(
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Event Test Task']
       );

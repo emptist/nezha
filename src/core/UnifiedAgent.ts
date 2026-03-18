@@ -2,7 +2,6 @@ import {
   createTransport,
   type TransportMode,
   type StreamingCallback,
-  type SessionManager,
   HttpTransport,
   CliTransport,
 } from './transports/index.js';
@@ -35,15 +34,14 @@ export interface UnifiedAgentResponse {
 }
 
 export class UnifiedAgent {
-  private readonly timeout: number;
-  private readonly maxRetries: number;
-  private readonly retryDelay: number;
-  private readonly serverUrl: string;
-  private readonly transportMode: TransportMode;
+  protected readonly timeout: number;
+  protected readonly maxRetries: number;
+  protected readonly retryDelay: number;
+  protected readonly serverUrl: string;
+  protected readonly transportMode: TransportMode;
   private readonly conversationLogger: ConversationLogger | null;
-  private readonly enableLogging: boolean;
-  private transport: ReturnType<typeof createTransport>;
-  private sessionManager: SessionManager;
+  protected readonly enableLogging: boolean;
+  protected transport: HttpTransport | CliTransport;
 
   constructor(config?: UnifiedAgentConfig) {
     this.timeout = config?.timeout ?? 600000;
@@ -63,12 +61,10 @@ export class UnifiedAgent {
       mode: this.transportMode,
       serverUrl: this.serverUrl,
       timeout: this.timeout,
-    });
-
-    this.sessionManager = this.transport as unknown as SessionManager;
+    }) as HttpTransport | CliTransport;
   }
 
-  private sleep(ms: number): Promise<void> {
+  protected sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
@@ -122,7 +118,7 @@ export class UnifiedAgent {
         message: response,
         output: response,
         artifacts,
-        sessionId: this.transport.getSessionId() || sessionId || undefined,
+        sessionId: sessionId || undefined,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -139,12 +135,15 @@ export class UnifiedAgent {
         message: errorMessage,
         output: errorMessage,
         artifacts,
-        sessionId: this.transport.getSessionId() || sessionId || undefined,
+        sessionId: sessionId || undefined,
       };
     }
   }
 
-  private async executeWithRetry(message: string, task?: AgentTask): Promise<UnifiedAgentResponse> {
+  protected async executeWithRetry(
+    message: string,
+    task?: AgentTask
+  ): Promise<UnifiedAgentResponse> {
     const sessionId = this.conversationLogger?.startConversation(
       {
         id: task?.id || crypto.randomUUID(),
@@ -156,8 +155,8 @@ export class UnifiedAgent {
 
     try {
       this.conversationLogger?.addMessage('user', message);
-    } catch {
-      // ConversationLogger not initialized
+    } catch (error) {
+      logger.debug('ConversationLogger unavailable:', error);
     }
 
     let lastError: Error | null = null;
@@ -178,8 +177,8 @@ export class UnifiedAgent {
             output: result,
             artifacts,
           });
-        } catch {
-          // ConversationLogger not initialized
+        } catch (error) {
+          logger.debug('Failed to log conversation:', error);
         }
 
         logger.info(`Task completed successfully`);
@@ -196,11 +195,11 @@ export class UnifiedAgent {
         logger.error(`Task execution error: ${lastError.message}`);
 
         if (lastError.name === 'AbortError') {
-          this.sessionManager.clearSession();
+          this.transport.clearSession();
         }
 
         if (lastError.message.includes('session')) {
-          this.sessionManager.clearSession();
+          this.transport.clearSession();
         }
 
         if (attempt < this.maxRetries) {
@@ -219,8 +218,8 @@ export class UnifiedAgent {
         output: errorMessage,
         artifacts: [],
       });
-    } catch {
-      // ConversationLogger not initialized
+    } catch (error) {
+      logger.debug('Failed to log failed conversation:', error);
     }
 
     return {
@@ -232,7 +231,7 @@ export class UnifiedAgent {
     };
   }
 
-  private buildStructuredPrompt(task: AgentTask, systemPrompt?: string): string {
+  protected buildStructuredPrompt(task: AgentTask, systemPrompt?: string): string {
     const defaultSystem = `You are an AI assistant helping with software development tasks.
 You have access to the Nezha system which provides:
 - Memory system for storing and retrieving knowledge
@@ -251,7 +250,7 @@ ${task.context ? `Context: ${task.context}` : ''}
 Please analyze the task and provide a detailed solution.`;
   }
 
-  private extractArtifacts(content: string): string[] {
+  protected static extractArtifactsStatic(content: string): string[] {
     const artifacts: string[] = [];
     const filePattern =
       /(?:file|created|modified|updated):\s*([^\s]+\.(ts|js|json|md|txt|tsx|jsx|yaml|yml))/gi;
@@ -266,140 +265,38 @@ Please analyze the task and provide a detailed solution.`;
     return artifacts;
   }
 
+  protected extractArtifacts(content: string): string[] {
+    return UnifiedAgent.extractArtifactsStatic(content);
+  }
+
   clearSession(): void {
-    this.sessionManager.clearSession();
+    this.transport.clearSession();
   }
 
   getSessionId(): string | null {
-    return this.sessionManager.getSessionId();
+    return this.transport.getSessionId();
   }
 }
 
-export class Agent {
-  private readonly timeout: number;
-  private readonly maxRetries: number;
-  private readonly retryDelay: number;
-  private readonly serverUrl: string;
-  private sessionId: string | null = null;
-  private readonly conversationLogger: ConversationLogger;
-  private transport: HttpTransport;
-
+export class Agent extends UnifiedAgent {
   constructor(config?: {
     timeout?: number;
     maxRetries?: number;
     retryDelay?: number;
     serverUrl?: string;
   }) {
-    this.timeout = config?.timeout ?? 600000;
-    this.maxRetries = config?.maxRetries ?? 3;
-    this.retryDelay = config?.retryDelay ?? 1000;
-    this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';
-    this.conversationLogger = new ConversationLogger('conversations');
-    this.transport = new HttpTransport(this.serverUrl, this.timeout);
-  }
-
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  public calculateRetryDelay(attempt: number): number {
-    const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
-    const jitter = Math.random() * 0.3 * baseDelay;
-    return Math.min(baseDelay + jitter, 30000);
+    super({ ...config, mode: 'http' });
   }
 
   async executeTask(
     message: string
   ): Promise<{ success: boolean; message?: string; sessionId?: string }> {
-    this.conversationLogger.startConversation(
-      { id: crypto.randomUUID(), title: message, description: message },
-      'task_execution'
-    );
-
-    this.conversationLogger.addMessage('user', message);
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        logger.info(
-          `Executing task (attempt ${attempt}/${this.maxRetries}): ${message.substring(0, 100)}...`
-        );
-
-        if (!this.transport.getSessionId()) {
-          await this.transport.createSession();
-        }
-
-        const result = await this.transport.sendMessage(message);
-        const artifacts = this.extractArtifacts(result);
-
-        this.conversationLogger.addMessage('assistant', result);
-        this.conversationLogger.endConversation({
-          success: true,
-          output: result,
-          artifacts,
-        });
-
-        logger.info(`Task completed successfully`);
-
-        return {
-          success: true,
-          message: result,
-          sessionId: this.transport.getSessionId() || undefined,
-        };
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        logger.error(`Task execution error: ${lastError.message}`);
-
-        if (lastError.name === 'AbortError') {
-          this.transport.clearSession();
-          return {
-            success: false,
-            message: `Task timed out after ${this.timeout}ms`,
-            sessionId: undefined,
-          };
-        }
-
-        if (lastError.message.includes('session')) {
-          this.transport.clearSession();
-        }
-
-        if (attempt < this.maxRetries) {
-          const delay = this.calculateRetryDelay(attempt);
-          logger.info(`Retrying after ${Math.round(delay)}ms...`);
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    const errorMessage = `Task failed after ${this.maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`;
-
-    this.conversationLogger.endConversation({
-      success: false,
-      output: errorMessage,
-      artifacts: [],
-    });
-
+    const result = await this.executeWithRetry(message);
     return {
-      success: false,
-      message: errorMessage,
-      sessionId: undefined,
+      success: result.success,
+      message: result.message,
+      sessionId: result.sessionId,
     };
-  }
-
-  private extractArtifacts(content: string): string[] {
-    const artifacts: string[] = [];
-    const filePattern =
-      /(?:file|created|modified|updated):\s*([^\s]+\.(ts|js|json|md|txt|tsx|jsx|yaml|yml))/gi;
-    let match;
-
-    while ((match = filePattern.exec(content)) !== null) {
-      if (!artifacts.includes(match[1])) {
-        artifacts.push(match[1]);
-      }
-    }
-
-    return artifacts;
   }
 }
 

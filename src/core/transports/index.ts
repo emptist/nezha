@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 
 export type TransportMode = 'http' | 'cli';
 
@@ -23,10 +23,11 @@ export interface SessionManager {
   clearSession(): void;
 }
 
-export class HttpTransport {
+export class HttpTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
   private sessionId: string | null = null;
+  private sessionCreationLock: Promise<string> | null = null;
 
   constructor(serverUrl: string, timeout: number) {
     this.serverUrl = serverUrl;
@@ -46,6 +47,24 @@ export class HttpTransport {
   }
 
   async createSession(): Promise<string> {
+    if (this.sessionId) {
+      return this.sessionId;
+    }
+
+    if (this.sessionCreationLock) {
+      return this.sessionCreationLock;
+    }
+
+    this.sessionCreationLock = this.doCreateSession();
+    try {
+      const sessionId = await this.sessionCreationLock;
+      return sessionId;
+    } finally {
+      this.sessionCreationLock = null;
+    }
+  }
+
+  private async doCreateSession(): Promise<string> {
     const response = await fetch(`${this.serverUrl}/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -62,15 +81,13 @@ export class HttpTransport {
   }
 
   async sendMessage(message: string): Promise<string> {
-    if (!this.sessionId) {
-      await this.createSession();
-    }
+    const sessionId = await this.createSession();
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
-      const response = await fetch(`${this.serverUrl}/session/${this.sessionId}/message`, {
+      const response = await fetch(`${this.serverUrl}/session/${sessionId}/message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -83,7 +100,7 @@ export class HttpTransport {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status} to ${this.serverUrl}: ${errorText}`);
       }
 
       const data = (await response.json()) as {
@@ -105,7 +122,7 @@ export class HttpTransport {
   }
 }
 
-export class CliTransport {
+export class CliTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
 
@@ -150,14 +167,39 @@ export class CliTransport {
         prompt,
       ];
 
-      const proc = spawn('opencode', args, {
-        stdio: ['pipe', 'pipe', streaming ? 'pipe' : 'pipe'],
-        env: { ...process.env },
-      });
+      let proc: ChildProcess;
+      let procKilled = false;
+
+      try {
+        proc = spawn('opencode', args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env },
+        });
+      } catch (err) {
+        reject(
+          new Error(`Failed to spawn opencode: ${err instanceof Error ? err.message : String(err)}`)
+        );
+        return;
+      }
 
       let output = '';
       let errorOutput = '';
       let stderrBuffer = '';
+
+      const cleanup = () => {
+        if (!procKilled && proc && !proc.killed) {
+          procKilled = true;
+          proc.kill('SIGTERM');
+          setTimeout(() => {
+            if (proc && !proc.killed) {
+              proc.kill('SIGKILL');
+            }
+          }, 5000);
+        }
+      };
+
+      process.on('SIGTERM', cleanup);
+      process.on('SIGINT', cleanup);
 
       if (streaming && onChunk) {
         proc.stderr?.on('data', data => {
@@ -192,12 +234,14 @@ export class CliTransport {
       });
 
       const timeoutId = setTimeout(() => {
-        proc.kill('SIGTERM');
+        cleanup();
         reject(new Error(`Command timed out after ${this.timeout}ms`));
       }, this.timeout);
 
       proc.on('close', code => {
         clearTimeout(timeoutId);
+        process.removeListener('SIGTERM', cleanup);
+        process.removeListener('SIGINT', cleanup);
 
         if (code === 0) {
           if (!streaming) {
@@ -206,13 +250,15 @@ export class CliTransport {
           } else {
             resolve(output);
           }
-        } else {
+        } else if (!procKilled) {
           reject(new Error(`opencode exited with code ${code}: ${errorOutput}`));
         }
       });
 
       proc.on('error', err => {
         clearTimeout(timeoutId);
+        process.removeListener('SIGTERM', cleanup);
+        process.removeListener('SIGINT', cleanup);
         reject(new Error(`Failed to spawn opencode: ${err.message}`));
       });
     });
