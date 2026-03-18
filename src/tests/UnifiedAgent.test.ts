@@ -144,7 +144,7 @@ describe('Transport Classes', () => {
         dataCallback(Buffer.from('{"type":"text","part":{"text":"response"}}'));
       }
       if (closeCb) {
-        closeCb(0);
+        (closeCb as (code: number) => void)(0);
       }
 
       const result = await resultPromise;
