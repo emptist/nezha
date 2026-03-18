@@ -24,7 +24,12 @@ describe('ConversationLogger', () => {
     expect(logger).toBeDefined();
   });
 
-  it('should initialize log directory', async () => {
+  it('should initialize log directory on first use', async () => {
+    await fs.stat(testDir).catch(() => {});
+    const task = { id: 'task-1', title: 'Test Task', description: 'Test description' };
+    logger.startConversation(task);
+    await logger.endConversation();
+
     const stat = await fs.stat(testDir);
     expect(stat.isDirectory()).toBe(true);
   });
@@ -94,6 +99,7 @@ describe('ConversationLogger', () => {
   it('should end conversation and save to file', async () => {
     const task = { id: 'task-1', title: 'Test Task', description: 'Test description' };
     logger.startConversation(task);
+    const sessionId = logger.getCurrentSessionId()!;
     logger.addMessage('user', 'Hello');
     logger.addMessage('assistant', 'Hi');
     logger.setResult({ success: true, output: 'Done', artifacts: [] });
@@ -101,11 +107,11 @@ describe('ConversationLogger', () => {
     await logger.endConversation();
 
     const date = new Date().toISOString().split('T')[0];
-    const logPath = path.join(testDir, date, `session-${logger.getCurrentSessionId()}.jsonl`);
+    const logPath = path.join(testDir, date, `session-${sessionId}.jsonl`);
     const content = await fs.readFile(logPath, 'utf-8');
     const log = JSON.parse(content.trim());
 
-    expect(log.session_id).toBeDefined();
+    expect(log.session_id).toBe(sessionId);
     expect(log.messages).toHaveLength(2);
     expect(log.result?.success).toBe(true);
     expect(log.metadata.duration_ms).toBeGreaterThanOrEqual(0);
@@ -170,6 +176,7 @@ describe('ConversationLogger', () => {
   });
 
   it('should handle index.json corruption gracefully', async () => {
+    await fs.mkdir(testDir, { recursive: true });
     const indexPath = path.join(testDir, 'index.json');
     await fs.writeFile(indexPath, 'invalid json{');
 

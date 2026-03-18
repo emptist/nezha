@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HeartbeatService } from '../services/HeartbeatService.js';
 import { Scheduler } from '../core/Scheduler.js';
-import { Agent } from '../core/Agent.js';
+import { UnifiedAgent } from '../core/UnifiedAgent.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
@@ -28,9 +28,14 @@ vi.mock('../core/Scheduler.js', () => ({
   })),
 }));
 
-vi.mock('../core/Agent.js', () => ({
-  Agent: vi.fn().mockImplementation(() => ({
+vi.mock('../core/UnifiedAgent.js', () => ({
+  UnifiedAgent: vi.fn().mockImplementation(() => ({
     executeTask: vi.fn().mockResolvedValue({ success: true, message: 'Task completed' }),
+    executeTaskStreaming: vi
+      .fn()
+      .mockResolvedValue({ success: true, message: 'Streaming task completed' }),
+    getSessionId: vi.fn().mockReturnValue(null),
+    clearSession: vi.fn(),
   })),
 }));
 

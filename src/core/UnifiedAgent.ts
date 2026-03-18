@@ -8,31 +8,73 @@ import {
 import { ConversationLogger } from './ConversationLogger.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * Configuration options for UnifiedAgent.
+ */
 export interface UnifiedAgentConfig {
+  /** Transport mode: 'http' (default) or 'cli' */
   mode?: TransportMode;
+  /** Request timeout in milliseconds (default: 600000 = 10 minutes) */
   timeout?: number;
+  /** Maximum retry attempts on failure (default: 3) */
   maxRetries?: number;
+  /** Initial delay between retries in ms (default: 1000) */
   retryDelay?: number;
+  /** OpenCode server URL (default: 'http://localhost:4096') */
   serverUrl?: string;
+  /** Directory for conversation logs (default: 'conversations') */
   logDir?: string;
+  /** Enable conversation logging (default: true) */
   enableLogging?: boolean;
 }
 
+/**
+ * Structured task representation for detailed task execution.
+ */
 export interface AgentTask {
+  /** Optional unique task identifier */
   id?: string;
+  /** Task title/summary */
   title: string;
+  /** Detailed task description */
   description: string;
+  /** Additional context information */
   context?: string;
 }
 
+/**
+ * Response from UnifiedAgent task execution.
+ */
 export interface UnifiedAgentResponse {
+  /** Whether the task completed successfully */
   success: boolean;
+  /** Response message or error description */
   message?: string;
+  /** Full output content */
   output?: string;
+  /** List of file artifacts mentioned in the response */
   artifacts?: string[];
+  /** Session identifier for the conversation */
   sessionId?: string;
 }
 
+/**
+ * UnifiedAgent provides transport-agnostic task execution with retry logic,
+ * conversation logging, and support for both HTTP and CLI modes.
+ *
+ * @example
+ * ```typescript
+ * // HTTP mode (default)
+ * const agent = new Agent();
+ * const result = await agent.executeTask('Fix the bug');
+ *
+ * // CLI mode with streaming
+ * const cliAgent = new CliAgent();
+ * await cliAgent.executeTaskStreaming('Deploy', (chunk, type) => {
+ *   console.log(`[${type}]`, chunk);
+ * });
+ * ```
+ */
 export class UnifiedAgent {
   protected readonly timeout: number;
   protected readonly maxRetries: number;
@@ -43,6 +85,10 @@ export class UnifiedAgent {
   protected readonly enableLogging: boolean;
   protected transport: HttpTransport | CliTransport;
 
+  /**
+   * Creates a new UnifiedAgent instance.
+   * @param config - Optional configuration object
+   */
   constructor(config?: UnifiedAgentConfig) {
     this.timeout = config?.timeout ?? 600000;
     this.maxRetries = config?.maxRetries ?? 3;
@@ -68,16 +114,32 @@ export class UnifiedAgent {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
+  /**
+   * Calculates retry delay with exponential backoff and jitter.
+   * @param attempt - Current attempt number (1-indexed)
+   * @returns Delay in milliseconds
+   */
   public calculateRetryDelay(attempt: number): number {
     const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.3 * baseDelay;
     return Math.min(baseDelay + jitter, 30000);
   }
 
+  /**
+   * Executes a simple task with automatic retry and logging.
+   * @param message - The task prompt/message
+   * @returns UnifiedAgentResponse with success status and output
+   */
   async executeTask(message: string): Promise<UnifiedAgentResponse> {
     return this.executeWithRetry(message);
   }
 
+  /**
+   * Executes a structured task with metadata and optional custom system prompt.
+   * @param task - The structured task definition
+   * @param systemPrompt - Optional custom system prompt to prepend
+   * @returns UnifiedAgentResponse with success status and output
+   */
   async executeStructuredTask(
     task: AgentTask,
     systemPrompt?: string
@@ -86,6 +148,14 @@ export class UnifiedAgent {
     return this.executeWithRetry(fullPrompt, task);
   }
 
+  /**
+   * Executes a task with streaming response callback.
+   * Only available in CLI mode. Throws error if used with HTTP transport.
+   * @param message - The task prompt/message
+   * @param onChunk - Callback for each streaming chunk (text, thinking, or error)
+   * @returns UnifiedAgentResponse with success status and complete output
+   * @throws Error if transport mode is not 'cli'
+   */
   async executeTaskStreaming(
     message: string,
     onChunk: StreamingCallback

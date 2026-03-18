@@ -28,6 +28,8 @@ export interface CheckpointServiceConfig {
 export class CheckpointService {
   private readonly stateFilePath: string;
   private currentSessionId?: string;
+  private agentSessionId?: string;
+  private transportMode?: 'http' | 'cli';
   private stats = {
     tasksExecuted: 0,
     tasksSucceeded: 0,
@@ -48,6 +50,22 @@ export class CheckpointService {
 
   getSessionId(): string | undefined {
     return this.currentSessionId;
+  }
+
+  setAgentSessionId(sessionId: string): void {
+    this.agentSessionId = sessionId;
+  }
+
+  getAgentSessionId(): string | undefined {
+    return this.agentSessionId;
+  }
+
+  setTransportMode(mode: 'http' | 'cli'): void {
+    this.transportMode = mode;
+  }
+
+  getTransportMode(): 'http' | 'cli' | undefined {
+    return this.transportMode;
   }
 
   updateStats(stats: Partial<typeof this.stats>): void {
@@ -72,6 +90,8 @@ export class CheckpointService {
       dailyMemoryPath,
       isPaused: this.isPaused,
       pauseUntil: this.pauseUntil?.toISOString(),
+      transportMode: this.transportMode,
+      agentSessionId: this.agentSessionId,
     };
 
     try {
@@ -99,6 +119,8 @@ export class CheckpointService {
       const state = JSON.parse(content) as DaemonState;
 
       this.currentSessionId = state.opencodeSessionId;
+      this.agentSessionId = state.agentSessionId;
+      this.transportMode = state.transportMode;
       this.stats = { ...state.stats };
       this.isPaused = state.isPaused;
       this.pauseUntil = state.pauseUntil ? new Date(state.pauseUntil) : undefined;

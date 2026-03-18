@@ -57,6 +57,8 @@ export class ConversationLogger {
   private writeStream: fs.WriteStream | null = null;
   private indexWritePromise: Promise<void> | null = null;
   private initialized: boolean = false;
+  private indexCache: IndexEntry[] | null = null;
+  private indexDirty: boolean = false;
 
   constructor(logDir: string = 'conversations') {
     this.logDir = logDir;
@@ -195,23 +197,6 @@ export class ConversationLogger {
       return;
     }
 
-    const indexPath = path.join(this.logDir, 'index.json');
-    const tempIndexPath = path.join(this.logDir, 'index.json.tmp');
-
-    let index: IndexEntry[] = [];
-
-    try {
-      await fs.promises.access(indexPath);
-      try {
-        const content = await fs.promises.readFile(indexPath, 'utf-8');
-        index = JSON.parse(content);
-      } catch {
-        index = [];
-      }
-    } catch {
-      index = [];
-    }
-
     const newEntry: IndexEntry = {
       session_id: this.currentConversation.session_id,
       timestamp: this.currentConversation.timestamp.toISOString(),
@@ -220,7 +205,54 @@ export class ConversationLogger {
       success: this.currentConversation.result?.success,
     };
 
+    if (this.indexCache) {
+      this.indexCache.push(newEntry);
+      this.indexDirty = true;
+      this.scheduleIndexFlush();
+      return;
+    }
+
+    await this.flushIndexToDisk(newEntry);
+  }
+
+  private scheduleIndexFlush(): void {
+    if (this.indexWritePromise) {
+      return;
+    }
+
+    this.indexWritePromise = Promise.resolve().then(async () => {
+      if (this.indexCache && this.indexDirty) {
+        await this.writeIndexToDisk(this.indexCache);
+        this.indexDirty = false;
+      }
+      this.indexWritePromise = null;
+    });
+  }
+
+  private async flushIndexToDisk(newEntry: IndexEntry): Promise<void> {
+    const indexPath = path.join(this.logDir, 'index.json');
+    const tempIndexPath = path.join(this.logDir, 'index.json.tmp');
+
+    let index: IndexEntry[] = [];
+
+    try {
+      const content = await fs.promises.readFile(indexPath, 'utf-8');
+      index = JSON.parse(content);
+    } catch {
+      index = [];
+    }
+
     index.push(newEntry);
+    this.indexCache = index;
+    this.indexDirty = true;
+
+    await this.writeIndexToDisk(index);
+    this.indexDirty = false;
+  }
+
+  private async writeIndexToDisk(index: IndexEntry[]): Promise<void> {
+    const indexPath = path.join(this.logDir, 'index.json');
+    const tempIndexPath = path.join(this.logDir, 'index.json.tmp');
 
     const tempContent = JSON.stringify(index, null, 2);
 
@@ -240,6 +272,14 @@ export class ConversationLogger {
   }
 
   async getConversationLog(sessionId: string): Promise<ConversationLog | null> {
+    if (this.indexCache) {
+      const entry = this.indexCache.find(e => e.session_id === sessionId);
+      if (!entry) {
+        return null;
+      }
+      return this.getConversationLogFromDisk(entry);
+    }
+
     const indexPath = path.join(this.logDir, 'index.json');
 
     try {
@@ -250,26 +290,38 @@ export class ConversationLogger {
         return null;
       }
 
-      const date = entry.timestamp.split('T')[0];
-      const logPath = path.join(this.logDir, date, `session-${sessionId}.jsonl`);
+      return this.getConversationLogFromDisk(entry);
+    } catch {
+      return null;
+    }
+  }
 
-      try {
-        const logContent = await fs.promises.readFile(logPath, 'utf-8');
-        return JSON.parse(logContent);
-      } catch {
-        return null;
-      }
+  private async getConversationLogFromDisk(entry: IndexEntry): Promise<ConversationLog | null> {
+    const date = entry.timestamp.split('T')[0];
+    const logPath = path.join(this.logDir, date, `session-${entry.session_id}.jsonl`);
+
+    try {
+      const logContent = await fs.promises.readFile(logPath, 'utf-8');
+      return JSON.parse(logContent);
     } catch {
       return null;
     }
   }
 
   async listConversations(date?: string): Promise<IndexEntry[]> {
+    if (this.indexCache) {
+      if (date) {
+        return this.indexCache.filter(entry => entry.timestamp.startsWith(date));
+      }
+      return this.indexCache;
+    }
+
     const indexPath = path.join(this.logDir, 'index.json');
 
     try {
       const indexContent = await fs.promises.readFile(indexPath, 'utf-8');
       const index: IndexEntry[] = JSON.parse(indexContent);
+      this.indexCache = index;
       if (date) {
         return index.filter(entry => entry.timestamp.startsWith(date));
       }
