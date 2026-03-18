@@ -122,7 +122,12 @@ export class SelfImprovementService {
       throw new Error(`Suggestion not found: ${suggestionId}`);
     }
 
-    const newPrompt = result.rows[0].suggested_prompt;
+    const row = result.rows[0];
+    const newPrompt = row?.suggested_prompt;
+
+    if (!newPrompt) {
+      throw new Error(`Suggestion not found: ${suggestionId}`);
+    }
 
     await this.db.query(
       `UPDATE ${SelfImprovementService.SUGGESTIONS_TABLE} SET status = 'approved' WHERE id = $1`,

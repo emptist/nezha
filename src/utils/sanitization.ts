@@ -159,8 +159,10 @@ export function sanitizeCronExpression(input: string | undefined): ValidationRes
   ];
 
   for (let i = 0; i < 5; i++) {
-    if (!patterns[i].test(parts[i])) {
-      return { valid: false, error: `Invalid cron part ${i + 1}: ${parts[i]}` };
+    const pattern = patterns[i];
+    const part = parts[i];
+    if (!pattern || !part || !pattern.test(part)) {
+      return { valid: false, error: `Invalid cron part ${i + 1}: ${part}` };
     }
   }
 

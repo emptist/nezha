@@ -96,7 +96,10 @@ class FileWriter {
         .reverse();
 
       for (let i = this.maxFiles; i < files.length; i++) {
-        fs.unlinkSync(path.join(dir, files[i]));
+        const file = files[i];
+        if (file) {
+          fs.unlinkSync(path.join(dir, file));
+        }
       }
     } catch (e) {
       console.error('Failed to clean old log files:', e);

@@ -100,6 +100,46 @@ describe('Transport Classes', () => {
 
       await expect(transport.sendMessage('test')).rejects.toThrow('HTTP 400');
     });
+
+    it('should handle non-json response gracefully', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.reject(new Error('Not JSON')),
+        text: () => Promise.resolve('plain text response'),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      transport.setSessionId('session-1');
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('plain text response');
+    });
+
+    it('should handle response without parts', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ noParts: true }),
+        text: () => Promise.resolve(''),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      transport.setSessionId('session-1');
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('{"noParts":true}');
+    });
+
+    it('should handle concurrent session creation requests', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'session-concurrent' }),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      const [session1, session2] = await Promise.all([
+        transport.createSession(),
+        transport.createSession(),
+      ]);
+      expect(session1).toBe(session2);
+    });
   });
 
   describe('CliTransport', () => {
@@ -271,6 +311,95 @@ describe('Transport Classes', () => {
       const transport = new CliTransport('http://localhost:4096', 60000);
       const result = await transport.sendMessage('test');
       expect(result).toBe('');
+    });
+
+    it('should handle timeout correctly', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 100);
+      const timeoutPromise = transport.sendMessage('test');
+
+      await expect(timeoutPromise).rejects.toThrow('timed out');
+    });
+
+    it('should handle process killed by signal', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event: string, cb: (code: number) => void) => {
+          if (event === 'close') cb(0);
+        }),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      await transport.sendMessage('test');
+      expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM');
+    });
+
+    it('should return empty string when no output', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((_event: string, cb: (code: number) => void) => {
+          if (_event === 'close') cb(0);
+        }),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('');
+    });
+  });
+
+  describe('HttpTransport edge cases', () => {
+    it('should handle non-json response gracefully', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.reject(new Error('Not JSON')),
+        text: () => Promise.resolve('plain text response'),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      transport.setSessionId('session-1');
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('plain text response');
+    });
+
+    it('should handle response without parts', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ noParts: true }),
+        text: () => Promise.resolve(''),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      transport.setSessionId('session-1');
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('{"noParts":true}');
+    });
+
+    it('should handle concurrent session creation requests', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ id: 'session-concurrent' }),
+      });
+
+      const transport = new HttpTransport('http://localhost:4096', 60000);
+      const [session1, session2] = await Promise.all([
+        transport.createSession(),
+        transport.createSession(),
+      ]);
+      expect(session1).toBe(session2);
     });
   });
 

@@ -216,4 +216,34 @@ describe('ConversationLogger', () => {
     expect(sessionId).toBeDefined();
     await logger.close();
   });
+
+  it('should return all conversations when no date filter', async () => {
+    const task1 = { id: 'task-1', title: 'Task 1', description: 'Test 1' };
+    const task2 = { id: 'task-2', title: 'Task 2', description: 'Test 2' };
+
+    logger.startConversation(task1);
+    logger.addMessage('user', 'Hello');
+    await logger.endConversation();
+
+    logger.startConversation(task2);
+    logger.addMessage('user', 'Hi');
+    await logger.endConversation();
+
+    const conversations = await logger.listConversations();
+    expect(conversations.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('should filter conversations by date when provided', async () => {
+    const task = { id: 'task-1', title: 'Task', description: 'Test' };
+    logger.startConversation(task);
+    logger.addMessage('user', 'test');
+    await logger.endConversation();
+
+    const today = new Date().toISOString().split('T')[0];
+    const filtered = await logger.listConversations(today);
+    expect(filtered.length).toBeGreaterThanOrEqual(1);
+
+    const yesterday = await logger.listConversations('1999-01-01');
+    expect(yesterday.length).toBe(0);
+  });
 });

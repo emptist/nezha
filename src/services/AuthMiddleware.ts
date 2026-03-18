@@ -82,8 +82,8 @@ export class AuthMiddleware {
         }
 
         const key = result.rows[0];
-        if (!key.enabled) {
-          return { authorized: false, error: 'API key disabled' };
+        if (!key || !key.enabled) {
+          return { authorized: false, error: key ? 'API key disabled' : 'Invalid API key' };
         }
 
         // Check rate limit
@@ -97,7 +97,9 @@ export class AuthMiddleware {
         }
 
         const role = (key.role as UserRole) || 'user';
-        return { authorized: true, apiKeyName: key.name, role, userId: key.id };
+        const userId = key.id ?? '';
+        const apiKeyName = key.name ?? '';
+        return { authorized: true, apiKeyName, role, userId };
       } catch (error) {
         logger.error('Auth middleware error:', error);
         return { authorized: false, error: 'Authentication error' };
@@ -124,7 +126,12 @@ export function parseBasicAuth(
   try {
     const base64 = authHeader.slice(6);
     const decoded = Buffer.from(base64, 'base64').toString();
-    const [username, password] = decoded.split(':');
+    const parts = decoded.split(':');
+    const username = parts[0];
+    const password = parts[1];
+    if (!username || !password) {
+      return null;
+    }
     return { username, password };
   } catch {
     return null;

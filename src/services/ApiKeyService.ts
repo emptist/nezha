@@ -174,12 +174,13 @@ export class ApiKeyService {
 
     const row = result.rows[0];
     if (!row) return null;
+    const rowData = row;
 
     const encryptedData: EncryptedData = {
-      encryptedData: row.encrypted_value,
-      iv: row.encrypted_iv,
-      tag: row.encrypted_tag,
-      salt: row.encrypted_salt,
+      encryptedData: rowData.encrypted_value,
+      iv: rowData.encrypted_iv,
+      tag: rowData.encrypted_tag,
+      salt: rowData.encrypted_salt,
     };
 
     return this.encryption.decrypt(encryptedData);

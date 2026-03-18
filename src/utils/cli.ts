@@ -56,12 +56,12 @@ export const cli = {
       Math.max(h.length, ...rows.map(r => (r[i] || '').length))
     );
 
-    const headerRow = headers.map((h, i) => h.padEnd(colWidths[i])).join('  ');
+    const headerRow = headers.map((h, i) => h.padEnd(colWidths[i] ?? h.length)).join('  ');
     console.log(`${colors.bright}${headerRow}${colors.reset}`);
-    console.log(colWidths.map(w => '-'.repeat(w)).join('  '));
+    console.log(colWidths.map(w => '-'.repeat(w ?? 0)).join('  '));
 
     for (const row of rows) {
-      console.log(row.map((c, i) => (c || '').padEnd(colWidths[i])).join('  '));
+      console.log(row.map((c, i) => (c || '').padEnd(colWidths[i] ?? 0)).join('  '));
     }
   },
 

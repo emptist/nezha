@@ -778,6 +778,9 @@ export class HeartbeatService {
     }
 
     const task = taskResult.rows[0];
+    if (!task) {
+      return { result: undefined, accessDenied: true, encrypted: false };
+    }
 
     if (!task.encrypted_result) {
       return { result: task.result ? JSON.parse(task.result) : undefined, encrypted: false };

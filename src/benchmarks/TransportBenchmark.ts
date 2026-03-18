@@ -2,15 +2,12 @@ import { benchmarkAsync, formatResult, type BenchmarkResult } from './timing.js'
 import { HttpTransport, CliTransport } from '../core/transports/index.js';
 
 const SERVER_URL = process.env.OPENCODE_SERVER_URL ?? 'http://localhost:4096';
-const TIMEOUT = 30000;
+const TIMEOUT = 120000;
 
 const TEST_MESSAGES = {
-  short: 'Hello, how are you?',
-  medium:
-    'Please help me understand the difference between synchronous and asynchronous programming in JavaScript.',
-  long: `I need to refactor a large codebase that currently uses callbacks extensively. 
-The codebase handles file operations, database queries, and API calls using nested callbacks.
-Please explain the best approach to migrate this to modern async/await patterns while maintaining backward compatibility.`,
+  short: 'Hello',
+  medium: 'What is 2+2?',
+  long: 'Please explain the difference between async/await and Promises.',
 };
 
 export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {

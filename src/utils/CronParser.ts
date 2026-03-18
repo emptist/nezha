@@ -15,11 +15,11 @@ export class CronParser {
       throw new Error(`Invalid cron expression: ${expression}. Expected 5 parts.`);
     }
     this.parts = {
-      minute: parts[0],
-      hour: parts[1],
-      dayOfMonth: parts[2],
-      month: parts[3],
-      dayOfWeek: parts[4],
+      minute: parts[0] ?? '*',
+      hour: parts[1] ?? '*',
+      dayOfMonth: parts[2] ?? '*',
+      month: parts[3] ?? '*',
+      dayOfWeek: parts[4] ?? '*',
     };
   }
 
@@ -28,27 +28,35 @@ export class CronParser {
 
     if (field.includes(',')) {
       const values = field.split(',').map(f => this.parseField(f, min, max, current));
-      return values.find(v => v >= current) ?? values[0];
+      const found = values.find(v => v >= current);
+      return found ?? values[0] ?? current;
     }
 
     if (field.includes('/')) {
-      const [range, step] = field.split('/');
-      const stepNum = parseInt(step, 10);
-      if (range === '*') {
+      const rangePart = field.split('/')[0] ?? '';
+      const step = field.split('/')[1] ?? '1';
+      const stepNum = parseInt(step, 10) || 1;
+      if (rangePart === '*') {
         return Math.ceil(current / stepNum) * stepNum;
       }
-      const [start] = range.split('-').map(Number);
+      const rangeParts = rangePart.split('-');
+      const startStr = rangeParts[0] ?? '0';
+      const start = parseInt(startStr, 10) || 0;
       return start + Math.floor((current - start) / stepNum) * stepNum;
     }
 
     if (field.includes('-')) {
-      const [start, end] = field.split('-').map(Number);
+      const rangeParts = field.split('-');
+      const startStr = rangeParts[0] ?? '0';
+      const endStr = rangeParts[1] ?? startStr;
+      const start = parseInt(startStr, 10) || 0;
+      const end = parseInt(endStr, 10) || start;
       if (current < start) return start;
       if (current <= end) return current;
       return start;
     }
 
-    return parseInt(field, 10);
+    return parseInt(field, 10) || current;
   }
 
   nextRun(from: Date = new Date()): Date {
@@ -149,8 +157,10 @@ export class CronParser {
     ) {
       return 'Every hour on Sunday';
     }
-    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '1-5') {
-      return `Weekdays at ${hour}:${minute.padStart(2, '0')}`;
+    if (dayOfMonth === '*' && month === '*' && dayOfWeek === '1-5' && minute !== undefined) {
+      const hourStr = hour ?? '0';
+      const minuteStr = minute;
+      return `Weekdays at ${hourStr}:${minuteStr.padStart(2, '0')}`;
     }
 
     return expression;

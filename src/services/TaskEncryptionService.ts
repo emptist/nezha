@@ -109,6 +109,9 @@ export class TaskEncryptionService {
     }
 
     const row = task.rows[0];
+    if (!row) {
+      return null;
+    }
 
     if (!this.encryption.isInitialized()) {
       return row.result ? JSON.parse(row.result) : null;
