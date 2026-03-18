@@ -704,18 +704,22 @@ describe('Backward Compatibility - Agent class', () => {
 
   describe('Agent error handling', () => {
     it('should retry on network error', async () => {
-      let callCount = 0;
-      mockFetch.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1 || callCount === 3) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ id: 'session-1' }),
-          });
-        }
-        return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Error') });
-      });
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
       const result = await agent.executeTask('test');
