@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import { benchmarkAsync, formatResult, type BenchmarkResult } from './timing.js';
 import { HttpTransport, CliTransport } from '../core/transports/index.js';
 
@@ -9,6 +10,15 @@ const TEST_MESSAGES = {
   medium: 'What is 2+2?',
   long: 'Please explain the difference between async/await and Promises.',
 };
+
+function isOpenCodeAvailable(): boolean {
+  try {
+    execSync('which opencode', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
@@ -52,27 +62,33 @@ export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
     )
   );
 
-  console.log('\n--- CliTransport Benchmarks ---\n');
+  const cliAvailable = isOpenCodeAvailable();
+  if (cliAvailable) {
+    console.log('\n--- CliTransport Benchmarks ---\n');
 
-  results.push(
-    await benchmarkAsync(
-      'CliTransport: sendMessage (short)',
-      async () => {
-        await cliTransport.sendMessage(TEST_MESSAGES.short);
-      },
-      { iterations: 10 }
-    )
-  );
+    results.push(
+      await benchmarkAsync(
+        'CliTransport: sendMessage (short)',
+        async () => {
+          await cliTransport.sendMessage(TEST_MESSAGES.short);
+        },
+        { iterations: 10 }
+      )
+    );
 
-  results.push(
-    await benchmarkAsync(
-      'CliTransport: sendMessage (medium)',
-      async () => {
-        await cliTransport.sendMessage(TEST_MESSAGES.medium);
-      },
-      { iterations: 10 }
-    )
-  );
+    results.push(
+      await benchmarkAsync(
+        'CliTransport: sendMessage (medium)',
+        async () => {
+          await cliTransport.sendMessage(TEST_MESSAGES.medium);
+        },
+        { iterations: 10 }
+      )
+    );
+  } else {
+    console.log('\n--- CliTransport Benchmarks ---\n');
+    console.log('  (opencode CLI not available, skipping)\n');
+  }
 
   console.log('\n--- Results ---\n');
   for (const result of results) {
@@ -90,6 +106,9 @@ export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
     console.log(
       `Difference: ${diff > 0 ? '+' : ''}${diff.toFixed(1)}% (${diff > 0 ? 'Cli slower' : 'Http slower'})`
     );
+  } else if (httpShortResult) {
+    console.log(`HttpTransport (short) avg: ${httpShortResult.avgMs.toFixed(2)}ms`);
+    console.log('CliTransport: not available');
   }
 
   return results;
