@@ -175,7 +175,7 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false, templateName?: string)
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false, templateName?: string, category?: string)
   : Promise<void> {
     cli.step('Validating task input...');
     
@@ -184,6 +184,7 @@ export class Cli {
     let finalPriority = priority;
     let finalTaskType = taskType;
     let finalTimeout = timeoutSeconds;
+    let finalCategory = category;
 
     if (templateName) {
       const db = await this.getDb();
@@ -245,6 +246,7 @@ export class Cli {
       timeoutSeconds: finalTimeout,
       taskType: finalTaskType || 'implementation',
       assignedTo: assignedTo || null,
+      category: finalCategory || null,
     };
 
     if (dryRun) {
@@ -257,17 +259,20 @@ export class Cli {
     const maxRetries = this.config.getTaskConfig().maxRetries;
     const taskId = crypto.randomUUID();
     await db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [taskId, taskData.title, taskData.description, TASK_STATUS.PENDING, taskData.priority, taskData.dependsOn, maxRetries, taskData.timeoutSeconds, taskData.timeoutSeconds && taskData.timeoutSeconds > 600, taskData.taskType, taskData.assignedTo]
+      `INSERT INTO tasks (id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [taskId, taskData.title, taskData.description, TASK_STATUS.PENDING, taskData.priority, taskData.dependsOn, maxRetries, taskData.timeoutSeconds, taskData.timeoutSeconds && taskData.timeoutSeconds > 600, taskData.taskType, taskData.assignedTo, taskData.category]
     );
     
     await db.query(
       `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [taskId, taskData.title, null, TASK_STATUS.PENDING, 'Task created', JSON.stringify({ type: taskData.taskType, assignedTo: taskData.assignedTo, priority: taskData.priority })]
+      [taskId, taskData.title, null, TASK_STATUS.PENDING, 'Task created', JSON.stringify({ type: taskData.taskType, assignedTo: taskData.assignedTo, priority: taskData.priority, category: taskData.category })]
     );
     
     await db.query(`SELECT auto_tag_task($1)`, [taskId]);
+    if (!taskData.category) {
+      await db.query(`SELECT auto_categorize_task($1)`, [taskId]);
+    }
     
     let extras = '';
     if (dependsOn && dependsOn.length > 0) extras += ` (depends on: ${dependsOn.join(', ')})`;
@@ -275,6 +280,7 @@ export class Cli {
     if (finalTaskType) extras += `, type: ${finalTaskType}`;
     if (assignedTo) extras += `, assigned: ${assignedTo}`;
     if (templateName) extras += `, template: ${templateName}`;
+    if (taskData.category) extras += `, category: ${taskData.category}`;
     
     cli.success(`Task created: "${taskData.title}"${extras}`);
   }
@@ -314,6 +320,50 @@ export class Cli {
     );
     
     cli.success(`Template "${name}" saved`);
+  }
+
+  async listCategoryRules(): Promise<void> {
+    const db = await this.getDb();
+    const result = await db.query<{ keyword: string; category: string; enabled: boolean }>(
+      `SELECT keyword, category, enabled FROM auto_category_rules ORDER BY keyword ASC`
+    );
+    
+    if (result.rows.length === 0) {
+      cli.info('No category rules found.');
+      return;
+    }
+    
+    console.log('\nAuto-categorization rules:\n');
+    cli.table(['Keyword', 'Category', 'Enabled'], 
+      result.rows.map(row => [
+        row.keyword,
+        row.category,
+        row.enabled ? 'yes' : 'no'
+      ])
+    );
+  }
+
+  async addCategoryRule(keyword: string, category: string): Promise<void> {
+    const validCategories = ['security', 'performance', 'feature', 'bugfix'];
+    if (!validCategories.includes(category)) {
+      cli.error(`Invalid category. Must be one of: ${validCategories.join(', ')}`);
+      process.exit(1);
+    }
+    
+    const db = await this.getDb();
+    await db.query(
+      `INSERT INTO auto_category_rules (keyword, category) VALUES ($1, $2)
+       ON CONFLICT (keyword) DO UPDATE SET category = $2, enabled = true`,
+      [keyword.toLowerCase().trim(), category]
+    );
+    
+    cli.success(`Category rule added: "${keyword}" -> ${category}`);
+  }
+
+  async removeCategoryRule(keyword: string): Promise<void> {
+    const db = await this.getDb();
+    await db.query(`DELETE FROM auto_category_rules WHERE keyword = $1`, [keyword.toLowerCase()]);
+    cli.success(`Category rule removed: "${keyword}"`);
   }
 
   async deleteTemplate(name: string): Promise<void> {
@@ -580,6 +630,7 @@ async function main(): Promise<void> {
         let taskType: string | undefined;
         let assignedTo: string | undefined;
         let templateName: string | undefined;
+        let category: string | undefined;
         const dryRun = args.includes('--dry-run');
         
         const templateIndex = args.indexOf('--template');
@@ -626,6 +677,19 @@ async function main(): Promise<void> {
             assignedTo = assignValue;
           }
         }
+
+        const catIndex = args.indexOf('--category');
+        if (catIndex !== -1 && catIndex + 1 < args.length) {
+          const catValue = args[catIndex + 1];
+          if (catValue && !catValue.startsWith('--')) {
+            const validCategories = ['security', 'performance', 'feature', 'bugfix'];
+            if (!validCategories.includes(catValue.toLowerCase())) {
+              cli.error(`Invalid category: ${catValue}. Valid categories: ${validCategories.join(', ')}`);
+              process.exit(1);
+            }
+            category = catValue.toLowerCase();
+          }
+        }
         
         if (templateName) {
           title = args.find((a, i) => i > 0 && i !== templateIndex && i !== templateIndex + 1 && !a.startsWith('--'));
@@ -640,17 +704,19 @@ async function main(): Promise<void> {
         
         if (!title && !templateName) {
           cli.error('Task title or --template is required');
-          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--timeout <seconds>] [--type <type>] [--assign <owner>] [--template <name>] [--dry-run]');
+          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--timeout <seconds>] [--type <type>] [--assign <owner>] [--category <category>] [--template <name>] [--dry-run]');
           console.log('\nValid types: analysis, implementation, documentation, bugfix, research, testing, deployment, maintenance');
+          console.log('\nValid categories: security, performance, feature, bugfix');
           console.log('\nExamples:');
           console.log('  nezha task-add "Review PR #123" "Check for bugs" --priority 5');
           console.log('  nezha task-add "Fix login" "Users cannot login" --type bugfix --assign agent-1');
           console.log('  nezha task-add "Write docs" "API documentation" --type documentation');
+          console.log('  nezha task-add "Fix security vulnerability" "SQL injection in login" --category security');
           console.log('  nezha task-add --template code-review "PR #123" "Review changes"');
           process.exit(1);
         }
         
-        await cliInstance.addTask(title || '', description, priority, dependsOn, timeoutSeconds, taskType, assignedTo, dryRun, templateName);
+        await cliInstance.addTask(title || '', description, priority, dependsOn, timeoutSeconds, taskType, assignedTo, dryRun, templateName, category);
         break;
       }
       
@@ -681,10 +747,12 @@ async function main(): Promise<void> {
       case 'tasks': {
         const tagIndex = args.indexOf('--tag');
         const statusIndex = args.indexOf('--status');
+        const categoryIndex = args.indexOf('--category');
         const tag = tagIndex !== -1 ? args[tagIndex + 1] : undefined;
         const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+        const category = categoryIndex !== -1 ? args[categoryIndex + 1] : undefined;
         
-        await cliInstance.listTasks(tag, status);
+        await cliInstance.listTasks(tag, status, category);
         break;
       }
       
@@ -818,6 +886,47 @@ async function main(): Promise<void> {
         }
         break;
       }
+
+      case 'category-rules': {
+        const subcommand = args[1];
+        
+        if (subcommand === 'list' || !subcommand) {
+          await cliInstance.listCategoryRules();
+        } else if (subcommand === 'add') {
+          const keyword = args[2];
+          const category = args[3];
+          
+          if (!keyword || !category) {
+            cli.error('Keyword and category are required');
+            console.log('\nUsage: nezha category-rules add <keyword> <category>');
+            console.log('\nCategories: security, performance, feature, bugfix');
+            console.log('\nExamples:');
+            console.log('  nezha category-rules add "memory leak" performance');
+            console.log('  nezha category-rules add "sql injection" security');
+            process.exit(1);
+          }
+          
+          await cliInstance.addCategoryRule(keyword, category);
+        } else if (subcommand === 'remove' || subcommand === 'delete') {
+          const keyword = args[2];
+          
+          if (!keyword) {
+            cli.error('Keyword is required');
+            console.log('\nUsage: nezha category-rules remove <keyword>');
+            process.exit(1);
+          }
+          
+          await cliInstance.removeCategoryRule(keyword);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha category-rules <list|add|remove> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha category-rules list');
+          console.log('  nezha category-rules add "memory leak" performance');
+          console.log('  nezha category-rules remove "memory leak"');
+        }
+        break;
+      }
       
       case 'help':
       default:
@@ -845,7 +954,7 @@ function showHelp(): void {
     health                        Show health information
     task-add <title> [desc]      Add a new task
     schedule <name> <desc> <cron> Create a scheduled task
-    tasks [--tag <tag>]          List tasks (filter by tag)
+    tasks [--tag <tag>] [--status <status>] [--category <category>] List tasks (filter by tag, status, category)
     templates <cmd>              Manage task templates
     auto-tag-rules <cmd>         Manage auto-tagging rules
     tasks [--tag <tag>]          List tasks
@@ -858,8 +967,9 @@ function showHelp(): void {
   --priority <n>                Task priority (0-100)
   --depends-on <uuid...>       Task IDs this task depends on
   --tag <tag>                  Filter by tag
-  --status <status>            Filter by status
-  --dry-run                    Show what would be done without executing
+   --status <status>            Filter by status
+   --category <category>       Filter by category (security, performance, feature, bugfix)
+   --dry-run                    Show what would be done without executing
 
 ${colors.bright}Examples:${colors.reset}
   ${colors.cyan}$ nezha start${colors.reset}
@@ -867,6 +977,7 @@ ${colors.bright}Examples:${colors.reset}
   ${colors.cyan}$ nezha task-add "Deploy" "Deploy to prod" --depends-on build-uuid --dry-run${colors.reset}
   ${colors.cyan}$ nezha schedule "Daily Cleanup" "Clean up" "0 2 * * *" --priority 10${colors.reset}
   ${colors.cyan}$ nezha tasks --status PENDING --tag urgent${colors.reset}
+  ${colors.cyan}$ nezha tasks --category bugfix${colors.reset}
 `);
 }
 

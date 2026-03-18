@@ -77,8 +77,7 @@ export class Agent {
       const startTime = Date.now();
 
       try {
-        const escapedMsg = message.replace(/"/g, '\\"');
-        const cmd = `opencode run --attach ${this.serverUrl} --format json "${escapedMsg}"`;
+        const cmd = `opencode run --attach ${this.serverUrl} --format json "${message.replace(/"/g, '\\"')}"`;
         
         logger.debug(`Running: ${cmd.substring(0, 100)}...`);
         
@@ -87,6 +86,7 @@ export class Agent {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env },
+          shell: '/bin/bash',
         });
 
         const elapsed = Date.now() - startTime;
@@ -105,7 +105,7 @@ export class Agent {
           logger.error(`Task timed out after ${elapsed}ms`);
           resolve({
             success: false,
-            message: `Task timed out after ${this.timeout}ms`,
+            message: `Task timed out after 120000ms`,
           });
         } else {
           const errMsg = error instanceof Error ? error.message : String(error);

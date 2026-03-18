@@ -220,7 +220,7 @@ export class Scheduler {
     // Find and lock pending task atomically to prevent race conditions
     // Only select tasks whose dependencies are all COMPLETED
     // Also consider next_retry_at for scheduled retries
-    // Priority: base priority + retry boost + aging factor
+    // Priority: base priority + retry boost + aging factor + category weight
     const result = await this.db.query<{ id: string; title: string; description: string; depends_on: string[]; retry_count: number; max_retries: number; timeout_seconds: number | null; priority: number; created_at: Date }>(
       `WITH eligible_tasks AS (
         SELECT 
@@ -233,7 +233,14 @@ export class Scheduler {
             WHEN type = 'analysis' THEN 2
             WHEN type = 'research' THEN -1
             ELSE 0
-          end as type_weight
+          end as type_weight,
+          CASE 
+            WHEN category = 'security' THEN 5
+            WHEN category = 'bugfix' THEN 3
+            WHEN category = 'performance' THEN 2
+            WHEN category = 'feature' THEN 0
+            ELSE 0
+          end as category_weight
         FROM ${tableName} 
         WHERE status = $1 
         AND (next_retry_at IS NULL OR next_retry_at <= NOW())
@@ -244,14 +251,14 @@ export class Scheduler {
         ))
       ),
       ranked AS (
-        SELECT *, (priority + age_boost + retry_boost + type_weight) as sort_score
+        SELECT *, (priority + age_boost + retry_boost + type_weight + category_weight) as sort_score
         FROM eligible_tasks
         ORDER BY sort_score DESC, created_at ASC 
         LIMIT 1 
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight FROM ranked)
+      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked)
       WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, depends_on, retry_count, max_retries, timeout_seconds`,
       [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
