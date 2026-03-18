@@ -13,6 +13,7 @@ function runMigrations(): void {
   const dbHost = process.env.NEZHA_DB_HOST || 'localhost';
   const dbPort = process.env.NEZHA_DB_PORT || '5432';
   const dbUser = process.env.NEZHA_DB_USER || 'postgres';
+  const psqlPath = '/Applications/Postgres.app/Contents/Versions/18/bin/psql';
 
   const files = ['001_initial.sql', '002_multi_project_support.sql', '003_embedding_support.sql',
     '004_self_improvement.sql', '005_task_dependencies.sql', '006_scheduled_tasks.sql',
@@ -23,7 +24,7 @@ function runMigrations(): void {
 
   for (const file of files) {
     try {
-      execSync(`psql -h "${dbHost}" -p "${dbPort}" -U "${dbUser}" -d "${dbName}" -f "${migrationsDir}/${file}" 2>/dev/null`, {
+      execSync(`"${psqlPath}" -h "${dbHost}" -p "${dbPort}" -U "${dbUser}" -d "${dbName}" -f "${migrationsDir}/${file}" 2>/dev/null`, {
         stdio: 'pipe',
       });
     } catch {
