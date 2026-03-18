@@ -28,11 +28,6 @@ export default defineConfig({
     cache: {
       dir: 'node_modules/.vitest',
     },
-    sequence: {
-      shuffle: false,
-      concurrent: false,
-    },
-    maxConcurrency: 1,
     retry: 0,
     bail: 0,
   },

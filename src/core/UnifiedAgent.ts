@@ -190,7 +190,7 @@ export class UnifiedAgent {
           message: result,
           output: result,
           artifacts,
-          sessionId: sessionId || undefined,
+          sessionId: this.transport.getSessionId() || sessionId || undefined,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -229,7 +229,7 @@ export class UnifiedAgent {
       message: errorMessage,
       output: errorMessage,
       artifacts: [],
-      sessionId: sessionId || undefined,
+      sessionId: this.transport.getSessionId() || sessionId || undefined,
     };
   }
 

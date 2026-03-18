@@ -354,22 +354,22 @@ describe('UnifiedAgent', () => {
     });
 
     it('should fail after max retries', async () => {
-      let callCount = 0;
-      mockFetch.mockImplementation(() => {
-        callCount++;
-        if (callCount === 1 || callCount === 3) {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ id: 'session-1' }),
-          });
-        }
-        return Promise.resolve({
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
           ok: false,
           status: 500,
-          text: () => Promise.resolve('Error ' + callCount),
+          text: () => Promise.resolve('Error 1'),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error 2'),
         });
-      });
 
       const agent = new UnifiedAgent({ maxRetries: 2, retryDelay: 10, enableLogging: false });
       const result = await agent.executeTask('test');
