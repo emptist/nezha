@@ -28,77 +28,66 @@
 
 ## 快速部署 (5分钟启动)
 
-### 方式一：独立部署 (推荐生产使用)
+### 步骤 1: 进入客户项目目录
 
 ```bash
-# 1. 进入客户项目目录
 cd /Users/jk/gits/hub/cloudbrain
+```
 
-# 2. 克隆 nezha 作为子模块
+### 步骤 2: 克隆 nezha 作为子模块
+
+```bash
 git submodule add https://github.com/your-org/nezha.git nezha
+```
 
-# 3. 安装依赖
+### 步骤 3: 安装依赖并编译
+
+```bash
 cd nezha
 npm install
 npm run build
-
-# 4. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入 API keys
-
-# 5. 启动服务 (按顺序!)
-# 终端 1: 启动 PostgreSQL
-pg_ctl -D /path/to/data start
-
-# 终端 2: 启动 OpenCode Server
-nohup opencode serve --port 4096 > /tmp/opencode.log 2>&1 &
-
-# 终端 3: 启动 Nezha Daemon
-nohup node dist/cli/index.js start > nezha.log 2>&1 &
-
-# 6. 验证服务
-curl http://localhost:4097/health
 ```
 
-### 方式二：Docker 一键部署 (开发测试)
+### 步骤 4: 配置环境变量
 
 ```bash
-# 在项目根目录创建 docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-version: '3.8'
-services:
-  postgres:
-    image: postgres:18
-    environment:
-      POSTGRES_DB: cloudbrain
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: dev123
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+cp .env.example .env
+# 编辑 .env，填入 API keys
+```
 
-  nezha:
-    build: ./nezha
-    depends_on:
-      - postgres
-    environment:
-      DATABASE_URL: postgresql://postgres:dev123@postgres:5432/cloudbrain
-      OPENCODE_API: http://opencode:4096
-    ports:
-      - "4097:4097"
+### 步骤 5: 启动 PostgreSQL
 
-  opencode:
-    image: your-org/opencode-server
-    ports:
-      - "4096:4096"
+```bash
+# macOS (Postgres.app)
+/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18-2 start
 
-volumes:
-  postgres_data:
-EOF
+# Linux/Ubuntu
+sudo systemctl start postgresql
+```
 
-# 启动
-docker-compose up -d
+### 步骤 6: 启动 OpenCode Server
+
+```bash
+nohup opencode serve --port 4096 > /tmp/opencode.log 2>&1 &
+```
+
+### 步骤 7: 启动 Nezha Daemon
+
+```bash
+nohup node dist/cli/index.js start > nezha.log 2>&1 &
+```
+
+### 步骤 8: 验证服务
+
+```bash
+# 检查 PostgreSQL
+psql -h localhost -U postgres -d cloudbrain -c "SELECT 1;"
+
+# 检查 OpenCode Server
+curl http://localhost:4096/health
+
+# 检查 Nezha
+curl http://localhost:4097/health
 ```
 
 ---
@@ -293,7 +282,8 @@ lsof -i :5432  # postgres
 # 重启服务
 pkill -f "opencode serve"
 pkill -f "nezha"
-docker-compose restart
+nohup opencode serve --port 4096 > /tmp/opencode.log 2>&1 &
+nohup node dist/cli/index.js start > nezha.log 2>&1 &
 ```
 
 ### 任务卡住
