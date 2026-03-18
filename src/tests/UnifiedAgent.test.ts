@@ -121,14 +121,11 @@ describe('Transport Classes', () => {
     });
 
     it('should spawn opencode with correct args', async () => {
-      let closeCallback: ((code: number) => void) | null = null;
       const mockProc = {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn((_event: string, cb: (code: number) => void) => {
-          if (_event === 'close') {
-            closeCallback = cb;
-          }
+          if (_event === 'close') cb(0);
         }),
         kill: vi.fn(),
       };
@@ -137,12 +134,9 @@ describe('Transport Classes', () => {
       const transport = new CliTransport('http://localhost:4096', 60000);
       const resultPromise = transport.sendMessage('test prompt');
 
-      const dataCallback = mockProc.stdout.on.mock.calls.find(
-        (c: unknown[]) => c[0] === 'data'
-      )?.[1] as (data: string) => void;
-      dataCallback?.('{"type":"text","part":{"text":"response"}}');
-
-      closeCallback?.(0);
+      mockProc.stdout.on.mock.calls.find((c: unknown[]) => c[0] === 'data')?.[1]?.(
+        '{"type":"text","part":{"text":"response"}}'
+      );
 
       const result = await resultPromise;
       expect(mockSpawn).toHaveBeenCalledWith(
@@ -252,13 +246,9 @@ describe('Transport Classes', () => {
 });
 
 describe('UnifiedAgent', () => {
-  let mockFetch: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
-    mockFetch = vi.fn();
-    globalThis.fetch = mockFetch;
   });
 
   afterEach(() => {
@@ -653,13 +643,9 @@ describe('CliAgent', () => {
 });
 
 describe('Backward Compatibility - Agent class', () => {
-  let mockFetch: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
-    mockFetch = vi.fn();
-    globalThis.fetch = mockFetch;
   });
 
   afterEach(() => {
@@ -706,50 +692,47 @@ describe('Backward Compatibility - Agent class', () => {
 
   describe('Agent error handling', () => {
     it('should retry on network error', async () => {
-      let callCount = 0;
-      mockFetch.mockImplementation((url: string) => {
-        callCount++;
-        if (url === 'http://localhost:4096/session') {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ id: 'session-1' }),
-          });
-        }
-        if (callCount === 2) {
-          return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Error') });
-        }
-        return Promise.resolve({
+      mockFetch
+        .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Success on retry' }] }),
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
         });
-      });
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(true);
-      expect(result.message).toContain('Success on retry');
+      expect(result.message).toBe('result');
     });
 
     it('should fail after exhausting retries', async () => {
-      let callCount = 0;
-      mockFetch.mockImplementation((url: string) => {
-        callCount++;
-        if (url === 'http://localhost:4096/session') {
-          return Promise.resolve({
-            ok: true,
-            status: 200,
-            json: () => Promise.resolve({ id: 'session-1' }),
-          });
-        }
-        return Promise.resolve({
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
           ok: false,
           status: 500,
-          text: () => Promise.resolve('Error'),
+          text: () => Promise.resolve('Error 1'),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error 2'),
         });
-      });
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
       const result = await agent.executeTask('test');
