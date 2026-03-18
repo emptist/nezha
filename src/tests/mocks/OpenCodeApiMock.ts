@@ -46,9 +46,9 @@ export class OpenCodeApiMock {
       this.callCount++;
 
       this.calls.push({
-        message: messageMatch ? messageMatch[1] : '',
+        message: messageMatch?.[1] ?? '',
         timestamp: new Date(),
-        serverUrl: urlMatch ? urlMatch[1] : 'http://localhost:4096',
+        serverUrl: urlMatch?.[1] ?? 'http://localhost:4096',
         command,
         options,
       });

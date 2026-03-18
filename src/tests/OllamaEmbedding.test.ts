@@ -53,8 +53,14 @@ describe('OllamaEmbedding', () => {
 
     expect(results).toBeInstanceOf(Array);
     expect(results.length).toBe(2);
-    expect(results[0].length).toBe(768);
-    expect(results[1].length).toBe(768);
+    const firstResult = results[0];
+    const secondResult = results[1];
+    if (firstResult) {
+      expect(firstResult.length).toBe(768);
+    }
+    if (secondResult) {
+      expect(secondResult.length).toBe(768);
+    }
   });
 
   it('should throw error on invalid API URL', async () => {

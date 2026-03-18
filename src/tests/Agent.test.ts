@@ -62,7 +62,8 @@ describe('Agent', () => {
         })
         .mockResolvedValueOnce({
           ok: true,
-          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Task completed successfully' }] }),
+          json: () =>
+            Promise.resolve({ parts: [{ type: 'text', text: 'Task completed successfully' }] }),
         });
 
       const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
@@ -218,8 +219,10 @@ describe('Agent', () => {
       await agent.executeTask('custom server test');
 
       expect(mockFetch).toHaveBeenCalled();
-      const sessionCall = mockFetch.mock.calls[0][0] as string;
-      expect(String(sessionCall).includes('http://custom:4096')).toBe(true);
+      const sessionCall = mockFetch.mock.calls[0]?.[0] as string | undefined;
+      if (sessionCall) {
+        expect(String(sessionCall).includes('http://custom:4096')).toBe(true);
+      }
     });
 
     it('should retry on mock failure then succeed', async () => {
@@ -248,11 +251,13 @@ describe('Agent', () => {
 
     it('should parse complex JSON responses', async () => {
       const complexResponse = {
-        parts: [{
-          type: 'text',
-          text: 'Complex response with data',
-          metadata: { status: 'ok', code: 200 },
-        }],
+        parts: [
+          {
+            type: 'text',
+            text: 'Complex response with data',
+            metadata: { status: 'ok', code: 200 },
+          },
+        ],
       };
       mockFetch
         .mockResolvedValueOnce({

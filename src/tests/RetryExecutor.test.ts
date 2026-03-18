@@ -128,8 +128,14 @@ describe('RetryExecutor', () => {
 
       const history = executor.getAttemptHistory();
       expect(history.length).toBe(2);
-      expect(history[0].attempt).toBe(1);
-      expect(history[1].attempt).toBe(2);
+      const firstAttempt = history[0];
+      const secondAttempt = history[1];
+      if (firstAttempt) {
+        expect(firstAttempt.attempt).toBe(1);
+      }
+      if (secondAttempt) {
+        expect(secondAttempt.attempt).toBe(2);
+      }
     });
   });
 

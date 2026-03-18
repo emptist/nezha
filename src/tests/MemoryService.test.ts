@@ -94,7 +94,10 @@ describe('MemoryService', () => {
 
       const results = await memoryService.search('hello');
       expect(results).toHaveLength(1);
-      expect(results[0].content).toBe('Hello world');
+      const firstResult = results[0];
+      if (firstResult) {
+        expect(firstResult.content).toBe('Hello world');
+      }
     });
 
     it('should return empty array when no results', async () => {
@@ -134,7 +137,10 @@ describe('MemoryService', () => {
 
       const results = await memoryService.getByProject('proj-1');
       expect(results).toHaveLength(1);
-      expect(results[0].projectId).toBe('proj-1');
+      const firstResult = results[0];
+      if (firstResult) {
+        expect(firstResult.projectId).toBe('proj-1');
+      }
     });
 
     it('should return empty array for unknown project', async () => {
