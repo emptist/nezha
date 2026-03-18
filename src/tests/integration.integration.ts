@@ -65,7 +65,7 @@ describe('Database Integration Tests', () => {
       throw new Error(`Database not available: ${health.error}`);
     }
 
-    await createTestDatabase(db);
+    await setupTestDatabase(db);
   });
 
   afterAll(async () => {
