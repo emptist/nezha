@@ -700,20 +700,23 @@ describe('Backward Compatibility - Agent class', () => {
 
   describe('Agent error handling', () => {
     it('should retry on network error', async () => {
-      let isFirstCall = true;
+      let callCount = 0;
       mockFetch.mockImplementation((url: string) => {
-        if (url.includes('/session') && isFirstCall) {
-          isFirstCall = false;
+        callCount++;
+        if (url === 'http://localhost:4096/session') {
           return Promise.resolve({
             ok: true,
             status: 200,
             json: () => Promise.resolve({ id: 'session-1' }),
           });
         }
+        if (callCount === 2) {
+          return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve('Error') });
+        }
         return Promise.resolve({
-          ok: false,
-          status: 500,
-          text: () => Promise.resolve('Error'),
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Success on retry' }] }),
         });
       });
 
@@ -721,14 +724,14 @@ describe('Backward Compatibility - Agent class', () => {
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('result');
+      expect(result.message).toContain('Success on retry');
     });
 
     it('should fail after exhausting retries', async () => {
       let callCount = 0;
       mockFetch.mockImplementation((url: string) => {
         callCount++;
-        if (url.includes('/session')) {
+        if (url === 'http://localhost:4096/session') {
           return Promise.resolve({
             ok: true,
             status: 200,
