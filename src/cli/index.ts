@@ -42,6 +42,7 @@ export class Cli {
   private heartbeatService: HeartbeatService | null = null;
   private healthServer: HealthServer | null = null;
   private checkpointService: CheckpointService;
+  private agentSystem: AgentSystem | null = null;
   private isShuttingDown: boolean = false;
   private readonly SHUTDOWN_TIMEOUT_MS: number = 30000;
   private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
@@ -62,18 +63,31 @@ export class Cli {
     const db = await this.getDb();
 
     const embeddingConfig = this.config.getEmbeddingConfig();
+    const transportConfig = this.config.getTransportConfig();
+
+    this.agentSystem = new AgentSystem({
+      maxAgents: 10,
+      heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
+      agentConfig: {},
+      unifiedAgentConfig: {
+        mode: transportConfig.mode,
+        serverUrl: transportConfig.opencodeApiUrl,
+      },
+      defaultMode: transportConfig.mode,
+    });
+    await this.agentSystem.start();
+
     this.heartbeatService = new HeartbeatService(db, {
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
       embedding: embeddingConfig,
     });
 
-    // Pass checkpoint service to heartbeat service for state tracking
     this.heartbeatService.setCheckpointService(this.checkpointService);
 
-    // HeartbeatService handles checkpoint loading and orphaned task reset
     await this.heartbeatService.start();
 
     this.healthServer = new HealthServer(db, 4097);
+    this.healthServer.setAgentSystem(this.agentSystem);
     await this.healthServer.start();
 
     // Handle graceful shutdown - save state before exit
@@ -143,6 +157,11 @@ export class Cli {
   }
 
   async stop(): Promise<void> {
+    logger.info('Stopping AgentSystem...');
+    if (this.agentSystem) {
+      await this.agentSystem.stop();
+    }
+
     logger.info('Stopping HeartbeatService...');
     if (this.heartbeatService) {
       await this.heartbeatService.stop();
@@ -173,11 +192,21 @@ export class Cli {
   }
 
   async health(): Promise<void> {
-    const health = this.heartbeatService?.getHealth();
-    if (health) {
-      console.log(JSON.stringify(health, null, 2));
+    const heartbeatHealth = this.heartbeatService?.getHealth();
+    if (heartbeatHealth) {
+      console.log('Heartbeat Service:', JSON.stringify(heartbeatHealth, null, 2));
     } else {
       console.log('Heartbeat service not initialized');
+    }
+
+    if (this.agentSystem) {
+      console.log('\nAgent System:');
+      console.log('  Status:', this.agentSystem.isActive() ? 'running' : 'stopped');
+      console.log('  Default Mode:', this.agentSystem.getDefaultMode());
+      console.log('  Total Agents:', this.agentSystem.getAgentCount());
+
+      const stats = this.agentSystem.getStats();
+      console.log('  Stats:', JSON.stringify(stats, null, 2));
     }
   }
 
@@ -1270,35 +1299,42 @@ function showHelp(): void {
   console.log(`
  ${colors.bright}Usage:${colors.reset} nezha <command> [options]
 
-  ${colors.bright}Commands:${colors.reset}
-    start                         Start the heartbeat service
-    stop                          Stop the heartbeat service
-    status                        Show current status
-    health                        Show health information
-    task-add <title> [desc]      Add a new task
-    schedule <name> <desc> <cron> Create a scheduled task
-    tasks [--tag <tag>]          List tasks (filter by tag, status, category)
-    table-of-tasks (tot)          Show task table with summary
-    templates <cmd>              Manage task templates
-    auto-tag-rules <cmd>         Manage auto-tagging rules
-    api-key create <name>        Create API key
-    api-key list                  List API keys
-    api-key revoke <name>         Revoke API key
-    help                          Show this help
+ ${colors.bright}Commands:${colors.reset}
+   start                         Start the heartbeat service
+   stop                          Stop the heartbeat service
+   status                        Show current status
+   health                        Show health information
+   task-add <title> [desc]      Add a new task
+   schedule <name> <desc> <cron> Create a scheduled task
+   tasks [--tag <tag>]          List tasks (filter by tag, status, category)
+   table-of-tasks (tot)          Show task table with summary
+   templates <cmd>               Manage task templates
+   auto-tag-rules <cmd>         Manage auto-tagging rules
+   api-key create <name>         Create API key
+   api-key list                  List API keys
+   api-key revoke <name>         Revoke API key
+   help                          Show this help
 
-  ${colors.bright}Options:${colors.reset}
-    --priority <n>                Task priority (0-100)
-    --depends-on <uuid...>       Task IDs this task depends on
-    --tag <tag>                  Filter by tag
-    --status <status>            Filter by status
-    --category <category>       Filter by category (security, performance, feature, bugfix)
-    --dry-run                    Show what would be done without executing
-    --json                       Output as JSON
-    --format=json                Output as JSON
-    --verbose                    Log all DB queries and API calls
+ ${colors.bright}Options:${colors.reset}
+   --transport <mode>           Transport mode: http or cli (default: http)
+   --stream                     Enable streaming output (CLI mode only)
+   --verbose                    Enable verbose logging
+   --priority <n>                Task priority (0-100)
+   --depends-on <uuid...>       Task IDs this task depends on
+   --tag <tag>                  Filter by tag
+   --status <status>            Filter by status
+   --category <category>       Filter by category (security, performance, feature, bugfix)
+   --dry-run                    Show what would be done without executing
+   --json                       Output as JSON
+   --format=json                Output as JSON
+
+ ${colors.bright}Environment Variables:${colors.reset}
+   NEZHA_TRANSPORT_MODE          Default transport mode (http or cli)
+   NEZHA_OPENCODE_API_URL       OpenCode API URL for HTTP transport
 
  ${colors.bright}Examples:${colors.reset}
    ${colors.cyan}$ nezha start${colors.reset}
+   ${colors.cyan}$ nezha start --transport cli --verbose${colors.reset}
    ${colors.cyan}$ nezha task-add "Review PR #123" "Check for bugs" --priority 5${colors.reset}
    ${colors.cyan}$ nezha task-add "Deploy" "Deploy to prod" --depends-on build-uuid --dry-run${colors.reset}
    ${colors.cyan}$ nezha task-add "Fix bug" "Critical bug" --json${colors.reset}
@@ -1306,7 +1342,7 @@ function showHelp(): void {
    ${colors.cyan}$ nezha tasks --status PENDING --tag urgent${colors.reset}
    ${colors.cyan}$ nezha tasks --category bugfix --json${colors.reset}
    ${colors.cyan}$ nezha tasks --format=json${colors.reset}
-`);
+ `);
 }
 
 main();
