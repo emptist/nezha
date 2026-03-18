@@ -86,6 +86,7 @@ export class YamlConfigLoader {
       const sectionMatch = trimmed.match(/^(\w+):$/);
       if (sectionMatch) {
         const sectionName = sectionMatch[1];
+        if (!sectionName) continue;
         currentSection = {};
         result[sectionName] = currentSection;
         sectionStack.push({ key: sectionName, obj: currentSection });
@@ -96,6 +97,7 @@ export class YamlConfigLoader {
       const nestedMatch = trimmed.match(/^(\w+):$/);
       if (nestedMatch && line.startsWith('  ')) {
         const sectionName = nestedMatch[1];
+        if (!sectionName || !currentSection) continue;
         const nested: Record<string, unknown> = {};
         currentSection[sectionName] = nested;
         sectionStack.push({ key: sectionName, obj: nested });
@@ -105,8 +107,11 @@ export class YamlConfigLoader {
       // Parse key-value pair
       const kvMatch = trimmed.match(/^(\w+):\s*(.*)$/);
       if (kvMatch) {
-        const [, key, value] = kvMatch;
-        currentSection[key] = this.parseValue(value);
+        const key = kvMatch[1];
+        const value = kvMatch[2];
+        if (key && value !== undefined && currentSection) {
+          currentSection[key] = this.parseValue(value);
+        }
       }
     }
 

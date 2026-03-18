@@ -299,6 +299,7 @@ export class Scheduler {
 
       if (result.rows.length > 0) {
         const task = result.rows[0];
+        if (!task) continue;
         const retryCount = task.retry_count ?? 0;
         const maxRetries = task.max_retries ?? 3;
         const timeoutSec = task.timeout_seconds ?? 300;
@@ -574,6 +575,7 @@ export class Scheduler {
     }
 
     const row = result.rows[0];
+    if (!row) return null;
 
     if (!this.encryption.isInitialized()) {
       return row.result ? JSON.parse(row.result) : null;

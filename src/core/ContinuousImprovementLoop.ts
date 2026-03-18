@@ -237,6 +237,7 @@ export class ContinuousImprovementLoop {
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i];
       const result = results[i];
+      if (!task || !result) continue;
 
       const review: Review = {
         success: result.success,
@@ -250,7 +251,7 @@ export class ContinuousImprovementLoop {
                 title: `Retry: ${task.title}`,
                 description: `Task failed: ${result.error || 'Unknown error'}`,
                 priority: task.priority,
-                category: task.category as any,
+                category: 'code',
                 autoFixable: false,
               },
             ],
@@ -307,6 +308,7 @@ export class ContinuousImprovementLoop {
       const task = tasks[i];
       const result = results[i];
       const review = reviews[i];
+      if (!task || !result || !review) continue;
 
       const learning: Learning = {
         timestamp: new Date(),

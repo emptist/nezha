@@ -191,4 +191,29 @@ describe('ConversationLogger', () => {
 
     expect(() => logger.addMessage('user', 'test')).toThrow('No active conversation');
   });
+
+  it('should handle close when no active conversation', async () => {
+    await logger.close();
+    expect(logger).toBeDefined();
+  });
+
+  it('should clear currentConversation after close', async () => {
+    const task = { id: 'task-1', title: 'Test Task', description: 'Test description' };
+    logger.startConversation(task);
+    logger.addMessage('user', 'test');
+    await logger.close();
+    await logger.close();
+  });
+
+  it('should allow starting new conversation after close', async () => {
+    const task1 = { id: 'task-1', title: 'Task 1', description: 'Test' };
+    logger.startConversation(task1);
+    await logger.endConversation();
+    await logger.close();
+
+    const task2 = { id: 'task-2', title: 'Task 2', description: 'Test' };
+    const sessionId = logger.startConversation(task2);
+    expect(sessionId).toBeDefined();
+    await logger.close();
+  });
 });

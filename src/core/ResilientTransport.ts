@@ -118,8 +118,9 @@ export class ResilientTransport {
     let match;
 
     while ((match = filePattern.exec(content)) !== null) {
-      if (!artifacts.includes(match[1])) {
-        artifacts.push(match[1]);
+      const filename = match[1];
+      if (filename && !artifacts.includes(filename)) {
+        artifacts.push(filename);
       }
     }
 

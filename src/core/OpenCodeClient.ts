@@ -245,7 +245,10 @@ Please analyze the task and provide a detailed solution.`;
     let match;
 
     while ((match = filePattern.exec(content)) !== null) {
-      artifacts.push(match[1]);
+      const filename = match[1];
+      if (filename) {
+        artifacts.push(filename);
+      }
     }
 
     return artifacts;

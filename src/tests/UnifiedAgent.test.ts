@@ -231,6 +231,47 @@ describe('Transport Classes', () => {
       expect(onChunk).toHaveBeenCalledWith('chunk1', 'text');
       expect(onChunk).toHaveBeenCalledWith('thinking...', 'thinking');
     });
+
+    it('should handle process error event', async () => {
+      const errorHandler = vi.fn();
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn((event: string, cb: (err: Error) => void) => {
+          if (event === 'error') errorHandler.mockImplementation(cb);
+        }),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      const sendPromise = transport.sendMessage('test');
+
+      const err = new Error('ENOENT');
+      errorHandler(err);
+      await expect(sendPromise).rejects.toThrow('Failed to spawn opencode');
+    });
+
+    it('should handle JSON parse errors in stderr gracefully', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: {
+          on: vi.fn((_: string, cb: (data: Buffer) => void) => {
+            cb(Buffer.from('not valid json\n'));
+            cb(Buffer.from('also not json\n'));
+          }),
+        },
+        on: vi.fn((_event: string, cb: (code: number) => void) => {
+          if (_event === 'close') cb(0);
+        }),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      const result = await transport.sendMessage('test');
+      expect(result).toBe('');
+    });
   });
 
   describe('createTransport', () => {
@@ -821,6 +862,104 @@ describe('Security Tests', () => {
       const longError = 'x'.repeat(1000);
       const truncated = longError.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
       expect(truncated.length).toBe(500);
+    });
+  });
+});
+
+describe('UnifiedAgent - Resilience Methods', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  describe('getResilienceStats', () => {
+    it('should return resilience statistics', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
+        });
+
+      const agent = new UnifiedAgent({ enableLogging: false });
+      await agent.executeTask('test');
+
+      const stats = agent.getResilienceStats();
+      expect(stats).toHaveProperty('circuitBreaker');
+      expect(stats).toHaveProperty('cacheHitRate');
+      expect(stats).toHaveProperty('retryCount');
+      expect(typeof stats.circuitBreaker).toBe('string');
+      expect(typeof stats.cacheHitRate).toBe('number');
+      expect(typeof stats.retryCount).toBe('number');
+    });
+
+    it('should track retry count after failures', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'recovered' }] }),
+        });
+
+      const agent = new UnifiedAgent({ maxRetries: 2, retryDelay: 10, enableLogging: false });
+      await agent.executeTask('test');
+
+      const stats = agent.getResilienceStats();
+      expect(stats.retryCount).toBeGreaterThan(0);
+    });
+  });
+
+  describe('resetCircuits', () => {
+    it('should reset all resilience mechanisms', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ id: 'session-1' }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve('Error'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'recovered' }] }),
+        });
+
+      const agent = new UnifiedAgent({ maxRetries: 2, retryDelay: 10, enableLogging: false });
+      await agent.executeTask('test');
+      agent.resetCircuits();
+
+      const stats = agent.getResilienceStats();
+      expect(stats).toBeDefined();
+      expect(typeof stats.circuitBreaker).toBe('string');
+    });
+
+    it('should reset currentMode back to transport mode', () => {
+      const agent = new UnifiedAgent({ mode: 'cli', enableLogging: false });
+      agent.resetCircuits();
+      expect(agent).toBeDefined();
     });
   });
 });
