@@ -17,6 +17,8 @@ export interface DaemonState {
   dailyMemoryPath?: string;
   isPaused: boolean;
   pauseUntil?: string;
+  transportMode?: 'http' | 'cli';
+  agentSessionId?: string;
 }
 
 export interface CheckpointServiceConfig {

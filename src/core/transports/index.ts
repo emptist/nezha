@@ -1,51 +1,96 @@
 import { spawn, type ChildProcess } from 'child_process';
 
+/**
+ * Transport mode determines how the agent communicates with the backend.
+ * - 'http': REST API communication via HTTP requests
+ * - 'cli': Spawns opencode CLI process for local execution
+ */
 export type TransportMode = 'http' | 'cli';
 
+/**
+ * Configuration for creating a transport instance.
+ */
 export interface TransportConfig {
+  /** Transport mode: 'http' or 'cli' */
   mode: TransportMode;
+  /** Server URL for HTTP transport or CLI server address */
   serverUrl: string;
+  /** Request timeout in milliseconds */
   timeout: number;
 }
 
+/**
+ * Response structure from transport operations.
+ */
 export interface TransportResponse {
+  /** The response content as a string */
   content: string;
+  /** List of file artifacts mentioned in the response */
   artifacts: string[];
 }
 
+/**
+ * Callback function for streaming responses.
+ * @param chunk - The text chunk received
+ * @param type - Type of chunk: 'text' (normal output), 'thinking' (reasoning), 'error' (error message)
+ */
 export interface StreamingCallback {
   (chunk: string, type: 'text' | 'thinking' | 'error'): void;
 }
 
+/**
+ * Interface for session management across transport implementations.
+ * All transports must implement this interface to ensure consistent session handling.
+ */
 export interface SessionManager {
+  /** Get the current session ID, or null if no session exists */
   getSessionId(): string | null;
+  /** Set the session ID */
   setSessionId(id: string | null): void;
+  /** Clear/reset the current session */
   clearSession(): void;
 }
 
+/**
+ * HTTP-based transport for communicating with OpenCode server via REST API.
+ * Maintains persistent sessions and provides reliable request/response handling.
+ */
 export class HttpTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
   private sessionId: string | null = null;
   private sessionCreationLock: Promise<string> | null = null;
 
+  /**
+   * Creates a new HttpTransport instance.
+   * @param serverUrl - Base URL of the OpenCode server
+   * @param timeout - Request timeout in milliseconds
+   */
   constructor(serverUrl: string, timeout: number) {
     this.serverUrl = serverUrl;
     this.timeout = timeout;
   }
 
+  /** @inheritDoc */
   getSessionId(): string | null {
     return this.sessionId;
   }
 
+  /** @inheritDoc */
   setSessionId(id: string | null): void {
     this.sessionId = id;
   }
 
+  /** @inheritDoc */
   clearSession(): void {
     this.sessionId = null;
   }
 
+  /**
+   * Creates a new session with the server.
+   * Returns existing session ID if already created (thread-safe).
+   * @returns The session ID
+   */
   async createSession(): Promise<string> {
     if (this.sessionId) {
       return this.sessionId;
@@ -80,6 +125,12 @@ export class HttpTransport implements SessionManager {
     return data.id;
   }
 
+  /**
+   * Sends a message to the agent via HTTP.
+   * Automatically creates/uses a session for stateful communication.
+   * @param message - The message to send
+   * @returns The response content
+   */
   async sendMessage(message: string): Promise<string> {
     const sessionId = await this.createSession();
 
@@ -122,31 +173,51 @@ export class HttpTransport implements SessionManager {
   }
 }
 
+/**
+ * CLI-based transport that spawns opencode process for local execution.
+ * Supports streaming responses via stderr parsing.
+ */
 export class CliTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
 
+  /**
+   * Creates a new CliTransport instance.
+   * @param serverUrl - Server address to pass to opencode
+   * @param timeout - Process timeout in milliseconds
+   */
   constructor(serverUrl: string, timeout: number) {
     this.serverUrl = serverUrl;
     this.timeout = timeout;
   }
 
+  /** @inheritDoc - CLI mode always returns null (no session concept) */
   getSessionId(): null {
     return null;
   }
 
-  setSessionId(_id: string | null): void {
-    // CLI mode doesn't use sessions
-  }
+  /** @inheritDoc - CLI mode doesn't use sessions */
+  setSessionId(_id: string | null): void {}
 
-  clearSession(): void {
-    // CLI mode doesn't use sessions
-  }
+  /** @inheritDoc - CLI mode doesn't use sessions */
+  clearSession(): void {}
 
+  /**
+   * Sends a message by spawning opencode CLI process.
+   * @param message - The message to send
+   * @returns The response content
+   */
   async sendMessage(message: string): Promise<string> {
     return this.runCommand(message, false);
   }
 
+  /**
+   * Sends a message with streaming response callback.
+   * Only available in CLI mode.
+   * @param message - The message to send
+   * @param onChunk - Callback for each streaming chunk
+   * @returns The complete response content
+   */
   async sendMessageStreaming(message: string, onChunk: StreamingCallback): Promise<string> {
     return this.runCommand(message, true, onChunk);
   }
@@ -286,6 +357,11 @@ export class CliTransport implements SessionManager {
   }
 }
 
+/**
+ * Factory function to create the appropriate transport based on configuration.
+ * @param config - Transport configuration
+ * @returns HttpTransport or CliTransport instance
+ */
 export function createTransport(config: TransportConfig): HttpTransport | CliTransport {
   if (config.mode === 'cli') {
     return new CliTransport(config.serverUrl, config.timeout);
