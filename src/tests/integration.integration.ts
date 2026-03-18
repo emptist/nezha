@@ -19,6 +19,11 @@ async function createTestDatabase(db: DatabaseClient): Promise<void> {
       result JSONB,
       error TEXT,
       retry_count INTEGER DEFAULT 0,
+      max_retries INTEGER DEFAULT 3,
+      depends_on UUID[],
+      timeout_seconds INTEGER DEFAULT 300,
+      started_at TIMESTAMPTZ,
+      is_long_running BOOLEAN DEFAULT false,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW(),
       completed_at TIMESTAMPTZ
