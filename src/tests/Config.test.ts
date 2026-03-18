@@ -204,7 +204,7 @@ describe('Config', () => {
     expect(config.validate()).toBe(false);
   });
 
-  it('should fail validation when DB_PASSWORD is empty', () => {
+  it('should allow empty DB_PASSWORD for Keychain/trust authentication', () => {
     process.env.NEZHA_DB_HOST = 'localhost';
     process.env.NEZHA_DB_PORT = '5432';
     process.env.NEZHA_DB_NAME = 'nezha';
@@ -213,7 +213,7 @@ describe('Config', () => {
     process.env.NEZHA_HEARTBEAT_INTERVAL = '1000';
     Config.resetInstance();
     const config = Config.getInstance();
-    expect(config.validate()).toBe(false);
+    expect(config.validate()).toBe(true);
   });
 
   it('should return copies of configs to prevent mutation', () => {
