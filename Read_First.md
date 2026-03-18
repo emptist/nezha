@@ -2,6 +2,14 @@
 
 > **IMPORTANT**: Think of these MD files as the ROM for Nezha - essential for booting, minimal in size, foundational for everything else.
 
+## READ THIS FIRST
+
+**For new AI sessions, read these files in order:**
+
+1. **[Read_First.md](./Read_First.md)** ← (this file) → How to start/restart
+2. **[PHILOSOPHY.md](./PHILOSOPHY.md)** → Why we use PostgreSQL, design decisions
+3. **[README.md](./README.md)** → Full documentation
+
 ## ROM Analogy
 
 ```
