@@ -4,6 +4,10 @@ import { Scheduler } from '../core/Scheduler.js';
 import { Config } from '../config/Config.js';
 import { execSync } from 'child_process';
 
+function firstRow<T>(rows: T[]): T | undefined {
+  return rows[0];
+}
+
 function runMigrations(): void {
   const dbName = process.env.NEZHA_DB_NAME || 'nezha';
   const migrationsDir = 'src/db/migrations';
@@ -12,18 +16,36 @@ function runMigrations(): void {
   const dbUser = process.env.NEZHA_DB_USER || 'postgres';
   const psqlPath = '/Applications/Postgres.app/Contents/Versions/18/bin/psql';
 
-  const files = ['001_initial.sql', '002_multi_project_support.sql', '003_embedding_support.sql',
-    '004_self_improvement.sql', '005_task_dependencies.sql', '006_scheduled_tasks.sql',
-    '007_dead_letter_queue.sql', '008_advanced_scheduling.sql', '009_api_security.sql',
-    '010_task_tags.sql', '011_event_audit_log.sql', '012_memory_compaction.sql',
-    '013_encryption_support.sql', '014_task_retry_system.sql', '015_task_timeout.sql',
-    '016_task_tracking_fields.sql', '017_task_audit_log.sql', '018_task_templates.sql', '019_task_categories.sql'];
+  const files = [
+    '001_initial.sql',
+    '002_multi_project_support.sql',
+    '003_embedding_support.sql',
+    '004_self_improvement.sql',
+    '005_task_dependencies.sql',
+    '006_scheduled_tasks.sql',
+    '007_dead_letter_queue.sql',
+    '008_advanced_scheduling.sql',
+    '009_api_security.sql',
+    '010_task_tags.sql',
+    '011_event_audit_log.sql',
+    '012_memory_compaction.sql',
+    '013_encryption_support.sql',
+    '014_task_retry_system.sql',
+    '015_task_timeout.sql',
+    '016_task_tracking_fields.sql',
+    '017_task_audit_log.sql',
+    '018_task_templates.sql',
+    '019_task_categories.sql',
+  ];
 
   for (const file of files) {
     try {
-      execSync(`"${psqlPath}" -h "${dbHost}" -p "${dbPort}" -U "${dbUser}" -d "${dbName}" -f "${migrationsDir}/${file}" 2>/dev/null`, {
-        stdio: 'pipe',
-      });
+      execSync(
+        `"${psqlPath}" -h "${dbHost}" -p "${dbPort}" -U "${dbUser}" -d "${dbName}" -f "${migrationsDir}/${file}" 2>/dev/null`,
+        {
+          stdio: 'pipe',
+        }
+      );
     } catch {
       // Migration may fail if already applied
     }
@@ -32,8 +54,15 @@ function runMigrations(): void {
 
 async function setupTestDatabase(db: DatabaseClient): Promise<void> {
   const tables = [
-    'task_audit_log', 'dead_letter_queue', 'event_log', 'conversation_log',
-    'task_templates', 'skill_registry', 'projects', 'memory', 'tasks'
+    'task_audit_log',
+    'dead_letter_queue',
+    'event_log',
+    'conversation_log',
+    'task_templates',
+    'skill_registry',
+    'projects',
+    'memory',
+    'tasks',
   ];
 
   for (const table of tables) {
@@ -160,15 +189,13 @@ describe('Database Integration Tests', () => {
       );
       const taskId = insertResult.rows[0].id;
 
-      await db.query(
-        `UPDATE tasks SET status = 'RUNNING', started_at = NOW() WHERE id = $1`,
-        [taskId]
-      );
+      await db.query(`UPDATE tasks SET status = 'RUNNING', started_at = NOW() WHERE id = $1`, [
+        taskId,
+      ]);
 
-      const result = await db.query<{ status: string }>(
-        `SELECT status FROM tasks WHERE id = $1`,
-        [taskId]
-      );
+      const result = await db.query<{ status: string }>(`SELECT status FROM tasks WHERE id = $1`, [
+        taskId,
+      ]);
 
       expect(result.rows[0].status).toBe('RUNNING');
     });
@@ -228,8 +255,14 @@ describe('Database Integration Tests', () => {
     });
 
     it('should query memory by tags', async () => {
-      await db.query(`INSERT INTO memory (content, tags) VALUES ($1, $2)`, ['Content A', ['node', 'typescript']]);
-      await db.query(`INSERT INTO memory (content, tags) VALUES ($1, $2)`, ['Content B', ['python']]);
+      await db.query(`INSERT INTO memory (content, tags) VALUES ($1, $2)`, [
+        'Content A',
+        ['node', 'typescript'],
+      ]);
+      await db.query(`INSERT INTO memory (content, tags) VALUES ($1, $2)`, [
+        'Content B',
+        ['python'],
+      ]);
       await db.query(`INSERT INTO memory (content, tags) VALUES ($1, $2)`, ['Content C', ['node']]);
 
       const result = await db.query<{ content: string }>(
@@ -243,7 +276,10 @@ describe('Database Integration Tests', () => {
 
   describe('Concurrent Task Handling (SKIP LOCKED)', () => {
     it('should skip locked tasks', async () => {
-      await db.query(`INSERT INTO tasks (title, status) VALUES ($1, $2)`, ['Locked Task', 'RUNNING']);
+      await db.query(`INSERT INTO tasks (title, status) VALUES ($1, $2)`, [
+        'Locked Task',
+        'RUNNING',
+      ]);
 
       const result1 = await db.query<{ id: string }>(
         `UPDATE tasks SET status = 'RUNNING' WHERE id = (
@@ -362,10 +398,9 @@ describe('Scheduler Integration Tests', () => {
     });
 
     it('should emit events during task lifecycle', async () => {
-      await db.query<{ id: string }>(
-        `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
-        ['Event Test Task']
-      );
+      await db.query<{ id: string }>(`INSERT INTO tasks (title) VALUES ($1) RETURNING id`, [
+        'Event Test Task',
+      ]);
 
       scheduler = new Scheduler(db, 100);
       const events: string[] = [];

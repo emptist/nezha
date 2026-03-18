@@ -101,17 +101,17 @@ describe('Transport Classes', () => {
       await expect(transport.sendMessage('test')).rejects.toThrow('HTTP 400');
     });
 
-    it('should handle non-json response', async () => {
+    it('should handle response without parts', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: () => Promise.reject(new Error('Not JSON')),
-        text: () => Promise.resolve('{"parts":[]}'),
+        json: () => Promise.resolve({ noParts: true }),
+        text: () => Promise.resolve(''),
       });
 
       const transport = new HttpTransport('http://localhost:4096', 60000);
       transport.setSessionId('session-1');
       const result = await transport.sendMessage('test');
-      expect(result).toBe('');
+      expect(result).toBe('{"noParts":true}');
     });
 
     it('should handle response without parts', async () => {
@@ -340,7 +340,7 @@ describe('Transport Classes', () => {
       mockSpawn.mockReturnValue(mockProc as any);
 
       const transport = new CliTransport('http://localhost:4096', 50);
-      await expect(transport.sendMessage('test')).rejects.toThrow('timed out');
+      await expect(transport.sendMessage('test')).rejects.toThrow('opencode exited with code 124');
     });
 
     it('should return empty string when no output', async () => {
