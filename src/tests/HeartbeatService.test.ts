@@ -169,4 +169,60 @@ describe('HeartbeatService', () => {
       expect(healthAfter.stats.tasksExecuted).toBe(initialExecuted + 1);
     });
   });
+
+  describe('transport mode', () => {
+    it('should default to http transport mode', () => {
+      expect(service.getTransportMode()).toBe('http');
+    });
+
+    it('should report streaming is not supported in http mode', () => {
+      expect(service.isStreamingSupported()).toBe(false);
+    });
+
+    it('should create service with cli transport mode', () => {
+      const cliService = new HeartbeatService(mockDb, {
+        agent: { mode: 'cli' },
+      });
+      expect(cliService.getTransportMode()).toBe('cli');
+    });
+
+    it('should report streaming is supported in cli mode', () => {
+      const cliService = new HeartbeatService(mockDb, {
+        agent: { mode: 'cli' },
+      });
+      expect(cliService.isStreamingSupported()).toBe(true);
+    });
+
+    it('should throw when calling streaming in http mode', async () => {
+      await expect(
+        service.executeTaskStreaming('task-123', 'Test', 'desc', vi.fn())
+      ).rejects.toThrow('Streaming is only supported in CLI transport mode');
+    });
+  });
+
+  describe('agent configuration', () => {
+    it('should pass custom agent config to UnifiedAgent', () => {
+      const customService = new HeartbeatService(mockDb, {
+        agent: {
+          mode: 'cli',
+          timeout: 300000,
+          maxRetries: 5,
+          retryDelay: 2000,
+          serverUrl: 'http://custom:8080',
+        },
+      });
+      expect(customService.getTransportMode()).toBe('cli');
+    });
+
+    it('should use http mode with explicit config', () => {
+      const httpService = new HeartbeatService(mockDb, {
+        agent: {
+          mode: 'http',
+          timeout: 600000,
+          maxRetries: 3,
+        },
+      });
+      expect(httpService.getTransportMode()).toBe('http');
+    });
+  });
 });

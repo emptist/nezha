@@ -339,15 +339,27 @@ Please analyze the task and provide a detailed solution.`;
     return UnifiedAgent.extractArtifactsStatic(content);
   }
 
+  /**
+   * Clears the current session, forcing a new session on next request.
+   * Useful when session state becomes invalid.
+   */
   clearSession(): void {
     this.transport.clearSession();
   }
 
+  /**
+   * Gets the current session ID.
+   * @returns Session ID or null if no session exists
+   */
   getSessionId(): string | null {
     return this.transport.getSessionId();
   }
 }
 
+/**
+ * HTTP transport convenience wrapper.
+ * Use this for server-to-server communication with OpenCode server.
+ */
 export class Agent extends UnifiedAgent {
   constructor(config?: {
     timeout?: number;
@@ -370,6 +382,10 @@ export class Agent extends UnifiedAgent {
   }
 }
 
+/**
+ * CLI transport convenience wrapper with streaming support.
+ * Use this for local CLI execution with real-time output streaming.
+ */
 export class CliAgent extends UnifiedAgent {
   constructor(config?: Omit<UnifiedAgentConfig, 'mode'>) {
     super({ ...config, mode: 'cli', enableLogging: true });
