@@ -189,19 +189,134 @@ This gives us the best of both:
 
 ---
 
-## Summary
+## Why Not Docker?
 
-**Nezha uses PostgreSQL because:**
+We don't use Docker unless we have a strong reason:
 
-1. ✅ **Queryable** - Find anything instantly
-2. ✅ **Concurrent** - Multiple workers safely
-3. ✅ **Searchable** - Semantic similarity search
-4. ✅ **Portable** - Export/import entire system
-5. ✅ **Reliable** - ACID transactions
+| Reason to use Docker | Why not needed |
+|---------------------|----------------|
+| "Easy setup" | PostgreSQL app is simple enough |
+| "Everyone uses it" | Not a valid reason |
+| "Portable" | pg_dump is portable enough |
+| "Isolated" | Local development doesn't need it |
 
-**Files still exist for:**
-- Human-readable daily memory
-- Machine-specific configuration
-- Documentation
+**Our approach:**
+- PostgreSQL app (macOS) - just start it
+- No container complexity
+- Easier debugging
 
-**This makes Nezha a universal toolset** that can be deployed anywhere with just PostgreSQL.
+---
+
+## Why PostgreSQL? (Not Because "Everyone Uses It")
+
+We use PostgreSQL because it **solves our exact problems**:
+
+| Problem | PostgreSQL Solution |
+|---------|-------------------|
+| Skills → Projects (many-to-many) | JOINs via project_skills table |
+| Find tasks by status + priority | SQL WHERE + ORDER BY |
+| Semantic memory search | pgvector |
+| Reliable state | ACID transactions |
+| Skills registry | Foreign keys, indexes |
+| Multi-project support | project_id column |
+
+**NOT valid reasons:**
+- ❌ "Everyone uses it"
+- ❌ "It's standard"
+- ❌ "Docker makes it easy"
+
+**We choose based on solving problems, not popularity.**
+
+---
+
+## General vs Project-Specific Data
+
+Some data is **global** (reusable), some is **project-specific**:
+
+### Global (scope = 'global')
+- `skills` - central skills registry
+- `tool_definitions` - available tools
+- `agent_soul` - core identity templates
+- `agent_identity` - identity patterns
+
+### Project-Specific (scope = 'project')
+- `agent_configs` - project agents
+- `user_profiles` - project users
+- `heartbeat_configs` - project schedules
+- `task_results` - project results
+- `tasks` - project tasks
+
+**Database advantage:** Easy to query globally or per-project:
+```sql
+-- All global skills
+SELECT * FROM skills WHERE scope = 'global';
+
+-- Skills used by a project
+SELECT s.* FROM skills s
+JOIN project_skills ps ON s.id = ps.skill_id
+WHERE ps.project_id = 'nezha';
+```
+
+---
+
+## Skills Registry (Many-to-Many)
+
+**File system problem:** Same skill copied to multiple `.openclaw/bootstrap/` folders
+
+**Database solution:**
+
+```
+skills (global) ◄── project_skills (link) ──► projects
+    │                    │
+    ├── name             ├── project_id
+    ├── content          ├── enabled
+    ├── version          └── config
+    └── source
+```
+
+**Benefits:**
+- One skill → many projects
+- Easy to search/filter
+- Version tracking
+- Project-specific config
+- Source tracking (openclaw, custom, downloaded)
+
+---
+
+## Design Principles
+
+1. **Operational data in PostgreSQL** - queryable, concurrent, reliable
+2. **Human reference in files** - daily memory, docs, config
+3. **Global tables for reusable** - skills, tools, templates
+4. **Project ID for isolation** - multi-project support
+5. **No Docker unless strong reason** - keep it simple
+6. **Choose tools that solve problems** - not because of popularity
+
+---
+
+## Quick Reference for New Session
+
+### Start Services
+```bash
+# PostgreSQL
+/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18-2 -l /Users/jk/Library/Application\ Support/Postgres/var-18-2/logfile start
+
+# opencode serve
+nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &
+
+# Nezha
+cd /Users/jk/gits/hub/nezha
+nohup node dist/cli/index.js start > .nezha.log 2>&1 &
+```
+
+### Check Status
+```bash
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+```
+
+### Key Tables
+- `tasks` - task queue
+- `skills` - central skills registry
+- `project_skills` - skill → project links
+- `agent_configs` - project agents
+- `memory` - semantic knowledge base
