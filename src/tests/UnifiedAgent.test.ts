@@ -19,13 +19,9 @@ vi.mock('child_process', () => ({
 
 describe('Transport Classes', () => {
   describe('HttpTransport', () => {
-    let mockFetch: ReturnType<typeof vi.fn>;
-
     beforeEach(() => {
       vi.clearAllMocks();
       vi.restoreAllMocks();
-      mockFetch = vi.fn();
-      globalThis.fetch = mockFetch;
     });
 
     afterEach(() => {
