@@ -561,9 +561,8 @@ describe('UnifiedAgent', () => {
   describe('executeTask - CLI mode', () => {
     let mockSpawn: ReturnType<typeof vi.fn>;
 
-    beforeEach(async () => {
-      const { spawn } = await import('child_process');
-      mockSpawn = spawn as ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      mockSpawn = vi.mocked(spawn);
     });
 
     it('should spawn opencode for CLI mode', async () => {
@@ -598,9 +597,8 @@ describe('UnifiedAgent', () => {
   describe('executeTaskStreaming', () => {
     let mockSpawn: ReturnType<typeof vi.fn>;
 
-    beforeEach(async () => {
-      const { spawn } = await import('child_process');
-      mockSpawn = spawn as ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      mockSpawn = vi.mocked(spawn);
     });
 
     it('should only work in CLI mode', async () => {
