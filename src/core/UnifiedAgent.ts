@@ -311,7 +311,7 @@ export class Agent {
   async executeTask(
     message: string
   ): Promise<{ success: boolean; message?: string; sessionId?: string }> {
-    const sessionId = this.conversationLogger.startConversation(
+    this.conversationLogger.startConversation(
       { id: crypto.randomUUID(), title: message, description: message },
       'task_execution'
     );
