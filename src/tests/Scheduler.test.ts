@@ -439,6 +439,7 @@ describe('Scheduler - Task Operations', () => {
     
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test' }],
         rowCount: 1,
@@ -466,6 +467,7 @@ describe('Scheduler - Task Operations', () => {
     
     mockQuery
       .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<unknown>)
       .mockResolvedValueOnce({
         rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
         rowCount: 1,

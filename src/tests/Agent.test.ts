@@ -256,7 +256,9 @@ describe('Agent', () => {
 
     it('should retry on mock failure then succeed', async () => {
       mockExecSync
-        .mockRejectedValueOnce(new Error('Network failure'))
+        .mockImplementationOnce(() => {
+          throw new Error('Network failure');
+        })
         .mockReturnValueOnce(OpenCodeApiMock.formatResponse('Success on retry'));
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
@@ -301,6 +303,7 @@ describe('Agent', () => {
       const result = await agent.executeTask('malformed json test');
 
       expect(result.success).toBe(true);
+      expect(result.message).toBe('');
     });
   });
 
