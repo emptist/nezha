@@ -9,6 +9,10 @@ import {
 } from '../core/UnifiedAgent.js';
 import { HttpTransport, CliTransport, createTransport } from '../core/transports/index.js';
 
+const mockFetch = vi.fn();
+
+vi.stubGlobal('fetch', mockFetch);
+
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
 }));
