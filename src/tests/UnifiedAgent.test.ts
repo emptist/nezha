@@ -121,11 +121,14 @@ describe('Transport Classes', () => {
     });
 
     it('should spawn opencode with correct args', async () => {
+      let closeCallback: ((code: number) => void) | null = null;
       const mockProc = {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn((_event: string, cb: (code: number) => void) => {
-          if (_event === 'close') cb(0);
+          if (_event === 'close') {
+            closeCallback = cb;
+          }
         }),
         kill: vi.fn(),
       };
@@ -134,9 +137,12 @@ describe('Transport Classes', () => {
       const transport = new CliTransport('http://localhost:4096', 60000);
       const resultPromise = transport.sendMessage('test prompt');
 
-      mockProc.stdout.on.mock.calls.find((c: unknown[]) => c[0] === 'data')?.[1]?.(
-        '{"type":"text","part":{"text":"response"}}'
-      );
+      const dataCallback = mockProc.stdout.on.mock.calls.find(
+        (c: unknown[]) => c[0] === 'data'
+      )?.[1] as (data: string) => void;
+      dataCallback?.('{"type":"text","part":{"text":"response"}}');
+
+      closeCallback?.(0);
 
       const result = await resultPromise;
       expect(mockSpawn).toHaveBeenCalledWith(

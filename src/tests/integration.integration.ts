@@ -262,8 +262,7 @@ describe('Database Integration Tests', () => {
         `UPDATE tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = (
           SELECT id FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC, created_at ASC LIMIT 1
           FOR UPDATE SKIP LOCKED
-        ) RETURNING id`,
-        [taskId]
+        ) RETURNING id`
       );
 
       expect(result.rowCount).toBe(1);
