@@ -536,10 +536,58 @@ export class Cli {
     tag?: string,
     status?: string,
     category?: string,
-    jsonOutput: boolean = false
+    jsonOutput: boolean = false,
+    showAll: boolean = false
   ): Promise<void> {
     const db = await this.getDb();
-    let query = `SELECT id, title, status, priority, tags, category, created_at FROM tasks WHERE 1=1`;
+
+    // First, show summary counts
+    const countResult = await db.query<{ status: string; count: string }>(
+      `SELECT status, COUNT(*) as count FROM tasks GROUP BY status ORDER BY count DESC`
+    );
+
+    if (jsonOutput) {
+      const query = this.buildTaskQuery(tag, status, category, showAll ? 1000 : 50);
+      const result = await db.query<TaskRow>(query.query, query.params);
+      console.log(JSON.stringify({ summary: countResult.rows, tasks: result.rows }, null, 2));
+      return;
+    }
+
+    // Print summary
+    console.log(`\n${colors.bright}Task Summary:${colors.reset}`);
+    cli.table(
+      ['Status', 'Count'],
+      countResult.rows.map(r => [r.status, r.count])
+    );
+
+    // Then show tasks
+    const query = this.buildTaskQuery(tag, status, category, showAll ? 1000 : 50);
+    const result = await db.query<TaskRow>(query.query, query.params);
+
+    if (result.rows.length === 0) {
+      cli.info('\nNo tasks found with current filters');
+      return;
+    }
+
+    console.log(`\n${colors.bright}Tasks:${colors.reset}\n`);
+    cli.table(
+      ['Status', 'Category', 'Title', 'Priority'],
+      result.rows.map(row => [
+        row.status,
+        row.category || '-',
+        row.title.substring(0, 40) + (row.title.length > 40 ? '...' : ''),
+        row.priority.toString(),
+      ])
+    );
+  }
+
+  private buildTaskQuery(
+    tag?: string,
+    status?: string,
+    category?: string,
+    limit: number = 50
+  ): { query: string; params: (string | number)[] } {
+    let query = `SELECT id, title, status, priority, tags, category, created_at, completed_at FROM tasks WHERE 1=1`;
     const params: (string | number)[] = [];
     let paramIndex = 1;
 
@@ -561,31 +609,105 @@ export class Cli {
       paramIndex++;
     }
 
-    query += ` ORDER BY priority DESC, created_at DESC LIMIT 20`;
+    query += ` ORDER BY completed_at DESC NULLS LAST, created_at DESC LIMIT $${paramIndex}`;
+    params.push(limit);
 
-    const result = await db.query<TaskRow>(query, params);
+    return { query, params };
+  }
 
-    if (jsonOutput) {
-      console.log(JSON.stringify(result.rows, null, 2));
-      return;
-    }
+  async tableOfTasks(): Promise<void> {
+    const db = await this.getDb();
+
+    const result = await db.query<{
+      status: string;
+      title: string;
+      priority: number;
+      created_at: Date;
+      completed_at: Date | null;
+      retry_count: number;
+    }>(`
+      SELECT status, title, priority, created_at, completed_at, retry_count 
+      FROM tasks 
+      ORDER BY 
+        CASE status 
+          WHEN 'RUNNING' THEN 1 
+          WHEN 'PENDING' THEN 2 
+          WHEN 'COMPLETED' THEN 3 
+          ELSE 4 
+        END,
+        priority DESC,
+        created_at DESC
+    `);
 
     if (result.rows.length === 0) {
       cli.info('No tasks found');
       return;
     }
 
-    cli.info(`Found ${result.rows.length} task(s):\n`);
-    cli.table(
-      ['Status', 'Category', 'Title', 'Priority', 'Tags'],
-      result.rows.map(row => [
-        row.status,
-        row.category || '-',
-        row.title.substring(0, 35) + (row.title.length > 35 ? '...' : ''),
-        row.priority.toString(),
-        (row.tags || []).join(', '),
-      ])
-    );
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let completedToday = 0;
+    let completedYesterday = 0;
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    for (const row of result.rows) {
+      if (row.status === 'COMPLETED' && row.completed_at) {
+        const completed = new Date(row.completed_at);
+        if (completed >= today) completedToday++;
+        else if (completed >= yesterday && completed < today) completedYesterday++;
+      }
+    }
+
+    console.log(`\n${colors.bright}${'═'.repeat(70)}${colors.reset}`);
+    console.log(`${colors.bright}  TABLE OF TASKS${colors.reset}`.padEnd(72) + `${colors.dim}|${colors.reset}`);
+    console.log(`${colors.bright}${'═'.repeat(70)}${colors.reset}`);
+    console.log(`  ${colors.cyan}Today:${colors.reset} ${colors.green}${completedToday}${colors.reset} completed`);
+    console.log(`  ${colors.cyan}Yesterday:${colors.reset} ${completedYesterday} completed`);
+    console.log(`  ${colors.cyan}Total:${colors.reset} ${result.rows.length} tasks`);
+    console.log(`${colors.bright}${'-'.repeat(70)}${colors.reset}`);
+
+    const statusCounts = new Map<string, number>();
+    for (const row of result.rows) {
+      statusCounts.set(row.status, (statusCounts.get(row.status) || 0) + 1);
+    }
+    console.log(`  ${colors.dim}Status:${colors.reset} ${Array.from(statusCounts.entries()).map(([s, c]) => `${s}:${c}`).join(' | ')}`);
+    console.log(`${colors.bright}${'-'.repeat(70)}${colors.reset}\n`);
+
+    const statusColors: Record<string, string> = {
+      'RUNNING': colors.yellow,
+      'PENDING': colors.cyan,
+      'COMPLETED': colors.green,
+      'FAILED': colors.red,
+    };
+
+    console.log(`${colors.bright}#${colors.reset} ${colors.dim}Status${colors.reset}  ${colors.dim}Priority${colors.reset}  ${colors.bright}Title${colors.reset}`.padEnd(60) + `${colors.dim}Result${colors.reset}`);
+    console.log(`${colors.dim}${'─'.repeat(70)}${colors.reset}`);
+
+    const maxShow = 20;
+    const toShow = result.rows.slice(0, maxShow);
+
+    toShow.forEach((row, i) => {
+      const statusColor = statusColors[row.status] || colors.white;
+      const title = row.title.substring(0, 45) + (row.title.length > 45 ? '...' : '');
+      const result_emoji = row.status === 'COMPLETED' ? '✓' : row.status === 'RUNNING' ? '▶' : row.status === 'FAILED' ? '✗' : '○';
+      const retryInfo = row.retry_count > 0 ? ` (${row.retry_count} retries)` : '';
+
+      console.log(
+        `${(i + 1).toString().padStart(2)}${colors.reset} ` +
+        `${statusColor}${result_emoji}${row.status.padEnd(8)}${colors.reset}` +
+        `${row.priority.toString().padStart(8)}` +
+        `  ${title}`.padEnd(55) +
+        `${colors.dim}${retryInfo}${colors.reset}`
+      );
+    });
+
+    if (result.rows.length > maxShow) {
+      console.log(`\n  ${colors.dim}... and ${result.rows.length - maxShow} more tasks${colors.reset}`);
+    }
+
+    console.log(`\n${colors.bright}${colors.dim}Updated: ${new Date().toLocaleTimeString()}${colors.reset}\n`);
   }
 
   async createApiKey(name: string, rateLimit: number = 100): Promise<void> {
@@ -903,8 +1025,9 @@ async function main(): Promise<void> {
         const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
         const category = categoryIndex !== -1 ? args[categoryIndex + 1] : undefined;
         const jsonOutput = args.includes('--json') || args.includes('--format=json');
+        const showAll = args.includes('--all');
 
-        await cliInstance.listTasks(tag, status, category, jsonOutput);
+        await cliInstance.listTasks(tag, status, category, jsonOutput, showAll);
         break;
       }
 
@@ -982,6 +1105,12 @@ async function main(): Promise<void> {
           console.log('  nezha auto-tag-rules list');
           console.log('  nezha auto-tag-rules delete "fix"');
         }
+        break;
+      }
+
+      case 'table-of-tasks':
+      case 'tot': {
+        await cliInstance.tableOfTasks();
         break;
       }
 
@@ -1109,10 +1238,10 @@ function showHelp(): void {
     health                        Show health information
     task-add <title> [desc]      Add a new task
     schedule <name> <desc> <cron> Create a scheduled task
-    tasks [--tag <tag>] [--status <status>] [--category <category>] List tasks (filter by tag, status, category)
+    tasks [--tag <tag>]          List tasks (filter by tag, status, category)
+    table-of-tasks (tot)          Show task table with summary
     templates <cmd>              Manage task templates
     auto-tag-rules <cmd>         Manage auto-tagging rules
-    tasks [--tag <tag>]          List tasks
     api-key create <name>        Create API key
     api-key list                  List API keys
     api-key revoke <name>         Revoke API key
