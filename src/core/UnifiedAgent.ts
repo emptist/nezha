@@ -97,6 +97,7 @@ export interface UnifiedAgentConfig {
   fallbackMode?: TransportMode;
   enableFallback?: boolean;
   enableCache?: boolean;
+  enableObservability?: boolean;
   cacheTtlMs?: number;
   circuitBreakerThreshold?: number;
   circuitBreakerResetMs?: number;
@@ -165,6 +166,12 @@ export class UnifiedAgent {
   protected readonly enableCache: boolean;
   protected readonly cacheTtlMs: number;
 
+  protected readonly agentMetrics: AgentMetrics;
+  protected readonly instanceId: string;
+  protected readonly enableObservability: boolean;
+
+  private static readonly healthChecks = new Map<string, () => Promise<boolean>>();
+
   constructor(config?: UnifiedAgentConfig) {
     this.timeout = config?.timeout ?? 600000;
     this.maxRetries = config?.maxRetries ?? 3;
@@ -176,11 +183,29 @@ export class UnifiedAgent {
     this.enableFallback = config?.enableFallback ?? true;
     this.enableCache = config?.enableCache ?? true;
     this.cacheTtlMs = config?.cacheTtlMs ?? 5 * 60 * 1000;
+    this.enableObservability = config?.enableObservability ?? true;
+    this.instanceId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
     if (this.enableLogging) {
       this.conversationLogger = new ConversationLogger(config?.logDir ?? 'conversations');
     } else {
       this.conversationLogger = null;
+    }
+
+    this.agentMetrics = {
+      executionTotal: createAgentMetrics('nezha_unified_agent'),
+      correlationId: config?.correlationId ?? generateCorrelationId(),
+    };
+
+    if (this.enableObservability) {
+      this.registerHealthCheck();
+      this.logStructured('agent_initialized', {
+        mode: this.transportMode,
+        serverUrl: this.serverUrl,
+        timeout: this.timeout,
+        enableObservability: this.enableObservability,
+        instanceId: this.instanceId,
+      });
     }
 
     this.transport = createTransport({
@@ -227,6 +252,142 @@ export class UnifiedAgent {
     this.responseCache = new ResponseCache<string>({ ttlMs: this.cacheTtlMs });
     this.staleCache = new StaleResponseCache<string>(this.cacheTtlMs, 50);
     this.errorClassifier = new ErrorClassifier();
+  }
+
+  private logStructured(event: string, data: Record<string, unknown>): void {
+    if (this.enableObservability) {
+      logger.info(event, {
+        component: 'UnifiedAgent',
+        instanceId: this.instanceId,
+        transportMode: this.transportMode,
+        ...data,
+      });
+    }
+  }
+
+  private registerHealthCheck(): void {
+    const checkName = `unified_agent_${this.instanceId}`;
+    UnifiedAgent.healthChecks.set(checkName, () => this.checkHealth());
+  }
+
+  private async checkHealth(): Promise<boolean> {
+    try {
+      if (this.transportMode === 'http') {
+        const start = Date.now();
+        await fetch(`${this.serverUrl}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000),
+        });
+        return Date.now() - start < 5000;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getHealth(): Promise<AgentHealth> {
+    const transports: TransportHealth[] = [];
+    let serverConnectivity = false;
+
+    try {
+      if (this.transportMode === 'http') {
+        const start = Date.now();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        try {
+          const response = await fetch(`${this.serverUrl}/health`, {
+            method: 'GET',
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          serverConnectivity = response.ok;
+          transports.push({
+            mode: 'http',
+            healthy: response.ok,
+            lastCheck: new Date(),
+            latencyMs: Date.now() - start,
+          });
+        } catch (error) {
+          clearTimeout(timeoutId);
+          transports.push({
+            mode: 'http',
+            healthy: false,
+            lastCheck: new Date(),
+            error: error instanceof Error ? error.message : 'Connection failed',
+          });
+        }
+      } else {
+        transports.push({
+          mode: 'cli',
+          healthy: true,
+          lastCheck: new Date(),
+        });
+      }
+    } catch {
+      serverConnectivity = false;
+    }
+
+    return {
+      healthy: serverConnectivity || this.transportMode === 'cli',
+      timestamp: new Date(),
+      serverConnectivity,
+      transports,
+    };
+  }
+
+  getMetrics(): {
+    totalExecutions: number;
+    avgDurationMs: number;
+    activeConnections: number;
+    tokenUsageTotal: number;
+  } {
+    const execMetrics = this.agentMetrics.executionTotal;
+    return {
+      totalExecutions: execMetrics.executionTotal.value,
+      avgDurationMs:
+        execMetrics.executionDurationSeconds.count > 0
+          ? (execMetrics.executionDurationSeconds.sum /
+              execMetrics.executionDurationSeconds.count) *
+            1000
+          : 0,
+      activeConnections: execMetrics.activeConnections.value,
+      tokenUsageTotal: execMetrics.tokenUsage.value,
+    };
+  }
+
+  exportMetrics(): string {
+    return getMetricsRegistry().export();
+  }
+
+  getCorrelationId(): string {
+    return this.agentMetrics.correlationId;
+  }
+
+  private recordTokenUsage(response: string): void {
+    if (!this.enableObservability) return;
+    const tokenPattern = /token[_\s]?usage[:\s]+(\d+)/gi;
+    let match;
+    let totalTokens = 0;
+
+    while ((match = tokenPattern.exec(response)) !== null) {
+      totalTokens += parseInt(match[1], 10);
+    }
+
+    if (totalTokens > 0) {
+      this.agentMetrics.executionTotal.tokenUsage.inc(totalTokens);
+    }
+  }
+
+  private recordDuration(durationMs: number): void {
+    if (!this.enableObservability) return;
+    this.agentMetrics.executionTotal.executionDurationSeconds.observe(durationMs / 1000);
+  }
+
+  private recordExecution(): void {
+    if (!this.enableObservability) return;
+    this.agentMetrics.executionTotal.executionTotal.inc();
   }
 
   private switchMode(mode: TransportMode): void {
