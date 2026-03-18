@@ -253,7 +253,11 @@ export class Cli {
       }
 
       const template = templateResult.rows[0];
-      finalTitle = title || template.description.split('\n')[0];
+      if (!template) {
+        cli.error('Template not found');
+        process.exit(1);
+      }
+      finalTitle = (title || template.description.split('\n')[0]) ?? template.description;
       finalDescription = description || template.description;
       finalPriority = priority || template.priority;
       finalTaskType = taskType || template.task_type;
@@ -1068,7 +1072,8 @@ async function main(): Promise<void> {
 
         const priorityIndex = args.indexOf('--priority');
         if (priorityIndex !== -1 && priorityIndex < args.length - 1) {
-          priority = parseInt(args[priorityIndex + 1], 10) || 0;
+          const priorityArg = args[priorityIndex + 1];
+          priority = priorityArg ? parseInt(priorityArg, 10) || 0 : 0;
         }
 
         if (!name || !cronExpression) {
@@ -1105,8 +1110,8 @@ async function main(): Promise<void> {
         if (subcommand === 'create') {
           const name = args[2];
           const rateIndex = args.indexOf('--rate');
-          const rateLimit =
-            rateIndex !== -1 && args[rateIndex + 1] ? parseInt(args[rateIndex + 1], 10) : 100;
+          const rateLimitArg = rateIndex !== -1 ? args[rateIndex + 1] : undefined;
+          const rateLimit = rateLimitArg ? parseInt(rateLimitArg, 10) : 100;
 
           if (!name) {
             cli.error('API key name is required');
@@ -1196,17 +1201,19 @@ async function main(): Promise<void> {
 
           const priorityIndex = args.indexOf('--priority');
           if (priorityIndex !== -1 && priorityIndex + 1 < args.length) {
-            priority = parseInt(args[priorityIndex + 1], 10) || 0;
+            const priorityArg = args[priorityIndex + 1];
+            priority = priorityArg ? parseInt(priorityArg, 10) || 0 : 0;
           }
 
           const typeIndex = args.indexOf('--type');
           if (typeIndex !== -1 && typeIndex + 1 < args.length) {
-            taskType = args[typeIndex + 1];
+            taskType = args[typeIndex + 1] ?? taskType;
           }
 
           const timeoutIndex = args.indexOf('--timeout');
           if (timeoutIndex !== -1 && timeoutIndex + 1 < args.length) {
-            timeoutSeconds = parseInt(args[timeoutIndex + 1], 10) || 300;
+            const timeoutArg = args[timeoutIndex + 1];
+            timeoutSeconds = timeoutArg ? parseInt(timeoutArg, 10) || 300 : 300;
           }
 
           if (!name) {

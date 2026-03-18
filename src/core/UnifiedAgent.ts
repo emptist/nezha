@@ -847,11 +847,34 @@ Please analyze the task and provide a detailed solution.`;
   }
 }
 
+/**
+ * Agent class - HTTP-only agent for backward compatibility.
+ * Use UnifiedAgent for new code to get dual-mode transport support.
+ *
+ * @example
+ * ```typescript
+ * import { Agent } from './core/UnifiedAgent';
+ *
+ * const agent = new Agent({ serverUrl: 'http://localhost:4096' });
+ * const result = await agent.executeTask('Fix the login bug');
+ * ```
+ */
 export class Agent extends UnifiedAgent {
+  /**
+   * Creates a new Agent instance using HTTP transport.
+   * @param config - Optional configuration (mode is always 'http')
+   */
   constructor(config?: Omit<UnifiedAgentConfig, 'mode'>) {
     super({ ...config, mode: 'http' });
   }
 
+  /**
+   * Executes a task via HTTP transport.
+   * Simplified response compared to UnifiedAgent.
+   *
+   * @param message - The task description
+   * @returns Promise resolving to simplified response with success, message, sessionId
+   */
   async executeTask(
     message: string
   ): Promise<{ success: boolean; message?: string; sessionId?: string }> {
@@ -864,7 +887,30 @@ export class Agent extends UnifiedAgent {
   }
 }
 
+/**
+ * CliAgent - CLI transport agent for local execution.
+ * Spawns opencode CLI process for task execution.
+ *
+ * @example
+ * ```typescript
+ * import { CliAgent } from './core/UnifiedAgent';
+ *
+ * const agent = new CliAgent({ serverUrl: 'http://localhost:4096' });
+ * const result = await agent.executeTask('Create a new component');
+ *
+ * // With streaming
+ * await agent.executeTaskStreaming('Analyze the codebase', (chunk, type) => {
+ *   console.log(`[${type}] ${chunk}`);
+ * });
+ * ```
+ */
 export class CliAgent extends UnifiedAgent {
+  /**
+   * Creates a new CliAgent instance using CLI transport.
+   * Automatically enables logging.
+   *
+   * @param config - Optional configuration (mode is always 'cli')
+   */
   constructor(config?: Omit<UnifiedAgentConfig, 'mode'>) {
     super({ ...config, mode: 'cli', enableLogging: true });
   }
