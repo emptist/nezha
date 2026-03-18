@@ -554,7 +554,7 @@ const pool = new Pool({
 });
 
 // 方案 3: 使用本地 PostgreSQL
-// 通过 Docker 或本地安装
+// 通过本地安装
 ```
 
 ### 6.2 性能优化

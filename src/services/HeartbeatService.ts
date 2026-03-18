@@ -8,6 +8,7 @@ import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from '../
 import { logger } from '../utils/logger.js';
 import { DailyMemoryService, memory_save } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
+import { GitAutoCommitPlugin } from '../plugins/index.js';
 import { CheckpointService } from './CheckpointService.js';
 import { getEncryptionService, containsSensitiveData, encryptSensitiveFields } from './EncryptionService.js';
 import { createStandardMetrics } from './MetricsService.js';
@@ -34,6 +35,10 @@ export interface HeartbeatServiceConfig {
       onTaskStart?: boolean;
       onTaskComplete?: boolean;
       onTaskError?: boolean;
+    };
+    gitAutoCommit?: {
+      autoPush?: boolean;
+      commitMessagePrefix?: string;
     };
   };
 }
@@ -128,6 +133,11 @@ export class HeartbeatService {
         onTaskError: config.notification.onTaskError,
       }));
     }
+
+    pluginManager.registerPlugin(new GitAutoCommitPlugin({
+      autoPush: config?.gitAutoCommit?.autoPush ?? true,
+      commitMessagePrefix: config?.gitAutoCommit?.commitMessagePrefix ?? 'Task completed:',
+    }));
     
     if (pluginManager.listPlugins().length > 0) {
       logger.info(`Loaded ${pluginManager.listPlugins().length} plugin(s): ${pluginManager.listPlugins().join(', ')}`);

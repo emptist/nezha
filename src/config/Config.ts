@@ -13,6 +13,7 @@ import {
   ENV_KEYS,
   ENV_DEFAULT,
 } from './constants.js';
+import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
 
 function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
   if (!value) return defaultValue;
@@ -52,10 +53,17 @@ export class Config implements IConfig {
   }
 
   private loadConfig(): NezhaConfig {
-    const dbConfig = this.loadDbConfig();
-    const taskConfig = this.loadTaskConfig();
+    const yamlResult = loadYamlConfig();
+    const yamlConfig = yamlResult.config;
+    
+    if (!yamlResult.valid) {
+      console.warn('YAML config validation warnings:', yamlResult.errors);
+    }
+
+    const dbConfig = this.loadDbConfig(yamlConfig);
+    const taskConfig = this.loadTaskConfig(yamlConfig);
     const memoryConfig = this.loadMemoryConfig();
-    const embeddingConfig = this.loadEmbeddingConfig();
+    const embeddingConfig = this.loadEmbeddingConfig(yamlConfig);
     const env = this.loadEnv();
 
     return {
@@ -67,45 +75,45 @@ export class Config implements IConfig {
     };
   }
 
-  private loadDbConfig(): DbConfig {
-    const host = process.env[ENV_KEYS.DB_HOST];
+  private loadDbConfig(yaml?: NezhaYamlConfig): DbConfig {
+    const host = process.env[ENV_KEYS.DB_HOST] || yaml?.database?.host;
     const port = process.env[ENV_KEYS.DB_PORT];
-    const database = process.env[ENV_KEYS.DB_NAME];
-    const user = process.env[ENV_KEYS.DB_USER];
-    const password = process.env[ENV_KEYS.DB_PASSWORD];
+    const database = process.env[ENV_KEYS.DB_NAME] || yaml?.database?.database;
+    const user = process.env[ENV_KEYS.DB_USER] || yaml?.database?.user;
+    const password = process.env[ENV_KEYS.DB_PASSWORD] || yaml?.database?.password;
     const max = process.env[ENV_KEYS.DB_MAX];
     return {
       host: host || DATABASE_CONFIG.DEFAULT_HOST,
-      port: parseIntEnv(port, DATABASE_CONFIG.DEFAULT_PORT, ENV_KEYS.DB_PORT),
+      port: parseIntEnv(port, yaml?.database?.port || DATABASE_CONFIG.DEFAULT_PORT, ENV_KEYS.DB_PORT),
       database: database || 'nezha',
       user: user || 'postgres',
       password: password || '',
-      max: parseIntEnv(max, DATABASE_CONFIG.DEFAULT_MAX, ENV_KEYS.DB_MAX),
+      max: parseIntEnv(max, yaml?.database?.max || DATABASE_CONFIG.DEFAULT_MAX, ENV_KEYS.DB_MAX),
       idleTimeoutMillis: DATABASE_CONFIG.DEFAULT_IDLE_TIMEOUT_MS,
       connectionTimeoutMillis: DATABASE_CONFIG.DEFAULT_CONNECTION_TIMEOUT_MS,
     };
   }
 
-  private loadTaskConfig(): TaskConfig {
+  private loadTaskConfig(yaml?: NezhaYamlConfig): TaskConfig {
     return {
       heartbeatIntervalMs: parseIntEnv(
         process.env[ENV_KEYS.HEARTBEAT_INTERVAL],
-        TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS,
+        yaml?.task?.heartbeatIntervalMs || TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS,
         ENV_KEYS.HEARTBEAT_INTERVAL
       ),
       maxRetries: parseIntEnv(
         process.env[ENV_KEYS.MAX_RETRIES],
-        TASK_CONFIG.DEFAULT_MAX_RETRIES,
+        yaml?.task?.maxRetries || TASK_CONFIG.DEFAULT_MAX_RETRIES,
         ENV_KEYS.MAX_RETRIES
       ),
       retryDelayMs: parseIntEnv(
         process.env[ENV_KEYS.RETRY_DELAY],
-        TASK_CONFIG.DEFAULT_RETRY_DELAY_MS,
+        yaml?.task?.retryDelayMs || TASK_CONFIG.DEFAULT_RETRY_DELAY_MS,
         ENV_KEYS.RETRY_DELAY
       ),
       taskTimeoutMs: parseIntEnv(
         process.env[ENV_KEYS.TASK_TIMEOUT],
-        TASK_CONFIG.DEFAULT_TASK_TIMEOUT_MS,
+        yaml?.task?.taskTimeoutMs || TASK_CONFIG.DEFAULT_TASK_TIMEOUT_MS,
         ENV_KEYS.TASK_TIMEOUT
       ),
     };
@@ -122,8 +130,8 @@ export class Config implements IConfig {
     };
   }
 
-  private loadEmbeddingConfig(): EmbeddingConfig | undefined {
-    const provider = process.env[ENV_KEYS.EMBEDDING_PROVIDER];
+  private loadEmbeddingConfig(yaml?: NezhaYamlConfig): EmbeddingConfig | undefined {
+    const provider = process.env[ENV_KEYS.EMBEDDING_PROVIDER] || yaml?.embedding?.provider;
     if (!provider) {
       return undefined;
     }
@@ -134,9 +142,9 @@ export class Config implements IConfig {
 
     return {
       provider,
-      model: process.env[ENV_KEYS.EMBEDDING_MODEL] || (provider === 'ollama' ? 'nomic-embed-text' : 'embedding-2'),
-      apiKey: process.env[ENV_KEYS.ZHIPU_API_KEY],
-      apiUrl: process.env[ENV_KEYS.EMBEDDING_API_URL],
+      model: process.env[ENV_KEYS.EMBEDDING_MODEL] || yaml?.embedding?.model || (provider === 'ollama' ? 'nomic-embed-text' : 'embedding-2'),
+      apiKey: process.env[ENV_KEYS.ZHIPU_API_KEY] || yaml?.embedding?.apiKey,
+      apiUrl: process.env[ENV_KEYS.EMBEDDING_API_URL] || yaml?.embedding?.apiUrl,
     };
   }
 

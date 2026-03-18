@@ -1,3 +1,4 @@
+import { execSync, exec } from 'child_process';
 import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 
@@ -12,14 +13,13 @@ export class Agent {
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly retryDelay: number;
-  private readonly serverUrl: string;
-  private sessionId: string | null = null;
+  private serverUrl: string;
 
   constructor(config?: AgentConfig) {
     this.timeout = config?.timeout ?? 300000;
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
-    this.serverUrl = config?.serverUrl ?? 'http://127.0.0.1:4096';
+    this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';
   }
 
   private async sleep(ms: number): Promise<void> {
@@ -30,27 +30,6 @@ export class Agent {
     const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.3 * baseDelay;
     return Math.min(baseDelay + jitter, 30000);
-  }
-
-  private async ensureSession(): Promise<string> {
-    if (this.sessionId) {
-      return this.sessionId;
-    }
-
-    const response = await fetch(`${this.serverUrl}/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'nezha-daemon-session' }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to create session: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json() as { id: string };
-    this.sessionId = data.id;
-    logger.info(`Created session: ${this.sessionId}`);
-    return this.sessionId!;
   }
 
   async executeTask(message: string): Promise<AgentResponse> {
@@ -93,60 +72,68 @@ export class Agent {
     };
   }
 
-  private async runOpenCode(message: string): Promise<AgentResponse> {
-    const startTime = Date.now();
+  private runOpenCode(message: string): Promise<AgentResponse> {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
 
-    try {
-      const sessionId = await this.ensureSession();
-      
-      logger.debug(`Sending message to session ${sessionId}: ${message}`);
-      
-      const response = await fetch(`${this.serverUrl}/session/${sessionId}/message`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          parts: [{ type: 'text', text: message }]
-        }),
-      });
+      try {
+        const escapedMsg = message.replace(/"/g, '\\"');
+        const cmd = `opencode run --attach ${this.serverUrl} --format json "${escapedMsg}"`;
+        
+        logger.debug(`Running: ${cmd.substring(0, 100)}...`);
+        
+        const output = execSync(cmd, {
+          timeout: this.timeout,
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env },
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        const elapsed = Date.now() - startTime;
+        const responseText = this.parseJsonOutput(output);
+        
+        logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
+        
+        resolve({
+          success: true,
+          message: responseText,
+        });
+      } catch (error) {
+        const elapsed = Date.now() - startTime;
+        
+        if (error instanceof Error && error.message.includes('timeout')) {
+          logger.error(`Task timed out after ${elapsed}ms`);
+          resolve({
+            success: false,
+            message: `Task timed out after ${this.timeout}ms`,
+          });
+        } else {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          logger.error(`Task failed after ${elapsed}ms: ${errMsg}`);
+          resolve({
+            success: false,
+            message: errMsg,
+          });
+        }
       }
+    });
+  }
 
-    const data = await response.json() as { id?: string; result?: { parts?: Array<{ type: string; text: string }> }; message?: { parts?: Array<{ type: string; text: string }> } };
-      const elapsed = Date.now() - startTime;
-      
-      let responseText = '';
-      if (data.result?.parts) {
-        responseText = data.result.parts
-          .filter((p: { type: string }) => p.type === 'text')
-          .map((p: { text: string }) => p.text)
-          .join('\n');
-      } else if (data.message?.parts) {
-        responseText = data.message.parts
-          .filter((p: { type: string }) => p.type === 'text')
-          .map((p: { text: string }) => p.text)
-          .join('\n');
-      } else {
-        responseText = JSON.stringify(data);
+  private parseJsonOutput(output: string): string {
+    const lines = output.trim().split('\n');
+    const textParts: string[] = [];
+
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line);
+        if (event.type === 'text' && event.part?.text) {
+          textParts.push(event.part.text);
+        }
+      } catch {
+        continue;
       }
-
-      logger.info(`Task completed in ${elapsed}ms: ${responseText.substring(0, 100)}...`);
-      
-      return {
-        success: true,
-        message: responseText,
-      };
-    } catch (error) {
-      const elapsed = Date.now() - startTime;
-      const err = error instanceof Error ? error : new Error(String(error));
-      logger.error(`Task failed after ${elapsed}ms: ${err.message}`);
-      
-      return {
-        success: false,
-        message: err.message,
-      };
     }
+
+    return textParts.join('');
   }
 }

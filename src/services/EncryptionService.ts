@@ -38,7 +38,7 @@ export class EncryptionService {
     }
 
     try {
-      const salt = Buffer.alloc(SALT_LENGTH);
+      const salt = crypto.randomBytes(SALT_LENGTH);
       this.key = await this.deriveKey(encryptionSecret, salt);
       logger.info('Encryption service initialized');
     } catch (error) {
@@ -206,4 +206,15 @@ export function decryptSensitiveFields(obj: Record<string, unknown>, encryption:
   }
 
   return result;
+}
+
+export function isEncryptedData(data: unknown): boolean {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+  const obj = data as Record<string, unknown>;
+  return typeof obj.iv === 'string' && 
+         typeof obj.encryptedData === 'string' && 
+         typeof obj.tag === 'string' && 
+         typeof obj.salt === 'string';
 }

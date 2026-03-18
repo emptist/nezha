@@ -174,36 +174,65 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false)
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false, templateName?: string)
   : Promise<void> {
     cli.step('Validating task input...');
     
-    const titleResult = sanitizeTaskTitle(title);
+    let finalTitle = title;
+    let finalDescription = description;
+    let finalPriority = priority;
+    let finalTaskType = taskType;
+    let finalTimeout = timeoutSeconds;
+
+    if (templateName) {
+      const db = await this.getDb();
+      const templateResult = await db.query<{ name: string; description: string; priority: number; task_type: string; timeout_seconds: number }>(
+        `SELECT name, description, priority, task_type, timeout_seconds FROM task_templates WHERE name = $1`,
+        [templateName]
+      );
+      
+      if (templateResult.rows.length === 0) {
+        cli.error(`Template not found: "${templateName}"`);
+        console.log('\nAvailable templates:');
+        await this.listTemplates();
+        process.exit(1);
+      }
+      
+      const template = templateResult.rows[0];
+      finalTitle = title || template.description.split('\n')[0];
+      finalDescription = description || template.description;
+      finalPriority = priority || template.priority;
+      finalTaskType = taskType || template.task_type;
+      finalTimeout = timeoutSeconds || template.timeout_seconds;
+      cli.info(`Using template: ${template.name}`);
+    }
+    
+    const titleResult = sanitizeTaskTitle(finalTitle);
     if (!titleResult.valid) {
       cli.error(`Invalid title: ${titleResult.error}`);
       process.exit(1);
     }
     
-    const descResult = sanitizeTaskDescription(description);
+    const descResult = sanitizeTaskDescription(finalDescription);
     if (!descResult.valid) {
       cli.error(`Invalid description: ${descResult.error}`);
       process.exit(1);
     }
     
-    const priorityResult = sanitizePriority(priority);
+    const priorityResult = sanitizePriority(finalPriority);
     if (!priorityResult.valid) {
       cli.error(`Invalid priority: ${priorityResult.error}`);
       process.exit(1);
     }
 
-    if (timeoutSeconds !== undefined && (isNaN(timeoutSeconds) || timeoutSeconds <= 0)) {
-      cli.error(`Invalid timeout: ${timeoutSeconds}. Must be a positive number.`);
+    if (finalTimeout !== undefined && (isNaN(finalTimeout) || finalTimeout <= 0)) {
+      cli.error(`Invalid timeout: ${finalTimeout}. Must be a positive number.`);
       process.exit(1);
     }
 
     const validTypes = ['analysis', 'implementation', 'documentation', 'bugfix', 'research', 'testing', 'deployment', 'maintenance'];
-    if (taskType && !validTypes.includes(taskType)) {
-      cli.error(`Invalid type: ${taskType}. Valid types: ${validTypes.join(', ')}`);
+    if (finalTaskType && !validTypes.includes(finalTaskType)) {
+      cli.error(`Invalid type: ${finalTaskType}. Valid types: ${validTypes.join(', ')}`);
       process.exit(1);
     }
 
@@ -212,8 +241,8 @@ export class Cli {
       description: descResult.sanitized || '',
       priority: parseInt(priorityResult.sanitized || '0', 10),
       dependsOn: dependsOn || [],
-      timeoutSeconds,
-      taskType: taskType || 'implementation',
+      timeoutSeconds: finalTimeout,
+      taskType: finalTaskType || 'implementation',
       assignedTo: assignedTo || null,
     };
 
@@ -241,11 +270,66 @@ export class Cli {
     
     let extras = '';
     if (dependsOn && dependsOn.length > 0) extras += ` (depends on: ${dependsOn.join(', ')})`;
-    if (timeoutSeconds) extras += `, timeout: ${timeoutSeconds}s`;
-    if (taskType) extras += `, type: ${taskType}`;
+    if (finalTimeout) extras += `, timeout: ${finalTimeout}s`;
+    if (finalTaskType) extras += `, type: ${finalTaskType}`;
     if (assignedTo) extras += `, assigned: ${assignedTo}`;
+    if (templateName) extras += `, template: ${templateName}`;
     
     cli.success(`Task created: "${taskData.title}"${extras}`);
+  }
+
+  async listTemplates(): Promise<void> {
+    const db = await this.getDb();
+    const result = await db.query<{ name: string; description: string; priority: number; task_type: string; timeout_seconds: number }>(
+      `SELECT name, description, priority, task_type, timeout_seconds FROM task_templates ORDER BY priority DESC, name ASC`
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('No templates found.');
+      return;
+    }
+    
+    console.log('\nAvailable task templates:\n');
+    for (const t of result.rows) {
+      console.log(`  ${t.name}`);
+      console.log(`    ${t.description}`);
+      console.log(`    priority: ${t.priority}, type: ${t.task_type}, timeout: ${t.timeout_seconds}s`);
+      console.log();
+    }
+  }
+
+  async addTemplate(name: string, description: string, priority: number = 0, taskType: string = 'implementation', timeoutSeconds: number = 300): Promise<void> {
+    if (!name || name.trim().length === 0) {
+      cli.error('Template name is required');
+      process.exit(1);
+    }
+    
+    const db = await this.getDb();
+    await db.query(
+      `INSERT INTO task_templates (name, description, priority, task_type, timeout_seconds) 
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name) DO UPDATE SET description = $2, priority = $3, task_type = $4, timeout_seconds = $5, updated_at = NOW()`,
+      [name.trim(), description.trim(), priority, taskType, timeoutSeconds]
+    );
+    
+    cli.success(`Template "${name}" saved`);
+  }
+
+  async deleteTemplate(name: string): Promise<void> {
+    if (!name || name.trim().length === 0) {
+      cli.error('Template name is required');
+      process.exit(1);
+    }
+    
+    const db = await this.getDb();
+    const result = await db.query(`DELETE FROM task_templates WHERE name = $1 RETURNING name`, [name.trim()]);
+    
+    if (result.rowCount === 0) {
+      cli.error(`Template not found: "${name}"`);
+      process.exit(1);
+    }
+    
+    cli.success(`Template "${name}" deleted`);
   }
 
   async scheduleTask(name: string, description: string, cronExpression: string, priority: number = 0, dryRun: boolean = 
@@ -480,14 +564,23 @@ async function main(): Promise<void> {
         break;
         
       case 'task-add': {
-        const title = args[1];
-        let description = args[2] ?? '';
+        let title: string | undefined;
+        let description = '';
         let priority = 0;
         let dependsOn: string[] | undefined;
         let timeoutSeconds: number | undefined;
         let taskType: string | undefined;
         let assignedTo: string | undefined;
+        let templateName: string | undefined;
         const dryRun = args.includes('--dry-run');
+        
+        const templateIndex = args.indexOf('--template');
+        if (templateIndex !== -1 && templateIndex + 1 < args.length) {
+          const templateValue = args[templateIndex + 1];
+          if (templateValue && !templateValue.startsWith('--')) {
+            templateName = templateValue.toLowerCase();
+          }
+        }
         
         const priorityIndex = args.indexOf('--priority');
         if (priorityIndex !== -1 && priorityIndex + 1 < args.length) {
@@ -526,18 +619,30 @@ async function main(): Promise<void> {
           }
         }
         
-        if (!title) {
-          cli.error('Task title is required');
-          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--timeout <seconds>] [--type <type>] [--assign <owner>] [--dry-run]');
+        if (templateName) {
+          title = args.find((a, i) => i > 0 && i !== templateIndex && i !== templateIndex + 1 && !a.startsWith('--'));
+          const titleIndex = args.findIndex((a, i) => i > 0 && i !== templateIndex && i !== templateIndex + 1 && !a.startsWith('--'));
+          if (titleIndex !== -1) {
+            description = args.slice(titleIndex + 1).find(a => !a.startsWith('--')) || '';
+          }
+        } else {
+          title = args[1];
+          description = args[2] ?? '';
+        }
+        
+        if (!title && !templateName) {
+          cli.error('Task title or --template is required');
+          console.log('\nUsage: nezha task-add <title> [description] [--priority <n>] [--depends-on <uuid...>] [--timeout <seconds>] [--type <type>] [--assign <owner>] [--template <name>] [--dry-run]');
           console.log('\nValid types: analysis, implementation, documentation, bugfix, research, testing, deployment, maintenance');
           console.log('\nExamples:');
           console.log('  nezha task-add "Review PR #123" "Check for bugs" --priority 5');
           console.log('  nezha task-add "Fix login" "Users cannot login" --type bugfix --assign agent-1');
           console.log('  nezha task-add "Write docs" "API documentation" --type documentation');
+          console.log('  nezha task-add --template code-review "PR #123" "Review changes"');
           process.exit(1);
         }
         
-        await cliInstance.addTask(title, description, priority, dependsOn, timeoutSeconds, taskType, assignedTo, dryRun);
+        await cliInstance.addTask(title || '', description, priority, dependsOn, timeoutSeconds, taskType, assignedTo, dryRun, templateName);
         break;
       }
       
@@ -651,6 +756,61 @@ async function main(): Promise<void> {
         break;
       }
       
+      case 'templates': {
+        const subcommand = args[1];
+        
+        if (subcommand === 'list' || !subcommand) {
+          await cliInstance.listTemplates();
+        } else if (subcommand === 'add') {
+          const name = args[2];
+          const description = args[3] ?? '';
+          let priority = 0;
+          let taskType = 'implementation';
+          let timeoutSeconds = 300;
+          
+          const priorityIndex = args.indexOf('--priority');
+          if (priorityIndex !== -1 && priorityIndex + 1 < args.length) {
+            priority = parseInt(args[priorityIndex + 1], 10) || 0;
+          }
+          
+          const typeIndex = args.indexOf('--type');
+          if (typeIndex !== -1 && typeIndex + 1 < args.length) {
+            taskType = args[typeIndex + 1];
+          }
+          
+          const timeoutIndex = args.indexOf('--timeout');
+          if (timeoutIndex !== -1 && timeoutIndex + 1 < args.length) {
+            timeoutSeconds = parseInt(args[timeoutIndex + 1], 10) || 300;
+          }
+          
+          if (!name) {
+            cli.error('Template name is required');
+            console.log('\nUsage: nezha templates add <name> <description> [--priority <n>] [--type <type>] [--timeout <seconds>]');
+            process.exit(1);
+          }
+          
+          await cliInstance.addTemplate(name, description, priority, taskType, timeoutSeconds);
+        } else if (subcommand === 'delete' || subcommand === 'remove') {
+          const name = args[2];
+          
+          if (!name) {
+            cli.error('Template name is required');
+            console.log('\nUsage: nezha templates delete <name>');
+            process.exit(1);
+          }
+          
+          await cliInstance.deleteTemplate(name);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha templates <list|add|delete> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha templates list');
+          console.log('  nezha templates add my-template "Description" --priority 5');
+          console.log('  nezha templates delete my-template');
+        }
+        break;
+      }
+      
       case 'help':
       default:
         showHelp();
@@ -670,20 +830,21 @@ function showHelp(): void {
   console.log(`
  ${colors.bright}Usage:${colors.reset} nezha <command> [options]
 
- ${colors.bright}Commands:${colors.reset}
-   start                         Start the heartbeat service
-   stop                          Stop the heartbeat service
-   status                        Show current status
-   health                        Show health information
-   task-add <title> [desc]      Add a new task
-   schedule <name> <desc> <cron> Create a scheduled task
-   tasks [--tag <tag>]          List tasks (filter by tag)
-   auto-tag-rules <cmd>         Manage auto-tagging rules
-   tasks [--tag <tag>]          List tasks
-   api-key create <name>        Create API key
-   api-key list                  List API keys
-   api-key revoke <name>         Revoke API key
-   help                          Show this help
+  ${colors.bright}Commands:${colors.reset}
+    start                         Start the heartbeat service
+    stop                          Stop the heartbeat service
+    status                        Show current status
+    health                        Show health information
+    task-add <title> [desc]      Add a new task
+    schedule <name> <desc> <cron> Create a scheduled task
+    tasks [--tag <tag>]          List tasks (filter by tag)
+    templates <cmd>              Manage task templates
+    auto-tag-rules <cmd>         Manage auto-tagging rules
+    tasks [--tag <tag>]          List tasks
+    api-key create <name>        Create API key
+    api-key list                  List API keys
+    api-key revoke <name>         Revoke API key
+    help                          Show this help
 
  ${colors.bright}Options:${colors.reset}
   --priority <n>                Task priority (0-100)

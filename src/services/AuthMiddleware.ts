@@ -13,7 +13,11 @@ export interface AuthResult {
   authorized: boolean;
   error?: string;
   apiKeyName?: string;
+  role?: string;
+  userId?: string;
 }
+
+export type UserRole = 'user' | 'admin' | 'superadmin' | 'readonly';
 
 export class AuthMiddleware {
   private db?: DatabaseClient;
@@ -28,6 +32,17 @@ export class AuthMiddleware {
 
   setDatabase(db: DatabaseClient): void {
     this.db = db;
+  }
+
+  private extractRole(apiKey: string): UserRole {
+    if (this.adminApiKey && apiKey === this.adminApiKey) {
+      return 'superadmin';
+    }
+    return 'user';
+  }
+
+  canDecryptSensitiveData(role: UserRole): boolean {
+    return role === 'admin' || role === 'superadmin';
   }
 
   async authenticate(request: Request): Promise<AuthResult> {
@@ -45,7 +60,7 @@ export class AuthMiddleware {
 
     // Check admin key first
     if (this.adminApiKey && apiKey === this.adminApiKey) {
-      return { authorized: true, apiKeyName: 'admin' };
+      return { authorized: true, apiKeyName: 'admin', role: 'superadmin' };
     }
 
     // Check database for API key
@@ -53,8 +68,8 @@ export class AuthMiddleware {
       const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
       
       try {
-        const result = await this.db.query<{ id: string; name: string; enabled: boolean }>(
-          `SELECT id, name, enabled FROM api_keys WHERE key_hash = $1`,
+        const result = await this.db.query<{ id: string; name: string; enabled: boolean; role: string }>(
+          `SELECT id, name, enabled, role FROM api_keys WHERE key_hash = $1`,
           [keyHash]
         );
 
@@ -77,7 +92,8 @@ export class AuthMiddleware {
           return { authorized: false, error: 'Rate limit exceeded' };
         }
 
-        return { authorized: true, apiKeyName: key.name };
+        const role = (key.role as UserRole) || 'user';
+        return { authorized: true, apiKeyName: key.name, role, userId: key.id };
       } catch (error) {
         logger.error('Auth middleware error:', error);
         return { authorized: false, error: 'Authentication error' };

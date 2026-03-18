@@ -6,6 +6,7 @@ import { HeartbeatService } from './services/HeartbeatService.js';
 import { EventBus } from './core/EventBus.js';
 import { Scheduler } from './core/Scheduler.js';
 import { AgentSystem, type AgentSystemConfig } from './core/AgentSystem.js';
+import { EncryptionService } from './services/EncryptionService.js';
 
 export interface NezhaCoreConfig {
   heartbeatIntervalMs?: number;
@@ -27,6 +28,9 @@ export class NezhaCore {
   }
 
   async initialize(config?: NezhaCoreConfig): Promise<void> {
+    const encryptionService = EncryptionService.getInstance();
+    await encryptionService.initialize();
+    
     this.db = new DatabaseClient(this.config);
     this.scheduler = new Scheduler(this.db, config?.heartbeatIntervalMs);
     this.heartbeatService = new HeartbeatService(this.db, {

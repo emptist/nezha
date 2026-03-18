@@ -56,53 +56,7 @@ node dist/cli/index.js tasks
 
 ---
 
-### Solution 2: Use Docker (Alternative)
-
-**Step 1: Create Docker Compose file**
-
-Create `docker-compose.yml` in project root:
-
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: nezha-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: Podbmima.jigm
-      POSTGRES_DB: nezha
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./src/db/migrations:/docker-entrypoint-initdb.d
-    restart: unless-stopped
-
-volumes:
-  postgres_data:
-```
-
-**Step 2: Start PostgreSQL**
-```bash
-docker-compose up -d
-```
-
-**Step 3: Verify connection**
-```bash
-docker-compose ps
-node dist/cli/index.js tasks
-```
-
-**Step 4: Stop when done**
-```bash
-docker-compose down
-```
-
----
-
-### Solution 3: Use Existing PostgreSQL Installation
+### Solution 2: Use Existing PostgreSQL Installation
 
 If PostgreSQL is already installed but not in PATH:
 
@@ -174,11 +128,11 @@ After applying any solution:
 
 ## 🎯 Recommended Approach
 
-**For Development**: Use Docker (Solution 2)
-- ✅ Easy to set up
-- ✅ Isolated environment
-- ✅ Easy to reset
-- ✅ Consistent across machines
+**For Development**: Use Homebrew installation (Solution 1)
+- ✅ Native performance
+- ✅ System integration
+- ✅ Automatic updates
+- ✅ Better resource management
 
 **For Production**: Use Homebrew installation (Solution 1)
 - ✅ Native performance

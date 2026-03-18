@@ -1,0 +1,40 @@
+# Nezha Configuration
+# See: https://github.com/your-org/nezha#configuration
+
+# Database configuration (PostgreSQL)
+database:
+  host: localhost
+  port: 5432
+  database: nezha
+  user: postgres
+  password: postgres
+  max: 10
+
+# Task scheduler configuration
+task:
+  heartbeatIntervalMs: 30000  # 30 seconds
+  maxRetries: 3
+  retryDelayMs: 5000
+  taskTimeoutMs: 300000  # 5 minutes
+
+# Embedding configuration (optional)
+# embedding:
+#   provider: ollama  # ollama, openai, or zhipu
+#   model: nomic-embed-text
+#   apiUrl: http://localhost:11434
+#   apiKey: your-api-key  # only for openai/zhipu
+
+# Health check server
+health:
+  port: 4097
+  requireAuth: false
+
+# Webhook notifications (optional)
+# webhook:
+#   url: https://your-webhook.com/notify
+#   secret: your-webhook-secret
+#   enabled: false
+
+# Logging
+logging:
+  level: info  # debug, info, warn, error

@@ -143,8 +143,8 @@ error: password authentication failed for user "postgres"
 ### Immediate Actions
 
 1. **Set up PostgreSQL database** (User action required)
-   - Choose one of the 3 solutions in [DATABASE_TROUBLESHOOTING.md](./DATABASE_TROUBLESHOOTING.md)
-   - Recommended: Docker for development, Homebrew for production
+   - Choose one of the solutions in [DATABASE_TROUBLESHOOTING.md](./DATABASE_TROUBLESHOOTING.md)
+   - Recommended: Homebrew installation
 
 2. **Initialize database schema**
    ```bash
@@ -166,7 +166,7 @@ error: password authentication failed for user "postgres"
 
 2. **Automated Database Setup**
    - Create setup script: `scripts/setup-database.sh`
-   - Support both Docker and native PostgreSQL
+   - Support native PostgreSQL installation
    - Initialize schema automatically
 
 3. **Graceful Degradation**
@@ -197,7 +197,7 @@ error: password authentication failed for user "postgres"
 
 ### For User
 
-1. Choose database setup method (Docker recommended for development)
+1. Choose database setup method (Homebrew installation recommended)
 2. Follow steps in [DATABASE_TROUBLESHOOTING.md](./DATABASE_TROUBLESHOOTING.md)
 3. Verify database connection works
 4. Resume testing with `node dist/cli/index.js start`

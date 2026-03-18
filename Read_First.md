@@ -102,7 +102,7 @@ nohup node dist/cli/index.js start > .nezha.log 2>&1 &
 
 ## Database Schema
 
-### tasks table
+### tasks table (CURRENT - includes all columns)
 
 ```sql
 CREATE TABLE tasks (
@@ -117,8 +117,18 @@ CREATE TABLE tasks (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
+  started_at TIMESTAMPTZ,              -- When task started (used for timeout detection)
   depends_on UUID[] DEFAULT '{}',
-  blocking UUID[] DEFAULT '{}'
+  blocking UUID[] DEFAULT '{}',
+  next_retry_at TIMESTAMPTZ,           -- For scheduled retries
+  max_retries INTEGER DEFAULT 3,
+  timeout_seconds INTEGER DEFAULT 300,
+  is_long_running BOOLEAN DEFAULT false,
+  type TEXT DEFAULT 'implementation', -- bugfix, deployment, analysis, research, implementation
+  assigned_to TEXT,
+  category TEXT DEFAULT 'feature',
+  tags TEXT[] DEFAULT '{}',
+  auto_tagged BOOLEAN DEFAULT false
 );
 ```
 
@@ -211,6 +221,37 @@ npm run build
 ```bash
 # Check PostgreSQL is running
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT 1;"
+```
+
+### Problem: Scheduler fails with "column does not exist"
+```sql
+-- If you see errors like "column started_at does not exist" or "column age_boost does not exist"
+-- The schema may be outdated. Add missing columns:
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
+
+-- If age_boost error appears, it's a SQL bug in Scheduler.ts - the CTE alias cannot be used in ORDER BY
+-- Fix: Use a subquery layer (see src/core/Scheduler.ts line 222-254)
+```
+
+### Problem: Task fails with "fetch failed"
+- Check if opencode server is running: `ps aux | grep "opencode serve"`
+- Restart if needed: `pkill -f "opencode serve" && nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &`
+
+### Problem: OpenCodeClient API mismatch (FIXED)
+- Was: OpenCodeClient tried to use `/chat/completions` REST API which doesn't exist
+- Fix: Changed to use `opencode run --attach` CLI command via child_process
+- Code: src/core/OpenCodeClient.ts - uses spawn() to run opencode commands
+
+---
+
+## Running Occasional Tasks (without queue)
+
+```bash
+# Run a one-off task directly via opencode (bypasses Nezha task queue)
+opencode run --attach http://localhost:4096 "Your prompt here"
+
+# Or start a new session each time
+opencode run "Your prompt here"
 ```
 
 ---

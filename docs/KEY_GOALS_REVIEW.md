@@ -194,7 +194,7 @@ async executeTask(taskId: string, title: string, description?: string) {
 ### 中期改进（需要开发）
 
 1. **自动环境检测**
-   - 自动检测 PostgreSQL 安装方式（APP/Homebrew/Docker）
+   - 自动检测 PostgreSQL 安装方式（APP/Homebrew）
    - 自动检测认证方式（Keychain/Password/Trust）
    - 自动配置连接参数
 

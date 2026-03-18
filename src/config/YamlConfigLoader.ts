@@ -17,6 +17,7 @@ export interface NezhaYamlConfig {
     heartbeatIntervalMs?: number;
     maxRetries?: number;
     retryDelayMs?: number;
+    taskTimeoutMs?: number;
   };
   embedding?: {
     provider?: 'ollama' | 'openai' | 'zhipu';

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance } from 'axios';
+import { spawn } from 'child_process';
 import { ConversationLogger } from './ConversationLogger.js';
 
 export interface OpenCodeConfig {
@@ -6,6 +6,7 @@ export interface OpenCodeConfig {
   apiKey?: string;
   modelId: string;
   providerId: string;
+  serverUrl?: string;
 }
 
 export interface OpenCodeMessage {
@@ -30,20 +31,14 @@ export interface OpenCodeResponse {
 }
 
 export class OpenCodeClient {
-  private client: AxiosInstance;
   private config: OpenCodeConfig;
   private conversationLogger: ConversationLogger;
+  private serverUrl: string;
 
   constructor(config: OpenCodeConfig, conversationLogger: ConversationLogger) {
     this.config = config;
     this.conversationLogger = conversationLogger;
-    this.client = axios.create({
-      baseURL: config.apiUrl,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(config.apiKey && { 'Authorization': `Bearer ${config.apiKey}` }),
-      },
-    });
+    this.serverUrl = config.serverUrl || 'http://localhost:4096';
   }
 
   async sendMessage(
@@ -54,21 +49,74 @@ export class OpenCodeClient {
       stream?: boolean;
     }
   ): Promise<string> {
-    try {
-      const response = await this.client.post<OpenCodeResponse>('/chat/completions', {
-        model: this.config.modelId,
-        messages,
-        temperature: options?.temperature || 0.7,
-        max_tokens: options?.maxTokens || 4000,
-        stream: options?.stream || false,
+    const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+    const userMsg = messages.find(m => m.role === 'user')?.content || '';
+    
+    const fullPrompt = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
+    
+    return this.runOpenCode(fullPrompt);
+  }
+
+  private runOpenCode(prompt: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const args = [
+        'run',
+        '--attach', this.serverUrl,
+        '--format', 'json',
+        prompt
+      ];
+
+      const proc = spawn('opencode', args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env }
       });
 
-      const content = response.data.choices[0]?.message?.content || '';
-      
-      return content;
-    } catch (error) {
-      throw new Error(`OpenCode API error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      let output = '';
+      let errorOutput = '';
+
+      proc.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      proc.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          try {
+            const response = this.parseJsonOutput(output);
+            resolve(response);
+          } catch {
+            resolve(output);
+          }
+        } else {
+          reject(new Error(`opencode exited with code ${code}: ${errorOutput}`));
+        }
+      });
+
+      proc.on('error', (err) => {
+        reject(new Error(`Failed to spawn opencode: ${err.message}`));
+      });
+    });
+  }
+
+  private parseJsonOutput(output: string): string {
+    const lines = output.trim().split('\n');
+    const textParts: string[] = [];
+
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line);
+        if (event.type === 'text' && event.part?.text) {
+          textParts.push(event.part.text);
+        }
+      } catch {
+        continue;
+      }
     }
+
+    return textParts.join('');
   }
 
   async executeTask(
@@ -104,14 +152,12 @@ ${context ? `Context: ${context}` : ''}
 
 Please analyze the task and provide a detailed solution.`;
 
-      const messages: OpenCodeMessage[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Please help me with this task: ${task.description}` },
-      ];
-
       this.conversationLogger.addMessage('user', `Task: ${task.title}`);
 
-      const response = await this.sendMessage(messages);
+      const response = await this.sendMessage([
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Please help me with this task: ${task.description}` },
+      ]);
       
       this.conversationLogger.addMessage('assistant', response);
 
@@ -137,53 +183,62 @@ Please analyze the task and provide a detailed solution.`;
     }
   }
 
-  async *streamResponse(
+  async streamResponse(
     messages: OpenCodeMessage[],
     options?: {
       temperature?: number;
       maxTokens?: number;
-    }
-  ): AsyncIterator<string> {
-    try {
-      const response = await this.client.post(
-        '/chat/completions',
-        {
-          model: this.config.modelId,
-          messages,
-          temperature: options?.temperature || 0.7,
-          max_tokens: options?.maxTokens || 4000,
-          stream: true,
-        },
-        { responseType: 'stream' }
-      );
+    },
+    onChunk?: (text: string) => void
+  ): Promise<string> {
+    const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+    const userMsg = messages.find(m => m.role === 'user')?.content || '';
+    
+    const fullPrompt = systemMsg ? `${systemMsg}\n\n${userMsg}` : userMsg;
 
-      const stream = response.data;
-      
-      for await (const chunk of stream) {
-        const lines = chunk.toString().split('\n').filter((line: string) => line.trim() !== '');
-        
+    return new Promise((resolve, reject) => {
+      const args = [
+        'run',
+        '--attach', this.serverUrl,
+        '--format', 'json',
+        '--thinking',
+        fullPrompt
+      ];
+
+      const proc = spawn('opencode', args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env }
+      });
+
+      let output = '';
+      let buffer = '';
+
+      proc.stdout.on('data', (data) => {
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              return;
+          try {
+            const event = JSON.parse(line);
+            if (event.type === 'text' && event.part?.text) {
+              output += event.part.text;
+              onChunk?.(event.part.text);
             }
-            
-            try {
-              const parsed = JSON.parse(data);
-              const content = parsed.choices[0]?.delta?.content;
-              if (content) {
-                yield content;
-              }
-            } catch {
-              // Skip invalid JSON
-            }
+          } catch {
+            continue;
           }
         }
-      }
-    } catch (error) {
-      throw new Error(`OpenCode streaming error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+      });
+
+      proc.on('close', (code) => {
+        resolve(output);
+      });
+
+      proc.on('error', (err) => {
+        reject(new Error(`Failed to spawn opencode: ${err.message}`));
+      });
+    });
   }
 
   private extractArtifacts(content: string): string[] {

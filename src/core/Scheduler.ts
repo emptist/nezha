@@ -4,6 +4,7 @@ import { type Task, type TaskStatus, type QueryResult } from '../config/types.js
 import { logger } from '../utils/logger.js';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
+import { EncryptionService, containsSensitiveData, encryptSensitiveFields, decryptSensitiveFields } from '../services/EncryptionService.js';
 
 const standardMetrics = createStandardMetrics();
 
@@ -34,6 +35,7 @@ export class Scheduler {
   private readonly db: DatabaseClient;
   private readonly heartbeatIntervalMs: number;
   private readonly eventBus: EventBus;
+  private readonly encryption: EncryptionService;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private isHeartbeatRunning: boolean = false;
   private recurringTaskTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
@@ -51,6 +53,7 @@ export class Scheduler {
     this.db = db;
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.eventBus = eventBus ?? new EventBus(db);
+    this.encryption = EncryptionService.getInstance();
   }
 
   getEventBus(): EventBus {
@@ -222,11 +225,8 @@ export class Scheduler {
       `WITH eligible_tasks AS (
         SELECT 
           id, title, description, depends_on, retry_count, max_retries, timeout_seconds, priority, created_at,
-          -- Aging factor: +1 priority for every 5 minutes waiting (max +10)
           LEAST(FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) / 300), 10) as age_boost,
-          -- Retry boost: +2 priority per retry attempt
           COALESCE(retry_count, 0) * 2 as retry_boost,
-          -- Weighted fair queue: type-based adjustment
           CASE 
             WHEN type = 'bugfix' THEN 5
             WHEN type = 'deployment' THEN 3
@@ -242,13 +242,17 @@ export class Scheduler {
           WHERE t.id = ANY(${tableName}.depends_on) 
           AND t.status != $2
         ))
-        ORDER BY (priority + age_boost + retry_boost + type_weight) DESC, created_at ASC 
+      ),
+      ranked AS (
+        SELECT *, (priority + age_boost + retry_boost + type_weight) as sort_score
+        FROM eligible_tasks
+        ORDER BY sort_score DESC, created_at ASC 
         LIMIT 1 
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight FROM eligible_tasks)
-      WHERE id = (SELECT id FROM eligible_tasks)
+      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight FROM ranked)
+      WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, depends_on, retry_count, max_retries, timeout_seconds`,
       [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
     );
@@ -418,5 +422,75 @@ export class Scheduler {
     } catch (error) {
       logger.warn('Failed to log task state change:', error);
     }
+  }
+
+  async completeTaskWithResult(taskId: string, result: Record<string, unknown>): Promise<void> {
+    const tableName = DATABASE_TABLES.TASKS;
+    
+    if (this.encryption.isInitialized() && containsSensitiveData(result)) {
+      const encrypted = encryptSensitiveFields(result, this.encryption);
+      await this.db.query(
+        `UPDATE ${tableName} SET status = $1, result = $2, encrypted_result = $3, encrypted_at = NOW(), completed_at = NOW(), updated_at = NOW() WHERE id = $4`,
+        [TASK_STATUS.COMPLETED, null, JSON.stringify(encrypted), taskId]
+      );
+    } else {
+      await this.db.query(
+        `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW(), updated_at = NOW() WHERE id = $3`,
+        [TASK_STATUS.COMPLETED, JSON.stringify(result), taskId]
+      );
+    }
+    
+    logger.info(`Task ${taskId} completed with result`);
+  }
+
+  async failTaskWithError(taskId: string, error: string): Promise<void> {
+    const tableName = DATABASE_TABLES.TASKS;
+    
+    await this.db.query(
+      `UPDATE ${tableName} SET status = $1, error = $2, completed_at = NOW(), updated_at = NOW() WHERE id = $3`,
+      [TASK_STATUS.FAILED, error, taskId]
+    );
+    
+    logger.info(`Task ${taskId} failed with error: ${error}`);
+  }
+
+  async getTaskResult(taskId: string, userRole: string = 'user'): Promise<Record<string, unknown> | null> {
+    const tableName = DATABASE_TABLES.TASKS;
+    
+    const result = await this.db.query<{
+      result: string | null;
+      encrypted_result: string | null;
+      status: TaskStatus;
+    }>(
+      `SELECT result, encrypted_result, status FROM ${tableName} WHERE id = $1`,
+      [taskId]
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+
+    if (!this.encryption.isInitialized()) {
+      return row.result ? JSON.parse(row.result) : null;
+    }
+
+    if (row.encrypted_result) {
+      if (userRole !== 'admin' && userRole !== 'superadmin') {
+        logger.warn(`User role '${userRole}' denied access to encrypted task ${taskId} result`);
+        return null;
+      }
+
+      try {
+        const encrypted = JSON.parse(row.encrypted_result as string);
+        return decryptSensitiveFields(encrypted, this.encryption);
+      } catch (error) {
+        logger.error(`Failed to decrypt task ${taskId} result:`, error);
+        return null;
+      }
+    }
+
+    return row.result ? JSON.parse(row.result) : null;
   }
 }

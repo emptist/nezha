@@ -361,6 +361,22 @@ cp .env.example .env
 # DB_PASSWORD=your_password
 ```
 
+### 环境变量
+
+在 `.env` 文件中配置：
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| DB_HOST | PostgreSQL 主机 | localhost |
+| DB_PORT | PostgreSQL 端口 | 5432 |
+| DB_NAME | 数据库名 | nezha |
+| DB_USER | 数据库用户 | postgres |
+| DB_PASSWORD | 数据库密码 | your_password |
+| EMBEDDING_PROVIDER | 嵌入提供者 (ollama/zhipu/openai) | - |
+| WEBHOOK_URL | Webhook 通知 URL | - |
+| NEZHA_MAX_RETRIES | 任务最大重试次数 | 3 |
+| NEZHA_TASK_TIMEOUT | 任务超时时间 (ms) | 300000 |
+
 ### 数据库初始化
 
 > ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！

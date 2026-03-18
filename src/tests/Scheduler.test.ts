@@ -351,3 +351,187 @@ describe('Scheduler - Additional Edge Cases', () => {
     expect(mockQuery).toHaveBeenCalled();
   });
 });
+
+describe('Scheduler - Task Operations', () => {
+  let scheduler: Scheduler;
+  let mockDb: DatabaseClient;
+
+  const createMockDb = (): DatabaseClient => {
+    const mockQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    const mockDb = {
+      query: mockQuery,
+      close: vi.fn(),
+    } as unknown as DatabaseClient;
+    return mockDb;
+  };
+
+  beforeEach(() => {
+    mockDb = createMockDb();
+    scheduler = new Scheduler(mockDb, 100);
+  });
+
+  afterEach(async () => {
+    await scheduler.stop();
+    vi.clearAllMocks();
+  });
+
+  it('should complete task with result', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    await scheduler.completeTaskWithResult('task-1', { result: 'success' });
+    
+    expect(mockQuery).toHaveBeenCalled();
+    const callArgs = mockQuery.mock.calls[0];
+    expect(callArgs[0]).toContain('UPDATE');
+    expect(callArgs[1]).toContain('task-1');
+  });
+
+  it('should fail task with error', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    await scheduler.failTaskWithError('task-1', 'Task failed');
+    
+    expect(mockQuery).toHaveBeenCalled();
+    const callArgs = mockQuery.mock.calls[0];
+    expect(callArgs[0]).toContain('UPDATE');
+    expect(callArgs[1]).toContain('task-1');
+  });
+
+  it('should get task result', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({
+      rows: [{ result: '{"foo":"bar"}', encrypted_result: null, status: 'COMPLETED' }],
+      rowCount: 1,
+    } as QueryResult<unknown>);
+    
+    const result = await scheduler.getTaskResult('task-1');
+    
+    expect(mockQuery).toHaveBeenCalled();
+    expect(result).toEqual({ foo: 'bar' });
+  });
+
+  it('should return null for non-existent task result', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    
+    const result = await scheduler.getTaskResult('non-existent');
+    
+    expect(result).toBeNull();
+  });
+
+  it('should emit heartbeat event on start', async () => {
+    const eventBus = scheduler.getEventBus();
+    const callback = vi.fn();
+    
+    eventBus.subscribe('scheduler:heartbeat', callback);
+    
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    expect(callback).toHaveBeenCalled();
+  });
+
+  it('should emit task started event', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-1', title: 'Test Task', description: 'Test' }],
+        rowCount: 1,
+      } as QueryResult<unknown>);
+
+    const eventBus = scheduler.getEventBus();
+    const callback = vi.fn();
+    eventBus.subscribe('scheduler:task:started', callback);
+    
+    scheduler.onTaskReady = vi.fn().mockResolvedValue(undefined);
+    
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        title: 'Test Task',
+      })
+    );
+  });
+
+  it('should emit task completed event on success', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
+        rowCount: 1,
+      } as QueryResult<unknown>);
+
+    const eventBus = scheduler.getEventBus();
+    const callback = vi.fn();
+    eventBus.subscribe('scheduler:task:completed', callback);
+    
+    scheduler.onTaskReady = vi.fn().mockResolvedValue(undefined);
+    
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        title: 'Test Task',
+      })
+    );
+  });
+
+  it('should emit task failed event on error', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    
+    mockQuery
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+      .mockResolvedValueOnce({
+        rows: [{ id: 'task-1', title: 'Test Task', description: 'Test', retry_count: 0, max_retries: 3, timeout_seconds: 300 }],
+        rowCount: 1,
+      } as QueryResult<unknown>);
+
+    const eventBus = scheduler.getEventBus();
+    const callback = vi.fn();
+    eventBus.subscribe('scheduler:task:failed', callback);
+    
+    scheduler.onTaskReady = vi.fn().mockRejectedValue(new Error('Task failed'));
+    
+    await scheduler.start();
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        title: 'Test Task',
+      })
+    );
+  });
+
+  it('should respect pause until time', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    
+    await scheduler.start();
+    await scheduler.stop();
+    
+    expect(scheduler.isActive()).toBe(false);
+  });
+
+  it('should handle waitUntilStopped', async () => {
+    const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+    
+    await scheduler.start();
+    
+    const stopPromise = scheduler.stop();
+    await scheduler.waitUntilStopped();
+    await stopPromise;
+    
+    expect(scheduler.isActive()).toBe(false);
+  });
+});
