@@ -80,6 +80,10 @@ export class Cli {
     this.heartbeatService = new HeartbeatService(db, {
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
       embedding: embeddingConfig,
+      agent: {
+        mode: transportConfig.mode,
+        serverUrl: transportConfig.opencodeApiUrl,
+      },
     });
 
     this.heartbeatService.setCheckpointService(this.checkpointService);

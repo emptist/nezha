@@ -12,10 +12,10 @@ database:
 
 # Task scheduler configuration
 task:
-  heartbeatIntervalMs: 30000  # 30 seconds
+  heartbeatIntervalMs: 30000 # 30 seconds
   maxRetries: 3
   retryDelayMs: 5000
-  taskTimeoutMs: 300000  # 5 minutes
+  taskTimeoutMs: 300000 # 5 minutes
 
 # Embedding configuration (optional)
 # embedding:
@@ -29,6 +29,10 @@ health:
   port: 4097
   requireAuth: false
 
+# Transport mode: http or cli (cli uses opencode run --attach)
+transport:
+  mode: cli
+
 # Webhook notifications (optional)
 # webhook:
 #   url: https://your-webhook.com/notify
@@ -37,4 +41,4 @@ health:
 
 # Logging
 logging:
-  level: info  # debug, info, warn, error
+  level: info # debug, info, warn, error
