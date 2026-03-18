@@ -3,6 +3,8 @@
 > Last Updated: 2026-03-18
 > Status: Planning
 
+> **Note**: Core architecture decisions (PostgreSQL vs files, hybrid storage) are documented in [PHILOSOPHY.md](../PHILOSOPHY.md). This file focuses on improvements beyond the baseline.
+
 ## Executive Summary
 
 This document outlines the systemic improvements needed to transform Nezha from a basic task queue into an autonomous AI agent system similar to OpenClaw. Based on comparison with OpenClaw's architecture, we identify key missing capabilities and their implementation priorities.
@@ -31,6 +33,30 @@ This document outlines the systemic improvements needed to transform Nezha from 
 2. No embedding-based search to find relevant past experiences
 3. Agent has no way to "remember" solutions to similar problems
 4. No daily reflection/learning loop
+
+### Storage Architecture (Reference)
+
+See [PHILOSOPHY.md](../PHILOSOPHY.md) for the complete design rationale:
+
+| Data Type | Storage | Reason |
+|-----------|---------|--------|
+| Tasks, Workers, Audit Logs | PostgreSQL | Queryable, concurrent, ACID |
+| Memory (knowledge base) | PostgreSQL + pgvector | Semantic search required |
+| Skills Registry | PostgreSQL | Many-to-many, version tracking |
+| Daily Memory Logs | Files (.tmp/) | Human readable, append-only |
+| Curated Knowledge | MEMORY.md | Human editable, AI reference |
+
+**Import/Export for Knowledge Base:**
+```bash
+# Export entire DB
+pg_dump nezha > backup.sql
+
+# Export specific tables (memory, skills)
+pg_dump -t memory -t skills nezha > knowledge.sql
+
+# Import on new machine
+psql nezha-new < backup.sql
+```
 
 ---
 
