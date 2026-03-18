@@ -367,4 +367,72 @@ export class MemoryService {
 
     return result.rowCount;
   }
+
+  async compactMemories(maxMemories: number = MEMORY_CONFIG.DEFAULT_MAX_MEMORIES): Promise<{
+    archived: number;
+    deleted: number;
+    totalBefore: number;
+    totalAfter: number;
+  }> {
+    const tableName = DATABASE_TABLES.MEMORY;
+    const archiveTable = 'archived_memory';
+
+    // Get total count before compaction
+    const beforeResult = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${tableName}`
+    );
+    const totalBefore = parseInt(beforeResult.rows[0]?.count || '0', 10);
+
+    if (totalBefore <= maxMemories) {
+      logger.debug(`Memory compaction skipped: ${totalBefore} memories within limit of ${maxMemories}`);
+      return { archived: 0, deleted: 0, totalBefore, totalAfter: totalBefore };
+    }
+
+    const toArchive = totalBefore - maxMemories;
+
+    // Archive lowest importance memories first
+    const archiveResult = await this.db.query(
+      `INSERT INTO ${archiveTable} 
+       (id, project_id, content, metadata, tags, importance, source, embedding, archived_at, original_created_at, original_updated_at, archive_reason)
+       SELECT id, project_id, content, metadata, tags, importance, source, embedding, NOW(), created_at, updated_at, 'compaction'
+       FROM ${tableName}
+       WHERE id NOT IN (
+         SELECT id FROM ${tableName}
+         ORDER BY importance DESC, updated_at DESC
+         LIMIT $1
+       )
+       RETURNING id`,
+      [maxMemories]
+    );
+
+    // Delete archived memories from main table
+    if (archiveResult.rows.length > 0) {
+      const archivedIds = archiveResult.rows.map(r => r.id);
+      await this.db.query(
+        `DELETE FROM ${tableName} WHERE id = ANY($1)`,
+        [archivedIds]
+      );
+    }
+
+    // Delete very old archived memories (keep last 30 days)
+    const deleteResult = await this.db.query(
+      `DELETE FROM ${archiveTable} 
+       WHERE archived_at < NOW() - INTERVAL '30 days'`
+    );
+
+    // Get total count after compaction
+    const afterResult = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${tableName}`
+    );
+    const totalAfter = parseInt(afterResult.rows[0]?.count || '0', 10);
+
+    logger.info(`Memory compaction complete: archived ${archiveResult.rows.length}, deleted ${deleteResult.rowCount}, before ${totalBefore}, after ${totalAfter}`);
+
+    return {
+      archived: archiveResult.rows.length,
+      deleted: deleteResult.rowCount || 0,
+      totalBefore,
+      totalAfter,
+    };
+  }
 }

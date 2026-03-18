@@ -1,8 +1,9 @@
 import http from 'http';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
+import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { getMetricsRegistry, createStandardMetrics } from './MetricsService.js';
 import { getCache } from './CacheService.js';
@@ -77,6 +78,9 @@ export interface HealthServerConfig {
   requireAuth?: boolean;
   adminUsername?: string;
   adminPassword?: string;
+  opencodeApiUrl?: string;
+  memoryDir?: string;
+  diskWarningThreshold?: number; // bytes
 }
 
 export class HealthServer {
@@ -87,6 +91,9 @@ export class HealthServer {
   private requireAuth: boolean;
   private adminUsername?: string;
   private adminPassword?: string;
+  private opencodeApiUrl?: string;
+  private memoryDir: string;
+  private diskWarningThreshold: number;
 
   constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
@@ -95,6 +102,45 @@ export class HealthServer {
     this.requireAuth = config?.requireAuth ?? false;
     this.adminUsername = config?.adminUsername;
     this.adminPassword = config?.adminPassword;
+    this.opencodeApiUrl = config?.opencodeApiUrl ?? process.env.OPENCODE_API_URL;
+    this.memoryDir = config?.memoryDir ?? MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR;
+    this.diskWarningThreshold = config?.diskWarningThreshold ?? 1024 * 1024 * 1024; // 1GB default
+  }
+
+  private async checkOpenCodeApi(): Promise<{ status: 'ok' | 'error' | 'not_configured'; latency_ms?: number; error?: string }> {
+    if (!this.opencodeApiUrl) {
+      return { status: 'not_configured' };
+    }
+
+    const start = Date.now();
+    try {
+      const response = await fetch(`${this.opencodeApiUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000),
+      });
+      const latency = Date.now() - start;
+      
+      if (response.ok) {
+        return { status: 'ok', latency_ms: latency };
+      }
+      return { status: 'error', latency_ms: latency, error: `HTTP ${response.status}` };
+    } catch (error) {
+      return { status: 'error', error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private async checkDiskSpace(): Promise<{ status: 'ok' | 'warning' | 'error'; free_bytes?: number; path?: string; error?: string }> {
+    try {
+      const stats = await fs.statfs(this.memoryDir);
+      const freeBytes = stats.bsize * stats.blocks;
+      
+      if (freeBytes < this.diskWarningThreshold) {
+        return { status: 'warning', free_bytes: freeBytes, path: this.memoryDir };
+      }
+      return { status: 'ok', free_bytes: freeBytes, path: this.memoryDir };
+    } catch (error) {
+      return { status: 'error', path: this.memoryDir, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   private authenticate(req: http.IncomingMessage): boolean {
@@ -227,6 +273,12 @@ export class HealthServer {
        FROM ${DATABASE_TABLES.MEMORY}`
     );
 
+    // Run additional health checks in parallel
+    const [opencodeResult, diskResult] = await Promise.all([
+      this.checkOpenCodeApi(),
+      this.checkDiskSpace(),
+    ]);
+
     const health: HealthResponse = {
       status: dbHealth.healthy ? 'healthy' : 'unhealthy',
       uptime,
@@ -242,12 +294,8 @@ export class HealthServer {
           },
           error: dbHealth.error,
         },
-        opencode_api: {
-          status: 'not_configured',
-        },
-        disk_space: {
-          status: 'ok',
-        },
+        opencode_api: opencodeResult,
+        disk_space: diskResult,
         task_queue: {
           status: 'ok',
           pending: taskCounts.pending,

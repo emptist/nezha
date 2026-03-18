@@ -81,11 +81,12 @@ export class SemanticSearchService {
   }
 
   async search(query: string, projectId?: string, limit?: number): Promise<SearchResult[]> {
+    const sanitizedQuery = query.trim();
     const queryLimit = limit ?? this.maxResults;
 
     let queryEmbedding: number[];
     try {
-      queryEmbedding = await this.embedding.embed(query);
+      queryEmbedding = await this.embedding.embed(sanitizedQuery);
     } catch (error) {
       logger.error('Failed to embed query:', error);
       throw new Error('Failed to generate query embedding');
@@ -93,7 +94,7 @@ export class SemanticSearchService {
 
     const tableName = DATABASE_TABLES.MEMORY;
     const projectIdFilter = projectId ? `AND project_id = $2` : '';
-    const params = projectId ? [query, projectId] : [query];
+    const params = projectId ? [sanitizedQuery, projectId] : [sanitizedQuery];
 
     const result = await this.db.query<{
       id: string;
@@ -120,6 +121,7 @@ export class SemanticSearchService {
         updated_at
        FROM ${tableName}
        WHERE embedding IS NOT NULL
+         AND content ILIKE '%' || $1 || '%'
          ${projectIdFilter}
        ORDER BY created_at DESC
        LIMIT 100`,

@@ -54,13 +54,6 @@ export class Cli {
   async start(): Promise<void> {
     const db = await this.getDb();
     
-    // Load previous state if exists
-    const savedState = await this.checkpointService.loadState();
-    if (savedState) {
-      logger.info('Found saved state, resuming...');
-      await this.checkpointService.resetRunningTasks(db);
-    }
-    
     const embeddingConfig = this.config.getEmbeddingConfig();
     this.heartbeatService = new HeartbeatService(db, {
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
@@ -70,6 +63,7 @@ export class Cli {
     // Pass checkpoint service to heartbeat service for state tracking
     this.heartbeatService.setCheckpointService(this.checkpointService);
     
+    // HeartbeatService handles checkpoint loading and orphaned task reset
     await this.heartbeatService.start();
     
     this.healthServer = new HealthServer(db, 4097);

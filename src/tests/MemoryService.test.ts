@@ -169,4 +169,42 @@ describe('MemoryService', () => {
       expect(deletedCount).toBe(0);
     });
   });
+
+  describe('compactMemories', () => {
+    it('should skip compaction when under limit', async () => {
+      const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+      mockQuery.mockResolvedValue({ rows: [{ count: '100' }], rowCount: 1 } as QueryResult<{ count: string }>);
+
+      const result = await memoryService.compactMemories(10000);
+      expect(result.archived).toBe(0);
+      expect(result.deleted).toBe(0);
+    });
+
+    it('should archive memories exceeding limit', async () => {
+      const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{ count: string }>)
+        .mockResolvedValueOnce({ rows: [{ id: 'mem-1' }, { id: 'mem-2' }], rowCount: 2 } as QueryResult<{ id: string }>)
+        .mockResolvedValueOnce({ rows: [], rowCount: 2 } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{ count: string }>);
+
+      const result = await memoryService.compactMemories(10000);
+      expect(result.archived).toBe(2);
+      expect(result.totalBefore).toBe(10050);
+      expect(result.totalAfter).toBe(10000);
+    });
+
+    it('should clean up old archived memories', async () => {
+      const mockQuery = mockDb.query as ReturnType<typeof vi.fn>;
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ count: '10050' }], rowCount: 1 } as QueryResult<{ count: string }>)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<{ id: string }>)
+        .mockResolvedValueOnce({ rows: [], rowCount: 10 } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [{ count: '10000' }], rowCount: 1 } as QueryResult<{ count: string }>);
+
+      const result = await memoryService.compactMemories(10000);
+      expect(result.deleted).toBe(10);
+    });
+  });
 });

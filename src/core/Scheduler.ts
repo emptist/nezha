@@ -150,6 +150,7 @@ export class Scheduler {
     // Check if paused
     if (this.isPaused && this.pauseUntil && new Date() < this.pauseUntil) {
       logger.info(`Scheduler heartbeat: Paused until ${this.pauseUntil.toISOString()}`);
+      this.isHeartbeatRunning = false;
       return;
     }
     
@@ -175,9 +176,20 @@ export class Scheduler {
       [TASK_STATUS.PENDING, TASK_STATUS.RUNNING]
     );
 
-    // Prevent concurrent task execution
+    // Prevent concurrent task execution - double check with database state
     if (this.isExecuting) {
       logger.debug('Scheduler heartbeat: Task already executing, skipping');
+      return;
+    }
+    
+    // Also check database for any running tasks as additional protection
+    const runningCheck = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${tableName} WHERE status = $1`,
+      [TASK_STATUS.RUNNING]
+    );
+    const runningCount = parseInt(runningCheck.rows[0]?.count || '0', 10);
+    if (runningCount > 0) {
+      logger.debug(`Scheduler heartbeat: ${runningCount} task(s) running in DB, skipping`);
       return;
     }
     
