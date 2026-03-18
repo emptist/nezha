@@ -123,7 +123,7 @@ export class UnifiedAgent {
         message: response,
         output: response,
         artifacts,
-        sessionId: sessionId || undefined,
+        sessionId: this.transport.getSessionId() || sessionId || undefined,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -140,7 +140,7 @@ export class UnifiedAgent {
         message: errorMessage,
         output: errorMessage,
         artifacts,
-        sessionId: sessionId || undefined,
+        sessionId: this.transport.getSessionId() || sessionId || undefined,
       };
     }
   }
