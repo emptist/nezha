@@ -2,47 +2,50 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Scheduler } from '../core/Scheduler.js';
 import { Config } from '../config/Config.js';
-import { readdir, readFile } from 'fs/promises';
-import { join } from 'path';
+import { execSync } from 'child_process';
 import type { QueryResult } from '../config/types.js';
 
 const TEST_DB_NAME = 'nezha_test';
 
-async function runMigrations(db: DatabaseClient): Promise<void> {
-  const migrationsDir = join(process.cwd(), 'src/db/migrations');
-  const files = await readdir(migrationsDir);
-  const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
+function runMigrations(): void {
+  const dbName = process.env.NEZHA_DB_NAME || 'nezha';
+  const migrationsDir = 'src/db/migrations';
+  const dbHost = process.env.NEZHA_DB_HOST || 'localhost';
+  const dbPort = process.env.NEZHA_DB_PORT || '5432';
+  const dbUser = process.env.NEZHA_DB_USER || 'postgres';
 
-  for (const file of sqlFiles) {
-    const content = await readFile(join(migrationsDir, file), 'utf-8');
-    const statements = content.split(';').filter(s => s.trim());
-    for (const stmt of statements) {
-      if (stmt.trim()) {
-        try {
-          await db.query(stmt);
-        } catch (e) {
-          console.error(`Migration ${file} statement failed:`, e);
-        }
-      }
+  const files = ['001_initial.sql', '002_multi_project_support.sql', '003_embedding_support.sql',
+    '004_self_improvement.sql', '005_task_dependencies.sql', '006_scheduled_tasks.sql',
+    '007_dead_letter_queue.sql', '008_advanced_scheduling.sql', '009_api_security.sql',
+    '010_task_tags.sql', '011_event_audit_log.sql', '012_memory_compaction.sql',
+    '013_encryption_support.sql', '014_task_retry_system.sql', '015_task_timeout.sql',
+    '016_task_tracking_fields.sql', '017_task_audit_log.sql', '018_task_templates.sql', '019_task_categories.sql'];
+
+  for (const file of files) {
+    try {
+      execSync(`psql -h "${dbHost}" -p "${dbPort}" -U "${dbUser}" -d "${dbName}" -f "${migrationsDir}/${file}" 2>/dev/null`, {
+        stdio: 'pipe',
+      });
+    } catch {
     }
   }
 }
 
 async function setupTestDatabase(db: DatabaseClient): Promise<void> {
   try {
-    await db.query(`DROP TABLE IF EXISTS tasks CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS memory CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS projects CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS skill_registry CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS task_audit_log CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS dead_letter_queue CASCADE`);
     await db.query(`DROP TABLE IF EXISTS event_log CASCADE`);
     await db.query(`DROP TABLE IF EXISTS conversation_log CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS dead_letter_queue CASCADE`);
-    await db.query(`DROP TABLE IF EXISTS task_audit_log CASCADE`);
     await db.query(`DROP TABLE IF EXISTS task_templates CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS skill_registry CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS projects CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS memory CASCADE`);
+    await db.query(`DROP TABLE IF EXISTS tasks CASCADE`);
   } catch {
   }
 
-  await runMigrations(db);
+  runMigrations();
 }
 
 async function cleanupTasks(db: DatabaseClient): Promise<void> {

@@ -1,7 +1,6 @@
 import {
   createTransport,
   type TransportMode,
-  type TransportResponse,
   type StreamingCallback,
   type SessionManager,
   HttpTransport,
