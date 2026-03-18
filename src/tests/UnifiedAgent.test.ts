@@ -19,8 +19,9 @@ describe('Transport Classes', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
+      vi.restoreAllMocks();
       mockFetch = vi.fn();
-      vi.stubGlobal('fetch', mockFetch);
+      globalThis.fetch = mockFetch;
     });
 
     afterEach(() => {
@@ -249,8 +250,9 @@ describe('UnifiedAgent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
+    globalThis.fetch = mockFetch;
   });
 
   afterEach(() => {
@@ -659,8 +661,9 @@ describe('Backward Compatibility - Agent class', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     mockFetch = vi.fn();
-    vi.stubGlobal('fetch', mockFetch);
+    globalThis.fetch = mockFetch;
   });
 
   afterEach(() => {

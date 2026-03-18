@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Agent } from '../core/Agent.js';
-import { OpenCodeApiMock } from './mocks/OpenCodeApiMock.js';
-
-vi.mock('child_process', () => ({
-  execSync: vi.fn(),
-  exec: vi.fn(),
-}));
-
-import { execSync } from 'child_process';
 
 describe('Agent', () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
+    mockFetch = vi.fn();
+    globalThis.fetch = mockFetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('constructor', () => {
