@@ -8,23 +8,25 @@ import {
 import { ConversationLogger } from './ConversationLogger.js';
 import { logger } from '../utils/logger.js';
 import {
-  createAgentMetrics,
-  registerHealthCheck,
-  unregisterHealthCheck,
-  type TransportHealth,
-  type AgentHealth,
-} from '../services/MetricsService.js';
+  categorizeError,
+  formatErrorMessage,
+  isRetryableError,
+  type CategorizedError,
+  ErrorClassifier,
+} from '../utils/ErrorClassifier.js';
+import { RetryExecutor, DEFAULT_RETRY_POLICY, type RetryPolicy } from '../utils/RetryExecutor.js';
+import {
+  EnhancedCircuitBreaker,
+  CircuitOpenError,
+  type CircuitState,
+} from '../utils/EnhancedCircuitBreaker.js';
+import { ResponseCache, StaleResponseCache } from '../utils/ResponseCache.js';
 
 export { type StreamingCallback } from './transports/index.js';
 
 const MAX_MESSAGE_LENGTH = 100000;
 const MAX_TASK_TITLE_LENGTH = 500;
 const MAX_TASK_DESCRIPTION_LENGTH = 5000;
-
-interface AgentMetrics {
-  executionTotal: ReturnType<typeof createAgentMetrics>;
-  correlationId: string;
-}
 
 function sanitizeForLog(input: string, maxLength: number = 200): string {
   const sanitized = input.replace(/[\x00-\x1F\x7F]/g, '');
@@ -72,67 +74,44 @@ function generateCorrelationId(): string {
   return `corr-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-/**
- * Configuration options for UnifiedAgent.
- */
 export interface UnifiedAgentConfig {
-  /** Transport mode: 'http' (default) or 'cli' */
   mode?: TransportMode;
-  /** Request timeout in milliseconds (default: 600000 = 10 minutes) */
   timeout?: number;
-  /** Maximum retry attempts on failure (default: 3) */
   maxRetries?: number;
-  /** Initial delay between retries in ms (default: 1000) */
   retryDelay?: number;
-  /** OpenCode server URL (default: 'http://localhost:4096') */
   serverUrl?: string;
-  /** Directory for conversation logs (default: 'conversations') */
   logDir?: string;
-  /** Enable conversation logging (default: true) */
   enableLogging?: boolean;
-  /** Enable observability (metrics, health checks) (default: true) */
-  enableObservability?: boolean;
-  /** Custom correlation ID for tracing */
   correlationId?: string;
+  fallbackMode?: TransportMode;
+  enableFallback?: boolean;
+  enableCache?: boolean;
+  cacheTtlMs?: number;
+  circuitBreakerThreshold?: number;
+  circuitBreakerResetMs?: number;
+  retryPolicy?: Partial<RetryPolicy>;
 }
 
-/**
- * Structured task representation for detailed task execution.
- */
 export interface AgentTask {
-  /** Optional unique task identifier */
   id?: string;
-  /** Task title/summary */
   title: string;
-  /** Detailed task description */
   description: string;
-  /** Additional context information */
   context?: string;
 }
 
-/**
- * Response from UnifiedAgent task execution.
- */
 export interface UnifiedAgentResponse {
-  /** Whether the task completed successfully */
   success: boolean;
-  /** Response message or error description */
   message?: string;
-  /** Full output content */
   output?: string;
-  /** List of file artifacts mentioned in the response */
   artifacts?: string[];
-  /** Session identifier for the conversation */
   sessionId?: string;
-  /** Correlation ID for tracing */
   correlationId?: string;
-  /** Execution duration in milliseconds */
   durationMs?: number;
+  errorCategory?: string;
+  fallbackUsed?: boolean;
+  fromCache?: boolean;
 }
 
-/**
- * Execution metrics for a single task.
- */
 export interface TaskMetrics {
   success: boolean;
   durationMs: number;
@@ -146,22 +125,13 @@ export interface TaskMetrics {
   };
 }
 
-/**
- * UnifiedAgent provides transport-agnostic task execution with retry logic,
- * conversation logging, and support for both HTTP and CLI modes.
- *
- * @example
- * ```typescript
- * // HTTP mode (default)
- * const agent = new Agent();
- * const result = await agent.executeTask('Fix the bug');
- *
- * // CLI mode with streaming
- * const cliAgent = new CliAgent();
- * await cliAgent.executeTaskStreaming('Deploy', (chunk, type) => {
- *    * });
- * ```
- */
+export interface ResilienceStats {
+  circuitBreaker: CircuitState;
+  cacheHitRate: number;
+  retryCount: number;
+  lastError?: CategorizedError;
+}
+
 export class UnifiedAgent {
   protected readonly timeout: number;
   protected readonly maxRetries: number;
@@ -171,18 +141,30 @@ export class UnifiedAgent {
   private readonly conversationLogger: ConversationLogger | null;
   protected readonly enableLogging: boolean;
   protected transport: HttpTransport | CliTransport;
+  protected fallbackTransport: HttpTransport | CliTransport | null = null;
+  protected currentMode: TransportMode;
 
-  /**
-   * Creates a new UnifiedAgent instance.
-   * @param config - Optional configuration object
-   */
+  protected circuitBreaker: EnhancedCircuitBreaker;
+  protected retryExecutor: RetryExecutor;
+  protected responseCache: ResponseCache<string>;
+  protected staleCache: StaleResponseCache<string>;
+  protected errorClassifier: ErrorClassifier;
+
+  protected readonly enableFallback: boolean;
+  protected readonly enableCache: boolean;
+  protected readonly cacheTtlMs: number;
+
   constructor(config?: UnifiedAgentConfig) {
     this.timeout = config?.timeout ?? 600000;
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
     this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';
     this.transportMode = config?.mode ?? 'http';
+    this.currentMode = this.transportMode;
     this.enableLogging = config?.enableLogging ?? true;
+    this.enableFallback = config?.enableFallback ?? true;
+    this.enableCache = config?.enableCache ?? true;
+    this.cacheTtlMs = config?.cacheTtlMs ?? 5 * 60 * 1000;
 
     if (this.enableLogging) {
       this.conversationLogger = new ConversationLogger(config?.logDir ?? 'conversations');
@@ -195,39 +177,78 @@ export class UnifiedAgent {
       serverUrl: this.serverUrl,
       timeout: this.timeout,
     }) as HttpTransport | CliTransport;
+
+    if (this.enableFallback && config?.fallbackMode) {
+      this.fallbackTransport = createTransport({
+        mode: config.fallbackMode,
+        serverUrl: this.serverUrl,
+        timeout: this.timeout,
+      }) as HttpTransport | CliTransport;
+    }
+
+    const circuitBreakerConfig = {
+      failureThreshold: config?.circuitBreakerThreshold ?? 3,
+      resetTimeoutMs: config?.circuitBreakerResetMs ?? 5 * 60 * 1000,
+      halfOpenAttempts: 1,
+      onStateChange: (from: CircuitState, to: CircuitState) => {
+        logger.info(`Circuit breaker: ${from} -> ${to}`);
+        if (to === 'open' && this.enableFallback && this.fallbackTransport) {
+          logger.info('Switching to fallback transport due to circuit breaker open');
+          this.switchMode(config?.fallbackMode ?? (this.transportMode === 'http' ? 'cli' : 'http'));
+        }
+      },
+      onFailure: (error: Error, count: number) => {
+        const categorized = categorizeError(error);
+        logger.warn(`Circuit breaker failure ${count} [${categorized.category}]: ${error.message}`);
+      },
+    };
+
+    this.circuitBreaker = new EnhancedCircuitBreaker(circuitBreakerConfig);
+
+    const retryPolicy: RetryPolicy = {
+      ...DEFAULT_RETRY_POLICY,
+      maxAttempts: this.maxRetries,
+      initialDelayMs: this.retryDelay,
+      ...config?.retryPolicy,
+    };
+    this.retryExecutor = new RetryExecutor(retryPolicy);
+
+    this.responseCache = new ResponseCache<string>({ ttlMs: this.cacheTtlMs });
+    this.staleCache = new StaleResponseCache<string>(this.cacheTtlMs, 50);
+    this.errorClassifier = new ErrorClassifier();
+  }
+
+  private switchMode(mode: TransportMode): void {
+    if (this.currentMode === mode) return;
+    logger.info(`Switching transport mode: ${this.currentMode} -> ${mode}`);
+    this.currentMode = mode;
+  }
+
+  private getCurrentTransport(): HttpTransport | CliTransport {
+    return this.currentMode === this.transportMode
+      ? this.transport
+      : (this.fallbackTransport ?? this.transport);
   }
 
   protected sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Calculates retry delay with exponential backoff and jitter.
-   * @param attempt - Current attempt number (1-indexed)
-   * @returns Delay in milliseconds
-   */
   public calculateRetryDelay(attempt: number): number {
     const baseDelay = this.retryDelay * Math.pow(2, attempt - 1);
     const jitter = Math.random() * 0.3 * baseDelay;
     return Math.min(baseDelay + jitter, 30000);
   }
 
-  /**
-   * Executes a simple task with automatic retry and logging.
-   * @param message - The task prompt/message
-   * @returns UnifiedAgentResponse with success status and output
-   */
+  private getCacheKey(message: string): string {
+    return `msg_${Buffer.from(message).toString('base64').slice(0, 64)}`;
+  }
+
   async executeTask(message: string): Promise<UnifiedAgentResponse> {
     validateInputLength(message, MAX_MESSAGE_LENGTH);
     return this.executeWithRetry(message);
   }
 
-  /**
-   * Executes a structured task with metadata and optional custom system prompt.
-   * @param task - The structured task definition
-   * @param systemPrompt - Optional custom system prompt to prepend
-   * @returns UnifiedAgentResponse with success status and output
-   */
   async executeStructuredTask(
     task: AgentTask,
     systemPrompt?: string
@@ -242,14 +263,6 @@ export class UnifiedAgent {
     return this.executeWithRetry(fullPrompt, task);
   }
 
-  /**
-   * Executes a task with streaming response callback.
-   * Only available in CLI mode. Throws error if used with HTTP transport.
-   * @param message - The task prompt/message
-   * @param onChunk - Callback for each streaming chunk (text, thinking, or error)
-   * @returns UnifiedAgentResponse with success status and complete output
-   * @throws Error if transport mode is not 'cli'
-   */
   async executeTaskStreaming(
     message: string,
     onChunk: TransportStreamingCallback
@@ -266,7 +279,6 @@ export class UnifiedAgent {
 
     try {
       this.conversationLogger?.addMessage('user', message);
-
       const response = await cliTransport.sendMessageStreaming(message, onChunk);
       const artifacts = this.extractArtifacts(response);
 
@@ -308,6 +320,7 @@ export class UnifiedAgent {
     message: string,
     task?: AgentTask
   ): Promise<UnifiedAgentResponse> {
+    const startTime = Date.now();
     const sessionId = this.conversationLogger?.startConversation(
       {
         id: task?.id || crypto.randomUUID(),
@@ -323,17 +336,52 @@ export class UnifiedAgent {
       logger.debug('ConversationLogger unavailable:', error);
     }
 
+    const cacheKey = this.getCacheKey(message);
+    let fallbackUsed = false;
+    let fromCache = false;
+
+    if (this.enableCache) {
+      const cached = this.responseCache.get([message]);
+      if (cached) {
+        logger.info('Returning cached response');
+        fromCache = true;
+        return {
+          success: true,
+          message: cached.data,
+          output: cached.data,
+          artifacts: this.extractArtifacts(cached.data),
+          sessionId: this.getCurrentTransport().getSessionId() || sessionId || undefined,
+          durationMs: Date.now() - startTime,
+          fromCache,
+        };
+      }
+    }
+
+    const sendWithCircuitBreaker = async (): Promise<string> => {
+      return this.circuitBreaker.execute(async () => {
+        return this.getCurrentTransport().sendMessage(message);
+      });
+    };
+
     let lastError: Error | null = null;
+    let lastCategorizedError: CategorizedError | null = null;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
         const logMessage = containsSensitivePattern(message)
           ? '[Contains sensitive data]'
           : sanitizeForLog(message, 100);
-        logger.info(`Executing task (attempt ${attempt}/${this.maxRetries}): ${logMessage}`);
+        logger.info(
+          `Executing task (attempt ${attempt}/${this.maxRetries}, mode: ${this.currentMode}): ${logMessage}`
+        );
 
-        const result = await this.transport.sendMessage(message);
+        const result = await sendWithCircuitBreaker();
         const artifacts = this.extractArtifacts(result);
+
+        if (this.enableCache) {
+          this.responseCache.set([message], result);
+          this.staleCache.set(cacheKey, result);
+        }
 
         try {
           this.conversationLogger?.addMessage('assistant', result);
@@ -353,22 +401,60 @@ export class UnifiedAgent {
           message: result,
           output: result,
           artifacts,
-          sessionId: this.transport.getSessionId() || sessionId || undefined,
+          sessionId: this.getCurrentTransport().getSessionId() || sessionId || undefined,
+          durationMs: Date.now() - startTime,
+          fromCache,
+          fallbackUsed,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
+        lastCategorizedError = categorizeError(lastError);
         const sanitizedError = maskSensitiveData(lastError.message);
-        logger.error(`Task execution error: ${sanitizedError}`);
+
+        if (lastError instanceof CircuitOpenError) {
+          logger.warn(`Circuit breaker open: ${lastError.message}`);
+        } else {
+          logger.error(
+            `Task execution error [${lastCategorizedError.category}]: ${sanitizedError}`
+          );
+        }
+
+        if (lastCategorizedError.category === 'AUTH') {
+          logger.error('Authentication error - will not retry');
+          break;
+        }
 
         if (lastError.name === 'AbortError') {
-          this.transport.clearSession();
+          this.getCurrentTransport().clearSession();
         }
 
         if (lastError.message.includes('session')) {
-          this.transport.clearSession();
+          this.getCurrentTransport().clearSession();
         }
 
-        if (attempt < this.maxRetries) {
+        if (this.enableFallback && !fallbackUsed && this.fallbackTransport && attempt === 1) {
+          const staleResponse = this.staleCache.getStale(cacheKey);
+          if (staleResponse) {
+            logger.warn('Using stale cached response due to errors');
+            fallbackUsed = true;
+            return {
+              success: true,
+              message: staleResponse.data,
+              output: staleResponse.data,
+              artifacts: this.extractArtifacts(staleResponse.data),
+              sessionId: this.getCurrentTransport().getSessionId() || sessionId || undefined,
+              durationMs: Date.now() - startTime,
+              fromCache: false,
+              fallbackUsed: true,
+            };
+          }
+
+          logger.info('Primary transport failed, attempting fallback');
+          this.switchMode(this.transportMode === 'http' ? 'cli' : 'http');
+          fallbackUsed = true;
+        }
+
+        if (attempt < this.maxRetries && isRetryableError(lastError)) {
           const delay = this.calculateRetryDelay(attempt);
           logger.info(`Retrying after ${Math.round(delay)}ms...`);
           await this.sleep(delay);
@@ -376,8 +462,9 @@ export class UnifiedAgent {
       }
     }
 
-    const errorInfo = lastError ? maskSensitiveData(lastError.message) : 'Unknown error';
-    const errorMessage = `Task failed after ${this.maxRetries} attempts: ${errorInfo}`;
+    const errorMessage = lastCategorizedError
+      ? formatErrorMessage(lastCategorizedError)
+      : `Task failed after ${this.maxRetries} attempts: ${lastError ? maskSensitiveData(lastError.message) : 'Unknown error'}`;
 
     try {
       await this.conversationLogger?.endConversation({
@@ -394,7 +481,10 @@ export class UnifiedAgent {
       message: errorMessage,
       output: errorMessage,
       artifacts: [],
-      sessionId: this.transport.getSessionId() || sessionId || undefined,
+      sessionId: this.getCurrentTransport().getSessionId() || sessionId || undefined,
+      durationMs: Date.now() - startTime,
+      errorCategory: lastCategorizedError?.category,
+      fallbackUsed,
     };
   }
 
@@ -436,34 +526,35 @@ Please analyze the task and provide a detailed solution.`;
     return UnifiedAgent.extractArtifactsStatic(content);
   }
 
-  /**
-   * Clears the current session, forcing a new session on next request.
-   * Useful when session state becomes invalid.
-   */
   clearSession(): void {
     this.transport.clearSession();
+    this.fallbackTransport?.clearSession();
   }
 
-  /**
-   * Gets the current session ID.
-   * @returns Session ID or null if no session exists
-   */
   getSessionId(): string | null {
-    return this.transport.getSessionId();
+    return this.getCurrentTransport().getSessionId();
+  }
+
+  getResilienceStats(): ResilienceStats {
+    return {
+      circuitBreaker: this.circuitBreaker.getState().state,
+      cacheHitRate: this.responseCache.getStats().hitRate,
+      retryCount: this.retryExecutor.getAttemptHistory().length,
+      lastError: undefined,
+    };
+  }
+
+  resetCircuits(): void {
+    this.circuitBreaker.reset();
+    this.retryExecutor.reset();
+    this.responseCache.clear();
+    this.staleCache.clear();
+    this.currentMode = this.transportMode;
   }
 }
 
-/**
- * HTTP transport convenience wrapper.
- * Use this for server-to-server communication with OpenCode server.
- */
 export class Agent extends UnifiedAgent {
-  constructor(config?: {
-    timeout?: number;
-    maxRetries?: number;
-    retryDelay?: number;
-    serverUrl?: string;
-  }) {
+  constructor(config?: Omit<UnifiedAgentConfig, 'mode'>) {
     super({ ...config, mode: 'http' });
   }
 
@@ -479,10 +570,6 @@ export class Agent extends UnifiedAgent {
   }
 }
 
-/**
- * CLI transport convenience wrapper with streaming support.
- * Use this for local CLI execution with real-time output streaming.
- */
 export class CliAgent extends UnifiedAgent {
   constructor(config?: Omit<UnifiedAgentConfig, 'mode'>) {
     super({ ...config, mode: 'cli', enableLogging: true });
