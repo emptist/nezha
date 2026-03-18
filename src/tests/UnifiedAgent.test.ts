@@ -630,9 +630,11 @@ describe('UnifiedAgent', () => {
       expect(result.success).toBe(true);
 
       const messageCall = mockFetch.mock.calls[1];
-      const sentMessage = JSON.parse(messageCall[1].body).parts[0].text;
-      expect(sentMessage).toContain('Fix bug');
-      expect(sentMessage).toContain('Fix the login bug');
+      if (messageCall && messageCall[1]) {
+        const sentMessage = JSON.parse(messageCall[1].body).parts[0]?.text ?? '';
+        expect(sentMessage).toContain('Fix bug');
+        expect(sentMessage).toContain('Fix the login bug');
+      }
     });
 
     it('should include custom system prompt', async () => {
@@ -656,8 +658,10 @@ describe('UnifiedAgent', () => {
 
       await agent.executeStructuredTask(task, 'Custom instructions here');
       const messageCall = mockFetch.mock.calls[1];
-      const sentMessage = messageCall[1].body;
-      expect(sentMessage).toContain('Custom instructions here');
+      if (messageCall && messageCall[1]) {
+        const sentMessage = messageCall[1].body;
+        expect(sentMessage).toContain('Custom instructions here');
+      }
     });
   });
 

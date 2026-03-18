@@ -181,9 +181,12 @@ describe('Database Integration Tests', () => {
         `SELECT title, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC, created_at ASC`
       );
 
-      expect(result.rows[0].title).toBe('High');
-      expect(result.rows[1].title).toBe('Medium');
-      expect(result.rows[2].title).toBe('Low');
+      const firstRowResult = result.rows[0];
+      const secondRowResult = result.rows[1];
+      const thirdRowResult = result.rows[2];
+      expect(firstRowResult?.title).toBe('High');
+      expect(secondRowResult?.title).toBe('Medium');
+      expect(thirdRowResult?.title).toBe('Low');
     });
   });
 
@@ -193,7 +196,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Status Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowInsert = firstRow(insertResult.rows);
+      const taskId = firstRowInsert?.id;
 
       await db.query(`UPDATE tasks SET status = 'RUNNING', started_at = NOW() WHERE id = $1`, [
         taskId,
@@ -203,7 +207,8 @@ describe('Database Integration Tests', () => {
         taskId,
       ]);
 
-      expect(result.rows[0].status).toBe('RUNNING');
+      const firstRowResult = firstRow(result.rows);
+      expect(firstRowResult?.status).toBe('RUNNING');
     });
 
     it('should transition to COMPLETED with result', async () => {
@@ -211,7 +216,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Complete Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowInsert = firstRow(insertResult.rows);
+      const taskId = firstRowInsert?.id;
 
       await db.query(
         `UPDATE tasks SET status = 'COMPLETED', result = $1, completed_at = NOW() WHERE id = $2`,
@@ -223,8 +229,9 @@ describe('Database Integration Tests', () => {
         [taskId]
       );
 
-      expect(result.rows[0].status).toBe('COMPLETED');
-      expect(result.rows[0].result).toEqual({ output: 'success' });
+      const firstRowResult = firstRow(result.rows);
+      expect(firstRowResult?.status).toBe('COMPLETED');
+      expect(firstRowResult?.result).toEqual({ output: 'success' });
     });
 
     it('should transition to FAILED with error', async () => {
@@ -232,7 +239,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Fail Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowInsert = firstRow(insertResult.rows);
+      const taskId = firstRowInsert?.id;
 
       await db.query(
         `UPDATE tasks SET status = 'FAILED', error = $1, completed_at = NOW() WHERE id = $2`,
@@ -244,8 +252,9 @@ describe('Database Integration Tests', () => {
         [taskId]
       );
 
-      expect(result.rows[0].status).toBe('FAILED');
-      expect(result.rows[0].error).toBe('Task failed due to error');
+      const firstRowResult = firstRow(result.rows);
+      expect(firstRowResult?.status).toBe('FAILED');
+      expect(firstRowResult?.error).toBe('Task failed due to error');
     });
   });
 
@@ -257,7 +266,8 @@ describe('Database Integration Tests', () => {
       );
 
       expect(result.rowCount).toBe(1);
-      expect(result.rows[0].content).toBe('Test memory content');
+      const firstRowResult = firstRow(result.rows);
+      expect(firstRowResult?.content).toBe('Test memory content');
     });
 
     it('should query memory by tags', async () => {
@@ -301,7 +311,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title, status) VALUES ($1, $2) RETURNING id`,
         ['SKIP LOCKED Test', 'PENDING']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowInsert = firstRow(insertResult.rows);
+      const taskId = firstRowInsert?.id;
 
       const result = await db.query<{ id: string }>(
         `UPDATE tasks SET status = 'RUNNING', updated_at = NOW() WHERE id = (
@@ -311,7 +322,8 @@ describe('Database Integration Tests', () => {
       );
 
       expect(result.rowCount).toBe(1);
-      expect(result.rows[0].id).toBe(taskId);
+      const firstRowResult = firstRow(result.rows);
+      expect(firstRowResult?.id).toBe(taskId);
     });
   });
 
@@ -383,12 +395,14 @@ describe('Scheduler Integration Tests', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
 
       expect(taskExecuted.length).toBeGreaterThanOrEqual(1);
-      if (taskExecuted.length > 0) {
+      const firstExecuted = taskExecuted[0];
+      if (firstExecuted && firstExecuted.taskId) {
         const result = await db.query<{ status: string; result: unknown }>(
           `SELECT status, result FROM tasks WHERE id = $1`,
-          [taskExecuted[0].taskId]
+          [firstExecuted.taskId]
         );
-        expect(result.rows[0].status).toBe('COMPLETED');
+        const firstRowResult = firstRow(result.rows);
+        expect(firstRowResult?.status).toBe('COMPLETED');
       }
     });
 
@@ -454,7 +468,8 @@ describe('Scheduler Integration Tests', () => {
         `INSERT INTO tasks (title, max_retries) VALUES ($1, $2) RETURNING id`,
         ['Fail Task', 0]
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowInsert = firstRow(insertResult.rows);
+      const taskId = firstRowInsert?.id;
 
       scheduler = new Scheduler(db, 100);
 
@@ -470,8 +485,9 @@ describe('Scheduler Integration Tests', () => {
         [taskId]
       );
 
-      if (result.rows.length > 0) {
-        expect(['FAILED', 'PENDING']).toContain(result.rows[0].status);
+      const firstRowResult = firstRow(result.rows);
+      if (firstRowResult) {
+        expect(['FAILED', 'PENDING']).toContain(firstRowResult.status);
       }
     });
   });

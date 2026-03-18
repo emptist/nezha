@@ -23,15 +23,10 @@ function isOpenCodeAvailable(): boolean {
 export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
 
-  console.log('\n=== Transport Latency Benchmarks ===\n');
-  console.log(`Server URL: ${SERVER_URL}\n`);
-
-  const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
+      const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
   const cliTransport = new CliTransport(SERVER_URL, TIMEOUT);
 
-  console.log('--- HttpTransport Benchmarks ---\n');
-
-  results.push(
+    results.push(
     await benchmarkAsync(
       'HttpTransport: createSession',
       async () => {
@@ -64,9 +59,7 @@ export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
 
   const cliAvailable = isOpenCodeAvailable();
   if (cliAvailable) {
-    console.log('\n--- CliTransport Benchmarks ---\n');
-
-    results.push(
+        results.push(
       await benchmarkAsync(
         'CliTransport: sendMessage (short)',
         async () => {
@@ -86,17 +79,14 @@ export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
       )
     );
   } else {
-    console.log('\n--- CliTransport Benchmarks ---\n');
-    console.log('  (opencode CLI not available, skipping)\n');
+        console.log('  (opencode CLI not available, skipping)\n');
   }
 
-  console.log('\n--- Results ---\n');
-  for (const result of results) {
+    for (const result of results) {
     console.log(formatResult(result));
   }
 
-  console.log('\n--- Comparison Summary ---\n');
-  const httpShortResult = results.find(r => r.name === 'HttpTransport: sendMessage (short)');
+    const httpShortResult = results.find(r => r.name === 'HttpTransport: sendMessage (short)');
   const cliShortResult = results.find(r => r.name === 'CliTransport: sendMessage (short)');
 
   if (httpShortResult && cliShortResult) {
@@ -108,44 +98,37 @@ export async function runTransportBenchmarks(): Promise<BenchmarkResult[]> {
     );
   } else if (httpShortResult) {
     console.log(`HttpTransport (short) avg: ${httpShortResult.avgMs.toFixed(2)}ms`);
-    console.log('CliTransport: not available');
-  }
+      }
 
   return results;
 }
 
 export async function runTransportComparison(): Promise<void> {
-  console.log('\n=== Transport Mode Comparison ===\n');
-
-  const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
+    const httpTransport = new HttpTransport(SERVER_URL, TIMEOUT);
   const cliTransport = new CliTransport(SERVER_URL, TIMEOUT);
 
   const iterations = 5;
   const httpTimes: number[] = [];
   const cliTimes: number[] = [];
 
-  console.log('Running HttpTransport tests...');
-  for (let i = 0; i < iterations; i++) {
+    for (let i = 0; i < iterations; i++) {
     const start = performance.now();
     try {
       await httpTransport.sendMessage(TEST_MESSAGES.short);
       httpTimes.push(performance.now() - start);
     } catch {
-      console.log(`  Attempt ${i + 1}: failed`);
-    }
+          }
   }
 
   const cliAvailable = isOpenCodeAvailable();
   if (cliAvailable) {
-    console.log('Running CliTransport tests...');
-    for (let i = 0; i < iterations; i++) {
+        for (let i = 0; i < iterations; i++) {
       const start = performance.now();
       try {
         await cliTransport.sendMessage(TEST_MESSAGES.short);
         cliTimes.push(performance.now() - start);
       } catch {
-        console.log(`  Attempt ${i + 1}: failed`);
-      }
+              }
     }
   } else {
     console.log('CliTransport tests skipped (opencode not available)');
@@ -154,8 +137,7 @@ export async function runTransportComparison(): Promise<void> {
   if (httpTimes.length > 0) {
     const httpAvg = httpTimes.reduce((a, b) => a + b, 0) / httpTimes.length;
 
-    console.log('\n--- Results ---\n');
-    console.log(
+        console.log(
       `HttpTransport avg latency: ${httpAvg.toFixed(2)}ms (${httpTimes.length} successful)`
     );
 
@@ -166,7 +148,6 @@ export async function runTransportComparison(): Promise<void> {
       );
       console.log(`\nDifference: ${(((cliAvg - httpAvg) / httpAvg) * 100).toFixed(1)}%`);
     } else {
-      console.log('CliTransport: not available');
-    }
+          }
   }
 }

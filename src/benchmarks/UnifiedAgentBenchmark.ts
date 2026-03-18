@@ -6,10 +6,7 @@ const SERVER_URL = process.env.OPENCODE_SERVER_URL ?? 'http://localhost:4096';
 export async function runUnifiedAgentBenchmarks(): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
 
-  console.log('\n=== UnifiedAgent Benchmarks ===\n');
-  console.log(`Server URL: ${SERVER_URL}\n`);
-
-  const agent = new UnifiedAgent({
+      const agent = new UnifiedAgent({
     serverUrl: SERVER_URL,
     mode: 'http',
     enableLogging: true,
@@ -18,9 +15,7 @@ export async function runUnifiedAgentBenchmarks(): Promise<BenchmarkResult[]> {
     timeout: 60000,
   });
 
-  console.log('--- executeTask Benchmarks ---\n');
-
-  results.push(
+    results.push(
     await benchmarkAsync(
       'UnifiedAgent: executeTask (simple ping)',
       async () => {
@@ -51,9 +46,7 @@ export async function runUnifiedAgentBenchmarks(): Promise<BenchmarkResult[]> {
     )
   );
 
-  console.log('\n--- Cache Performance ---\n');
-
-  const cachedAgent = new UnifiedAgent({
+    const cachedAgent = new UnifiedAgent({
     serverUrl: SERVER_URL,
     mode: 'http',
     enableLogging: false,
@@ -96,14 +89,9 @@ export async function runUnifiedAgentBenchmarks(): Promise<BenchmarkResult[]> {
   console.log(`  Cached avg: ${cachedAvg.toFixed(2)}ms`);
   console.log(`  Speedup: ${(uncachedAvg / cachedAvg).toFixed(2)}x`);
 
-  console.log('\n--- Resilience Stats ---\n');
-  const stats = agent.getResilienceStats();
-  console.log(`  Circuit breaker: ${stats.circuitBreaker}`);
-  console.log(`  Cache hit rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
-  console.log(`  Retry count: ${stats.retryCount}`);
-
-  console.log('\n--- Results ---\n');
-  for (const result of results) {
+    const stats = agent.getResilienceStats();
+    console.log(`  Cache hit rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+      for (const result of results) {
     if (result.name !== 'UnifiedAgent: Cache Speedup') {
       console.log(formatResult(result));
     }
@@ -133,16 +121,14 @@ export async function runAgentComparison(): Promise<void> {
 
   const testTask = 'Say hello in one word';
 
-  console.log('Running HTTP agent tests...');
-  const httpTimes: number[] = [];
+    const httpTimes: number[] = [];
   for (let i = 0; i < 3; i++) {
     const start = performance.now();
     await httpAgent.executeTask(testTask);
     httpTimes.push(performance.now() - start);
   }
 
-  console.log('Running CLI agent tests...');
-  const cliTimes: number[] = [];
+    const cliTimes: number[] = [];
   for (let i = 0; i < 3; i++) {
     const start = performance.now();
     await cliAgent.executeTask(testTask);
@@ -153,8 +139,7 @@ export async function runAgentComparison(): Promise<void> {
     const httpAvg = httpTimes.reduce((a, b) => a + b, 0) / httpTimes.length;
     const cliAvg = cliTimes.reduce((a, b) => a + b, 0) / cliTimes.length;
 
-    console.log('\n--- Results ---\n');
-    console.log(`HTTP agent avg latency: ${httpAvg.toFixed(2)}ms (${httpTimes.length} successful)`);
+        console.log(`HTTP agent avg latency: ${httpAvg.toFixed(2)}ms (${httpTimes.length} successful)`);
     console.log(`CLI agent avg latency: ${cliAvg.toFixed(2)}ms (${cliTimes.length} successful)`);
     console.log(`\nDifference: ${(((cliAvg - httpAvg) / httpAvg) * 100).toFixed(1)}%`);
   }

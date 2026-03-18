@@ -28,26 +28,9 @@ PostgreSQL = BIOS (initializes system)
 Runtime = OS
         │
         └── opencode serve + Node.js
-```
-These MD files = ROM (essential boot instructions)
-        │
-        ├── README.md     → How to start/boot
-        ├── PHILOSOPHY.md → Why it works this way  
-        ├── Read_First.md → Emergency recovery
-        └── .env.example  → Default config
-
-PostgreSQL = BIOS (initializes system)
-        │
-        └── Tables: tasks, skills, memory, etc.
-
-Runtime = OS
-        │
-        └── opencode serve + Node.js
 
 Apps = Tasks (AI doing work)
 ```
-
-## Quick Start (For New AI Session)
 
 ## Quick Start (For New AI Session)
 
@@ -126,7 +109,56 @@ nohup node dist/cli/index.js start > .nezha.log 2>&1 &
 
 ## Database Schema
 
-### tasks table (CURRENT - includes all columns)
+The system uses 27 tables for comprehensive task management, memory, and agent configuration.
+
+### Core Tables
+
+| Table | Purpose |
+|-------|---------|
+| `tasks` | Main task queue with status tracking |
+| `scheduled_tasks` | Cron-based task scheduling |
+| `memory` | Long-term memory storage |
+| `skills` | Skill definitions and configurations |
+| `task_results` | Task execution results |
+| `task_templates` | Reusable task templates |
+| `task_audit_log` | Task history and audit trail |
+
+### Agent & Project Tables
+
+| Table | Purpose |
+|-------|---------|
+| `agent_configs` | Agent configuration settings |
+| `agent_identity` | Agent identity and personality |
+| `agent_soul` | Agent core behavior definitions |
+| `projects` | Multi-project support |
+| `project_skills` | Project-specific skills |
+| `project_metrics` | Project performance metrics |
+| `project_communications` | Inter-project messaging |
+| `project_config_history` | Configuration version history |
+
+### Security & Monitoring Tables
+
+| Table | Purpose |
+|-------|---------|
+| `api_keys` | API key management |
+| `provider_api_keys` | LLM provider API keys |
+| `rate_limits` | Rate limiting configuration |
+| `user_profiles` | User settings and preferences |
+| `event_log` | System event logging |
+| `heartbeat_configs` | Health monitoring configuration |
+
+### Utility Tables
+
+| Table | Purpose |
+|-------|---------|
+| `dead_letter_queue` | Failed message handling |
+| `archived_memory` | Compressed old memories |
+| `auto_category_rules` | Automatic task categorization |
+| `auto_tag_rules` | Automatic task tagging |
+| `prompt_suggestions` | Prompt template library |
+| `tool_definitions` | Custom tool definitions |
+
+### tasks table (Core Schema)
 
 ```sql
 CREATE TABLE tasks (
@@ -141,14 +173,14 @@ CREATE TABLE tasks (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
-  started_at TIMESTAMPTZ,              -- When task started (used for timeout detection)
+  started_at TIMESTAMPTZ,
   depends_on UUID[] DEFAULT '{}',
   blocking UUID[] DEFAULT '{}',
-  next_retry_at TIMESTAMPTZ,           -- For scheduled retries
+  next_retry_at TIMESTAMPTZ,
   max_retries INTEGER DEFAULT 3,
   timeout_seconds INTEGER DEFAULT 300,
   is_long_running BOOLEAN DEFAULT false,
-  type TEXT DEFAULT 'implementation', -- bugfix, deployment, analysis, research, implementation
+  type TEXT DEFAULT 'implementation',
   assigned_to TEXT,
   category TEXT DEFAULT 'feature',
   tags TEXT[] DEFAULT '{}',
@@ -175,39 +207,6 @@ SELECT * FROM tasks WHERE status = 'FAILED';
 
 -- Recent completed
 SELECT id, title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 10;
-```
-
-### scheduled_tasks table
-
-```sql
-CREATE TABLE scheduled_tasks (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  name TEXT NOT NULL,
-  description TEXT,
-  cron_expression TEXT,
-  interval_ms BIGINT,
-  next_run TIMESTAMPTZ,
-  enabled BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### memory table
-
-```sql
-CREATE TABLE memory (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  project_id TEXT,
-  content TEXT NOT NULL,
-  metadata JSONB,
-  tags TEXT[],
-  importance INTEGER DEFAULT 0,
-  source TEXT,
-  embedding JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
 ```
 
 ---
@@ -291,10 +290,11 @@ node dist/cli/index.js task-add "Task Title" "Task description" priority
 
 ## Current Status (Update this on each handoff)
 
-- Last checked: [UPDATE_TIMESTAMP]
-- Completed tasks: [COUNT]
-- Pending tasks: [COUNT]
-- Running tasks: [COUNT]
+- Last checked: 2026-03-19
+- Completed tasks: 0
+- Pending tasks: 0
+- Running tasks: 0
+- Services running: ✅ opencode serve (port 4096), ✅ nezha daemon
 
 Run this to update:
 ```bash

@@ -276,6 +276,7 @@ export class CliTransport implements SessionManager {
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env },
         });
+        proc.stdin?.end();
       } catch (err) {
         reject(
           new Error(`Failed to spawn opencode: ${err instanceof Error ? err.message : String(err)}`)
