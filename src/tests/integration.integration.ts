@@ -301,7 +301,7 @@ describe('Scheduler Integration Tests', () => {
       throw new Error(`Database not available: ${health.error}`);
     }
 
-    await db.query(`DELETE FROM tasks`);
+    await setupTestDatabase(db);
   });
 
   beforeEach(async () => {
