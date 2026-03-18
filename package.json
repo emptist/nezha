@@ -36,6 +36,11 @@
     "dev:logs": "tail -f .tmp/nezha.log",
     "dev:repl": "tsx -r tsx repl",
     "dev:quick": "npm run typecheck && npm run build && node dist/cli/index.js",
+    "benchmark": "tsx src/benchmarks/run.ts",
+    "benchmark:logger": "tsx src/benchmarks/run.ts --logger",
+    "benchmark:transport": "tsx src/benchmarks/run.ts --transport",
+    "benchmark:agent": "tsx src/benchmarks/run.ts --agent",
+    "benchmark:compare": "tsx src/benchmarks/run.ts --compare",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },

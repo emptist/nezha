@@ -1086,7 +1086,7 @@ async function main(): Promise<void> {
           process.exit(1);
         }
 
-        await cliInstance.scheduleTask(name, description, cronExpression, priority, dryRun);
+        await cliInstance.scheduleTask(name, description ?? '', cronExpression, priority, dryRun);
         break;
       }
 
@@ -1207,13 +1207,16 @@ async function main(): Promise<void> {
 
           const typeIndex = args.indexOf('--type');
           if (typeIndex !== -1 && typeIndex + 1 < args.length) {
-            taskType = args[typeIndex + 1] ?? taskType;
+            const typeArg = args[typeIndex + 1];
+            if (typeArg) taskType = typeArg;
           }
 
           const timeoutIndex = args.indexOf('--timeout');
           if (timeoutIndex !== -1 && timeoutIndex + 1 < args.length) {
             const timeoutArg = args[timeoutIndex + 1];
-            timeoutSeconds = timeoutArg ? parseInt(timeoutArg, 10) || 300 : 300;
+            if (timeoutArg) {
+              timeoutSeconds = parseInt(timeoutArg, 10) || 300;
+            }
           }
 
           if (!name) {
