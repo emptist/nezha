@@ -1,7 +1,8 @@
 import { Scheduler } from '../core/Scheduler.js';
 import { Agent } from '../core/Agent.js';
 import { MemoryService } from '../core/Memory.js';
-import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG, TASK_CONFIG } from '../config/constants.js';
+import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
+import { Config } from '../config/Config.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { waitForever } from '../utils/wait.js';
 import {
@@ -88,6 +89,8 @@ export class HeartbeatService {
   private checkpointTimer: ReturnType<typeof setInterval> | null = null;
   private readonly memoryCleanupIntervalMs: number;
   private readonly memoryCompactionIntervalMs: number;
+  private readonly defaultMaxRetries: number;
+  private readonly defaultRetryDelayMs: number;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -100,6 +103,10 @@ export class HeartbeatService {
   ) {
     this.scheduler = scheduler ?? new Scheduler(db, config?.heartbeatIntervalMs);
     this.agent = new Agent();
+
+    const taskConfig = Config.getInstance().getTaskConfig();
+    this.defaultMaxRetries = taskConfig.maxRetries;
+    this.defaultRetryDelayMs = taskConfig.retryDelayMs;
 
     let embeddingProvider: EmbeddingProvider | undefined;
     if (config?.embedding) {
@@ -317,7 +324,7 @@ export class HeartbeatService {
     title: string,
     description?: string,
     retryCount: number = 0,
-    maxRetries: number = 3,
+    maxRetries: number = this.defaultMaxRetries,
     timeoutSeconds: number = 300
   ): Promise<void> {
     this.stats.tasksExecuted++;
@@ -452,8 +459,8 @@ export class HeartbeatService {
       }
 
       const delayMs = Math.min(
-        TASK_CONFIG.RETRY_BASE_DELAY_MS * Math.pow(2, retryCount),
-        TASK_CONFIG.RETRY_MAX_DELAY_MS
+        this.defaultRetryDelayMs * Math.pow(2, retryCount),
+        this.defaultRetryDelayMs * 10 // max 10x the base delay
       );
       const nextRetryAt = new Date(Date.now() + delayMs);
 

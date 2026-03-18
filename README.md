@@ -380,6 +380,8 @@ cp .env.example .env
 ### 数据库初始化
 
 > ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！
+> 
+> 📖 **深入了解**: 参见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md) 了解 CLI vs REST API 的对比
 
 #### 标准操作流程 (SOP)
 

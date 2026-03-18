@@ -100,14 +100,14 @@ export class Config implements IConfig {
         ENV_KEYS.HEARTBEAT_INTERVAL
       ),
       maxRetries: parseIntEnv(
-        process.env[ENV_KEYS.MAX_RETRIES],
+        process.env[ENV_KEYS.RETRY_MAX_ATTEMPTS] || process.env[ENV_KEYS.MAX_RETRIES],
         yaml?.task?.maxRetries || TASK_CONFIG.DEFAULT_MAX_RETRIES,
-        ENV_KEYS.MAX_RETRIES
+        ENV_KEYS.RETRY_MAX_ATTEMPTS
       ),
       retryDelayMs: parseIntEnv(
-        process.env[ENV_KEYS.RETRY_DELAY],
+        process.env[ENV_KEYS.RETRY_DELAY_MS] || process.env[ENV_KEYS.RETRY_DELAY],
         yaml?.task?.retryDelayMs || TASK_CONFIG.DEFAULT_RETRY_DELAY_MS,
-        ENV_KEYS.RETRY_DELAY
+        ENV_KEYS.RETRY_DELAY_MS
       ),
       taskTimeoutMs: parseIntEnv(
         process.env[ENV_KEYS.TASK_TIMEOUT],

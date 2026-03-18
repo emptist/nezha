@@ -18,6 +18,22 @@ These MD files = ROM (essential boot instructions)
         ├── README.md     → How to start/boot
         ├── PHILOSOPHY.md → Why it works this way  
         ├── Read_First.md → Emergency recovery
+        ├── docs/OPENCODE_INTEGRATION.md → OpenCode integration approaches (CLI vs REST API)
+        └── .env.example  → Default config
+
+PostgreSQL = BIOS (initializes system)
+        │
+        └── Tables: tasks, skills, memory, etc.
+
+Runtime = OS
+        │
+        └── opencode serve + Node.js
+```
+These MD files = ROM (essential boot instructions)
+        │
+        ├── README.md     → How to start/boot
+        ├── PHILOSOPHY.md → Why it works this way  
+        ├── Read_First.md → Emergency recovery
         └── .env.example  → Default config
 
 PostgreSQL = BIOS (initializes system)

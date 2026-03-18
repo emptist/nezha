@@ -16,7 +16,7 @@ export class Agent {
   private sessionId: string | null = null;
 
   constructor(config?: AgentConfig) {
-    this.timeout = config?.timeout ?? 300000;
+    this.timeout = config?.timeout ?? 600000;  // 10 minutes
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
     this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';

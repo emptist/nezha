@@ -165,6 +165,8 @@ Nezha 是一个 AI 驱动的自主开发系统，支持两种任务管理模式�
 ### 数据库设置
 
 > ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！
+> 
+> 📖 **深入了解**: 参见 [OPENCODE_INTEGRATION.md](./OPENCODE_INTEGRATION.md) 了解 CLI vs REST API 的对比
 
 #### 标准操作流程 (SOP)
 
