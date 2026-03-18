@@ -117,9 +117,10 @@ describe('Database Integration Tests', () => {
       );
 
       expect(result.rowCount).toBe(1);
-      expect(result.rows[0].title).toBe('Test Task');
-      expect(result.rows[0].status).toBe('PENDING');
-      expect(result.rows[0].id).toBeDefined();
+      const row = firstRow(result.rows);
+      expect(row?.title).toBe('Test Task');
+      expect(row?.status).toBe('PENDING');
+      expect(row?.id).toBeDefined();
     });
 
     it('should read a task by id', async () => {
@@ -127,7 +128,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Read Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowData = firstRow(insertResult.rows);
+      const taskId = firstRowData?.id;
 
       const readResult = await db.query<{ id: string; title: string }>(
         `SELECT * FROM tasks WHERE id = $1`,
@@ -135,7 +137,8 @@ describe('Database Integration Tests', () => {
       );
 
       expect(readResult.rows.length).toBe(1);
-      expect(readResult.rows[0].title).toBe('Read Test');
+      const readRow = firstRow(readResult.rows);
+      expect(readRow?.title).toBe('Read Test');
     });
 
     it('should update a task status', async () => {
@@ -143,14 +146,16 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Update Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowData = firstRow(insertResult.rows);
+      const taskId = firstRowData?.id;
 
       const updateResult = await db.query(
         `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
         ['RUNNING', taskId]
       );
 
-      expect(updateResult.rows[0].status).toBe('RUNNING');
+      const updateRow = firstRow(updateResult.rows);
+      expect(updateRow?.status).toBe('RUNNING');
     });
 
     it('should delete a task', async () => {
@@ -158,7 +163,8 @@ describe('Database Integration Tests', () => {
         `INSERT INTO tasks (title) VALUES ($1) RETURNING id`,
         ['Delete Test']
       );
-      const taskId = insertResult.rows[0].id;
+      const firstRowData = firstRow(insertResult.rows);
+      const taskId = firstRowData?.id;
 
       await db.query(`DELETE FROM tasks WHERE id = $1`, [taskId]);
 
