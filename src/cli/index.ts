@@ -10,8 +10,11 @@ import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
 import { verboseLogger, setVerboseMode } from '../utils/verboseLogger.js';
+import { AgentSystem } from '../core/AgentSystem.js';
 
 export let isVerbose = false;
+export let transportMode: 'http' | 'cli' = 'http';
+export let enableStream = false;
 import {
   sanitizeTaskTitle,
   sanitizeTaskDescription,
@@ -661,9 +664,13 @@ export class Cli {
     }
 
     console.log(`\n${colors.bright}${'═'.repeat(70)}${colors.reset}`);
-    console.log(`${colors.bright}  TABLE OF TASKS${colors.reset}`.padEnd(72) + `${colors.dim}|${colors.reset}`);
+    console.log(
+      `${colors.bright}  TABLE OF TASKS${colors.reset}`.padEnd(72) + `${colors.dim}|${colors.reset}`
+    );
     console.log(`${colors.bright}${'═'.repeat(70)}${colors.reset}`);
-    console.log(`  ${colors.cyan}Today:${colors.reset} ${colors.green}${completedToday}${colors.reset} completed`);
+    console.log(
+      `  ${colors.cyan}Today:${colors.reset} ${colors.green}${completedToday}${colors.reset} completed`
+    );
     console.log(`  ${colors.cyan}Yesterday:${colors.reset} ${completedYesterday} completed`);
     console.log(`  ${colors.cyan}Total:${colors.reset} ${result.rows.length} tasks`);
     console.log(`${colors.bright}${'-'.repeat(70)}${colors.reset}`);
@@ -672,17 +679,25 @@ export class Cli {
     for (const row of result.rows) {
       statusCounts.set(row.status, (statusCounts.get(row.status) || 0) + 1);
     }
-    console.log(`  ${colors.dim}Status:${colors.reset} ${Array.from(statusCounts.entries()).map(([s, c]) => `${s}:${c}`).join(' | ')}`);
+    console.log(
+      `  ${colors.dim}Status:${colors.reset} ${Array.from(statusCounts.entries())
+        .map(([s, c]) => `${s}:${c}`)
+        .join(' | ')}`
+    );
     console.log(`${colors.bright}${'-'.repeat(70)}${colors.reset}\n`);
 
     const statusColors: Record<string, string> = {
-      'RUNNING': colors.yellow,
-      'PENDING': colors.cyan,
-      'COMPLETED': colors.green,
-      'FAILED': colors.red,
+      RUNNING: colors.yellow,
+      PENDING: colors.cyan,
+      COMPLETED: colors.green,
+      FAILED: colors.red,
     };
 
-    console.log(`${colors.bright}#${colors.reset} ${colors.dim}Status${colors.reset}  ${colors.dim}Priority${colors.reset}  ${colors.bright}Title${colors.reset}`.padEnd(60) + `${colors.dim}Result${colors.reset}`);
+    console.log(
+      `${colors.bright}#${colors.reset} ${colors.dim}Status${colors.reset}  ${colors.dim}Priority${colors.reset}  ${colors.bright}Title${colors.reset}`.padEnd(
+        60
+      ) + `${colors.dim}Result${colors.reset}`
+    );
     console.log(`${colors.dim}${'─'.repeat(70)}${colors.reset}`);
 
     const maxShow = 20;
@@ -691,23 +706,34 @@ export class Cli {
     toShow.forEach((row, i) => {
       const statusColor = statusColors[row.status] || colors.white;
       const title = row.title.substring(0, 45) + (row.title.length > 45 ? '...' : '');
-      const result_emoji = row.status === 'COMPLETED' ? '✓' : row.status === 'RUNNING' ? '▶' : row.status === 'FAILED' ? '✗' : '○';
+      const result_emoji =
+        row.status === 'COMPLETED'
+          ? '✓'
+          : row.status === 'RUNNING'
+            ? '▶'
+            : row.status === 'FAILED'
+              ? '✗'
+              : '○';
       const retryInfo = row.retry_count > 0 ? ` (${row.retry_count} retries)` : '';
 
       console.log(
         `${(i + 1).toString().padStart(2)}${colors.reset} ` +
-        `${statusColor}${result_emoji}${row.status.padEnd(8)}${colors.reset}` +
-        `${row.priority.toString().padStart(8)}` +
-        `  ${title}`.padEnd(55) +
-        `${colors.dim}${retryInfo}${colors.reset}`
+          `${statusColor}${result_emoji}${row.status.padEnd(8)}${colors.reset}` +
+          `${row.priority.toString().padStart(8)}` +
+          `  ${title}`.padEnd(55) +
+          `${colors.dim}${retryInfo}${colors.reset}`
       );
     });
 
     if (result.rows.length > maxShow) {
-      console.log(`\n  ${colors.dim}... and ${result.rows.length - maxShow} more tasks${colors.reset}`);
+      console.log(
+        `\n  ${colors.dim}... and ${result.rows.length - maxShow} more tasks${colors.reset}`
+      );
     }
 
-    console.log(`\n${colors.bright}${colors.dim}Updated: ${new Date().toLocaleTimeString()}${colors.reset}\n`);
+    console.log(
+      `\n${colors.bright}${colors.dim}Updated: ${new Date().toLocaleTimeString()}${colors.reset}\n`
+    );
   }
 
   async createApiKey(name: string, rateLimit: number = 100): Promise<void> {
@@ -840,6 +866,19 @@ async function main(): Promise<void> {
     setVerboseMode(true);
     logger.setContext({ verbose: true });
   }
+
+  const transportIndex = args.indexOf('--transport');
+  if (transportIndex !== -1 && transportIndex + 1 < args.length) {
+    const transportValue = args[transportIndex + 1];
+    if (transportValue === 'http' || transportValue === 'cli') {
+      transportMode = transportValue;
+    } else {
+      cli.error(`Invalid transport mode: ${transportValue}. Valid modes: http, cli`);
+      process.exit(1);
+    }
+  }
+
+  enableStream = args.includes('--stream');
 
   const cliInstance = new Cli();
 

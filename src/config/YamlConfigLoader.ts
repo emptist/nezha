@@ -25,6 +25,10 @@ export interface NezhaYamlConfig {
     apiUrl?: string;
     apiKey?: string;
   };
+  transport?: {
+    mode?: 'http' | 'cli';
+    opencodeApiUrl?: string;
+  };
   health?: {
     port?: number;
     requireAuth?: boolean;

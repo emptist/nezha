@@ -1,5 +1,31 @@
 import { spawn, type ChildProcess } from 'child_process';
 
+const MAX_PROMPT_LENGTH = 100000;
+const MAX_SERVER_URL_LENGTH = 2048;
+
+function sanitizeStringForCli(input: string): string {
+  return input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+}
+
+function validateServerUrl(url: string): void {
+  if (url.length > MAX_SERVER_URL_LENGTH) {
+    throw new Error(`Server URL exceeds maximum length of ${MAX_SERVER_URL_LENGTH}`);
+  }
+  if (!/^[a-zA-Z0-9._~:/\-]+$/.test(url)) {
+    throw new Error('Server URL contains invalid characters');
+  }
+}
+
+function validatePrompt(prompt: string): void {
+  if (prompt.length > MAX_PROMPT_LENGTH) {
+    throw new Error(`Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH}`);
+  }
+  const nullBytes = prompt.match(/\x00/g);
+  if (nullBytes) {
+    throw new Error('Prompt contains null bytes');
+  }
+}
+
 /**
  * Transport mode determines how the agent communicates with the backend.
  * - 'http': REST API communication via HTTP requests
@@ -187,7 +213,8 @@ export class CliTransport implements SessionManager {
    * @param timeout - Process timeout in milliseconds
    */
   constructor(serverUrl: string, timeout: number) {
-    this.serverUrl = serverUrl;
+    validateServerUrl(serverUrl);
+    this.serverUrl = sanitizeStringForCli(serverUrl);
     this.timeout = timeout;
   }
 
@@ -227,6 +254,9 @@ export class CliTransport implements SessionManager {
     streaming: boolean,
     onChunk?: StreamingCallback
   ): Promise<string> {
+    validatePrompt(prompt);
+    const sanitizedPrompt = sanitizeStringForCli(prompt);
+
     return new Promise((resolve, reject) => {
       const args = [
         'run',
@@ -235,7 +265,7 @@ export class CliTransport implements SessionManager {
         '--format',
         'json',
         ...(streaming ? ['--thinking'] : []),
-        prompt,
+        sanitizedPrompt,
       ];
 
       let proc: ChildProcess;
@@ -325,7 +355,8 @@ export class CliTransport implements SessionManager {
             resolve(output);
           }
         } else if (!procKilled) {
-          reject(new Error(`opencode exited with code ${code}: ${errorOutput}`));
+          const sanitizedError = errorOutput.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
+          reject(new Error(`opencode exited with code ${code}: ${sanitizedError}`));
         }
       });
 

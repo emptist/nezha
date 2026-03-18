@@ -22,6 +22,118 @@ export interface HistogramMetric extends Metric {
   count: number;
 }
 
+export interface TokenUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface AgentMetrics {
+  executionTotal: Counter;
+  executionDurationSeconds: Histogram;
+  tokenUsage: Counter;
+  activeConnections: Gauge;
+}
+
+export interface TransportHealth {
+  mode: 'http' | 'cli';
+  healthy: boolean;
+  lastCheck: Date;
+  latencyMs?: number;
+  error?: string;
+}
+
+export interface AgentHealth {
+  healthy: boolean;
+  timestamp: Date;
+  serverConnectivity: boolean;
+  transports: TransportHealth[];
+}
+
+class Counter {
+  constructor(
+    private metrics: Map<string, Metric>,
+    private key: string
+  ) {}
+
+  inc(value: number = 1): void {
+    const metric = this.metrics.get(this.key);
+    if (metric) {
+      metric.value += value;
+    }
+  }
+
+  get value(): number {
+    const metric = this.metrics.get(this.key);
+    return metric?.value ?? 0;
+  }
+}
+
+class Gauge {
+  constructor(
+    private metrics: Map<string, Metric>,
+    private key: string
+  ) {}
+
+  inc(value: number = 1): void {
+    const metric = this.metrics.get(this.key);
+    if (metric) {
+      metric.value += value;
+    }
+  }
+
+  dec(value: number = 1): void {
+    const metric = this.metrics.get(this.key);
+    if (metric) {
+      metric.value -= value;
+    }
+  }
+
+  set(value: number): void {
+    const metric = this.metrics.get(this.key);
+    if (metric) {
+      metric.value = value;
+    }
+  }
+
+  get value(): number {
+    const metric = this.metrics.get(this.key);
+    return metric?.value ?? 0;
+  }
+}
+
+class Histogram {
+  constructor(
+    private metrics: Map<string, HistogramMetric>,
+    private key: string
+  ) {}
+
+  observe(value: number): void {
+    const metric = this.metrics.get(this.key);
+    if (metric) {
+      metric.sum += value;
+      metric.count += 1;
+      for (const bucket of metric.buckets) {
+        if (value <= bucket.le) {
+          bucket.count++;
+        }
+      }
+    }
+  }
+
+  get sum(): number {
+    const metric = this.metrics.get(this.key);
+    return metric?.sum ?? 0;
+  }
+
+  get count(): number {
+    const metric = this.metrics.get(this.key);
+    return metric?.count ?? 0;
+  }
+}
+
+export { Counter, Gauge, Histogram };
+
 export class MetricsRegistry {
   private counters: Map<string, Metric> = new Map();
   private gauges: Map<string, Metric> = new Map();
@@ -40,10 +152,10 @@ export class MetricsRegistry {
   }
 
   // Counter: monotonically increasing value
-  counter(name: string, help: string = ''): Counter {
-    const key = this.getKey(name, {});
+  counter(name: string, help: string = '', labels: Record<string, string> = {}): Counter {
+    const key = this.getKey(name, labels);
     if (!this.counters.has(key)) {
-      this.counters.set(key, { name, type: 'counter', help, value: 0, labels: {} });
+      this.counters.set(key, { name, type: 'counter', help, value: 0, labels });
     }
     return new Counter(this.counters, key);
   }
@@ -61,16 +173,17 @@ export class MetricsRegistry {
   histogram(
     name: string,
     help: string = '',
-    buckets: number[] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10]
+    buckets: number[] = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+    labels: Record<string, string> = {}
   ): Histogram {
-    const key = this.getKey(name, {});
+    const key = this.getKey(name, labels);
     if (!this.histograms.has(key)) {
       const histogramMetric: HistogramMetric = {
         name,
         type: 'histogram',
         help,
         value: 0,
-        labels: {},
+        labels,
         buckets: buckets.map(le => ({ le, count: 0 })),
         sum: 0,
         count: 0,
@@ -128,68 +241,6 @@ export class MetricsRegistry {
   }
 }
 
-class Counter {
-  constructor(
-    private metrics: Map<string, Metric>,
-    private key: string
-  ) {}
-
-  inc(value: number = 1): void {
-    const metric = this.metrics.get(this.key);
-    if (metric) {
-      metric.value += value;
-    }
-  }
-}
-
-class Gauge {
-  constructor(
-    private metrics: Map<string, Metric>,
-    private key: string
-  ) {}
-
-  inc(value: number = 1): void {
-    const metric = this.metrics.get(this.key);
-    if (metric) {
-      metric.value += value;
-    }
-  }
-
-  dec(value: number = 1): void {
-    const metric = this.metrics.get(this.key);
-    if (metric) {
-      metric.value -= value;
-    }
-  }
-
-  set(value: number): void {
-    const metric = this.metrics.get(this.key);
-    if (metric) {
-      metric.value = value;
-    }
-  }
-}
-
-class Histogram {
-  constructor(
-    private metrics: Map<string, HistogramMetric>,
-    private key: string
-  ) {}
-
-  observe(value: number): void {
-    const metric = this.metrics.get(this.key);
-    if (metric) {
-      metric.sum += value;
-      metric.count += 1;
-      for (const bucket of metric.buckets) {
-        if (value <= bucket.le) {
-          bucket.count++;
-        }
-      }
-    }
-  }
-}
-
 // Global metrics registry
 let globalRegistry: MetricsRegistry | null = null;
 
@@ -236,4 +287,55 @@ export function createStandardMetrics() {
     // Memory usage gauge (bytes)
     memoryUsageBytes: registry.gauge('nezha_memory_usage_bytes', 'Process memory usage in bytes'),
   };
+}
+
+// Agent-specific metrics factory
+export function createAgentMetrics(prefix: string = 'nezha_agent') {
+  const registry = getMetricsRegistry();
+
+  return {
+    executionTotal: registry.counter(`${prefix}_execution_total`, 'Total agent task executions'),
+    executionDurationSeconds: registry.histogram(
+      `${prefix}_execution_duration_seconds`,
+      'Agent task execution duration in seconds',
+      [0.1, 0.5, 1, 2, 5, 10, 30, 60, 120, 300]
+    ),
+    tokenUsage: registry.counter(`${prefix}_token_usage_total`, 'Total token usage by type'),
+    activeConnections: registry.gauge(
+      `${prefix}_active_connections`,
+      'Number of active agent connections'
+    ),
+  };
+}
+
+// Health check registry
+const healthChecks = new Map<string, () => Promise<boolean>>();
+
+export function registerHealthCheck(name: string, check: () => Promise<boolean>): void {
+  healthChecks.set(name, check);
+}
+
+export function unregisterHealthCheck(name: string): void {
+  healthChecks.delete(name);
+}
+
+export async function runHealthChecks(): Promise<Record<string, boolean>> {
+  const results: Record<string, boolean> = {};
+  const checks = Array.from(healthChecks.entries());
+
+  await Promise.all(
+    checks.map(async ([name, check]) => {
+      try {
+        results[name] = await check();
+      } catch {
+        results[name] = false;
+      }
+    })
+  );
+
+  return results;
+}
+
+export function getAllHealthChecks(): string[] {
+  return Array.from(healthChecks.keys());
 }

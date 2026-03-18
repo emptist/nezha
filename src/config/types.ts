@@ -34,6 +34,21 @@ export interface NezhaConfig {
   memory: MemoryConfig;
   embedding?: EmbeddingConfig;
   env: 'development' | 'production' | 'test';
+  transport: TransportConfig;
+}
+
+export interface TransportConfig {
+  mode: 'http' | 'cli';
+  opencodeApiUrl: string;
+  fallbackMode?: 'http' | 'cli';
+  timeout?: number;
+  enableFallback?: boolean;
+  enableCache?: boolean;
+  cacheTtlMs?: number;
+  maxRetries?: number;
+  retryDelayMs?: number;
+  circuitBreakerThreshold?: number;
+  circuitBreakerResetMs?: number;
 }
 
 export enum TaskStatus {
@@ -109,5 +124,6 @@ export interface IConfig {
   getMemoryConfig(): MemoryConfig;
   getEmbeddingConfig(): EmbeddingConfig | undefined;
   getEnv(): string;
+  getTransportConfig(): TransportConfig;
   validate(): boolean;
 }

@@ -7,8 +7,70 @@ import {
 } from './transports/index.js';
 import { ConversationLogger } from './ConversationLogger.js';
 import { logger } from '../utils/logger.js';
+import {
+  createAgentMetrics,
+  registerHealthCheck,
+  unregisterHealthCheck,
+  type TransportHealth,
+  type AgentHealth,
+} from '../services/MetricsService.js';
 
 export { type StreamingCallback } from './transports/index.js';
+
+const MAX_MESSAGE_LENGTH = 100000;
+const MAX_TASK_TITLE_LENGTH = 500;
+const MAX_TASK_DESCRIPTION_LENGTH = 5000;
+
+interface AgentMetrics {
+  executionTotal: ReturnType<typeof createAgentMetrics>;
+  correlationId: string;
+}
+
+function sanitizeForLog(input: string, maxLength: number = 200): string {
+  const sanitized = input.replace(/[\x00-\x1F\x7F]/g, '');
+  if (sanitized.length <= maxLength) {
+    return sanitized;
+  }
+  return sanitized.slice(0, maxLength) + '...';
+}
+
+function containsSensitivePattern(text: string): boolean {
+  const sensitivePatterns = [
+    /password["\s]*[:=]["\s]*[^"\s]+/i,
+    /api[_-]?key["\s]*[:=]["\s]*[^"\s]+/i,
+    /secret["\s]*[:=]["\s]*[^"\s]+/i,
+    /token["\s]*[:=]["\s]*[^"\s]+/i,
+    /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/,
+    /-----BEGIN CERTIFICATE-----/,
+  ];
+  return sensitivePatterns.some(pattern => pattern.test(text));
+}
+
+function maskSensitiveData(input: string): string {
+  const patterns = [
+    { regex: /(password["\s]*[:=]["\s]*)([^"\s]+)/gi, replacement: '$1***' },
+    { regex: /(api[_-]?key["\s]*[:=]["\s]*)([^"\s]+)/gi, replacement: '$1***' },
+    { regex: /(secret["\s]*[:=]["\s]*)([^"\s]+)/gi, replacement: '$1***' },
+    { regex: /(token["\s]*[:=]["\s]*)([^"\s]+)/gi, replacement: '$1***' },
+    { regex: /(Bearer\s+)([A-Za-z0-9\-._~+/]+=*)/gi, replacement: '$1***' },
+  ];
+
+  let result = input;
+  for (const { regex, replacement } of patterns) {
+    result = result.replace(regex, replacement);
+  }
+  return result;
+}
+
+function validateInputLength(message: string, maxLength: number): void {
+  if (message.length > maxLength) {
+    throw new Error(`Input exceeds maximum allowed length of ${maxLength} characters`);
+  }
+}
+
+function generateCorrelationId(): string {
+  return `corr-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`;
+}
 
 /**
  * Configuration options for UnifiedAgent.
@@ -28,6 +90,10 @@ export interface UnifiedAgentConfig {
   logDir?: string;
   /** Enable conversation logging (default: true) */
   enableLogging?: boolean;
+  /** Enable observability (metrics, health checks) (default: true) */
+  enableObservability?: boolean;
+  /** Custom correlation ID for tracing */
+  correlationId?: string;
 }
 
 /**
@@ -58,6 +124,26 @@ export interface UnifiedAgentResponse {
   artifacts?: string[];
   /** Session identifier for the conversation */
   sessionId?: string;
+  /** Correlation ID for tracing */
+  correlationId?: string;
+  /** Execution duration in milliseconds */
+  durationMs?: number;
+}
+
+/**
+ * Execution metrics for a single task.
+ */
+export interface TaskMetrics {
+  success: boolean;
+  durationMs: number;
+  attemptCount: number;
+  transportMode: TransportMode;
+  correlationId: string;
+  tokenUsage?: {
+    input?: number;
+    output?: number;
+    total?: number;
+  };
 }
 
 /**
@@ -132,6 +218,7 @@ export class UnifiedAgent {
    * @returns UnifiedAgentResponse with success status and output
    */
   async executeTask(message: string): Promise<UnifiedAgentResponse> {
+    validateInputLength(message, MAX_MESSAGE_LENGTH);
     return this.executeWithRetry(message);
   }
 
@@ -145,6 +232,12 @@ export class UnifiedAgent {
     task: AgentTask,
     systemPrompt?: string
   ): Promise<UnifiedAgentResponse> {
+    if (task.title.length > MAX_TASK_TITLE_LENGTH) {
+      throw new Error(`Task title exceeds maximum length of ${MAX_TASK_TITLE_LENGTH}`);
+    }
+    if (task.description.length > MAX_TASK_DESCRIPTION_LENGTH) {
+      throw new Error(`Task description exceeds maximum length of ${MAX_TASK_DESCRIPTION_LENGTH}`);
+    }
     const fullPrompt = this.buildStructuredPrompt(task, systemPrompt);
     return this.executeWithRetry(fullPrompt, task);
   }
@@ -234,9 +327,10 @@ export class UnifiedAgent {
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        logger.info(
-          `Executing task (attempt ${attempt}/${this.maxRetries}): ${message.substring(0, 100)}...`
-        );
+        const logMessage = containsSensitivePattern(message)
+          ? '[Contains sensitive data]'
+          : sanitizeForLog(message, 100);
+        logger.info(`Executing task (attempt ${attempt}/${this.maxRetries}): ${logMessage}`);
 
         const result = await this.transport.sendMessage(message);
         const artifacts = this.extractArtifacts(result);
@@ -263,7 +357,8 @@ export class UnifiedAgent {
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        logger.error(`Task execution error: ${lastError.message}`);
+        const sanitizedError = maskSensitiveData(lastError.message);
+        logger.error(`Task execution error: ${sanitizedError}`);
 
         if (lastError.name === 'AbortError') {
           this.transport.clearSession();
@@ -281,7 +376,8 @@ export class UnifiedAgent {
       }
     }
 
-    const errorMessage = `Task failed after ${this.maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`;
+    const errorInfo = lastError ? maskSensitiveData(lastError.message) : 'Unknown error';
+    const errorMessage = `Task failed after ${this.maxRetries} attempts: ${errorInfo}`;
 
     try {
       await this.conversationLogger?.endConversation({

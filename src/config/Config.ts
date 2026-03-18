@@ -5,6 +5,7 @@ import {
   type EmbeddingConfig,
   type NezhaConfig,
   type IConfig,
+  type TransportConfig,
 } from './types.js';
 import { DATABASE_CONFIG, TASK_CONFIG, MEMORY_CONFIG, ENV_KEYS, ENV_DEFAULT } from './constants.js';
 import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
@@ -58,6 +59,7 @@ export class Config implements IConfig {
     const taskConfig = this.loadTaskConfig(yamlConfig);
     const memoryConfig = this.loadMemoryConfig();
     const embeddingConfig = this.loadEmbeddingConfig(yamlConfig);
+    const transportConfig = this.loadTransportConfig(yamlConfig);
     const env = this.loadEnv();
 
     return {
@@ -66,6 +68,7 @@ export class Config implements IConfig {
       memory: memoryConfig,
       embedding: embeddingConfig,
       env,
+      transport: transportConfig,
     };
   }
 
@@ -162,6 +165,19 @@ export class Config implements IConfig {
     return ENV_DEFAULT.DEVELOPMENT;
   }
 
+  private loadTransportConfig(yaml?: NezhaYamlConfig): TransportConfig {
+    const mode = process.env[ENV_KEYS.TRANSPORT_MODE] || yaml?.transport?.mode || 'http';
+    const validMode = mode === 'cli' ? 'cli' : 'http';
+
+    return {
+      mode: validMode,
+      opencodeApiUrl:
+        process.env[ENV_KEYS.OPENCODE_API_URL] ||
+        yaml?.transport?.opencodeApiUrl ||
+        'http://localhost:4096',
+    };
+  }
+
   getDbConfig(): DbConfig {
     return { ...this.config.db };
   }
@@ -180,6 +196,10 @@ export class Config implements IConfig {
 
   getEnv(): string {
     return this.config.env;
+  }
+
+  getTransportConfig(): TransportConfig {
+    return { ...this.config.transport };
   }
 
   validate(): boolean {

@@ -67,6 +67,27 @@ export interface HealthResponse {
   }>;
 }
 
+export interface AgentHealthResponse {
+  status: 'healthy' | 'unhealthy';
+  agents: Array<{
+    id: string;
+    mode: 'http' | 'cli';
+    status: 'idle' | 'busy' | 'error';
+    registeredAt: string;
+    lastActivity: string;
+    taskCount: number;
+  }>;
+  stats: {
+    totalAgents: number;
+    idleAgents: number;
+    busyAgents: number;
+    errorAgents: number;
+    totalTasksExecuted: number;
+    agentsByMode: Record<'http' | 'cli', number>;
+  };
+  defaultMode: 'http' | 'cli';
+}
+
 export interface MetricsResponse {
   tasks_per_hour: number;
   avg_task_duration: number;
@@ -80,7 +101,7 @@ export interface HealthServerConfig {
   adminPassword?: string;
   opencodeApiUrl?: string;
   memoryDir?: string;
-  diskWarningThreshold?: number; // bytes
+  diskWarningThreshold?: number;
 }
 
 export class HealthServer {
@@ -94,6 +115,7 @@ export class HealthServer {
   private opencodeApiUrl?: string;
   private memoryDir: string;
   private diskWarningThreshold: number;
+  private agentSystem: import('../core/AgentSystem.js').AgentSystem | null = null;
 
   constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
@@ -105,6 +127,10 @@ export class HealthServer {
     this.opencodeApiUrl = config?.opencodeApiUrl ?? process.env.OPENCODE_API_URL;
     this.memoryDir = config?.memoryDir ?? MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR;
     this.diskWarningThreshold = config?.diskWarningThreshold ?? 1024 * 1024 * 1024; // 1GB default
+  }
+
+  setAgentSystem(agentSystem: import('../core/AgentSystem.js').AgentSystem): void {
+    this.agentSystem = agentSystem;
   }
 
   private async checkOpenCodeApi(): Promise<{
@@ -201,6 +227,10 @@ export class HealthServer {
             const health = await this.getHealth();
             res.writeHead(200);
             res.end(JSON.stringify(health));
+          } else if (url.pathname === '/agents') {
+            const agentHealth = this.getAgentHealth();
+            res.writeHead(200);
+            res.end(JSON.stringify(agentHealth));
           } else if (url.pathname === '/metrics') {
             const registry = getMetricsRegistry();
             this.updateMetricsFromDb();
@@ -396,6 +426,49 @@ export class HealthServer {
 
     metricsCache.set('metrics', metrics);
     return metrics;
+  }
+
+  getAgentHealth(): AgentHealthResponse {
+    if (!this.agentSystem) {
+      return {
+        status: 'unhealthy',
+        agents: [],
+        stats: {
+          totalAgents: 0,
+          idleAgents: 0,
+          busyAgents: 0,
+          errorAgents: 0,
+          totalTasksExecuted: 0,
+          agentsByMode: { http: 0, cli: 0 },
+        },
+        defaultMode: 'http',
+      };
+    }
+
+    const agents = this.agentSystem.getAllAgents();
+    const stats = this.agentSystem.getStats();
+    const defaultMode = this.agentSystem.getDefaultMode();
+
+    return {
+      status: agents.length > 0 ? 'healthy' : 'healthy',
+      agents: agents.map(info => ({
+        id: info.id,
+        mode: info.mode,
+        status: info.status,
+        registeredAt: info.registeredAt.toISOString(),
+        lastActivity: info.lastActivity.toISOString(),
+        taskCount: info.taskCount,
+      })),
+      stats: {
+        totalAgents: stats.totalAgents,
+        idleAgents: stats.idleAgents,
+        busyAgents: stats.busyAgents,
+        errorAgents: stats.errorAgents,
+        totalTasksExecuted: stats.totalTasksExecuted,
+        agentsByMode: stats.agentsByMode,
+      },
+      defaultMode,
+    };
   }
 
   private async updateMetricsFromDb(): Promise<void> {

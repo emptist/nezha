@@ -651,6 +651,180 @@ describe('CliAgent', () => {
   });
 });
 
+describe('Security Tests', () => {
+  let mockSpawn: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockSpawn = vi.mocked(spawn);
+  });
+
+  describe('CliTransport Input Validation', () => {
+    it('should reject serverUrl exceeding max length', () => {
+      const longUrl = 'http://localhost:' + 'x'.repeat(2048);
+      expect(() => new CliTransport(longUrl, 60000)).toThrow('exceeds maximum length');
+    });
+
+    it('should reject serverUrl with invalid characters', () => {
+      expect(() => new CliTransport('http://localhost:4096; rm -rf', 60000)).toThrow(
+        'invalid characters'
+      );
+    });
+
+    it('should reject prompt exceeding max length', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      const longPrompt = 'x'.repeat(100001);
+      await expect(transport.sendMessage(longPrompt)).rejects.toThrow('exceeds maximum length');
+    });
+
+    it('should reject prompt with null bytes', async () => {
+      const mockProc = {
+        stdout: { on: vi.fn() },
+        stderr: { on: vi.fn() },
+        on: vi.fn(),
+        kill: vi.fn(),
+      };
+      mockSpawn.mockReturnValue(mockProc as any);
+
+      const transport = new CliTransport('http://localhost:4096', 60000);
+      await expect(transport.sendMessage('test\x00prompt')).rejects.toThrow('null bytes');
+    });
+
+    it('should reject serverUrl with control characters', () => {
+      expect(() => new CliTransport('http://localhost:4096\x00test', 60000)).toThrow(
+        'invalid characters'
+      );
+    });
+  });
+
+  describe('UnifiedAgent Input Validation', () => {
+    it('should reject message exceeding max length', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
+      });
+
+      const agent = new UnifiedAgent({ enableLogging: false });
+      const longMessage = 'x'.repeat(100001);
+      await expect(agent.executeTask(longMessage)).rejects.toThrow(
+        'exceeds maximum allowed length'
+      );
+    });
+
+    it('should reject task title exceeding max length', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
+      });
+
+      const agent = new UnifiedAgent({ enableLogging: false });
+      const longTitle = 'x'.repeat(501);
+      await expect(
+        agent.executeStructuredTask({ title: longTitle, description: 'test' })
+      ).rejects.toThrow('exceeds maximum length of 500');
+    });
+
+    it('should reject task description exceeding max length', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ parts: [{ type: 'text', text: 'result' }] }),
+      });
+
+      const agent = new UnifiedAgent({ enableLogging: false });
+      const longDesc = 'x'.repeat(5001);
+      await expect(
+        agent.executeStructuredTask({ title: 'test', description: longDesc })
+      ).rejects.toThrow('exceeds maximum length of 5000');
+    });
+  });
+
+  describe('Sensitive Data Masking', () => {
+    it('should mask password in logs', () => {
+      const testMessage = 'Please use password: secret123 for authentication';
+      const masked = testMessage.replace(/(password["\s]*[:=]["\s]*)([^"\s]+)/gi, '$1***');
+      expect(masked).toBe('Please use password: *** for authentication');
+    });
+
+    it('should mask API key in logs', () => {
+      const testMessage = 'api_key=sk-1234567890abcdef';
+      const masked = testMessage.replace(/(api[_-]?key["\s]*[:=]["\s]*)([^"\s]+)/gi, '$1***');
+      expect(masked).toBe('api_key=***');
+    });
+
+    it('should mask Bearer token in logs', () => {
+      const testMessage = 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
+      const masked = testMessage.replace(/(Bearer\s+)([A-Za-z0-9\-._~+/]+=*)/gi, '$1***');
+      expect(masked).toBe('Authorization: Bearer ***');
+    });
+
+    it('should detect private key pattern', () => {
+      const testMessage = 'Key: -----BEGIN RSA PRIVATE KEY-----MIIE...';
+      const hasPrivateKey = /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/i.test(testMessage);
+      expect(hasPrivateKey).toBe(true);
+    });
+
+    it('should detect sensitive patterns in message', () => {
+      const hasSensitive = (text: string): boolean => {
+        const patterns = [
+          /password["\s]*[:=]["\s]*[^"\s]+/i,
+          /api[_-]?key["\s]*[:=]["\s]*[^"\s]+/i,
+          /secret["\s]*[:=]["\s]*[^"\s]+/i,
+          /token["\s]*[:=]["\s]*[^"\s]+/i,
+          /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/,
+          /-----BEGIN CERTIFICATE-----/,
+        ];
+        return patterns.some(pattern => pattern.test(text));
+      };
+
+      expect(hasSensitive('My password: secret')).toBe(true);
+      expect(hasSensitive('api_key=abc123')).toBe(true);
+      expect(hasSensitive('Just a normal message')).toBe(false);
+    });
+
+    it('should detect sensitive patterns in message', () => {
+      const hasSensitive = (text: string): boolean => {
+        const patterns = [
+          /password["\s]*[:=]["\s]*[^"\s]+/i,
+          /api[_-]?key["\s]*[:=]["\s]*[^"\s]+/i,
+          /secret["\s]*[:=]["\s]*[^"\s]+/i,
+          /token["\s]*[:=]["\s]*[^"\s]+/i,
+          /-----BEGIN (?:RSA |EC )?PRIVATE KEY-----/,
+          /-----BEGIN CERTIFICATE-----/,
+        ];
+        return patterns.some(pattern => pattern.test(text));
+      };
+
+      expect(hasSensitive('My password: secret')).toBe(true);
+      expect(hasSensitive('api_key=abc123')).toBe(true);
+      expect(hasSensitive('Just a normal message')).toBe(false);
+    });
+  });
+
+  describe('Error Message Sanitization', () => {
+    it('should sanitize control characters from error messages', () => {
+      const errorWithControlChars = 'Error\x00\x1F message';
+      const sanitized = errorWithControlChars.replace(/[\x00-\x1F\x7F]/g, '');
+      expect(sanitized).toBe('Error message');
+    });
+
+    it('should truncate long error output', () => {
+      const longError = 'x'.repeat(1000);
+      const truncated = longError.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
+      expect(truncated.length).toBe(500);
+    });
+  });
+});
+
 describe('Backward Compatibility - Agent class', () => {
   beforeEach(() => {
     vi.clearAllMocks();
