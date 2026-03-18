@@ -182,8 +182,8 @@ export class CliTransport implements SessionManager {
         return;
       }
 
-      let output = '';
-      let errorOutput = '';
+      const outputParts: string[] = [];
+      const errorOutputParts: string[] = [];
       let stderrBuffer = '';
 
       const cleanup = () => {
@@ -211,7 +211,7 @@ export class CliTransport implements SessionManager {
             try {
               const event = JSON.parse(line);
               if (event.type === 'text') {
-                output += event.part?.text || '';
+                outputParts.push(event.part?.text || '');
                 onChunk(event.part?.text || '', 'text');
               } else if (event.type === 'thinking') {
                 onChunk(event.part?.text || '', 'thinking');
@@ -223,13 +223,13 @@ export class CliTransport implements SessionManager {
         });
       } else {
         proc.stderr?.on('data', data => {
-          errorOutput += data.toString();
+          errorOutputParts.push(data.toString());
         });
       }
 
       proc.stdout?.on('data', data => {
         if (!streaming) {
-          output += data.toString();
+          outputParts.push(data.toString());
         }
       });
 
@@ -242,6 +242,9 @@ export class CliTransport implements SessionManager {
         clearTimeout(timeoutId);
         process.removeListener('SIGTERM', cleanup);
         process.removeListener('SIGINT', cleanup);
+
+        const output = outputParts.join('');
+        const errorOutput = errorOutputParts.join('');
 
         if (code === 0) {
           if (!streaming) {

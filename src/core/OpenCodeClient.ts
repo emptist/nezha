@@ -162,7 +162,7 @@ Please analyze the task and provide a detailed solution.`;
         artifacts: this.extractArtifacts(response),
       };
 
-      this.conversationLogger.endConversation(result);
+      await this.conversationLogger.endConversation(result);
 
       return result;
     } catch (error) {
@@ -172,7 +172,7 @@ Please analyze the task and provide a detailed solution.`;
         artifacts: [],
       };
 
-      this.conversationLogger.endConversation(result);
+      await this.conversationLogger.endConversation(result);
 
       throw error;
     }

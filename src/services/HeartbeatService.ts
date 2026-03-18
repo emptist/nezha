@@ -1,5 +1,6 @@
 import { Scheduler } from '../core/Scheduler.js';
-import { Agent } from '../core/Agent.js';
+import { UnifiedAgent, CliAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
+import { type StreamingCallback } from '../core/transports/index.js';
 import { MemoryService } from '../core/Memory.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { Config } from '../config/Config.js';
@@ -25,6 +26,8 @@ import { getPluginManager, type TaskContext } from '../core/PluginManager.js';
 import { NotificationPlugin, LoggingPlugin } from '../plugins/index.js';
 import { WebhookService, createWebhookConfigFromEnv } from './WebhookService.js';
 
+export type AgentTransportMode = 'http' | 'cli';
+
 const standardMetrics = createStandardMetrics();
 const pluginManager = getPluginManager();
 const webhookService = new WebhookService(createWebhookConfigFromEnv());
@@ -36,6 +39,15 @@ export interface HeartbeatServiceConfig {
   maxReconnectAttempts?: number;
   embedding?: EmbeddingConfig;
   checkpointIntervalMs?: number;
+  agent?: {
+    mode?: AgentTransportMode;
+    timeout?: number;
+    maxRetries?: number;
+    retryDelay?: number;
+    serverUrl?: string;
+    enableLogging?: boolean;
+    logDir?: string;
+  };
   plugins?: {
     logging?: boolean;
     notification?: {
@@ -65,7 +77,7 @@ export interface HeartbeatHealth {
 
 export class HeartbeatService {
   private readonly scheduler: Scheduler;
-  private readonly agent: Agent;
+  private readonly agent: UnifiedAgent;
   private readonly memory: MemoryService;
   private readonly dailyMemory: DailyMemoryService;
   private readonly selfImprovement: SelfImprovementService;
@@ -91,6 +103,7 @@ export class HeartbeatService {
   private readonly memoryCompactionIntervalMs: number;
   private readonly defaultMaxRetries: number;
   private readonly defaultRetryDelayMs: number;
+  private readonly transportMode: AgentTransportMode;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -102,11 +115,27 @@ export class HeartbeatService {
     scheduler?: Scheduler
   ) {
     this.scheduler = scheduler ?? new Scheduler(db, config?.heartbeatIntervalMs);
-    this.agent = new Agent();
+    this.transportMode = config?.agent?.mode ?? 'http';
+
+    const agentConfig: UnifiedAgentConfig = {
+      mode: this.transportMode,
+      timeout: config?.agent?.timeout,
+      maxRetries: config?.agent?.maxRetries,
+      retryDelay: config?.agent?.retryDelay,
+      serverUrl: config?.agent?.serverUrl,
+      enableLogging: config?.agent?.enableLogging ?? true,
+      logDir: config?.agent?.logDir,
+    };
+
+    if (this.transportMode === 'cli') {
+      this.agent = new CliAgent(agentConfig);
+    } else {
+      this.agent = new UnifiedAgent(agentConfig);
+    }
 
     const taskConfig = Config.getInstance().getTaskConfig();
-    this.defaultMaxRetries = taskConfig.maxRetries;
-    this.defaultRetryDelayMs = taskConfig.retryDelayMs;
+    this.defaultMaxRetries = config?.agent?.maxRetries ?? taskConfig.maxRetries;
+    this.defaultRetryDelayMs = config?.agent?.retryDelay ?? taskConfig.retryDelayMs;
 
     let embeddingProvider: EmbeddingProvider | undefined;
     if (config?.embedding) {
@@ -129,9 +158,10 @@ export class HeartbeatService {
     this.heartbeatIntervalMs = config?.heartbeatIntervalMs ?? 60000;
     this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
-    this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000; // 5 minutes
+    this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
 
-    // Connect scheduler to task execution
+    logger.info(`HeartbeatService initialized with ${this.transportMode} transport mode`);
+
     this.scheduler.onTaskReady = this.executeTask.bind(this);
   }
 
@@ -549,6 +579,183 @@ export class HeartbeatService {
       stats: { ...this.stats },
       lastError: this.lastError,
     };
+  }
+
+  getTransportMode(): AgentTransportMode {
+    return this.transportMode;
+  }
+
+  isStreamingSupported(): boolean {
+    return this.transportMode === 'cli';
+  }
+
+  async executeTaskStreaming(
+    taskId: string,
+    title: string,
+    description: string | undefined,
+    onChunk: StreamingCallback,
+    retryCount: number = 0,
+    maxRetries: number = this.defaultMaxRetries,
+    timeoutSeconds: number = 300
+  ): Promise<void> {
+    if (!this.isStreamingSupported()) {
+      throw new Error('Streaming is only supported in CLI transport mode');
+    }
+
+    this.stats.tasksExecuted++;
+    standardMetrics.activeTasks.inc(1);
+
+    const startTime = Date.now();
+    const taskContext: TaskContext = {
+      taskId,
+      title,
+      description,
+      status: 'RUNNING',
+      startTime: new Date(startTime),
+      metadata: { retryCount, maxRetries, timeoutSeconds, streaming: true },
+    };
+
+    await pluginManager.executeBeforeTask(taskContext);
+
+    logger.info(
+      `Executing task with streaming: ${title} (attempt ${retryCount + 1}/${maxRetries})`
+    );
+
+    try {
+      const result = await (this.agent as UnifiedAgent).executeTaskStreaming(
+        description || title,
+        onChunk
+      );
+
+      const durationSeconds = (Date.now() - startTime) / 1000;
+      standardMetrics.taskDurationSeconds.observe(durationSeconds);
+      standardMetrics.activeTasks.dec(1);
+
+      const tableName = DATABASE_TABLES.TASKS;
+      const resultMessage = result.message || result.output || '';
+
+      if (result.success) {
+        logger.info(`Task completed successfully`);
+
+        const resultData = { message: resultMessage };
+
+        if (containsSensitiveData(resultData as Record<string, unknown>)) {
+          const encryption = getEncryptionService();
+          if (encryption.isInitialized()) {
+            const encrypted = encryptSensitiveFields(
+              resultData as Record<string, unknown>,
+              encryption
+            );
+            await this.db.query(
+              `UPDATE ${tableName} SET status = $1, result = $2, encrypted_result = $3, encrypted_at = NOW(), retry_count = 0, next_retry_at = NULL WHERE id = $4`,
+              [
+                TASK_STATUS.COMPLETED,
+                JSON.stringify({ message: resultMessage }),
+                JSON.stringify(encrypted),
+                taskId,
+              ]
+            );
+          } else {
+            await this.db.query(
+              `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0, next_retry_at = NULL WHERE id = $3`,
+              [TASK_STATUS.COMPLETED, JSON.stringify(resultData), taskId]
+            );
+          }
+        } else {
+          await this.db.query(
+            `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0, next_retry_at = NULL WHERE id = $3`,
+            [TASK_STATUS.COMPLETED, JSON.stringify(resultData), taskId]
+          );
+        }
+
+        await this.db.query(
+          `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            taskId,
+            title,
+            TASK_STATUS.RUNNING,
+            TASK_STATUS.COMPLETED,
+            'Task completed successfully',
+            JSON.stringify({ retryCount, maxRetries, streaming: true }),
+          ]
+        );
+
+        await this.memory.save({
+          id: crypto.randomUUID(),
+          projectId: undefined,
+          content: `Task: ${title}\nResult: ${resultMessage}`,
+          metadata: { type: 'task_result', success: true, streaming: true },
+        });
+
+        await this.dailyMemory.save({
+          task: title,
+          result: resultMessage || 'Completed',
+        });
+
+        this.stats.tasksSucceeded++;
+
+        await pluginManager.executeAfterTask({
+          ...taskContext,
+          status: TASK_STATUS.COMPLETED,
+          result: resultMessage,
+          endTime: new Date(),
+        });
+
+        webhookService.sendTaskCompleted(taskId, title, description, resultMessage || 'Completed');
+
+        await this.runReflection(title, resultMessage || 'Completed');
+
+        return;
+      }
+
+      this.stats.tasksFailed++;
+
+      await pluginManager.executeAfterTask({
+        ...taskContext,
+        status: TASK_STATUS.FAILED,
+        error: resultMessage,
+        endTime: new Date(),
+      });
+
+      logger.error(`Task failed (attempt ${retryCount + 1}/${maxRetries}):`, resultMessage);
+      this.lastError = resultMessage || 'Unknown error';
+
+      if (retryCount + 1 >= maxRetries) {
+        webhookService.sendTaskFailed(taskId, title, description, resultMessage || 'Unknown error');
+        await this.moveToDeadLetter(
+          taskId,
+          title,
+          description,
+          resultMessage || 'Unknown error',
+          retryCount,
+          maxRetries
+        );
+        return;
+      }
+
+      const delayMs = Math.min(
+        this.defaultRetryDelayMs * Math.pow(2, retryCount),
+        this.defaultRetryDelayMs * 10
+      );
+      const nextRetryAt = new Date(Date.now() + delayMs);
+
+      logger.info(
+        `Scheduling retry ${retryCount + 2}/${maxRetries} at ${nextRetryAt.toISOString()} (delay: ${delayMs / 1000}s)`
+      );
+
+      await this.db.query(
+        `UPDATE ${tableName} SET status = $1, retry_count = $2, next_retry_at = $3, error = $4, updated_at = NOW() WHERE id = $5`,
+        [TASK_STATUS.PENDING, retryCount + 1, nextRetryAt, resultMessage, taskId]
+      );
+    } catch (error) {
+      standardMetrics.activeTasks.dec(1);
+      await pluginManager.executeOnError(
+        taskContext,
+        error instanceof Error ? error : new Error(String(error))
+      );
+      throw error;
+    }
   }
 
   async getTaskResult(

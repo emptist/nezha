@@ -107,7 +107,7 @@ export class UnifiedAgent {
       const artifacts = this.extractArtifacts(response);
 
       this.conversationLogger?.addMessage('assistant', response);
-      this.conversationLogger?.endConversation({
+      await this.conversationLogger?.endConversation({
         success: true,
         output: response,
         artifacts,
@@ -124,7 +124,7 @@ export class UnifiedAgent {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const artifacts = this.extractArtifacts(errorMessage);
 
-      this.conversationLogger?.endConversation({
+      await this.conversationLogger?.endConversation({
         success: false,
         output: errorMessage,
         artifacts: [],
@@ -172,7 +172,7 @@ export class UnifiedAgent {
 
         try {
           this.conversationLogger?.addMessage('assistant', result);
-          this.conversationLogger?.endConversation({
+          await this.conversationLogger?.endConversation({
             success: true,
             output: result,
             artifacts,
@@ -213,7 +213,7 @@ export class UnifiedAgent {
     const errorMessage = `Task failed after ${this.maxRetries} attempts: ${lastError?.message ?? 'Unknown error'}`;
 
     try {
-      this.conversationLogger?.endConversation({
+      await this.conversationLogger?.endConversation({
         success: false,
         output: errorMessage,
         artifacts: [],

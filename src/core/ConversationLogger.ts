@@ -42,19 +42,37 @@ export interface ConversationLog {
   metadata: ConversationMetadata;
 }
 
+interface IndexEntry {
+  session_id: string;
+  timestamp: string;
+  task_title: string;
+  conversation_type: string;
+  success?: boolean;
+}
+
 export class ConversationLogger {
   private currentConversation: ConversationLog | null = null;
   private readonly logDir: string;
   private startTime: number = 0;
+  private writeStream: fs.WriteStream | null = null;
+  private indexWritePromise: Promise<void> | null = null;
+  private initialized: boolean = false;
 
   constructor(logDir: string = 'conversations') {
     this.logDir = logDir;
-    this.ensureLogDirectory();
   }
 
-  private ensureLogDirectory(): void {
-    if (!fs.existsSync(this.logDir)) {
-      fs.mkdirSync(this.logDir, { recursive: true });
+  private async ensureInitialized(): Promise<void> {
+    if (this.initialized) return;
+    await this.ensureLogDirectory();
+    this.initialized = true;
+  }
+
+  private async ensureLogDirectory(): Promise<void> {
+    try {
+      await fs.promises.access(this.logDir);
+    } catch {
+      await fs.promises.mkdir(this.logDir, { recursive: true });
     }
   }
 
@@ -121,7 +139,7 @@ export class ConversationLogger {
     };
   }
 
-  endConversation(result?: ConversationResult): void {
+  async endConversation(result?: ConversationResult): Promise<void> {
     if (!this.currentConversation) {
       return;
     }
@@ -131,75 +149,103 @@ export class ConversationLogger {
     }
 
     this.currentConversation.metadata.duration_ms = Date.now() - this.startTime;
-    this.saveConversation();
+    await this.saveConversation();
     this.currentConversation = null;
   }
 
-  private saveConversation(): void {
+  private async saveConversation(): Promise<void> {
     if (!this.currentConversation) {
       return;
     }
 
+    await this.ensureInitialized();
+
     const date = new Date().toISOString().split('T')[0];
     const dateDir = path.join(this.logDir, date);
 
-    if (!fs.existsSync(dateDir)) {
-      fs.mkdirSync(dateDir, { recursive: true });
+    try {
+      await this.ensureDirectoryExists(dateDir);
+    } catch (error) {
+      console.error('Failed to create date directory:', error);
+      throw error;
     }
 
     const logPath = path.join(dateDir, `session-${this.currentConversation.session_id}.jsonl`);
     const logEntry = JSON.stringify(this.currentConversation) + '\n';
 
-    fs.writeFileSync(logPath, logEntry, 'utf-8');
-    this.updateIndex();
+    try {
+      await fs.promises.writeFile(logPath, logEntry, 'utf-8');
+      await this.updateIndex();
+    } catch (error) {
+      console.error('Failed to save conversation:', error);
+      throw error;
+    }
   }
 
-  private updateIndex(): void {
+  private async ensureDirectoryExists(dirPath: string): Promise<void> {
+    try {
+      await fs.promises.access(dirPath);
+    } catch {
+      await fs.promises.mkdir(dirPath, { recursive: true });
+    }
+  }
+
+  private async updateIndex(): Promise<void> {
     if (!this.currentConversation) {
       return;
     }
 
     const indexPath = path.join(this.logDir, 'index.json');
-    let index: Array<{
-      session_id: string;
-      timestamp: string;
-      task_title: string;
-      conversation_type: string;
-      success?: boolean;
-    }> = [];
+    const tempIndexPath = path.join(this.logDir, 'index.json.tmp');
 
-    if (fs.existsSync(indexPath)) {
+    let index: IndexEntry[] = [];
+
+    try {
+      await fs.promises.access(indexPath);
       try {
-        index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-      } catch (error) {
+        const content = await fs.promises.readFile(indexPath, 'utf-8');
+        index = JSON.parse(content);
+      } catch {
         index = [];
       }
+    } catch {
+      index = [];
     }
 
-    index.push({
+    const newEntry: IndexEntry = {
       session_id: this.currentConversation.session_id,
       timestamp: this.currentConversation.timestamp.toISOString(),
       task_title: this.currentConversation.task.title,
       conversation_type: this.currentConversation.conversation_type,
       success: this.currentConversation.result?.success,
-    });
+    };
 
-    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf-8');
+    index.push(newEntry);
+
+    const tempContent = JSON.stringify(index, null, 2);
+
+    try {
+      await fs.promises.writeFile(tempIndexPath, tempContent, 'utf-8');
+      await fs.promises.rename(tempIndexPath, indexPath);
+    } catch (error) {
+      try {
+        await fs.promises.unlink(tempIndexPath);
+      } catch {}
+      throw error;
+    }
   }
 
   getCurrentSessionId(): string | null {
     return this.currentConversation?.session_id || null;
   }
 
-  getConversationLog(sessionId: string): ConversationLog | null {
+  async getConversationLog(sessionId: string): Promise<ConversationLog | null> {
     const indexPath = path.join(this.logDir, 'index.json');
-    if (!fs.existsSync(indexPath)) {
-      return null;
-    }
 
     try {
-      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
-      const entry = index.find((e: { session_id: string }) => e.session_id === sessionId);
+      const indexContent = await fs.promises.readFile(indexPath, 'utf-8');
+      const index: IndexEntry[] = JSON.parse(indexContent);
+      const entry = index.find(e => e.session_id === sessionId);
       if (!entry) {
         return null;
       }
@@ -207,37 +253,41 @@ export class ConversationLogger {
       const date = entry.timestamp.split('T')[0];
       const logPath = path.join(this.logDir, date, `session-${sessionId}.jsonl`);
 
-      if (!fs.existsSync(logPath)) {
+      try {
+        const logContent = await fs.promises.readFile(logPath, 'utf-8');
+        return JSON.parse(logContent);
+      } catch {
         return null;
       }
-
-      const logContent = fs.readFileSync(logPath, 'utf-8');
-      return JSON.parse(logContent);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
 
-  listConversations(date?: string): Array<{
-    session_id: string;
-    timestamp: string;
-    task_title: string;
-    conversation_type: string;
-    success?: boolean;
-  }> {
+  async listConversations(date?: string): Promise<IndexEntry[]> {
     const indexPath = path.join(this.logDir, 'index.json');
-    if (!fs.existsSync(indexPath)) {
-      return [];
-    }
 
     try {
-      const index = JSON.parse(fs.readFileSync(indexPath, 'utf-8'));
+      const indexContent = await fs.promises.readFile(indexPath, 'utf-8');
+      const index: IndexEntry[] = JSON.parse(indexContent);
       if (date) {
-        return index.filter((entry: { timestamp: string }) => entry.timestamp.startsWith(date));
+        return index.filter(entry => entry.timestamp.startsWith(date));
       }
       return index;
-    } catch (error) {
+    } catch {
       return [];
     }
+  }
+
+  async close(): Promise<void> {
+    if (this.writeStream) {
+      await new Promise<void>(resolve => {
+        this.writeStream!.end(() => {
+          this.writeStream = null;
+          resolve();
+        });
+      });
+    }
+    this.currentConversation = null;
   }
 }
