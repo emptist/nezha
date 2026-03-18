@@ -95,6 +95,8 @@ export class ApiKeyService {
     }
 
     const row = result.rows[0];
+    if (!row) return null;
+
     const encryptedData: EncryptedData = {
       encryptedData: row.encrypted_key,
       iv: row.encrypted_iv,
@@ -171,6 +173,8 @@ export class ApiKeyService {
     }
 
     const row = result.rows[0];
+    if (!row) return null;
+
     const encryptedData: EncryptedData = {
       encryptedData: row.encrypted_value,
       iv: row.encrypted_iv,
