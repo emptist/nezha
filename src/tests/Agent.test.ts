@@ -81,7 +81,9 @@ describe('Agent', () => {
     it('should retry on failure', async () => {
       const mockExecSync = execSync as ReturnType<typeof vi.fn>;
       mockExecSync
-        .mockRejectedValueOnce(new Error('Network error'))
+        .mockImplementationOnce(() => {
+          throw new Error('Network error');
+        })
         .mockReturnValueOnce('{"type":"text","part":{"text":"Success"}}');
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
@@ -139,12 +141,13 @@ describe('Agent', () => {
 
     it('should handle non-JSON output gracefully', async () => {
       const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce(Buffer.from('plain text output without JSON'));
+      mockExecSync.mockReturnValueOnce('plain text output without JSON');
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(true);
+      expect(result.message).toBe('');
     });
 
     it('should calculate retry delay with exponential backoff', () => {
@@ -288,12 +291,13 @@ describe('Agent', () => {
 
     it('should handle malformed JSON in response', async () => {
       const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce(Buffer.from('not valid json { broken'));
+      mockExecSync.mockReturnValueOnce('not valid json { broken');
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('malformed json test');
 
       expect(result.success).toBe(true);
+      expect(result.message).toBe('');
     });
   });
 
