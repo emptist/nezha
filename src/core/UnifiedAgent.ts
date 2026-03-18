@@ -21,12 +21,23 @@ import {
   type CircuitState,
 } from '../utils/EnhancedCircuitBreaker.js';
 import { ResponseCache, StaleResponseCache } from '../utils/ResponseCache.js';
+import {
+  createAgentMetrics,
+  getMetricsRegistry,
+  type TransportHealth,
+  type AgentHealth,
+} from '../services/MetricsService.js';
 
 export { type StreamingCallback } from './transports/index.js';
 
 const MAX_MESSAGE_LENGTH = 100000;
 const MAX_TASK_TITLE_LENGTH = 500;
 const MAX_TASK_DESCRIPTION_LENGTH = 5000;
+
+interface AgentMetrics {
+  executionTotal: ReturnType<typeof createAgentMetrics>;
+  correlationId: string;
+}
 
 function sanitizeForLog(input: string, maxLength: number = 200): string {
   const sanitized = input.replace(/[\x00-\x1F\x7F]/g, '');

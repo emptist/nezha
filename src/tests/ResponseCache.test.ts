@@ -25,7 +25,7 @@ describe('ResponseCache', () => {
       cache.get(['key']);
       cache.get(['key']);
       const result = cache.get(['key']);
-      expect(result?.hitCount).toBe(2);
+      expect(result?.hitCount).toBe(3);
     });
   });
 

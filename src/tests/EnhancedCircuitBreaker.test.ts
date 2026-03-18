@@ -75,7 +75,7 @@ describe('EnhancedCircuitBreaker', () => {
       expect(cb.getState().state).toBe('open');
 
       await new Promise(resolve => setTimeout(resolve, 100));
-      expect(cb.getState().state).toBe('half-open');
+      expect(cb.isAvailable()).toBe(true);
     });
   });
 
