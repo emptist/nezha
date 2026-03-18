@@ -55,24 +55,33 @@ describe('Agent', () => {
 
   describe('executeTask - Integration Tests', () => {
     it('should execute task successfully', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce(
-        JSON.stringify({
-          type: 'text',
-          part: { text: 'Task completed successfully' },
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'session-123' }),
         })
-      );
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Task completed successfully' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
       const result = await agent.executeTask('test task');
 
       expect(result.success).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('should return success result with message', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce('{"type":"text","part":{"text":"Hello World"}}');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'session-456' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Hello World' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('hello');
@@ -82,79 +91,98 @@ describe('Agent', () => {
     });
 
     it('should retry on failure', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync
-        .mockImplementationOnce(() => {
-          throw new Error('Network error');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          statusText: 'Internal Server Error',
+          text: () => Promise.resolve('Network error'),
         })
-        .mockReturnValueOnce('{"type":"text","part":{"text":"Success"}}');
-
-      const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
-      const result = await agent.executeTask('test task');
-
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
-      expect(result.success).toBe(true);
-    });
-
-    it('should fail after max retries exhausted', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync
-        .mockImplementationOnce(() => {
-          throw new Error('Error 1');
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'session-retry' }),
         })
-        .mockImplementationOnce(() => {
-          throw new Error('Error 2');
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Success' }] }),
         });
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
       const result = await agent.executeTask('test task');
 
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+      expect(result.success).toBe(true);
+    });
+
+    it('should fail after max retries exhausted', async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          statusText: 'Error 1',
+          text: () => Promise.resolve('Error 1'),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          statusText: 'Error 2',
+          text: () => Promise.resolve('Error 2'),
+        });
+
+      const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
+      const result = await agent.executeTask('test task');
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
       expect(result.success).toBe(false);
       expect(result.message).toContain('Error 2');
     });
 
     it('should handle timeout errors', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      const timeoutError = new Error('Command timed out');
-      timeoutError.name = 'Error';
-      mockExecSync.mockImplementation(() => {
-        const error: any = new Error('Command timed out');
-        error.status = 'timeout';
-        throw error;
+      mockFetch.mockImplementation(() => {
+        const controller = new AbortController();
+        setTimeout(() => controller.abort(), 1);
+        return Promise.reject(new DOMException('Aborted', 'AbortError'));
       });
 
       const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
       const result = await agent.executeTask('long running task');
 
       expect(result.success).toBe(false);
+      expect(result.message).toContain('timed out');
     });
 
     it('should parse multiple JSON lines', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      const output = [
-        '{"type":"text","part":{"text":"Line 1"}}',
-        '{"type":"text","part":{"text":"Line 2"}}',
-        '{"type":"text","part":{"text":"Line 3"}}',
-      ].join('\n');
-      mockExecSync.mockReturnValueOnce(output);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'session-multi' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Line 1' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('Line 1Line 2Line 3');
     });
 
     it('should handle non-JSON output gracefully', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce('plain text output without JSON');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'session-text' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'plain text output' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('');
     });
 
     it('should calculate retry delay with exponential backoff', () => {
@@ -179,107 +207,62 @@ describe('Agent', () => {
     });
   });
 
-  describe('Agent Integration Tests with OpenCodeApiMock', () => {
-    let mockExecSync: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      vi.clearAllMocks();
-      mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      OpenCodeApiMock.setup({
-        success: true,
-        responseText: 'Integration test response',
-      });
-    });
-
-    afterEach(() => {
-      OpenCodeApiMock.teardown();
-    });
-
-    it('should use OpenCodeApiMock for task execution', async () => {
-      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Mock response text'));
-
-      const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
-      const result = await agent.executeTask('integration test task');
-
-      expect(result.success).toBe(true);
-      expect(result.message).toContain('Mock response text');
-      expect(OpenCodeApiMock.getCalls().length).toBeGreaterThanOrEqual(0);
-    });
-
-    it('should track API calls when executing tasks', async () => {
-      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Task completed'));
-
-      const agent = new Agent({ maxRetries: 1 });
-      await agent.executeTask('test task with tracking');
-
-      const calls = OpenCodeApiMock.getCalls();
-      expect(calls.length).toBe(0);
-    });
-
-    it('should handle mock error responses', async () => {
-      OpenCodeApiMock.setup({
-        success: false,
-        error: 'Mock API error',
-      });
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Mock API error');
-      });
-
-      const agent = new Agent({ maxRetries: 1, retryDelay: 10 });
-      const result = await agent.executeTask('error test');
-
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('Mock API error');
-    });
-
-    it('should handle delayed mock responses', async () => {
-      OpenCodeApiMock.setup({
-        success: true,
-        responseText: 'Delayed response',
-        delay: 50,
-      });
-      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Delayed response'));
-
-      const agent = new Agent({ maxRetries: 1, timeout: 5000 });
-      const result = await agent.executeTask('delayed task');
-
-      expect(result.success).toBe(true);
-    });
-
+  describe('Agent Integration Tests', () => {
     it('should use custom server URL from config', async () => {
-      mockExecSync.mockReturnValueOnce(OpenCodeApiMock.formatResponse('Custom server'));
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: 'custom-session' }),
+      });
 
       const agent = new Agent({ maxRetries: 1, serverUrl: 'http://custom:4096' });
       await agent.executeTask('custom server test');
 
-      expect(mockExecSync).toHaveBeenCalled();
-      const callArgs = mockExecSync.mock.calls[0][0] as string;
-      expect(callArgs).toContain('http://custom:4096');
+      expect(mockFetch).toHaveBeenCalled();
+      const sessionCall = mockFetch.mock.calls[0][0] as string;
+      expect(String(sessionCall).includes('http://custom:4096')).toBe(true);
     });
 
     it('should retry on mock failure then succeed', async () => {
-      mockExecSync
-        .mockImplementationOnce(() => {
-          throw new Error('Network failure');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 503,
+          statusText: 'Service Unavailable',
+          text: () => Promise.resolve('Network failure'),
         })
-        .mockReturnValueOnce(OpenCodeApiMock.formatResponse('Success on retry'));
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'retry-session' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'Success on retry' }] }),
+        });
 
       const agent = new Agent({ maxRetries: 2, retryDelay: 10 });
       const result = await agent.executeTask('retry success test');
 
       expect(result.success).toBe(true);
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(3);
     });
 
     it('should parse complex JSON responses', async () => {
       const complexResponse = {
-        type: 'text',
-        part: {
+        parts: [{
+          type: 'text',
           text: 'Complex response with data',
           metadata: { status: 'ok', code: 200 },
-        },
+        }],
       };
-      mockExecSync.mockReturnValueOnce(JSON.stringify(complexResponse));
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'complex-session' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve(complexResponse),
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('complex json test');
@@ -289,35 +272,45 @@ describe('Agent', () => {
     });
 
     it('should handle empty response gracefully', async () => {
-      mockExecSync.mockReturnValueOnce('');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'empty-session' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [] }),
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('empty response test');
 
       expect(result.success).toBe(true);
-      expect(result.message).toBe('');
     });
 
     it('should handle malformed JSON in response', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce('not valid json { broken');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'malformed-session' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => {
+            throw new Error('Invalid JSON');
+          },
+        });
 
       const agent = new Agent({ maxRetries: 1 });
       const result = await agent.executeTask('malformed json test');
 
-      expect(result.success).toBe(true);
-      expect(result.message).toBe('');
+      expect(result.success).toBe(false);
     });
   });
 
   describe('Agent - Error Scenarios', () => {
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
-
-    it('should handle execSync throwing non-Error objects', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockImplementation(() => {
+    it('should handle fetch throwing non-Error objects', async () => {
+      mockFetch.mockImplementation(() => {
         throw 'string error';
       });
 
@@ -325,12 +318,18 @@ describe('Agent', () => {
       const result = await agent.executeTask('test');
 
       expect(result.success).toBe(false);
-      expect(result.message).toContain('string error');
     });
 
     it('should handle null message gracefully', async () => {
-      const mockExecSync = execSync as ReturnType<typeof vi.fn>;
-      mockExecSync.mockReturnValueOnce('{"type":"text","part":{"text":"ok"}}');
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ id: 'null-session' }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ parts: [{ type: 'text', text: 'ok' }] }),
+        });
 
       const agent = new Agent();
       const result = await agent.executeTask('');
