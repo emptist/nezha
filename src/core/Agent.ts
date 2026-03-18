@@ -83,7 +83,7 @@ export class Agent {
         logger.debug(`Running: ${cmd.substring(0, 100)}...`);
         
         const output = execSync(cmd, {
-          timeout: this.timeout,
+          timeout: 120000,
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env },
