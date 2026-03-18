@@ -131,7 +131,7 @@ describe('Scheduler', () => {
     // Wait for heartbeat to execute
     await new Promise(resolve => setTimeout(resolve, 150));
 
-    expect(callback).toHaveBeenCalledWith('task-1', 'Test Task', 'Test description');
+    expect(callback).toHaveBeenCalledWith('task-1', 'Test Task', 'Test description', expect.any(Number), expect.any(Number), expect.any(Number));
     expect(scheduler.getTotalTasksExecuted()).toBe(1);
   });
 
