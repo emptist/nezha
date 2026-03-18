@@ -175,8 +175,8 @@ export class Cli {
     }
   }
 
-  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false, templateName?: string, category?: string)
-  : Promise<void> {
+  async addTask(title: string, description: string, priority: number = 0, dependsOn?: string[], timeoutSeconds?: number, taskType?: string, assignedTo?: string, dryRun: boolean = false, templateName?: string, category?: string, jsonOutput: boolean = false)
+  : Promise<{ id: string; title: string } | undefined> {
     cli.step('Validating task input...');
     
     let finalTitle = title;
@@ -281,6 +281,15 @@ export class Cli {
     if (assignedTo) extras += `, assigned: ${assignedTo}`;
     if (templateName) extras += `, template: ${templateName}`;
     if (taskData.category) extras += `, category: ${taskData.category}`;
+    
+    if (jsonOutput) {
+      const result = await db.query<{ id: string; title: string; status: string; priority: number; category: string; tags: string[]; created_at: Date }>(
+        `SELECT id, title, status, priority, category, tags, created_at FROM tasks WHERE id = $1`,
+        [taskId]
+      );
+      console.log(JSON.stringify(result.rows[0], null, 2));
+      return;
+    }
     
     cli.success(`Task created: "${taskData.title}"${extras}`);
   }
@@ -441,7 +450,7 @@ export class Cli {
     await this.addTask("Continuous Improvement Cycle", description, 10);
   }
 
-  async listTasks(tag?: string, status?: string, category?: string): Promise<void> {
+  async listTasks(tag?: string, status?: string, category?: string, jsonOutput: boolean = false): Promise<void> {
     const db = await this.getDb();
     let query = `SELECT id, title, status, priority, tags, category, created_at FROM tasks WHERE 1=1`;
     const params: (string | number)[] = [];
@@ -468,6 +477,11 @@ export class Cli {
     query += ` ORDER BY priority DESC, created_at DESC LIMIT 20`;
 
     const result = await db.query<TaskRow>(query, params);
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(result.rows, null, 2));
+      return;
+    }
 
     if (result.rows.length === 0) {
       cli.info('No tasks found');
