@@ -123,7 +123,9 @@ describe('Transport Classes', () => {
     it('should spawn opencode with correct args', async () => {
       let closeCb: ((code: number) => void) | null = null;
       const mockProc = {
-        stdout: { on: vi.fn() },
+        stdout: {
+          on: vi.fn((_event: string, _cb: (data: Buffer) => void) => {}),
+        },
         stderr: { on: vi.fn() },
         on: vi.fn((_event: string, cb: (code: number) => void) => {
           if (_event === 'close') closeCb = cb;
@@ -138,9 +140,10 @@ describe('Transport Classes', () => {
       const dataCallback = mockProc.stdout.on.mock.calls.find(
         (c: unknown[]) => c[0] === 'data'
       )?.[1] as (data: Buffer) => void;
-      dataCallback?.(Buffer.from('{"type":"text","part":{"text":"response"}}'));
-
-      closeCb?.(0);
+      if (dataCallback) {
+        dataCallback(Buffer.from('{"type":"text","part":{"text":"response"}}'));
+      }
+      if (closeCb) closeCb(0);
 
       const result = await resultPromise;
       expect(mockSpawn).toHaveBeenCalledWith(
