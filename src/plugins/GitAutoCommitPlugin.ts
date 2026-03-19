@@ -6,6 +6,7 @@ export interface GitAutoCommitConfig {
   autoPush?: boolean;
   commitMessagePrefix?: string;
   autoAdd?: boolean;
+  useActualCommitMessage?: boolean;
 }
 
 export class GitAutoCommitPlugin implements Plugin {
@@ -16,16 +17,19 @@ export class GitAutoCommitPlugin implements Plugin {
   private readonly autoPush: boolean;
   private readonly commitMessagePrefix: string;
   private readonly autoAdd: boolean;
+  private readonly useActualCommitMessage: boolean;
 
   constructor(config: GitAutoCommitConfig = {}) {
     this.config = {
       autoPush: config.autoPush ?? true,
       commitMessagePrefix: config.commitMessagePrefix ?? 'Task completed:',
       autoAdd: config.autoAdd ?? true,
+      useActualCommitMessage: config.useActualCommitMessage ?? true,
     };
     this.autoPush = config.autoPush ?? true;
     this.commitMessagePrefix = config.commitMessagePrefix ?? 'Task completed:';
     this.autoAdd = config.autoAdd ?? true;
+    this.useActualCommitMessage = config.useActualCommitMessage ?? true;
   }
 
   private hasGitChanges(): boolean {
@@ -49,6 +53,27 @@ export class GitAutoCommitPlugin implements Plugin {
     }
   }
 
+  private getLatestCommitMessage(): string | null {
+    try {
+      const msg = execSync('git log -1 --format=%B', { encoding: 'utf-8' }).trim();
+      const lines = msg.split('\n');
+      const firstLine = lines[0] || '';
+      if (
+        firstLine.startsWith('Task completed:') ||
+        firstLine.startsWith('feat:') ||
+        firstLine.startsWith('fix:') ||
+        firstLine.startsWith('docs:') ||
+        firstLine.startsWith('test:') ||
+        firstLine.startsWith('refactor:')
+      ) {
+        return firstLine;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   private async commitAndPush(taskTitle: string): Promise<void> {
     if (!this.hasGitChanges()) {
       logger.debug('[GitAutoCommit] No changes to commit');
@@ -67,9 +92,22 @@ export class GitAutoCommitPlugin implements Plugin {
         logger.debug('[GitAutoCommit] Added files to staging');
       }
 
-      const commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+      let commitMsg: string;
+
+      if (this.useActualCommitMessage) {
+        const actualMsg = this.getLatestCommitMessage();
+        if (actualMsg) {
+          commitMsg = actualMsg;
+          logger.debug('[GitAutoCommit] Using actual commit message:', actualMsg);
+        } else {
+          commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+        }
+      } else {
+        commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+      }
+
       execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { encoding: 'utf-8' });
-      logger.info(`[GitAutoCommit] Committed: ${taskTitle}`);
+      logger.info(`[GitAutoCommit] Committed: ${commitMsg.split('\n')[0]}`);
 
       if (this.autoPush) {
         try {
