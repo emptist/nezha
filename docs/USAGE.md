@@ -2,27 +2,132 @@
 
 Nezha is an AI-powered task automation system that continuously executes tasks from a PostgreSQL database using OpenCode as the AI agent.
 
+## Design Principle: PostgreSQL-First
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PostgreSQL (Primary)                           │
+│   • All structured data (memories, skills, conversations)        │
+│   • Queryable, indexed, relational                              │
+│   • The ONE source of truth                                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │ Only when unavoidable
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                    File System (Fallback)                         │
+│   • Source code (git)                                          │
+│   • Config files (config.yaml)                                  │
+│   • NOT for knowledge/memory storage                            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Architecture
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────┐     ┌─────────────┐
-│ PostgreSQL  │────▶│   Scheduler  │────▶│  Agent  │────▶│ OpenCode API│
+│ PostgreSQL  │────▶│   Scheduler   │────▶│  Agent  │────▶│ OpenCode API│
 │   (tasks)   │     │              │     │         │     │   (port     │
 │             │◀────│              │◀────│         │◀────│   4098)     │
 └─────────────┘     └──────────────┘     └─────────┘     └─────────────┘
                            │
                     HeartbeatService
                            │
-                    MemoryService
+                     MemoryService
+                           │
+                      SkillSystem
 ```
 
 ### Components
 
-1. **PostgreSQL Database** - Stores tasks and memory entries
-2. **Scheduler** (`src/core/Scheduler.ts`) - Polls DB for pending tasks at regular intervals
+1. **PostgreSQL Database** - Stores tasks, memories, skills, conversations
+2. **Scheduler** (`src/core/Scheduler.ts`) - Polls DB for pending tasks
 3. **Agent** (`src/core/Agent.ts`) - Communicates with OpenCode API
-4. **HeartbeatService** (`src/services/HeartbeatService.ts`) - Orchestrates scheduler, agent, and memory
-5. **MemoryService** (`src/core/Memory.ts`) - Stores task results and learning data
+4. **HeartbeatService** (`src/services/HeartbeatService.ts`) - Orchestrates everything
+5. **MemoryService** (`src/core/Memory.ts`) - Stores knowledge and patterns
+6. **SkillSystem** (`src/core/SkillSystem.ts`) - DB-only skill loading
+
+## AI Tools for Learning
+
+### Memory Tools
+
+```typescript
+// Save important information
+memory_save({
+  content: 'Key decision: Use PostgreSQL as primary storage',
+  tags: ['architecture', 'database'],
+  importance: 8,
+});
+
+// Search memories
+const results = await memory_search('PostgreSQL decisions');
+
+// Link related knowledge
+memory_link(memoryId1, memoryId2);
+```
+
+### Skill Tools
+
+```typescript
+// Search skills
+const skills = await search_skills('code review');
+
+// Execute skill
+const result = await execute_skill('code-review', { files: ['./src'] });
+
+// Build new skill
+const skill = await build_skill({
+  name: 'test-generator',
+  purpose: 'Generate unit tests from code',
+});
+```
+
+### Task Review Tools
+
+```typescript
+// Review completed task
+const review = await review_task({
+  taskId: 'task-123',
+  taskTitle: 'Fix memory leak',
+  result: 'Fixed by adding cleanup',
+  testsPassed: true,
+});
+// Review saves patterns to memory automatically
+```
+
+## Knowledge Import
+
+Import from traditional markdown files:
+
+```typescript
+// Import all markdown files in directory
+await import_markdown_knowledge('./docs');
+
+// Supported types:
+// - SOUL.md → identity/persona
+// - AGENTS.md → operating instructions
+// - memory/*.md → daily memories
+// - lore.md → background knowledge
+```
+
+## Skill Sources
+
+| Source               | Description          | Security       |
+| -------------------- | -------------------- | -------------- |
+| **Internally Built** | AI-generated skills  | Full control   |
+| **ClawHub**          | External marketplace | Scan + approve |
+| **Task Review**      | Learned from QC      | Automatic      |
+
+## Key Files
+
+| File                                      | Purpose                |
+| ----------------------------------------- | ---------------------- |
+| `src/core/Memory.ts`                      | Memory system          |
+| `src/core/SkillSystem.ts`                 | Skill system (DB-only) |
+| `src/services/SkillBuilder.ts`            | AI skill builder       |
+| `src/services/TaskReviewSkill.ts`         | Task QC + learning     |
+| `src/services/MarkdownKnowledgeLoader.ts` | File → DB import       |
+| `src/services/ClawHubClient.ts`           | ClawHub integration    |
 
 ## How Heartbeat Works
 
@@ -84,26 +189,26 @@ nezha tasks     # Lists recent tasks
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| NEZHA_DB_HOST | localhost | PostgreSQL host |
-| NEZHA_DB_PORT | 5432 | PostgreSQL port |
-| NEZHA_DB_NAME | nezha | Database name |
-| NEZHA_DB_USER | postgres | Database user |
-| NEZHA_DB_PASSWORD | - | Database password |
-| NEZHA_HEARTBEAT_INTERVAL | 30000 | Heartbeat interval (ms) |
-| NEZHA_TASK_TIMEOUT | 300000 | Task timeout (ms) |
+| Variable                 | Default   | Description             |
+| ------------------------ | --------- | ----------------------- |
+| NEZHA_DB_HOST            | localhost | PostgreSQL host         |
+| NEZHA_DB_PORT            | 5432      | PostgreSQL port         |
+| NEZHA_DB_NAME            | nezha     | Database name           |
+| NEZHA_DB_USER            | postgres  | Database user           |
+| NEZHA_DB_PASSWORD        | -         | Database password       |
+| NEZHA_HEARTBEAT_INTERVAL | 30000     | Heartbeat interval (ms) |
+| NEZHA_TASK_TIMEOUT       | 300000    | Task timeout (ms)       |
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `src/cli/index.ts` | CLI entry point |
-| `src/core/Scheduler.ts` | Task scheduling and heartbeat logic |
-| `src/core/Agent.ts` | OpenCode API communication |
-| `src/services/HeartbeatService.ts` | Main orchestration |
-| `src/db/DatabaseClient.ts` | PostgreSQL client |
-| `src/config/constants.ts` | Configuration constants |
+| File                               | Purpose                             |
+| ---------------------------------- | ----------------------------------- |
+| `src/cli/index.ts`                 | CLI entry point                     |
+| `src/core/Scheduler.ts`            | Task scheduling and heartbeat logic |
+| `src/core/Agent.ts`                | OpenCode API communication          |
+| `src/services/HeartbeatService.ts` | Main orchestration                  |
+| `src/db/DatabaseClient.ts`         | PostgreSQL client                   |
+| `src/config/constants.ts`          | Configuration constants             |
 
 ## Database Schema
 
@@ -139,11 +244,13 @@ CREATE TABLE memory (
 **Cause**: AI session didn't complete or network issue
 
 **Debug**:
+
 1. Check logs for errors
 2. Restart: `nezha stop && nezha start`
 3. Tasks >5min old are auto-reset to PENDING (by scheduler)
 
 **How it works**:
+
 - Scheduler.ts line 117-121: Auto-resets RUNNING tasks to PENDING after 5 minutes
 - HeartbeatService.executeTask() updates status to COMPLETED or FAILED after AI finishes
 - Task lifecycle: PENDING → RUNNING → COMPLETED/FAILED
@@ -153,6 +260,7 @@ CREATE TABLE memory (
 **Cause**: OpenCode API not running on port 4098
 
 **Debug**:
+
 1. Ensure OpenCode is running
 2. Check `src/config/constants.ts` for API settings
 
@@ -161,6 +269,7 @@ CREATE TABLE memory (
 **Cause**: PostgreSQL not running or credentials wrong
 
 **Debug**:
+
 1. Check environment variables
 2. Verify PostgreSQL is running
 
@@ -174,6 +283,7 @@ Nezha uses `HEARTBEAT.md` as a self-improvement mechanism:
 4. Adds new tasks as needed
 
 This allows the AI to:
+
 - Continuously improve itself
 - Track technical debt
 - Execute planned improvements
@@ -191,6 +301,7 @@ This section documents 5 real instances of continuous work from the development 
 **Context**: User requested to implement a CLI command for adding tasks to the system.
 
 **User Request**:
+
 ```
 实现 CLI task-add 命令
 ```
@@ -279,6 +390,7 @@ Recent tasks:
 **Outcome**: Successfully implemented and tested the CLI task-add command, allowing users to add tasks to the system via command line.
 
 **Key Learnings**:
+
 - CLI commands should validate input parameters
 - Database operations should use parameterized queries to prevent SQL injection
 - User feedback should be clear and immediate
@@ -287,6 +399,7 @@ Recent tasks:
 ---
 
 **Key Learnings**:
+
 - CLI commands should validate input parameters
 - Database operations should use parameterized queries to prevent SQL injection
 - User feedback should be clear and immediate
@@ -303,6 +416,7 @@ Recent tasks:
 **Example task-add Commands** (from longest to shortest):
 
 1. **Continuous Improvement Cycle Task**:
+
 ```bash
 node dist/cli/index.js task-add "Review and improve codebase" "This is a continuous improvement cycle. Steps:
 1. Read src/core/ files and identify issues or improvements
@@ -316,16 +430,19 @@ node dist/cli/index.js task-add "Review and improve codebase" "This is a continu
 ```
 
 2. **HEARTBEAT.md Execution Task**:
+
 ```bash
 node dist/cli/index.js task-add "Execute HEARTBEAT.md tasks" "Read HEARTBEAT.md in the current directory. Execute the tasks listed there following the continuous improvement cycle: Review -> Identify -> Fix -> Build -> Test -> Document -> Commit -> Push -> Update HEARTBEAT.md" 10
 ```
 
 3. **System Improvement Task**:
+
 ```bash
 node dist/cli/index.js task-add "Improve nezha codebase" "Analyze the src/ directory and identify issues or improvements needed. Fix at least one bug or improve one component. Read the code first to understand the architecture." 10
 ```
 
 4. **Real Code Improvement Task**:
+
 ```bash
 node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 1. Delete src/tests/ directory (not needed)
@@ -335,56 +452,67 @@ node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 ```
 
 5. **Documentation Task**:
+
 ```bash
 node dist/cli/index.js task-add "Document improvements" "Create a CHANGELOG.md documenting all the improvements made today: task counter, getStats, getHealth, health CLI command, error handling" 10
 ```
 
 6. **Code Cleanup Task**:
+
 ```bash
 node dist/cli/index.js task-add "Code cleanup" "Clean up code: remove duplicate code, fix imports, add comments. Build, commit, push." 10
 ```
 
 7. **Bug Fix Task**:
+
 ```bash
 node dist/cli/index.js task-add "Fix bugs" "Fix bugs in IMPROVEMENTS.md: #2 (duplicate logic). Build, commit, push." 10
 ```
 
 8. **Feature Addition Task**:
+
 ```bash
 node dist/cli/index.js task-add "Add feature" "Read src/core/Scheduler.ts. Add a simple but useful feature: track and log how many tasks have been executed in total. Add a counter." 10
 ```
 
 9. **Health Check Task**:
+
 ```bash
 node dist/cli/index.js task-add "Add health check" "Add a health check to HeartbeatService. Add a method that returns { isRunning, stats, lastError }" 10
 ```
 
 10. **CLI Enhancement Task**:
+
 ```bash
 node dist/cli/index.js task-add "Add CLI health command" "Add a 'health' command to CLI that calls the getHealth() method and prints the status" 10
 ```
 
 11. **Stats Enhancement Task**:
+
 ```bash
 node dist/cli/index.js task-add "Improve more" "Read src/core/Scheduler.ts and add another useful feature: add a getStats() method that returns { totalTasks, lastHeartbeat, isPaused, pauseUntil }" 10
 ```
 
 12. **Logging Improvement Task**:
+
 ```bash
 node dist/cli/index.js task-add "Add better logging" "Improve console logging in src/core/Scheduler.ts. Add timestamps and more descriptive messages." 5
 ```
 
 13. **Error Handling Task**:
+
 ```bash
 node dist/cli/index.js task-add "Add error logging" "Improve error handling in src/core/Agent.ts. Add proper logging for failed requests." 5
 ```
 
 14. **Code Review Task**:
+
 ```bash
 node dist/cli/index.js task-add "Review nezha src code" "Review the src/core directory and identify any issues" 10
 ```
 
 15. **Simple Test Task**:
+
 ```bash
 node dist/cli/index.js task-add "Test task" "This is a test task" 1
 ```
@@ -392,6 +520,7 @@ node dist/cli/index.js task-add "Test task" "This is a test task" 1
 **Outcome**: Successfully demonstrated that detailed task-add commands with step-by-step instructions enable the AI to perform complex multi-step workflows autonomously.
 
 **Key Learnings**:
+
 - Longer task descriptions with numbered steps are more effective
 - Include build, test, and commit steps in task descriptions
 - Priority parameter (1-10) helps control task execution order
@@ -407,6 +536,7 @@ node dist/cli/index.js task-add "Test task" "This is a test task" 1
 **Workflow**:
 
 1. **Initial Setup**:
+
 ```bash
 # Start heartbeat service
 node dist/cli/index.js start
@@ -451,6 +581,7 @@ node dist/cli/index.js task-add "Document improvements" "Create a CHANGELOG.md d
 **Outcome**: The system successfully executed a continuous improvement loop, making 5+ improvements autonomously without human intervention.
 
 **Key Learnings**:
+
 - AI can generate and execute tasks autonomously
 - Each task should build on previous work
 - Include verification steps (build, test) in task descriptions
@@ -471,23 +602,23 @@ node dist/cli/index.js task-add "Document improvements" "Create a CHANGELOG.md d
 async executeTask(taskId: string, title: string, description?: string): Promise<void> {
   const maxRetries = 3;
   const retryDelayMs = 30000; // 30 seconds
-  
+
   this.stats.tasksExecuted++;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`[Heartbeat] Executing task: ${title} (attempt ${attempt}/${maxRetries})`);
-    
+
     const result = await this.agent.executeTask(description || title);
-    
+
     if (result.success) {
       console.log(`[Heartbeat] Task completed successfully`);
-      
+
       // Mark task as completed
       await this.db.query(
         `UPDATE ${tableName} SET status = $1, result = $2, completed_at = NOW() WHERE id = $3`,
         [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.message }), taskId]
       );
-      
+
       // Save to memory
       await this.memory.save({
         id: crypto.randomUUID(),
@@ -495,32 +626,33 @@ async executeTask(taskId: string, title: string, description?: string): Promise<
         content: `Task: ${title}\nResult: ${result.message}`,
         metadata: { type: 'task_result', success: true },
       });
-      
+
       this.stats.tasksSucceeded++;
       return; // Success, exit
     } else {
       console.error(`[Heartbeat] Task failed (attempt ${attempt}/${maxRetries}):`, result.message);
       this.lastError = result.message || 'Unknown error';
-      
+
       if (attempt < maxRetries) {
         console.log(`[Heartbeat] Waiting ${retryDelayMs / 1000}s before retry...`);
         await new Promise(resolve => setTimeout(resolve, retryDelayMs));
       }
     }
   }
-  
+
   // All retries failed
   console.error(`[Heartbeat] Task failed after ${maxRetries} attempts`);
   await this.db.query(
     `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
     [TASK_STATUS.FAILED, 'Max retries exceeded', taskId]
   );
-  
+
   this.stats.tasksFailed++;
 }
 ```
 
 **Task to Test Retry Mechanism**:
+
 ```bash
 node dist/cli/index.js task-add "Test retry mechanism" "Test the error handling and retry mechanism by executing a task that might fail. Verify that it retries up to 3 times with 30-second delays between attempts." 5
 ```
@@ -528,6 +660,7 @@ node dist/cli/index.js task-add "Test retry mechanism" "Test the error handling 
 **Outcome**: Successfully implemented robust error handling with configurable retry logic, making the system more resilient to transient failures.
 
 **Key Learnings**:
+
 - Implement retry mechanisms for external API calls
 - Use exponential backoff or fixed delays between retries
 - Track retry attempts and provide clear logging
@@ -548,33 +681,33 @@ node dist/cli/index.js task-add "Test retry mechanism" "Test the error handling 
 private async heartbeat(): Promise<void> {
   // Check for stuck RUNNING tasks (older than 5 minutes) - reset to PENDING for retry
   await this.db.query(
-    `UPDATE ${tableName} SET status = $1, updated_at = NOW() 
+    `UPDATE ${tableName} SET status = $1, updated_at = NOW()
      WHERE status = 'RUNNING' AND updated_at < NOW() - INTERVAL '5 minutes'`,
     [TASK_STATUS.PENDING]
   );
-  
+
   // Find pending task with atomic locking using CTE and SKIP LOCKED
   const result = await this.db.query<{ id: string; title: string; description: string }>(
     `WITH selected_task AS (
-       SELECT id, title, description 
-       FROM ${tableName} 
-       WHERE status = $1 
-       ORDER BY priority DESC, created_at ASC 
+       SELECT id, title, description
+       FROM ${tableName}
+       WHERE status = $1
+       ORDER BY priority DESC, created_at ASC
        LIMIT 1
        FOR UPDATE SKIP LOCKED
      )
-     UPDATE ${tableName} 
-     SET status = 'RUNNING', updated_at = NOW() 
-     FROM selected_task 
-     WHERE ${tableName}.id = selected_task.id 
+     UPDATE ${tableName}
+     SET status = 'RUNNING', updated_at = NOW()
+     FROM selected_task
+     WHERE ${tableName}.id = selected_task.id
      RETURNING selected_task.id, selected_task.title, selected_task.description`,
     [TASK_STATUS.PENDING]
   );
-  
+
   if (result.rows.length > 0) {
     const task = result.rows[0];
     log.info(`Scheduler heartbeat: Found pending task "${task.title}" (id: ${task.id}), scheduling for execution`);
-    
+
     // Execute task and wait for completion
     try {
       await this.onTaskReady?.(task.id, task.title, task.description);
@@ -583,14 +716,14 @@ private async heartbeat(): Promise<void> {
     } catch (err) {
       log.error(`Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) failed with error:`, err);
       this.consecutiveFailures++;
-      
+
       // Check if we need to pause
       if (this.consecutiveFailures >= 5) {
         this.isPaused = true;
         this.pauseUntil = new Date(Date.now() + 60 * 1000); // Pause for 1 minute
         log.warn(`Scheduler heartbeat: Too many failures (${this.consecutiveFailures}), pausing for 1 minute`);
       }
-      
+
       // Reset to PENDING for retry (with delay handled by failure count)
       await this.db.query(
         `UPDATE ${tableName} SET status = $1, error = $2 WHERE id = $3`,
@@ -604,6 +737,7 @@ private async heartbeat(): Promise<void> {
 ```
 
 **Task to Test Concurrency**:
+
 ```bash
 node dist/cli/index.js task-add "Test concurrency control" "Test the PostgreSQL CTE + FOR UPDATE SKIP LOCKED mechanism by running multiple instances of the heartbeat service simultaneously. Verify that no two instances pick the same task. Add logging to track which instance picks which task." 10
 ```
@@ -611,6 +745,7 @@ node dist/cli/index.js task-add "Test concurrency control" "Test the PostgreSQL 
 **Outcome**: Successfully implemented atomic task locking, preventing race conditions and enabling safe concurrent execution.
 
 **Key Learnings**:
+
 - Use database-level locking for distributed systems
 - PostgreSQL CTE + FOR UPDATE SKIP LOCKED is ideal for task queues
 - Reset stuck tasks to PENDING for automatic recovery
@@ -630,6 +765,7 @@ The 5 instances demonstrate:
 5. **Instance 5**: Database-level concurrency control
 
 **Key Principles**:
+
 - Use detailed, step-by-step task descriptions
 - Include verification steps (build, test, commit)
 - Implement robust error handling and retry logic
@@ -637,9 +773,9 @@ The 5 instances demonstrate:
 - Enable autonomous task generation and execution
 
 **Best Practices**:
+
 - Task descriptions should be as long and detailed as possible
 - Include success criteria in task descriptions
 - Use priority to control execution order
 - Track statistics (tasks executed, succeeded, failed)
 - Save results to memory for future reference
-
