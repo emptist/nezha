@@ -3,6 +3,7 @@ import { MemoryService, type SaveMemoryInput } from './Memory.js';
 import { ConversationLogger } from './ConversationLogger.js';
 import { InterReviewService } from '../services/InterReviewService.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
+import { logger } from '../utils/logger.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs-extra';
@@ -250,28 +251,92 @@ export class ContinuousImprovementLoop {
       const result = results[i];
       if (!task || !result) continue;
 
-      const review: Review = {
-        success: result.success,
-        score: this.calculateScore(result),
-        feedback: this.generateFeedback(result),
-        improvements: result.success
-          ? []
-          : [
-              {
-                type: 'improvement',
-                title: `Retry: ${task.title}`,
-                description: `Task failed: ${result.error || 'Unknown error'}`,
+      let review: Review;
+
+      if (this.reviewService) {
+        try {
+          const request = {
+            taskId: task.id,
+            reviewerId: 'continuous-improvement-loop',
+            context: {
+              taskDescription: task.description,
+              changes: result.output,
+              message: task.title,
+            },
+          };
+
+          const reviewId = await this.reviewService.requestReview(request);
+          const reviewResult = await this.reviewService.performReview(
+            reviewId,
+            `Review this improvement task result. Task: ${task.title}. Result: ${result.success ? 'success' : 'failed'}. Output: ${result.output}`
+          );
+
+          review = {
+            success: result.success,
+            score: reviewResult.overallScore,
+            feedback: [reviewResult.summary, ...reviewResult.findings.map(f => f.message)],
+            improvements: reviewResult.findings
+              .filter(f => f.type === 'suggestion')
+              .map(f => ({
+                type: 'improvement' as const,
+                title: f.message,
+                description: f.suggestion || f.message,
                 priority: task.priority,
-                category: 'code',
+                category: task.category as 'infrastructure' | 'code' | 'documentation' | 'testing' | 'feature',
                 autoFixable: false,
+              })),
+          };
+
+          if (reviewResult.learnings.length > 0) {
+            await this.memoryService.save({
+              id: `improvement-learning-${task.id}`,
+              content: JSON.stringify({
+                task: task.title,
+                category: task.category,
+                learnings: reviewResult.learnings,
+              }),
+              metadata: {
+                taskId: task.id,
+                category: task.category,
+                source: 'continuous-improvement-review',
               },
-            ],
-      };
+              source: 'continuous-improvement',
+              importance: reviewResult.overallScore > 70 ? 7 : 5,
+              tags: ['learning', 'improvement', task.category],
+            });
+          }
+        } catch (error) {
+          logger.warn(`Review service failed for task ${task.id}, falling back to self-score:`, error);
+          review = this.createFallbackReview(task, result);
+        }
+      } else {
+        review = this.createFallbackReview(task, result);
+      }
 
       reviews.push(review);
     }
 
     return reviews;
+  }
+
+  private createFallbackReview(task: Task, result: TaskResult): Review {
+    return {
+      success: result.success,
+      score: this.calculateScore(result),
+      feedback: this.generateFeedback(result),
+      improvements: result.success
+        ? []
+        : [
+            {
+              type: 'improvement',
+              title: `Retry: ${task.title}`,
+              description: `Task failed: ${result.error || 'Unknown error'}`,
+              priority: task.priority,
+              category: 'code',
+              autoFixable: false,
+            },
+          ],
+    };
   }
 
   private calculateScore(result: TaskResult): number {
@@ -319,7 +384,9 @@ export class ContinuousImprovementLoop {
       const task = tasks[i];
       const result = results[i];
       const review = reviews[i];
-      if (!task || !result || !review) continue;
+      if (!task || !result || !review) {
+        continue;
+      }
 
       const learning: Learning = {
         timestamp: new Date(),
