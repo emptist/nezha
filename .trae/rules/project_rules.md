@@ -18,6 +18,23 @@ Git Auto-Commit
 Results visible to Trae AI
 ```
 
+**See also**: [AI_COLLABORATION.md](../docs/AI_COLLABORATION.md) for detailed collaboration protocol.
+
+## Skill Separation Policy
+
+**IMPORTANT**: Trae skills and Nezha skills are separate!
+
+| AI | Skills Location | Purpose |
+|----|-----------------|---------|
+| Trae AI | `.trae/skills/` | Trae-specific workflow |
+| OpenCode AI | PostgreSQL `skills` table | OpenCode execution |
+
+**Copy Direction**: Nezha → Trae only (one-way)
+- ✅ Can copy skills from Nezha database to `.trae/skills/`
+- ❌ Cannot copy skills from `.trae/skills/` to Nezha database
+
+**Rationale**: Each AI has different capabilities; skills should be optimized separately.
+
 ## The PDCA Improvement Cycle
 
 **Follow the continuous improvement loop for endless self-improvement:**
