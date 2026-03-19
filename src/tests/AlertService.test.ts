@@ -132,8 +132,8 @@ describe('AlertService', () => {
 
       const alerts = service.getAlerts();
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].type).toBe('dependency_blocked');
-      expect(alerts[0].severity).toBe('warning');
+      expect(alerts[0]?.type).toBe('dependency_blocked');
+      expect(alerts[0]?.severity).toBe('warning');
     });
 
     it('should include blocked dependencies in message', () => {
@@ -141,8 +141,8 @@ describe('AlertService', () => {
       service.trackDependencyBlocked('task-1', ['task-2', 'task-3']);
 
       const alerts = service.getAlerts();
-      expect(alerts[0].message).toContain('task-2');
-      expect(alerts[0].message).toContain('task-3');
+      expect(alerts[0]?.message).toContain('task-2');
+      expect(alerts[0]?.message).toContain('task-3');
     });
 
     it('should include metadata with blocked tasks', () => {
@@ -150,7 +150,7 @@ describe('AlertService', () => {
       service.trackDependencyBlocked('task-1', ['task-2', 'task-3']);
 
       const alerts = service.getAlerts();
-      expect(alerts[0].metadata).toEqual({
+      expect(alerts[0]?.metadata).toEqual({
         taskId: 'task-1',
         blockedBy: ['task-2', 'task-3'],
       });
@@ -268,8 +268,8 @@ describe('AlertService', () => {
       service.trackCircuitBreaker('test-service', 'open');
 
       const alerts = service.getAlerts();
-      expect(alerts[0].createdAt).toBeInstanceOf(Date);
-      expect(alerts[0].acknowledged).toBe(false);
+      expect(alerts[0]?.createdAt).toBeInstanceOf(Date);
+      expect(alerts[0]?.acknowledged).toBe(false);
     });
   });
 });
