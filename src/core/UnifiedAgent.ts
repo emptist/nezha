@@ -27,6 +27,7 @@ import {
   type TransportHealth,
   type AgentHealth,
 } from '../services/MetricsService.js';
+import type { DatabaseClient } from '../db/DatabaseClient.js';
 
 export { type StreamingCallback } from './transports/index.js';
 
@@ -102,6 +103,8 @@ export interface UnifiedAgentConfig {
   circuitBreakerThreshold?: number;
   circuitBreakerResetMs?: number;
   retryPolicy?: Partial<RetryPolicy>;
+  dbClient?: DatabaseClient;
+  projectId?: string;
 }
 
 export interface AgentTask {
@@ -225,7 +228,11 @@ export class UnifiedAgent {
     this.instanceId = `agent-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
     if (this.enableLogging) {
-      this.conversationLogger = new ConversationLogger(config?.logDir ?? 'conversations');
+      this.conversationLogger = new ConversationLogger(
+        config?.logDir ?? 'conversations',
+        config?.dbClient,
+        config?.projectId
+      );
     } else {
       this.conversationLogger = null;
     }

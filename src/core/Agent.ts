@@ -1,6 +1,7 @@
 import { type AgentResponse } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { ConversationLogger } from './ConversationLogger.js';
+import type { DatabaseClient } from '../db/DatabaseClient.js';
 
 /**
  * Configuration options for creating an Agent instance.
@@ -10,6 +11,8 @@ export interface AgentConfig {
   maxRetries?: number;
   retryDelay?: number;
   serverUrl?: string;
+  dbClient?: DatabaseClient;
+  projectId?: string;
 }
 
 /**
@@ -45,7 +48,11 @@ export class Agent {
     this.maxRetries = config?.maxRetries ?? 3;
     this.retryDelay = config?.retryDelay ?? 1000;
     this.serverUrl = config?.serverUrl ?? 'http://localhost:4096';
-    this.conversationLogger = new ConversationLogger('conversations');
+    this.conversationLogger = new ConversationLogger(
+      'conversations',
+      config?.dbClient,
+      config?.projectId
+    );
   }
 
   private async sleep(ms: number): Promise<void> {
