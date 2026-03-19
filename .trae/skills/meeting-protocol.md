@@ -91,7 +91,7 @@ When you see other AIs' opinions:
 
 ### 5. Document Agreements
 
-Save agreements to memory:
+Save agreements to memory using `memory.save()`:
 
 ```markdown
 # Agreement: [Topic]
@@ -101,6 +101,15 @@ Save agreements to memory:
 **Decision**: [What was agreed]
 **Rationale**: [Why this decision]
 **Implementation**: [How to implement]
+```
+
+Example:
+```
+memory.save({
+  content: "# Agreement: [Topic]\n\n**Decision**: ...",
+  project: "nezha",
+  importance: "high"
+})
 ```
 
 ## Negotiation Skills
@@ -157,22 +166,22 @@ Save agreements to memory:
 ┌─────────────────────────────────────────────────────────────┐
 │                    DISCUSSION FLOW                           │
 │                                                              │
-│  1. AI #1 creates discussion task                            │
+│  1. Agent creates task with "Discussion:" prefix             │
 │     │                                                        │
 │     ▼                                                        │
-│  2. AI #2 reads and responds                                 │
+│  2. Scheduler picks up task → assigns to AI                  │
 │     │                                                        │
 │     ▼                                                        │
-│  3. AI #3 reads all and responds                             │
+│  3. AI reads topic, forms opinion, responds                  │
 │     │                                                        │
 │     ▼                                                        │
-│  4. AI #1 summarizes and proposes consensus                  │
+│  4. (Optional) Spawn additional reviewers                     │
 │     │                                                        │
 │     ▼                                                        │
-│  5. All AIs confirm or object                                │
+│  5. Original AI summarizes and proposes consensus            │
 │     │                                                        │
 │     ▼                                                        │
-│  6. Consensus reached → Document → Implement                 │
+│  6. Consensus reached → memory.save() → Implement            │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -184,33 +193,35 @@ Save agreements to memory:
 - Consensus is **emergent**, not enforced
 - Agreements are **AI decisions**, not programmatic constraints
 
-## Reference: OpenClaw Gas Town (External Project)
+## Spawning Discussion Participants
 
-> **Note**: OpenClaw is a separate project, NOT what Nezha uses. This is included for reference only.
+To involve more AIs in discussions:
 
-**OpenClaw** (separate project at `/Users/jk/gits/hub/openclaw`) has a multi-agent system called **Gas Town** that we can learn from.
+1. **Create discussion task**: Add task with `Discussion:` prefix
+2. **Assign explicitly**: Use `assigned_to` field or spawn dedicated reviewer
+3. **Use Agent tools**: `Agent.executeTask()` spawns additional AI instances
 
-### Gas Town Key Concepts
+### Example: Spawn Reviewer
 
-| Concept | Description |
-|---------|-------------|
-| **GUPP** | Gas Town Universal Propulsion Principle: "If work on hook, RUN IT" |
-| **BEADS** | Atomic work units stored in Git-backed JSON |
-| **MOLECULES** | Workflows encoded as chains of beads |
-| **HOOKS** | Work queue for each worker |
-| **MAIL** | Message inbox for workers |
+```
+Agent.executeTask({
+  task: "Review the proposal and provide feedback",
+  spawn_as: "reviewer"
+})
+```
 
-### How This Inspires Nezha's Meeting Protocol
+## Reference: Multi-Agent Research (Completed)
 
-1. **GUPP Principle**: AIs should self-propel - "if work on hook, run it"
-2. **Hooks Pattern**: Each AI has a work queue (Nezha tasks) to check
-3. **Mail Pattern**: AIs can send messages via task descriptions
+OpenClaw Gas Town research has been completed. See:
+- [reviews/openclaw_multiagent_research.md](../../reviews/openclaw_multiagent_research.md)
 
-**Read more**: `reviews/openclaw_multiagent_research.md`
+Key findings relevant to meetings:
+- Multi-AI collaboration is fully supported
+- Session-based communication between agents
+- Task assignment via database queue
 
 ## See Also
 
-- [AI_COLLABORATION.md](../../docs/AI_COLLABORATION.md) - Full collaboration framework
-- [OPENCODE_INTEGRATION.md](../../docs/OPENCODE_INTEGRATION.md) - OpenCode spawning methods
+- [AI_COLLABORATION.md](../docs/AI_COLLABORATION.md) - Full collaboration framework
+- [OPENCODE_INTEGRATION.md](../docs/OPENCODE_INTEGRATION.md) - OpenCode spawning methods
 - [continuous-improvement.md](./continuous-improvement.md) - PDCA cycle skill
-- [openclaw_multiagent_research.md](../../reviews/openclaw_multiagent_research.md) - Gas Town research
