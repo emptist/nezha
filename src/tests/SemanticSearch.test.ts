@@ -146,10 +146,14 @@ describe('SemanticSearchService', () => {
       );
     });
 
-    it('should throw error when embedding fails', async () => {
-      mockEmbedding.embed.mockRejectedValueOnce(new Error('Embedding API error'));
+    it('should handle embedding errors gracefully', async () => {
+      service = new SemanticSearchService(mockDb);
+      const originalEmbed = mockEmbedding.embed;
+      mockEmbedding.embed = vi.fn().mockRejectedValue(new Error('Embedding API error'));
 
       await expect(service.search('test')).rejects.toThrow('Failed to generate query embedding');
+
+      mockEmbedding.embed = originalEmbed;
     });
 
     it('should handle empty results', async () => {
