@@ -7,15 +7,15 @@
 
 ## P0 - 最高优先级
 
-### [ ] Process Guardian 孤儿进程清理完善
+### [x] Process Guardian 孤儿进程清理完善
 - **描述**: 检查 Process Guardian 是否能正确处理所有孤儿进程场景
-- **相关文件**: `src/services/ProcessGuardian.ts`
-- **状态**: 已实现，待验证
+- **相关文件**: `src/services/TaskWatchdogService.ts`, `src/cli/process-guardian.ts`
+- **状态**: ✅ 已实现并验证 (TaskWatchdogService.getOrphanedProcesses, cleanupOrphanedProcess)
 
-### [ ] Inter-Review 集成到改进循环
+### [x] Inter-Review 集成到改进循环
 - **描述**: 将 AI 互相 Review 机制集成到持续改进循环中
-- **相关文件**: `src/services/InterReviewService.ts`
-- **状态**: 已实现，待集成
+- **相关文件**: `src/services/AutoReviewService.ts`
+- **状态**: ✅ 已实现 (AutoReviewService 自动触发 reviews 并保存 learnings 到 memory)
 
 ---
 
@@ -52,6 +52,8 @@
 - [x] 修复 CLI 中的类型错误 (LSP缓存问题，已验证build和tests通过)
 - [x] 验证 TypeScript 编译无错误
 - [x] 验证 466 tests 全部通过
+- [x] 验证 InterReview 已集成到改进循环 (AutoReviewService)
+- [x] 验证 Process Guardian 孤儿进程清理已实现 (TaskWatchdogService)
 
 ### 2026-03-19
 - [x] Fix duplicate method calls bug in HeartbeatService
