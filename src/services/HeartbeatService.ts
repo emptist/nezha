@@ -261,9 +261,6 @@ export class HeartbeatService {
     this.setupWatchdogListeners();
     this.setupLongTaskListeners();
 
-    this.setupWatchdogListeners();
-    this.setupLongTaskListeners();
-
     if (this.checkpointService) {
       const savedState = await this.checkpointService.loadState();
       if (savedState) {
