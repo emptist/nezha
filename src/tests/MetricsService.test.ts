@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MetricsService, Counter, Gauge, Histogram, type TransportHealth, type AgentHealth } from '../services/MetricsService.js';
+import { 
+  Counter, Gauge, Histogram, MetricsRegistry, getMetricsRegistry,
+  createStandardMetrics, createAgentMetrics, registerHealthCheck,
+  unregisterHealthCheck, runHealthChecks, getAllHealthChecks
+} from '../services/MetricsService.js';
 import { logger } from '../utils/logger.js';
 
 vi.mock('../utils/logger.js', () => ({
@@ -12,17 +16,8 @@ vi.mock('../utils/logger.js', () => ({
 }));
 
 describe('MetricsService', () => {
-  let service: MetricsService;
-
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new MetricsService();
-  });
-
-  describe('constructor', () => {
-    it('should create MetricsService instance', () => {
-      expect(service).toBeDefined();
-    });
   });
 
   describe('Counter', () => {
@@ -41,14 +36,12 @@ describe('MetricsService', () => {
     it('should return 0 for non-existent metric', () => {
       const metrics = new Map();
       const counter = new Counter(metrics, 'missing');
-
       expect(counter.value).toBe(0);
     });
 
     it('should not increment if metric not found', () => {
       const metrics = new Map();
       const counter = new Counter(metrics, 'missing');
-
       counter.inc();
       expect(counter.value).toBe(0);
     });
@@ -91,7 +84,6 @@ describe('MetricsService', () => {
     it('should return 0 for non-existent metric', () => {
       const metrics = new Map();
       const gauge = new Gauge(metrics, 'missing');
-
       expect(gauge.value).toBe(0);
     });
   });
@@ -155,185 +147,160 @@ describe('MetricsService', () => {
     });
   });
 
-  describe('recordTaskExecution', () => {
-    it('should record task execution metrics', () => {
-      service.recordTaskExecution(100, { totalTokens: 500 });
-      expect(logger.info).toHaveBeenCalled();
+  describe('MetricsRegistry', () => {
+    it('should create a new registry', () => {
+      const registry = new MetricsRegistry();
+      expect(registry).toBeDefined();
     });
 
-    it('should record execution without token usage', () => {
-      service.recordTaskExecution(50);
-      expect(logger.info).toHaveBeenCalled();
-    });
-  });
-
-  describe('recordConnectionStatus', () => {
-    it('should record HTTP transport status', () => {
-      service.recordConnectionStatus('http', true, 25);
-      expect(logger.info).toHaveBeenCalled();
+    it('should get singleton registry', () => {
+      const registry = getMetricsRegistry();
+      expect(registry).toBeDefined();
     });
 
-    it('should record CLI transport status', () => {
-      service.recordConnectionStatus('cli', true);
-      expect(logger.info).toHaveBeenCalled();
+    it('should create counter via registry', () => {
+      const registry = new MetricsRegistry();
+      const counter = registry.createCounter('test', 'A test counter');
+      expect(counter).toBeDefined();
     });
 
-    it('should record failed transport', () => {
-      service.recordConnectionStatus('http', false, undefined, 'Connection refused');
-      expect(logger.warn).toHaveBeenCalled();
-    });
-  });
-
-  describe('recordApiCall', () => {
-    it('should record successful API call', () => {
-      service.recordApiCall('/api/tasks', 200, 50);
-      expect(logger.info).toHaveBeenCalled();
+    it('should create gauge via registry', () => {
+      const registry = new MetricsRegistry();
+      const gauge = registry.createGauge('test_gauge', 'A test gauge');
+      expect(gauge).toBeDefined();
     });
 
-    it('should record failed API call', () => {
-      service.recordApiCall('/api/tasks', 500, 100);
-      expect(logger.warn).toHaveBeenCalled();
+    it('should create histogram via registry', () => {
+      const registry = new MetricsRegistry();
+      const histogram = registry.createHistogram('test_hist', 'A test histogram');
+      expect(histogram).toBeDefined();
     });
 
-    it('should record 4xx as failure', () => {
-      service.recordApiCall('/api/tasks', 404, 30);
-      expect(logger.warn).toHaveBeenCalled();
-    });
-  });
-
-  describe('getTransportHealth', () => {
-    it('should return HTTP transport health status', () => {
-      service.recordConnectionStatus('http', true, 25);
-      const health = service.getTransportHealth();
-      expect(health.mode).toBe('http');
-      expect(health.healthy).toBe(true);
-      expect(health.latencyMs).toBe(25);
+    it('should increment counter', () => {
+      const registry = new MetricsRegistry();
+      const counter = registry.createCounter('inc_test', 'Increment test');
+      counter.inc();
+      expect(counter.value).toBe(1);
     });
 
-    it('should return unhealthy when last check failed', () => {
-      service.recordConnectionStatus('http', false, undefined, 'Error');
-      const health = service.getTransportHealth();
-      expect(health.healthy).toBe(false);
-      expect(health.error).toBe('Error');
+    it('should set gauge value', () => {
+      const registry = new MetricsRegistry();
+      const gauge = registry.createGauge('set_test', 'Set test');
+      gauge.set(10);
+      expect(gauge.value).toBe(10);
     });
 
-    it('should report CLI transport healthy', () => {
-      service.recordConnectionStatus('cli', true);
-      const health = service.getTransportHealth();
-      expect(health.mode).toBe('cli');
-      expect(health.healthy).toBe(true);
-    });
-  });
-
-  describe('getAgentHealth', () => {
-    it('should return agent health status', () => {
-      service.recordConnectionStatus('http', true, 25);
-      const health = service.getAgentHealth();
-      expect(health.healthy).toBe(true);
-      expect(health.serverConnectivity).toBe(true);
-      expect(health.transports).toHaveLength(1);
+    it('should observe histogram', () => {
+      const registry = new MetricsRegistry();
+      const histogram = registry.createHistogram('obs_test', 'Observe test');
+      histogram.observe(0.5);
+      expect(histogram.get().count).toBe(1);
     });
 
-    it('should include timestamp in health response', () => {
-      const health = service.getAgentHealth();
-      expect(health.timestamp).toBeInstanceOf(Date);
+    it('should list all metrics', () => {
+      const registry = new MetricsRegistry();
+      registry.createCounter('c1', 'Counter 1');
+      registry.createGauge('g1', 'Gauge 1');
+      registry.createHistogram('h1', 'Histogram 1');
+
+      const list = registry.listMetrics();
+      expect(list.length).toBe(3);
+    });
+
+    it('should get metrics by name', () => {
+      const registry = new MetricsRegistry();
+      registry.createCounter('named_counter', 'Named counter');
+
+      const metric = registry.getMetric('named_counter');
+      expect(metric).toBeDefined();
+      expect(metric?.name).toBe('named_counter');
+    });
+
+    it('should return undefined for missing metric', () => {
+      const registry = new MetricsRegistry();
+      const metric = registry.getMetric('nonexistent');
+      expect(metric).toBeUndefined();
+    });
+
+    it('should clear all metrics', () => {
+      const registry = new MetricsRegistry();
+      registry.createCounter('to_clear', 'Will be cleared');
+      registry.clear();
+      expect(registry.listMetrics().length).toBe(0);
     });
   });
 
-  describe('getMetricsSummary', () => {
-    it('should return metrics summary with defaults', () => {
-      const summary = service.getMetricsSummary();
-      expect(summary.tasksExecuted).toBe(0);
-      expect(summary.totalTokenUsage).toBe(0);
-      expect(summary.activeConnections).toBe(0);
-      expect(summary.serverHealthy).toBe(true);
-    });
-
-    it('should return correct task count', () => {
-      service.recordTaskExecution(100);
-      service.recordTaskExecution(50);
-      const summary = service.getMetricsSummary();
-      expect(summary.tasksExecuted).toBe(2);
-    });
-
-    it('should return correct token usage', () => {
-      service.recordTaskExecution(100, { totalTokens: 500 });
-      service.recordTaskExecution(50, { totalTokens: 300 });
-      const summary = service.getMetricsSummary();
-      expect(summary.totalTokenUsage).toBe(800);
-    });
-
-    it('should report unhealthy when server down', () => {
-      service.recordConnectionStatus('http', false, undefined, 'Down');
-      const summary = service.getMetricsSummary();
-      expect(summary.serverHealthy).toBe(false);
+  describe('createStandardMetrics', () => {
+    it('should create standard metrics object', () => {
+      const metrics = createStandardMetrics();
+      expect(metrics).toBeDefined();
+      expect(metrics.tasksExecuted).toBeDefined();
+      expect(metrics.activeTasks).toBeDefined();
+      expect(metrics.taskDuration).toBeDefined();
+      expect(metrics.tokenUsage).toBeDefined();
+      expect(metrics.apiLatency).toBeDefined();
+      expect(metrics.cacheHitRate).toBeDefined();
     });
   });
 
-  describe('incrementActiveConnections', () => {
-    it('should increment active connections', () => {
-      service.incrementActiveConnections();
-      const summary = service.getMetricsSummary();
-      expect(summary.activeConnections).toBe(1);
+  describe('createAgentMetrics', () => {
+    it('should create agent metrics with default prefix', () => {
+      const metrics = createAgentMetrics();
+      expect(metrics).toBeDefined();
+      expect(metrics.executionTotal).toBeDefined();
+      expect(metrics.executionDurationSeconds).toBeDefined();
+      expect(metrics.tokenUsage).toBeDefined();
+      expect(metrics.activeConnections).toBeDefined();
+    });
+
+    it('should create agent metrics with custom prefix', () => {
+      const metrics = createAgentMetrics('custom_prefix');
+      expect(metrics).toBeDefined();
     });
   });
 
-  describe('decrementActiveConnections', () => {
-    it('should decrement active connections', () => {
-      service.incrementActiveConnections();
-      service.incrementActiveConnections();
-      service.decrementActiveConnections();
-      const summary = service.getMetricsSummary();
-      expect(summary.activeConnections).toBe(1);
+  describe('Health Checks', () => {
+    it('should register and unregister health checks', async () => {
+      const check = vi.fn().mockResolvedValue(true);
+      
+      registerHealthCheck('test_check', check);
+      expect(getAllHealthChecks()).toContain('test_check');
+
+      unregisterHealthCheck('test_check');
+      expect(getAllHealthChecks()).not.toContain('test_check');
     });
 
-    it('should not go below zero', () => {
-      service.decrementActiveConnections();
-      const summary = service.getMetricsSummary();
-      expect(summary.activeConnections).toBe(0);
-    });
-  });
+    it('should run health checks', async () => {
+      const check1 = vi.fn().mockResolvedValue(true);
+      const check2 = vi.fn().mockResolvedValue(false);
+      
+      registerHealthCheck('pass_check', check1);
+      registerHealthCheck('fail_check', check2);
 
-  describe('getRecentExecutions', () => {
-    it('should return recent executions', () => {
-      service.recordTaskExecution(100, { totalTokens: 100 });
-      service.recordTaskExecution(200, { totalTokens: 200 });
-      const recent = service.getRecentExecutions(10);
-      expect(recent).toHaveLength(2);
+      const results = await runHealthChecks();
+      
+      expect(results['pass_check']).toBe(true);
+      expect(results['fail_check']).toBe(false);
     });
 
-    it('should limit to specified count', () => {
-      for (let i = 0; i < 20; i++) {
-        service.recordTaskExecution(i * 10);
-      }
-      const recent = service.getRecentExecutions(5);
-      expect(recent).toHaveLength(5);
+    it('should handle health check errors', async () => {
+      const failingCheck = vi.fn().mockRejectedValue(new Error('Check failed'));
+      
+      registerHealthCheck('error_check', failingCheck);
+
+      const results = await runHealthChecks();
+      
+      expect(results['error_check']).toBe(false);
+      expect(logger.debug).toHaveBeenCalled();
     });
 
-    it('should include duration and tokens in each execution', () => {
-      service.recordTaskExecution(150, { totalTokens: 300 });
-      const recent = service.getRecentExecutions(1);
-      expect(recent[0]).toHaveProperty('durationMs', 150);
-      expect(recent[0]).toHaveProperty('tokens', 300);
-    });
-  });
-
-  describe('reset', () => {
-    it('should reset all metrics', () => {
-      service.recordTaskExecution(100);
-      service.incrementActiveConnections();
-      service.reset();
-
-      const summary = service.getMetricsSummary();
-      expect(summary.tasksExecuted).toBe(0);
-      expect(summary.activeConnections).toBe(0);
-    });
-
-    it('should reset recent executions', () => {
-      service.recordTaskExecution(100);
-      service.reset();
-      const recent = service.getRecentExecutions(10);
-      expect(recent).toHaveLength(0);
+    it('should list all registered health checks', () => {
+      registerHealthCheck('check1', async () => true);
+      registerHealthCheck('check2', async () => true);
+      
+      const checks = getAllHealthChecks();
+      expect(checks).toContain('check1');
+      expect(checks).toContain('check2');
     });
   });
 });
