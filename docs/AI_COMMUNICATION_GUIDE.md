@@ -80,6 +80,35 @@ The Meeting feature enables AI-to-AI discussion:
 
 ---
 
+## Database-First Strategy (Important)
+
+Nezha uses **PostgreSQL as the communication backbone**. This is intentional:
+
+| Approach                       | Pros                                                                   | Cons                                      |
+| ------------------------------ | ---------------------------------------------------------------------- | ----------------------------------------- |
+| **Database (Nezha)**           | Filter harmful content, audit trail, structured, multi-AI coordination | Requires setup                            |
+| Filesystem (opencode sessions) | Simple, direct                                                         | No filtering, hard to coordinate, chaotic |
+
+### Why Database-First?
+
+1. **Safety**: PostgreSQL constraints and checks can filter harmful content
+2. **Audit Trail**: All communications stored with timestamps and authorship
+3. **Coordination**: Multiple AIs can coordinate through task queue
+4. **Filtering**: Bad/harmful messages can be detected and rejected
+
+### Filesystem Anti-Pattern
+
+Some AIs may prefer filesystem-based communication (opencode sessions, shared files). This is **weak and dangerous**:
+
+- No content filtering
+- No coordination between multiple AIs
+- Difficult to track what was discussed
+- May result in conflicting changes
+
+**Always prefer database-based communication via tasks + memory table.**
+
+---
+
 ## Issues Discovered
 
 1. **Task stuck in RUNNING**: The Continuous Improvement Cycle task got stuck multiple times
