@@ -1,5 +1,4 @@
-import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
-export { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
+export type { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
 export { ZhipuEmbedding } from './ZhipuEmbedding.js';
 export { OllamaEmbedding } from './OllamaEmbedding.js';
 export { OpenAIEmbedding } from './OpenAIEmbedding.js';
