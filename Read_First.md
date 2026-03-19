@@ -6,18 +6,31 @@
 
 **For new AI sessions, read these files in order:**
 
+### Essential (Must Read)
+
 1. **[Read_First.md](./Read_First.md)** ← (this file) → How to start/restart
 2. **[PHILOSOPHY.md](./PHILOSOPHY.md)** → Why we use PostgreSQL, design decisions
-3. **[README.md](./README.md)** → Full documentation
+3. **[AGENTS.md](./AGENTS.md)** → AI instructions, priorities, and constraints
+4. **[README.md](./README.md)** → Full documentation
+
+### Recommended (Deeper Understanding)
+
+5. **[docs/USAGE.md](./docs/USAGE.md)** → Architecture, AI tools, memory/skill systems
+6. **[LEARNING_SYSTEM.md](./LEARNING_SYSTEM.md)** → How AI learns autonomously
+7. **[docs/SKILL_SYSTEM.md](./docs/SKILL_SYSTEM.md)** → PostgreSQL-first skill loading
+8. **[docs/AI_COLLABORATION_GUIDE.md](./docs/AI_COLLABORATION_GUIDE.md)** → Multi-agent patterns
+
+**Total AI onboarding: ~22 minutes**
 
 ## ROM Analogy
 
 ```
 These MD files = ROM (essential boot instructions)
         │
-        ├── README.md     → How to start/boot
-        ├── PHILOSOPHY.md → Why it works this way  
         ├── Read_First.md → Emergency recovery
+        ├── PHILOSOPHY.md → Why it works this way  
+        ├── AGENTS.md     → AI behavior rules
+        ├── README.md     → How to start/boot
         ├── docs/OPENCODE_INTEGRATION.md → OpenCode integration approaches (CLI vs REST API)
         └── .env.example  → Default config
 
@@ -34,11 +47,19 @@ Apps = Tasks (AI doing work)
 
 ## Quick Start (For New AI Session)
 
+> **Note**: Commands use the default PostgreSQL path. Set `PSQL_PATH` environment variable if different:
+> ```bash
+> export PSQL_PATH=/usr/local/bin/psql  # Linux/Homebrew
+> export PSQL_PATH="/Applications/Postgres.app/Contents/Versions/18/bin/psql"  # macOS Postgres.app
+> ```
+
 ### 1. Start Required Services
 
 ```bash
 # Start PostgreSQL (if not running)
-/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18-2 -l /Users/jk/Library/Application\ Support/Postgres/var-18-2/logfile start
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl} \
+  -D ~/Library/Application\ Support/Postgres/var-18-2 \
+  -l ~/Library/Application\ Support/Postgres/var-18-2/logfile start
 
 # Start opencode serve (REQUIRED for task execution)
 nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &
@@ -52,19 +73,25 @@ nohup node dist/cli/index.js start > .nezha.log 2>&1 &
 ### 2. Check Current Status
 
 ```bash
-# 查看任务状态（最常用！）
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+# View task status (most common!)
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
 
-# 查看当前运行的任务
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT title, started_at FROM tasks WHERE status = 'RUNNING';"
+# View currently running tasks
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "SELECT title, started_at FROM tasks WHERE status = 'RUNNING';"
 
-# 查看最近完成的任务
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 5;"
+# View recently completed tasks
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "SELECT title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY completed_at DESC LIMIT 5;"
 
-# 查看 daemon 日志
+# View daemon log
 tail -20 .nezha.log
 
-# 检查服务是否运行
+# Check if services are running
 ps aux | grep "opencode serve"
 ps aux | grep "dist/cli/index.js start"
 ```
@@ -75,13 +102,19 @@ The system stores everything in PostgreSQL. To continue:
 
 ```bash
 # Reset stuck RUNNING tasks to PENDING
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE tasks SET status = 'PENDING' WHERE status = 'RUNNING';"
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "UPDATE tasks SET status = 'PENDING' WHERE status = 'RUNNING';"
 
 # View pending tasks
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 10;"
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "SELECT id, title, status, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 10;"
 
 # View completed tasks
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT COUNT(*) FROM tasks WHERE status = 'COMPLETED';"
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -c "SELECT COUNT(*) FROM tasks WHERE status = 'COMPLETED';"
 ```
 
 ### 4. If System Crashed - Recovery Steps
@@ -94,7 +127,9 @@ cd /Users/jk/gits/hub/nezha
 npm run build
 
 # 2. Run migrations if new tables needed
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -f src/db/migrations/*.sql
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha \
+  -f src/db/migrations/*.sql
 
 # 3. Restart everything
 pkill -f "opencode serve" 2>/dev/null
@@ -146,6 +181,10 @@ The system uses 27 tables for comprehensive task management, memory, and agent c
 | `user_profiles` | User settings and preferences |
 | `event_log` | System event logging |
 | `heartbeat_configs` | Health monitoring configuration |
+| `process_pids` | Track spawned process PIDs for cleanup |
+| `inter_reviews` | AI peer review system for code quality |
+| `stuck_tasks_tracking` | Watchdog tracking for stuck tasks |
+| `failure_alerts` | Failure alert management |
 
 ### Utility Tables
 
@@ -243,7 +282,8 @@ npm run build
 ### Problem: Database connection issues
 ```bash
 # Check PostgreSQL is running
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT 1;"
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha -c "SELECT 1;"
 ```
 
 ### Problem: Scheduler fails with "column does not exist"
@@ -288,15 +328,85 @@ node dist/cli/index.js task-add "Task Title" "Task description" priority
 
 ---
 
-## Current Status (Update this on each handoff)
+## Monitoring & Review Commands
 
-- Last checked: 2026-03-19
-- Completed tasks: 0
-- Pending tasks: 0
-- Running tasks: 0
-- Services running: ✅ opencode serve (port 4096), ✅ nezha daemon
+### Dead Letter Queue (DLQ)
 
-Run this to update:
 ```bash
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
+# List failed tasks in DLQ
+node dist/cli/index.js dlq list
+
+# List all (including resolved)
+node dist/cli/index.js dlq list --all
+
+# Resolve a DLQ item
+node dist/cli/index.js dlq resolve <id> --notes "Fixed the issue"
+
+# Retry a failed task
+node dist/cli/index.js dlq retry <id>
+
+# Delete a DLQ item
+node dist/cli/index.js dlq delete <id>
+```
+
+### Failure Alerts
+
+```bash
+# List active alerts
+node dist/cli/index.js alerts list
+
+# Acknowledge an alert
+node dist/cli/index.js alerts ack <id> --by "username"
+
+# View alert statistics
+node dist/cli/index.js alerts stats
+```
+
+### Watchdog (Process Monitoring)
+
+```bash
+# View watchdog statistics
+node dist/cli/index.js watchdog stats
+
+# Cleanup orphaned processes (older than 60 minutes)
+node dist/cli/index.js watchdog cleanup --threshold 60
+```
+
+### AI Code Review
+
+```bash
+# Request a review of current changes
+node dist/cli/index.js review request
+
+# View pending reviews
+node dist/cli/index.js review show
+
+# View review statistics
+node dist/cli/index.js review stats
+
+# Respond to a review
+node dist/cli/index.js review respond <review-id> "Response text"
+```
+
+---
+
+## Current Status
+
+Run this command to check current system status:
+
+```bash
+# Quick status check
+${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
+  -h 127.0.0.1 -U postgres -d nezha -c "
+SELECT 
+  status, 
+  COUNT(*) as count 
+FROM tasks 
+GROUP BY status 
+ORDER BY count DESC;
+"
+
+# Check services
+echo "=== Services ===" && \
+ps aux | grep -E "(opencode serve|dist/cli/index.js)" | grep -v grep
 ```
