@@ -184,13 +184,11 @@ Save agreements to memory:
 - Consensus is **emergent**, not enforced
 - Agreements are **AI decisions**, not programmatic constraints
 
-## Important Context: OpenClaw Gas Town
+## Reference: OpenClaw Gas Town (External Project)
 
-**OpenClaw already has a multi-agent system called Gas Town!**
+> **Note**: OpenClaw is a separate project, NOT what Nezha uses. This is included for reference only.
 
-**OpenClaw Codebase**: `/Users/jk/gits/hub/openclaw`
-
-**Key File**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/examples/28-gas-town.prose`
+**OpenClaw** (separate project at `/Users/jk/gits/hub/openclaw`) has a multi-agent system called **Gas Town** that we can learn from.
 
 ### Gas Town Key Concepts
 
@@ -201,28 +199,42 @@ Save agreements to memory:
 | **MOLECULES** | Workflows encoded as chains of beads |
 | **HOOKS** | Work queue for each worker |
 | **MAIL** | Message inbox for workers |
-| **CONVOYS** | Work-order units tracking delivery |
 
-### Gas Town Worker Roles
-
-| Role | Purpose |
-|------|---------|
-| **Mayor** | Concierge, receives user requests |
-| **Polecats** | Ephemeral workers that swarm on work |
-| **Refinery** | Merge queue processor |
-| **Witness** | Swarm health monitor |
-| **Deacon** | Daemon beacon, propagates heartbeat |
-| **Dogs** | Maintenance crew |
-| **Crew** | Long-lived coding agents |
-
-### How This Affects Our Meeting Protocol
+### How This Inspires Nezha's Meeting Protocol
 
 1. **GUPP Principle**: AIs should self-propel - "if work on hook, run it"
-2. **Hooks Pattern**: Each AI has a work queue (hook) to check
-3. **Mail Pattern**: AIs can send messages to each other's inboxes
-4. **Convoys**: Track delivery of work orders across multiple AIs
+2. **Hooks Pattern**: Each AI has a work queue (Nezha tasks) to check
+3. **Mail Pattern**: AIs can send messages via task descriptions
 
 **Read more**: `reviews/openclaw_multiagent_research.md`
+
+---
+
+## Nezha's Implementation (OpenCode-based)
+
+Nezha spawns **OpenCode** AI instances for task execution.
+
+### How to Spawn OpenCode AIs
+
+```bash
+# Method 1: Create subagent
+opencode agent create --mode subagent --description "Task executor"
+
+# Method 2: Run with specific agent
+opencode run --agent <agent-name> "Your task"
+
+# Method 3: Headless server
+opencode serve --port 4096
+opencode run --attach http://localhost:4096 "Task"
+```
+
+### Nezha Parallel Spawning
+
+```bash
+# Create multiple tasks - Nezha spawns multiple OpenCode instances
+node dist/cli/index.js task-add "Spawn Request: AI 1" "Task 1" 9
+node dist/cli/index.js task-add "Spawn Request: AI 2" "Task 2" 9
+```
 
 ## See Also
 

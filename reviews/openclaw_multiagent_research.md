@@ -2,11 +2,101 @@
 
 > Research conducted by Trae AI on 2026-03-20
 
+> **⚠️ Important Clarification**: 
+> - **OpenClaw** is a **separate project** at `/Users/jk/gits/hub/openclaw`
+> - **OpenCode** is the AI that **Nezha spawns** for task execution
+> - This report researches OpenClaw for reference and learning purposes
+
 ## Executive Summary
 
-**OpenClaw DOES have a sophisticated multi-agent orchestration system!**
+**OpenClaw** (separate project) has a sophisticated multi-agent orchestration system with **TWO** mechanisms:
 
-It's called **"Gas Town"** - a "Kubernetes for agents" with 7 worker roles coordinating through persistent state.
+1. **Gas Town** - A "Kubernetes for agents" with 7 worker roles (OpenProse-based)
+2. **Sub-Agents** - Built-in `sessions_spawn` tool for spawning child agents
+
+**For Nezha**: See the Appendix for OpenCode spawning methods that Nezha actually uses.
+
+---
+
+## Part 1: Sub-Agents (Built-in Feature)
+
+### Official Documentation
+
+**Path**: `/Users/jk/gits/hub/openclaw/docs/tools/subagents.md`
+
+### How to Spawn Agents
+
+**Slash Command**:
+```bash
+/subagents spawn <agentId> <task> [--model <model>] [--thinking <level>]
+```
+
+**Tool**:
+```typescript
+sessions_spawn({
+  task: "string",           // required
+  label: "string",          // optional
+  agentId: "string",        // optional
+  model: "string",          // optional
+  thinking: "level",        // optional
+  runTimeoutSeconds: 0,     // optional
+  thread: false,            // optional - for thread-bound sessions
+  mode: "run|session",      // optional
+  cleanup: "delete|keep",   // optional
+  sandbox: "inherit|require" // optional
+})
+```
+
+### Sub-Agent Features
+
+| Feature | Description |
+|---------|-------------|
+| **Isolation** | Each sub-agent runs in its own session |
+| **Announce** | Results are announced back to requester |
+| **Nested** | Supports up to 5 levels of nesting (maxSpawnDepth) |
+| **Concurrency** | Default 8 concurrent sub-agents |
+| **Auto-archive** | Sessions archived after 60 minutes |
+| **Thread binding** | Discord supports persistent thread-bound sessions |
+
+### Nested Sub-Agents (Orchestrator Pattern)
+
+```json5
+{
+  agents: {
+    defaults: {
+      subagents: {
+        maxSpawnDepth: 2,        // allow sub-agents to spawn children
+        maxChildrenPerAgent: 5,  // max active children per session
+        maxConcurrent: 8,        // global concurrency cap
+        runTimeoutSeconds: 900,  // default timeout
+      },
+    },
+  },
+}
+```
+
+### Depth Levels
+
+| Depth | Session Key | Role | Can Spawn? |
+|-------|-------------|------|------------|
+| 0 | `agent:<id>:main` | Main agent | Always |
+| 1 | `agent:<id>:subagent:<uuid>` | Sub-agent/orchestrator | If maxSpawnDepth >= 2 |
+| 2 | `agent:<id>:subagent:<uuid>:subagent:<uuid>` | Sub-sub-agent (worker) | Never |
+
+### Control Commands
+
+```bash
+/subagents list                    # List active sub-agents
+/subagents kill <id|#|all>         # Stop sub-agents
+/subagents log <id|#> [limit]      # View logs
+/subagents info <id|#>             # Show metadata
+/subagents send <id|#> <message>   # Send message to sub-agent
+/subagents steer <id|#> <message>  # Steer sub-agent
+```
+
+---
+
+## Part 2: Gas Town (OpenProse-based Orchestration)
 
 ## Key Finding: The MEOW Stack
 
@@ -99,12 +189,101 @@ Physics over politeness. No waiting for permission.
    - Gas Town has hooks + mail for communication
    - We could add similar mechanisms
 
+5. **Should Nezha implement `sessions_spawn` like OpenClaw?**
+   - Built-in sub-agent spawning
+   - Announce mechanism for results
+   - Nested agent support
+
+---
+
+## Integration Possibility: Nezha + OpenClaw Sub-Agents
+
+### Option 1: Nezha Calls OpenClaw's sessions_spawn
+
+If Nezha runs alongside OpenClaw, it could:
+1. Use OpenClaw's `sessions_spawn` tool to spawn child agents
+2. Receive announce messages when tasks complete
+3. Leverage OpenClaw's concurrency management
+
+### Option 2: Nezha Implements Similar Mechanism
+
+Nezha could implement its own spawn mechanism:
+1. Add `task_spawn` CLI command
+2. Create child tasks that report back to parent
+3. Track nested task depth
+4. Implement announce/notify pattern
+
+### Option 3: Hybrid Approach
+
+1. Nezha tasks can optionally be BEADS (Git-backed)
+2. Nezha daemon can participate in Gas Town as a worker
+3. Meeting protocol works with both systems
+
 ## Source
 
 - **OpenClaw Codebase**: `/Users/jk/gits/hub/openclaw`
 - **Key File**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/examples/28-gas-town.prose`
 - **OpenProse Compiler**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/compiler.md`
+- **Subagents Documentation**: `/Users/jk/gits/hub/openclaw/docs/tools/subagents.md`
 - Framework: OpenProse VM for multi-agent orchestration
+
+---
+
+## Appendix: OpenCode AI Spawning (For Nezha)
+
+### How Nezha Can Spawn Multiple OpenCode AIs
+
+OpenCode supports spawning multiple AI instances:
+
+#### 1. Create Subagent Agents
+
+```bash
+opencode agent create --mode subagent --description "Task executor"
+```
+
+#### 2. Run with Specific Agent
+
+```bash
+opencode run --agent <agent-name> "Your task"
+```
+
+#### 3. Headless Server Mode
+
+```bash
+opencode serve --port 4096
+opencode run --attach http://localhost:4096 "Task"
+```
+
+#### 4. Nezha Parallel Execution
+
+```bash
+# Create multiple tasks - Nezha will spawn multiple OpenCode instances
+node dist/cli/index.js task-add "Spawn Request: AI 1" "Task 1" 9
+node dist/cli/index.js task-add "Spawn Request: AI 2" "Task 2" 9
+```
+
+### OpenCode Agent Modes
+
+| Mode | Description |
+|------|-------------|
+| `all` | Full agent with all capabilities |
+| `primary` | Main agent |
+| `subagent` | Child agent for specific tasks |
+
+### OpenCode Agent Tools
+
+Available tools for configuration:
+- `bash` - Shell commands
+- `read` - File reading
+- `write` - File writing
+- `edit` - File editing
+- `list` - Directory listing
+- `glob` - File pattern matching
+- `grep` - Content search
+- `webfetch` - Web fetching
+- `task` - Task management
+- `todowrite` - Todo writing
+- `todoread` - Todo reading
 
 ## Next Steps
 
