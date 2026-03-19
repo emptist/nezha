@@ -43,7 +43,7 @@ export class OpenCodeClient {
 
   async sendMessage(
     messages: OpenCodeMessage[],
-    options?: {
+    _options?: {
       temperature?: number;
       maxTokens?: number;
       stream?: boolean;
@@ -126,7 +126,7 @@ export class OpenCodeClient {
     output: string;
     artifacts: string[];
   }> {
-    const sessionId = this.conversationLogger.startConversation(task, 'task_execution');
+    this.conversationLogger.startConversation(task, 'task_execution');
 
     try {
       const systemPrompt = `You are an AI assistant helping with software development tasks.
@@ -228,7 +228,7 @@ Please analyze the task and provide a detailed solution.`;
         }
       });
 
-      proc.on('close', code => {
+      proc.on('close', (_code: number | null) => {
         resolve(output);
       });
 

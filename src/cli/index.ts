@@ -9,7 +9,7 @@ import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
-import { verboseLogger, setVerboseMode } from '../utils/verboseLogger.js';
+import { setVerboseMode } from '../utils/verboseLogger.js';
 import { AgentSystem } from '../core/AgentSystem.js';
 
 export let isVerbose = false;
@@ -19,8 +19,6 @@ import {
   sanitizeTaskTitle,
   sanitizeTaskDescription,
   sanitizePriority,
-  sanitizeUUID,
-  sanitizeTags,
 } from '../utils/sanitization.js';
 
 interface TaskRow {
@@ -886,7 +884,7 @@ export class Cli {
 
     cli.step('Deleting auto-tag rule...');
 
-    const result = await db.query(`DELETE FROM auto_tag_rules WHERE keyword = $1`, [
+    await db.query(`DELETE FROM auto_tag_rules WHERE keyword = $1`, [
       keyword.toLowerCase(),
     ]);
 

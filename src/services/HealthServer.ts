@@ -1,7 +1,5 @@
 import http from 'http';
 import * as fs from 'fs/promises';
-import * as path from 'path';
-import * as os from 'os';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { logger } from '../utils/logger.js';

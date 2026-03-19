@@ -1,7 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, MEMORY_CONFIG } from '../config/constants.js';
-import { type Memory, type MemoryFilter, type QueryResult } from '../config/types.js';
-import { EmbeddingProvider, ZhipuEmbedding } from '../services/embedding/index.js';
+import { type Memory } from '../config/types.js';
+import { EmbeddingProvider } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
 import { sanitizeSearchQuery, sanitizeMemoryContent } from '../utils/sanitization.js';
 import { getCache } from '../services/CacheService.js';
@@ -156,8 +156,7 @@ export class MemoryService {
     const embeddingStr = `[${queryEmbedding.join(',')}]`;
 
     const params: (string | number)[] = [embeddingStr, queryThreshold, queryLimit];
-    let paramIndex = 4;
-    const projectIdFilter = projectId ? `AND project_id = $${paramIndex++}` : '';
+    const projectIdFilter = projectId ? `AND project_id = $4` : '';
 
     const result = await this.db.query<VectorSearchResult>(
       `SELECT 
@@ -198,8 +197,7 @@ export class MemoryService {
     const queryLimit = Math.min(limit ?? 10, 100);
 
     const params: (string | number)[] = [sanitized.sanitized!, queryLimit];
-    let paramIndex = 3;
-    const projectIdFilter = projectId ? `AND project_id = $${paramIndex++}` : '';
+    const projectIdFilter = projectId ? `AND project_id = $3` : '';
     if (projectId) {
       params.push(projectId);
     }
@@ -409,8 +407,6 @@ export class MemoryService {
       );
       return { archived: 0, deleted: 0, totalBefore, totalAfter: totalBefore };
     }
-
-    const toArchive = totalBefore - maxMemories;
 
     // Archive lowest importance memories first
     const archiveResult = await this.db.query(
