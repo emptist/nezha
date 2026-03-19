@@ -329,7 +329,6 @@ export class ImprovementIdentifier {
 
     const coreDir = path.join(this.projectRoot, 'src/core');
     const expectedFiles = [
-      'ContinuousImprovementLoop.ts',
       'ImprovementIdentifier.ts',
       'ResultReviewer.ts',
       'LearningRecorder.ts',
