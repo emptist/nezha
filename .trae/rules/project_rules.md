@@ -48,7 +48,9 @@ node dist/cli/index.js list-tasks
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT COUNT(*) FROM tasks WHERE status IN ('PENDING', 'RUNNING');"
 
 # If no pending tasks, create a review task
-node dist/cli/index.js task-add "Continuous review cycle" "Perform codebase review, look for improvements, check for issues" 3
+node dist/cli/index.js improve
+# or
+node dist/cli/index.js continuous-improvement
 ```
 
 ### Task Sync Rules

@@ -41,14 +41,16 @@ Since the function isn't exposed as a CLI command yet, use `task-add`:
 node dist/cli/index.js task-add "Continuous Improvement Cycle" "PDCA Cycle: 1. Review codebase 2. Plan fixes 3. Execute 4. Check results 5. Update memory" 10
 ```
 
-### Future CLI Command (To Be Added)
+### CLI Command (Now Available!)
 
 ```bash
-# Once the CLI command is added:
+# Use the new CLI command:
 node dist/cli/index.js continuous-improvement
-# or
+# or use the short alias:
 node dist/cli/index.js improve
 ```
+
+This creates a task with priority 10 that follows the PDCA cycle.
 
 ## The Improvement Cycle
 

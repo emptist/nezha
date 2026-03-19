@@ -1,6 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { LearningAnalysisService } from '../core/LearningAnalysis.js';
-import { MemoryService } from '../core/Memory.js';
 import { logger } from '../utils/logger.js';
 
 export interface RecordOutcomeInput {
@@ -246,7 +245,7 @@ export async function apply_insight(db: DatabaseClient, input: ApplyInsightInput
 
 export async function auto_generate_insights(
   db: DatabaseClient,
-  projectId?: string
+  _projectId?: string
 ): Promise<string> {
   const learningService = new LearningAnalysisService(db);
   const ids = await learningService.autoGenerateInsights();
