@@ -562,6 +562,17 @@ node dist/cli/process-guardian.js stop
 
 ## 与 OpenClaw 的关系
 
+### OpenClaw vs Nezha
+
+| 方面         | OpenClaw                 | Nezha             |
+| ------------ | ------------------------ | ----------------- |
+| **定位**     | 通用 AI 助手网关         | 专用开发助手      |
+| **记忆**     | 文件系统 (`memory/*.md`) | PostgreSQL        |
+| **技能**     | `.md` 文件在磁盘         | 数据库 + 审批流程 |
+| **知识**     | 每日 markdown 文件       | 可查询的表        |
+| **设计哲学** | 文件优先                 | PostgreSQL 优先   |
+| **安全**     | 信任外部技能             | 扫描 + 审批       |
+
 ### OpenClaw 核心机制
 
 OpenClaw 是一个**通用 AI 助手网关**，提供：
@@ -575,32 +586,15 @@ OpenClaw 是一个**通用 AI 助手网关**，提供：
 | **任务队列**     | CommandQueue                          | 防止并发冲突          |
 | **Skills 系统**  | 插件机制                              | 功能扩展              |
 
-### OpenClaw 没有的功能
+### Nezha 的增强
 
-通过代码分析，OpenClaw **没有实现**以下功能：
-
-| 功能         | 状态 | 说明                   |
-| ------------ | ---- | ---------------------- |
-| **主动学习** | ❌   | 没有自动学习机制       |
-| **被动学习** | ❌   | 没有从错误中学习的功能 |
-| **知识提取** | ❌   | 没有自动知识整理       |
-| **自我优化** | ❌   | 没有性能优化机制       |
-
-OpenClaw 的 Memory 系统主要是：
-
-- 向量嵌入和语义搜索
-- 文件索引和检索
-- 会话历史存储
-
-### Nezha 的定位
-
-| 方面     | OpenClaw          | Nezha        |
-| -------- | ----------------- | ------------ |
-| **定位** | 通用 AI 助手网关  | 专用开发助手 |
-| **记忆** | 文件系统 + SQLite | PostgreSQL   |
-| **调度** | heartbeat + cron  | 相同机制     |
-| **学习** | ❌ 无             | ❌ 暂未实现  |
-| **渠道** | 20+ 消息平台      | 编辑器 AI    |
+| 功能         | OpenClaw | Nezha                     |
+| ------------ | -------- | ------------------------- |
+| **学习系统** | ❌ 无    | ✅ Task Review + 模式存储 |
+| **技能构建** | ❌ 无    | ✅ AI 自主生成技能        |
+| **技能安全** | ❌ 信任  | ✅ 扫描 + 审批            |
+| **知识导入** | ❌ 文件  | ✅ SOUL.md → PostgreSQL   |
+| **审计日志** | ❌ 无    | ✅ skill_audit_log        |
 
 **策略**: 借鉴 OpenClaw 的心跳和调度机制，用 PostgreSQL 增强存储能力，专注于开发场景。
 
@@ -620,22 +614,27 @@ OpenClaw 的 Memory 系统主要是：
 - [x] Process Guardian (孤儿进程清理)
 - [x] Conversation Logging (会话日志)
 - [x] 客户项目集成教程
+- [x] **Skill System (DB-only 加载)**
+- [x] **Skill Builder (AI 构建技能)**
+- [x] **Task Review (自动化 QC)**
+- [x] **ClawHub Integration (安全导入)**
+- [x] **Markdown Knowledge Import (SOUL.md → DB)**
+- [x] **Decision Framework (ReAct 模式)**
+- [x] **Dual Storage (JSONL + PostgreSQL)**
 
 ### 进行中 🚧
 
 - [ ] 提高测试覆盖率（目标 80%）
-- [ ] 统一日志系统
-- [ ] 完善 EventBus 集成
-- [ ] 实现 Cron 调度
+- [ ] 完善 Skill System 与 Agent 集成
+- [ ] Skill 依赖解析
 
 ### 计划中 📋
 
-- [ ] AI 驱动的学习系统（记忆工具 + System Prompt）
-- [ ] 向量搜索（pgvector）
-- [ ] 技能市场和发现
-- [ ] 监控和告警
+- [ ] Skill 组合 (技能叠加)
+- [ ] Skill 评级和反馈
+- [ ] 自动化 Skill 测试
 - [ ] Web UI
-- [ ] 性能优化
+- [ ] 监控和告警
 
 ## PostgreSQL 18 特性利用
 
