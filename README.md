@@ -201,7 +201,7 @@ Agent 更新数据库状态
 
 #### 1. Memory System (记忆系统) ✅
 
-使用 PostgreSQL 实现永久存储，借鉴 OpenClaw 的记忆机制：
+PostgreSQL 实现永久存储：
 
 ```typescript
 interface MemorySystem {
@@ -211,11 +211,11 @@ interface MemorySystem {
   // 检索
   search(searchTerm: string, limit?: number): Promise<Memory[]>;
 
+  // 向量搜索
+  vectorSearch(query: string): Promise<VectorSearchResult[]>;
+
   // 按项目查询
   getByProject(projectId: string): Promise<Memory[]>;
-
-  // 清理旧记忆
-  deleteOldMemories(): Promise<number>;
 }
 ```
 
@@ -224,167 +224,141 @@ interface MemorySystem {
 - ✅ PostgreSQL 存储
 - ✅ CRUD 操作
 - ✅ 搜索功能
-- ⚠️ 向量搜索（pgvector）未实现
-- ⚠️ 自动捕获未实现
+- ✅ 向量搜索 (pgvector)
+- ✅ SOUL.md/AGENTS.md 导入
 
 **存储内容**:
 
 - 任务执行历史
-- 错误日志
-- 项目信息
+- 学习模式
+- 知识图谱
 - 用户偏好
 
-#### 2. Scheduler System (调度系统) ✅
+#### 2. Skill System (技能系统) ✅
 
-借鉴 OpenClaw 的 heartbeat + cron 机制：
-
-```typescript
-interface SchedulerSystem {
-  // 启动心跳
-  start(): Promise<void>;
-
-  // 停止心跳
-  stop(): Promise<void>;
-
-  // 调度任务
-  scheduleTask(task: ScheduledTask): Promise<string>;
-
-  // 获取统计信息
-  getStats(): SchedulerStats;
-}
-```
-
-**实现状态**:
-
-- ✅ 心跳机制（可配置间隔）
-- ✅ 任务队列（使用 PostgreSQL SKIP LOCKED）
-- ✅ 并发安全（FOR UPDATE SKIP LOCKED）
-- ✅ 失败暂停机制
-- ✅ 卡住任务自动重置
-- ⚠️ Cron 调度未实现
-
-**工作流程**:
-
-```
-心跳触发 (默认每 30 分钟)
-    ↓
-检查 tasks 表
-    ↓ 有待处理任务
-获取任务 (SKIP LOCKED)
-    ↓
-执行任务
-    ↓
-更新状态
-    ↓
-等待下一次心跳
-```
-
-**关键特性**:
-
-- **并发安全**: 使用 `FOR UPDATE SKIP LOCKED` 防止多实例竞争
-- **自动恢复**: 卡住的任务（5分钟无响应）自动重置为 PENDING
-- **失败保护**: 连续失败 5 次后暂停 1 分钟
-- **统计追踪**: 记录执行次数、最后运行时间等
-
-#### 3. Agent System (代理系统) ✅
-
-与编辑器 AI 通信的核心模块：
-
-```typescript
-interface AgentSystem {
-  // 创建会话
-  createSession(): Promise<AgentSession>;
-
-  // 发送消息
-  sendMessage(sessionId: string, message: string): Promise<AgentResponse>;
-
-  // 执行任务
-  executeTask(message: string): Promise<AgentResponse>;
-}
-```
-
-**实现状态**:
-
-- ✅ HTTP 通信
-- ✅ 会话管理
-- ✅ 错误处理
-- ✅ 重试机制（指数退避 + 抖动）
-- ✅ 详细的网络错误消息
-
-**错误处理特性**:
-
-- **网络错误映射**: 将错误代码转换为人类可读消息
-- **可重试状态**: 识别 429, 502, 503, 504 等可重试状态
-- **指数退避**: 重试延迟随次数增加
-- **请求追踪**: 每个请求有唯一 ID
-
-#### 4. Process Guardian (进程守护) ✅
-
-孤儿进程清理和实例管理：
-
-```bash
-# 启动守护进程
-node dist/cli/process-guardian.js run
-
-# 查看状态
-node dist/cli/process-guardian.js status
-
-# 单次清理
-node dist/cli/process-guardian.js once
-
-# 停止守护
-node dist/cli/process-guardian.js stop
-```
-
-**功能**:
-
-- 自动清理孤儿进程 (运行超过 1 小时)
-- 实例数量控制 (防止重复启动)
-- 支持 cron 定时任务: `0,10,20,30,40,50 * * * *`
-
-#### 5. Conversation Logging (会话日志) ✅
-
-JSONL 格式的会话记录：
-
-```
-conversations/
-├── index.json              # 会话索引
-└── 2026-03-19/
-    └── session-xxx.jsonl  # 会话详情
-```
-
-**用途**:
-
-- 任务执行历史追踪
-- 成功率统计
-- AI 协作分析
-
-#### 6. Skill System (技能系统) ⚠️
-
-插件和技能扩展机制：
+**DB-only 技能加载** - 安全强化：
 
 ```typescript
 interface SkillSystem {
-  // 注册技能
-  registerSkill(skill: Skill): void;
-
-  // 获取技能
-  getSkill(name: string): Skill | undefined;
+  // 获取技能 (仅从 DB)
+  getSkill(name: string): Promise<Skill | null>;
 
   // 列出技能
-  listSkills(): string[];
+  listSkills(): Promise<StoredSkill[]>;
+
+  // 搜索技能
+  searchSkills(query: string): Promise<StoredSkill[]>;
 
   // 执行技能
-  executeSkill(name: string, input: unknown): Promise<unknown>;
+  executeSkill(name: string, input: unknown): Promise<SkillExecutionResult>;
 }
 ```
 
-**实现状态**:
+**安全模型**:
 
-- ✅ 基础注册和执行
-- ⚠️ 未与 Agent 集成
-- ❌ 未实现技能发现
-- ❌ 未实现技能市场
+- ❌ 永不从磁盘加载技能
+- ✅ 仅加载已批准技能 (status='approved')
+- ✅ 安全评分 >= 70
+- ✅ 静态代码分析
+- ✅ 用户审批流程
+
+#### 3. Skill Builder (技能构建) ✅
+
+AI 自主构建技能：
+
+```typescript
+interface SkillBuilder {
+  // 构建新技能
+  buildSkill(input: SkillBuildInput): Promise<SkillBuildOutput>;
+
+  // 改进现有技能
+  improveSkill(skillId: string, improvement: string): Promise<SkillBuildOutput>;
+
+  // 列出内部构建的技能
+  listInternallyBuiltSkills(): Promise<SkillSpec[]>;
+}
+```
+
+**构建流程**:
+
+```
+输入用途 → AI 生成技能规范 → 质量评分 → 保存到数据库
+```
+
+#### 4. Task Review (任务评审) ✅
+
+自动化 QC 系统：
+
+```typescript
+interface TaskReviewSkill {
+  // 评审任务
+  review(input: TaskReviewInput): Promise<TaskReviewOutput>;
+
+  // 获取评审历史
+  getReviewHistory(taskId?: string): Promise<TaskReviewOutput[]>;
+}
+```
+
+**评审内容**:
+
+- 执行状态 (成功/失败)
+- 结果质量
+- 性能 (耗时)
+- 测试通过/失败
+- 文件变更
+
+**学习输出**:
+
+- 优秀解决方案 → 记住
+- 关键问题 → 避免
+- 常见模式 → 存储
+
+#### 5. Knowledge Import (知识导入) ✅
+
+从传统 markdown 文件导入：
+
+```typescript
+interface MarkdownKnowledgeLoader {
+  // 导入目录
+  importDirectory(dirPath: string): Promise<ImportResult[]>;
+
+  // 导出到 markdown
+  exportToMarkdown(type: KnowledgeType): Promise<string>;
+}
+```
+
+**支持文件类型**:
+
+- `SOUL.md` → 身份/角色
+- `AGENTS.md` → 操作指令
+- `USER.md` → 用户上下文
+- `memory/*.md` → 每日记忆
+- `lore.md` → 背景知识
+
+#### 6. ClawHub Integration (ClawHub 集成) ✅
+
+安全导入外部技能：
+
+```typescript
+interface ClawHubClient {
+  // 搜索技能
+  searchSkills(options: SearchOptions): Promise<ClawHubSkill[]>;
+
+  // 安全评审
+  reviewSkill(skill: ClawHubSkill): Promise<SkillReviewResult>;
+
+  // 安装 (需审批)
+  installSkill(skill: ClawHubSkill): Promise<boolean>;
+}
+```
+
+**安全层**:
+
+- 静态代码分析
+- 危险模式检测
+- 安全评分
+- 用户审批
+- 自动屏蔽恶意技能
 
 ## 技术选型
 
