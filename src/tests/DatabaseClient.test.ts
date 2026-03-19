@@ -144,9 +144,9 @@ describe('DatabaseClient', () => {
     });
 
     it('should handle missing pool properties', () => {
-      mockPool.totalCount = undefined;
-      mockPool.idleCount = undefined;
-      mockPool.waitingCount = undefined;
+      (mockPool.totalCount as number | undefined) = undefined;
+      (mockPool.idleCount as number | undefined) = undefined;
+      (mockPool.waitingCount as number | undefined) = undefined;
 
       const stats = client.getPoolStats();
 
