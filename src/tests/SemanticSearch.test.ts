@@ -147,7 +147,7 @@ describe('SemanticSearchService', () => {
     });
 
     it('should throw error when embedding fails', async () => {
-      mockEmbedding.embed.mockRejectedValue(new Error('Embedding API error'));
+      mockEmbedding.embed.mockRejectedValueOnce(new Error('Embedding API error'));
 
       await expect(service.search('test')).rejects.toThrow('Failed to generate query embedding');
     });
