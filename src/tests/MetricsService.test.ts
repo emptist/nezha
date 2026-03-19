@@ -160,73 +160,73 @@ describe('MetricsService', () => {
 
     it('should create counter via registry', () => {
       const registry = new MetricsRegistry();
-      const counter = registry.createCounter('test', 'A test counter');
+      const counter = registry.counter('test', 'A test counter');
       expect(counter).toBeDefined();
     });
 
     it('should create gauge via registry', () => {
       const registry = new MetricsRegistry();
-      const gauge = registry.createGauge('test_gauge', 'A test gauge');
+      const gauge = registry.gauge('test_gauge', 'A test gauge');
       expect(gauge).toBeDefined();
     });
 
     it('should create histogram via registry', () => {
       const registry = new MetricsRegistry();
-      const histogram = registry.createHistogram('test_hist', 'A test histogram');
+      const histogram = registry.histogram('test_hist', 'A test histogram');
       expect(histogram).toBeDefined();
     });
 
     it('should increment counter', () => {
       const registry = new MetricsRegistry();
-      const counter = registry.createCounter('inc_test', 'Increment test');
+      const counter = registry.counter('inc_test', 'Increment test');
       counter.inc();
       expect(counter.value).toBe(1);
     });
 
     it('should set gauge value', () => {
       const registry = new MetricsRegistry();
-      const gauge = registry.createGauge('set_test', 'Set test');
+      const gauge = registry.gauge('set_test', 'Set test');
       gauge.set(10);
       expect(gauge.value).toBe(10);
     });
 
     it('should observe histogram', () => {
       const registry = new MetricsRegistry();
-      const histogram = registry.createHistogram('obs_test', 'Observe test');
+      const histogram = registry.histogram('obs_test', 'Observe test');
       histogram.observe(0.5);
       expect(histogram.get().count).toBe(1);
     });
 
-    it('should list all metrics', () => {
+    it('should export metrics in prometheus format', () => {
       const registry = new MetricsRegistry();
-      registry.createCounter('c1', 'Counter 1');
-      registry.createGauge('g1', 'Gauge 1');
-      registry.createHistogram('h1', 'Histogram 1');
+      registry.counter('c1', 'Counter 1');
+      registry.gauge('g1', 'Gauge 1');
+      registry.histogram('h1', 'Histogram 1');
 
-      const list = registry.listMetrics();
-      expect(list.length).toBe(3);
+      const exported = registry.export();
+      expect(exported).toContain('# HELP c1 Counter 1');
+      expect(exported).toContain('# TYPE c1 counter');
+      expect(exported).toContain('# TYPE g1 gauge');
+      expect(exported).toContain('# TYPE h1 histogram');
     });
 
-    it('should get metrics by name', () => {
+    it('should export to JSON', () => {
       const registry = new MetricsRegistry();
-      registry.createCounter('named_counter', 'Named counter');
-
-      const metric = registry.getMetric('named_counter');
-      expect(metric).toBeDefined();
-      expect(metric?.name).toBe('named_counter');
+      registry.counter('json_test', 'Test');
+      
+      const json = registry.toJSON();
+      expect(json).toHaveProperty('counters');
+      expect(json).toHaveProperty('gauges');
+      expect(json).toHaveProperty('histograms');
     });
 
-    it('should return undefined for missing metric', () => {
+    it('should reset all metrics', () => {
       const registry = new MetricsRegistry();
-      const metric = registry.getMetric('nonexistent');
-      expect(metric).toBeUndefined();
-    });
-
-    it('should clear all metrics', () => {
-      const registry = new MetricsRegistry();
-      registry.createCounter('to_clear', 'Will be cleared');
-      registry.clear();
-      expect(registry.listMetrics().length).toBe(0);
+      registry.counter('to_clear', 'Will be cleared');
+      registry.reset();
+      
+      const json = registry.toJSON() as { counters: Record<string, unknown> };
+      expect(Object.keys(json.counters).length).toBe(0);
     });
   });
 
@@ -234,12 +234,11 @@ describe('MetricsService', () => {
     it('should create standard metrics object', () => {
       const metrics = createStandardMetrics();
       expect(metrics).toBeDefined();
-      expect(metrics.tasksExecuted).toBeDefined();
+      expect(metrics.tasksTotal).toBeDefined();
       expect(metrics.activeTasks).toBeDefined();
-      expect(metrics.taskDuration).toBeDefined();
-      expect(metrics.tokenUsage).toBeDefined();
-      expect(metrics.apiLatency).toBeDefined();
-      expect(metrics.cacheHitRate).toBeDefined();
+      expect(metrics.taskDurationSeconds).toBeDefined();
+      expect(metrics.workerUtilization).toBeDefined();
+      expect(metrics.queueSize).toBeDefined();
     });
   });
 
