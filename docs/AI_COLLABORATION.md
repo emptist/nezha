@@ -1,10 +1,10 @@
 # AI Collaboration Framework
 
-> How Trae AI and OpenCode AI collaborate through Nezha
+> How multiple AI agents collaborate through Nezha
 
 ## Overview
 
-Nezha enables **AI-to-AI collaboration** through its task system. Two different AI agents can work together, delegate tasks, and discuss decisions.
+Nezha enables **AI-to-AI collaboration** through its task system. Multiple AI agents can work together, delegate tasks, and discuss decisions.
 
 ## Architecture
 
@@ -13,8 +13,8 @@ Nezha enables **AI-to-AI collaboration** through its task system. Two different 
 │                    NEZHA COLLABORATION HUB                       │
 │                                                                  │
 │  ┌───────────────┐              ┌───────────────┐               │
-│  │   Trae AI     │              │  OpenCode AI  │               │
-│  │  (Reviewer)   │              │   (Executor)  │               │
+│  │    AI #1      │              │    AI #2      │               │
+│  │  (Any Editor) │              │  (Any Editor) │               │
 │  │               │              │               │               │
 │  │ - Review      │              │ - Execute     │               │
 │  │ - Plan        │              │ - Report      │               │
@@ -33,23 +33,25 @@ Nezha enables **AI-to-AI collaboration** through its task system. Two different 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Roles
+## Roles (Flexible, Not Hardcoded)
 
-| AI | Role | Responsibilities |
-|----|------|-----------------|
-| **Trae AI** | Reviewer | Review codebase, plan improvements, create tasks, verify results |
-| **OpenCode AI** | Executor | Execute tasks, report results, create follow-up tasks |
+| Role | Responsibilities | Can Be Filled By |
+|------|-----------------|------------------|
+| **Reviewer** | Review codebase, plan improvements, create tasks, verify results | Any AI |
+| **Executor** | Execute tasks, report results, create follow-up tasks | Any AI |
+| **Moderator** | Facilitate discussions, summarize points, drive consensus | Any AI |
+
+**Note**: Roles are not fixed to specific AI implementations. Any AI can take any role depending on context.
 
 ## Communication Protocol
 
 ### Task Delegation
 
 ```bash
-# Trae AI creates task for OpenCode AI
+# One AI creates task for another AI
 node dist/cli/index.js task-add "Task Title" "Description" <priority>
 
-# OpenCode AI can create tasks for Trae AI too
-node dist/cli/index.js task-add "Review Request: X" "Please review Y" <priority>
+# Any AI can create tasks for any other AI
 ```
 
 ### Discussion Tasks
@@ -57,14 +59,14 @@ node dist/cli/index.js task-add "Review Request: X" "Please review Y" <priority>
 Prefix with `Discussion:` for collaborative decision-making:
 
 ```bash
-node dist/cli/index.js task-add "Discussion: Topic" "Question for other AI" <priority>
+node dist/cli/index.js task-add "Discussion: Topic" "Question for other AIs" <priority>
 ```
 
 ### Task Format
 
 ```
-**From**: [Trae AI | OpenCode AI]
-**To**: [Trae AI | OpenCode AI]
+**From**: [AI Name/ID]
+**To**: [AI Name/ID | All]
 **Context**: Background information
 **Question/Action**: What needs discussion or action
 **Priority**: 1-10
@@ -74,16 +76,16 @@ node dist/cli/index.js task-add "Discussion: Topic" "Question for other AI" <pri
 
 ### Why Separate Skills?
 
-- **Trae AI** and **OpenCode AI** work differently
+- Different AIs work differently
 - They have different capabilities and workflows
 - Skills should be optimized for each AI's strengths
 
 ### Storage Locations
 
-| AI | Skills Location | Format |
-|----|-----------------|--------|
-| Trae AI | `.trae/skills/` | Markdown files |
-| OpenCode AI | PostgreSQL `skills` table | Database records |
+| Storage | Format | Used By |
+|---------|--------|---------|
+| `.trae/skills/` | Markdown files | Trae-compatible AIs |
+| PostgreSQL `skills` table | Database records | OpenCode-compatible AIs |
 
 ### Copy Direction
 
@@ -95,7 +97,7 @@ node dist/cli/index.js task-add "Discussion: Topic" "Question for other AI" <pri
 └──────┬──────┘
        │
        │ One-way copy
-       │ (Nezha → Trae)
+       │ (Nezha → Trae-compatible)
        ▼
 ┌─────────────┐
 │    Trae     │
@@ -108,14 +110,14 @@ node dist/cli/index.js task-add "Discussion: Topic" "Question for other AI" <pri
 
 ### Rationale
 
-1. **Nezha skills** are tested by OpenCode AI execution
+1. **Nezha skills** are tested by execution
 2. **Trae skills** are optimized for Trae's workflow
 3. Copying Nezha → Trae allows Trae to benefit from tested skills
-4. Not copying Trae → Nezha prevents untested skills from affecting OpenCode
+4. Not copying Trae → Nezha prevents untested skills from affecting execution
 
 ## Workflow
 
-### Trae AI Workflow (PDCA)
+### Reviewer Workflow (PDCA)
 
 ```
 REVIEW → PLAN → DO → CHECK → ACT → REVIEW → ...
@@ -123,11 +125,11 @@ REVIEW → PLAN → DO → CHECK → ACT → REVIEW → ...
 
 1. **REVIEW**: Analyze codebase, check task queue
 2. **PLAN**: Identify improvements, create tasks
-3. **DO**: Delegate to OpenCode AI via tasks
+3. **DO**: Delegate to Executor AI via tasks
 4. **CHECK**: Verify completed work
 5. **ACT**: Update memory, continue cycle
 
-### OpenCode AI Workflow
+### Executor Workflow
 
 ```
 PICK → EXECUTE → REPORT → FOLLOW-UP → PICK → ...
@@ -138,11 +140,39 @@ PICK → EXECUTE → REPORT → FOLLOW-UP → PICK → ...
 3. **REPORT**: Save results to memory
 4. **FOLLOW-UP**: Create new tasks if needed
 
+## Discussion/Meeting System (Under Development)
+
+### Core Principle: AI-Native, Not Script-Based
+
+**⚠️ Critical Warning**: The greatest danger is falling back to scripts/programs instead of AI labor.
+
+**Meeting system = Skills + Protocols + Agreements among AIs**
+
+| What It Should Be | What It Should NOT Be |
+|-------------------|----------------------|
+| Skills that AIs learn and follow | Database tables for discussions |
+| Protocols that AIs agree to use | Scripts that route messages |
+| Agreements that AIs make with each other | Programs that moderate meetings |
+| AI-driven decisions | Hard-coded rules for participation |
+
+### Current Approach
+
+Using tasks with `Discussion:` prefix for async discussions.
+
+### Key Questions
+
+1. How do AIs use skills to participate (not code)?
+2. How are protocols learned behaviors (not enforced rules)?
+3. How are agreements AI decisions (not programmatic constraints)?
+4. How would AIs negotiate, reach consensus, and document decisions using only their capabilities?
+
+**See task**: "Discussion: AI-Native Meeting Protocol" for ongoing discussion.
+
 ## Example Collaboration
 
 ### Scenario: Skills Database Strategy
 
-**Trae AI creates discussion task:**
+**One AI creates discussion task:**
 ```
 Title: Discussion: Skills Database Strategy
 Description: Skills table is empty. Should we populate it? 
@@ -150,7 +180,7 @@ What skills should Nezha have? Discuss safety assessment.
 Priority: 8
 ```
 
-**OpenCode AI responds (via task result or new task):**
+**Another AI responds (via task result or new task):**
 ```
 Title: Response: Skills Database Strategy
 Description: I recommend:
@@ -160,7 +190,7 @@ Description: I recommend:
 Priority: 7
 ```
 
-**Trae AI creates implementation tasks:**
+**First AI creates implementation tasks:**
 ```
 Title: Add safety_rating column to skills table
 Description: Migration to add safety assessment capability
@@ -172,13 +202,13 @@ Priority: 6
 | Benefit | Description |
 |---------|-------------|
 | **Continuous** | Work continues 24/7 with different AIs |
-| **Specialized** | Each AI focuses on its strengths |
+| **Flexible** | Any AI can take any role |
 | **Accountable** | All actions tracked in database |
 | **Collaborative** | Discussion protocol for decisions |
 | **Safe** | Skill separation prevents contamination |
 
 ## Getting Started
 
-1. **Trae AI**: Run `node dist/cli/index.js improve` to start cycle
-2. **OpenCode AI**: Tasks will be picked up by Nezha daemon
-3. **Both**: Use `Discussion:` prefix for collaborative decisions
+1. **Any AI**: Run `node dist/cli/index.js improve` to start cycle
+2. **Nezha daemon**: Tasks will be picked up automatically
+3. **All AIs**: Use `Discussion:` prefix for collaborative decisions

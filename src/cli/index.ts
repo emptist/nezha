@@ -58,7 +58,7 @@ export class Cli {
     this.checkpointService = new CheckpointService();
   }
 
-  private async getDb(): Promise<DatabaseClient> {
+  public async getDb(): Promise<DatabaseClient> {
     if (!this.db) {
       this.db = new DatabaseClient(this.config);
     }
@@ -965,6 +965,23 @@ async function main(): Promise<void> {
         await cliInstance.health();
         break;
 
+      case 'skill-sync': {
+        const { traeSkillSyncService } = await import('../services/TraeSkillSyncService.js');
+        const db = await cliInstance.getDb();
+        traeSkillSyncService.setDatabaseClient(db);
+        cli.step('Syncing skills to Trae...');
+        const result = await traeSkillSyncService.syncToTrae();
+        if (result.errors.length > 0) {
+          cli.error(`Sync completed with ${result.errors.length} errors`);
+          for (const err of result.errors) {
+            console.log(`  - ${err}`);
+          }
+        } else {
+          cli.success(`Synced ${result.synced} skills to .trae/skills/`);
+        }
+        break;
+      }
+
       case 'task-add': {
         let title: string | undefined;
         let description = '';
@@ -1504,6 +1521,7 @@ function showHelp(): void {
     stop                          Stop the heartbeat service
     status                        Show current status
     health                        Show health information
+    skill-sync                    Sync approved skills to Trae AI (.trae/skills/)
     task-add <title> [desc]      Add a new task
     schedule <name> <desc> <cron> Create a scheduled task
     continuous-improvement       Add a continuous improvement cycle task

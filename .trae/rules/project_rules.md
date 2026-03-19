@@ -4,30 +4,32 @@
 
 ## Core Integration Pattern
 
-**Trae AI + Nezha = AI-to-AI Collaboration**
+**AI + Nezha = AI-to-AI Collaboration**
 
 ```
-Trae AI (Task Creator & Reviewer)
+One AI (Task Creator & Reviewer)
     ↓ CLI Commands
 Nezha Scheduler (Orchestration)
     ↓ 
-OpenCode AI (Task Executor)
+Another AI (Task Executor)
     ↓
 Git Auto-Commit
     ↓
-Results visible to Trae AI
+Results visible to All AIs
 ```
+
+**Note**: Roles are flexible. Any AI can be creator, reviewer, or executor. The system is not hardcoded to specific AI implementations.
 
 **See also**: [AI_COLLABORATION.md](../docs/AI_COLLABORATION.md) for detailed collaboration protocol.
 
 ## Skill Separation Policy
 
-**IMPORTANT**: Trae skills and Nezha skills are separate!
+**IMPORTANT**: Skills are stored separately for different AI implementations!
 
-| AI | Skills Location | Purpose |
-|----|-----------------|---------|
-| Trae AI | `.trae/skills/` | Trae-specific workflow |
-| OpenCode AI | PostgreSQL `skills` table | OpenCode execution |
+| Storage | Format | Used By |
+|---------|--------|---------|
+| `.trae/skills/` | Markdown files | Trae-compatible AIs |
+| PostgreSQL `skills` table | Database records | OpenCode-compatible AIs |
 
 **Copy Direction**: Nezha → Trae only (one-way)
 - ✅ Can copy skills from Nezha database to `.trae/skills/`
