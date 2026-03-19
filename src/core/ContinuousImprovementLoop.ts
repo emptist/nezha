@@ -81,6 +81,9 @@ export class ContinuousImprovementLoop {
     this.memoryService = memoryService;
     this.conversationLogger = conversationLogger;
     this.db = db || null;
+    if (this.db) {
+      this.reviewService = new InterReviewService(this.db);
+    }
   }
 
   setDatabaseClient(db: DatabaseClient): void {
@@ -282,7 +285,12 @@ export class ContinuousImprovementLoop {
                 title: f.message,
                 description: f.suggestion || f.message,
                 priority: task.priority,
-                category: task.category as 'infrastructure' | 'code' | 'documentation' | 'testing' | 'feature',
+                category: task.category as
+                  | 'infrastructure'
+                  | 'code'
+                  | 'documentation'
+                  | 'testing'
+                  | 'feature',
                 autoFixable: false,
               })),
           };
@@ -298,15 +306,17 @@ export class ContinuousImprovementLoop {
               metadata: {
                 taskId: task.id,
                 category: task.category,
-                source: 'continuous-improvement-review',
+                source: 'continuous-improvement',
               },
-              source: 'continuous-improvement',
               importance: reviewResult.overallScore > 70 ? 7 : 5,
               tags: ['learning', 'improvement', task.category],
             });
           }
         } catch (error) {
-          logger.warn(`Review service failed for task ${task.id}, falling back to self-score:`, error);
+          logger.warn(
+            `Review service failed for task ${task.id}, falling back to self-score:`,
+            error
+          );
           review = this.createFallbackReview(task, result);
         }
       } else {
