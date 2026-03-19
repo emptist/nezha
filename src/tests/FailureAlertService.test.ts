@@ -219,8 +219,8 @@ describe('FailureAlertService', () => {
       const alerts = await service.getUnacknowledgedAlerts();
 
       expect(alerts).toHaveLength(2);
-      expect(alerts[0].alertType).toBe(AlertType.REPEATED_FAILURE);
-      expect(alerts[1].alertType).toBe(AlertType.STUCK_TASK);
+      expect(alerts[0]!.alertType).toBe(AlertType.REPEATED_FAILURE);
+      expect(alerts[1]!.alertType).toBe(AlertType.STUCK_TASK);
     });
   });
 
