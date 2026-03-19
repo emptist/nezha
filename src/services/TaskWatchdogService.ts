@@ -58,7 +58,8 @@ export class TaskWatchdogService extends EventEmitter {
     super();
     this.db = db;
     this.checkIntervalMs = config?.checkIntervalMs ?? WATCHDOG_CONFIG.CHECK_INTERVAL_MS;
-    this.defaultTimeoutSeconds = config?.defaultTimeoutSeconds ?? WATCHDOG_CONFIG.DEFAULT_TIMEOUT_SECONDS;
+    this.defaultTimeoutSeconds =
+      config?.defaultTimeoutSeconds ?? WATCHDOG_CONFIG.DEFAULT_TIMEOUT_SECONDS;
     this.maxKillsPerTask = config?.maxKillsPerTask ?? WATCHDOG_CONFIG.MAX_KILLS_PER_TASK;
     this.gracePeriodMs = config?.gracePeriodMs ?? WATCHDOG_CONFIG.GRACE_PERIOD_MS;
     this.enableProcessKill = config?.enableProcessKill ?? WATCHDOG_CONFIG.ENABLE_PROCESS_KILL;
@@ -77,7 +78,9 @@ export class TaskWatchdogService extends EventEmitter {
       });
     }, this.checkIntervalMs);
 
-    logger.info(`TaskWatchdogService started (interval: ${this.checkIntervalMs}ms, default timeout: ${this.defaultTimeoutSeconds}s)`);
+    logger.info(
+      `TaskWatchdogService started (interval: ${this.checkIntervalMs}ms, default timeout: ${this.defaultTimeoutSeconds}s)`
+    );
     this.emit(WatchdogEvent.WATCHDOG_STARTED);
   }
 
@@ -157,10 +160,7 @@ export class TaskWatchdogService extends EventEmitter {
     }
     this.trackedTasks.delete(taskId);
 
-    await this.db.query(
-      `DELETE FROM stuck_tasks_tracking WHERE task_id = $1`,
-      [taskId]
-    );
+    await this.db.query(`DELETE FROM stuck_tasks_tracking WHERE task_id = $1`, [taskId]);
   }
 
   async getTrackedTasks(): Promise<WatchdogTask[]> {
@@ -185,7 +185,9 @@ export class TaskWatchdogService extends EventEmitter {
 
       if (elapsedMs > timeoutMs && !task.isKilled) {
         if (task.killCount >= this.maxKillsPerTask) {
-          logger.warn(`Task ${taskId} exceeded max watchdog kills (${this.maxKillsPerTask}), marking as stuck`);
+          logger.warn(
+            `Task ${taskId} exceeded max watchdog kills (${this.maxKillsPerTask}), marking as stuck`
+          );
           await this.markTaskAsStuck(taskId, 'Max watchdog kills exceeded');
           continue;
         }
@@ -198,13 +200,19 @@ export class TaskWatchdogService extends EventEmitter {
           this.emit(WatchdogEvent.TASK_KILLED, result);
         }
       } else if (elapsedMs > timeoutMs * 0.8 && elapsedMs <= timeoutMs) {
-        logger.debug(`Task ${taskId} approaching timeout (${Math.round(elapsedMs / 1000)}s/${task.watchdogTimeoutSeconds}s)`);
+        logger.debug(
+          `Task ${taskId} approaching timeout (${Math.round(elapsedMs / 1000)}s/${task.watchdogTimeoutSeconds}s)`
+        );
         this.emit(WatchdogEvent.HEARTBEAT_MISSED, { task, elapsedMs });
       }
     }
   }
 
-  private async killTask(taskId: string, processId: number | undefined, reason: string): Promise<WatchdogResult> {
+  private async killTask(
+    taskId: string,
+    processId: number | undefined,
+    reason: string
+  ): Promise<WatchdogResult> {
     const result: WatchdogResult = {
       killed: false,
       taskId,
@@ -225,16 +233,20 @@ export class TaskWatchdogService extends EventEmitter {
         result.killed = true;
         logger.info(`Watchdog killed process ${processId} for task ${taskId}: ${reason}`);
 
+        await this.db.query(`SELECT mark_process_terminated($1, 'terminated')`, [processId]);
+
         const task = this.trackedTasks.get(taskId);
         if (task) {
           task.killCount++;
           task.isKilled = true;
         }
 
-        await this.db.query(
-          `SELECT record_watchdog_kill($1, $2, $3, $4)`,
-          [taskId, processId, reason, this.defaultTimeoutSeconds]
-        );
+        await this.db.query(`SELECT record_watchdog_kill($1, $2, $3, $4)`, [
+          taskId,
+          processId,
+          reason,
+          this.defaultTimeoutSeconds,
+        ]);
       }
     } catch (error) {
       logger.error(`Failed to kill process ${processId} for task ${taskId}:`, error);
@@ -322,5 +334,47 @@ export class TaskWatchdogService extends EventEmitter {
     const totalKills = parseInt(totalKillsResult.rows[0]?.total || '0', 10);
 
     return { trackedTasks: tracked, stuckTasks: stuck, killedTasks: killed, totalKills };
+  }
+
+  async getOrphanedProcesses(thresholdMinutes: number = 60): Promise<
+    Array<{
+      id: string;
+      pid: number;
+      taskId: string | null;
+      command: string;
+      spawnedAt: Date;
+      ageMinutes: number;
+    }>
+  > {
+    const result = await this.db.query<{
+      id: string;
+      pid: number;
+      task_id: string | null;
+      command: string;
+      spawned_at: Date;
+      age_minutes: number;
+    }>(`SELECT * FROM find_orphaned_processes($1)`, [thresholdMinutes]);
+    return result.rows.map(row => ({
+      id: row.id,
+      pid: row.pid,
+      taskId: row.task_id,
+      command: row.command,
+      spawnedAt: row.spawned_at,
+      ageMinutes: row.age_minutes,
+    }));
+  }
+
+  async cleanupOrphanedProcess(pid: number): Promise<boolean> {
+    try {
+      const killed = await this.killProcess(pid);
+      if (killed) {
+        await this.db.query(`SELECT mark_process_terminated($1, 'orphaned')`, [pid]);
+        logger.info(`Cleaned up orphaned process: ${pid}`);
+      }
+      return killed;
+    } catch (error) {
+      logger.error(`Failed to cleanup orphaned process ${pid}:`, error);
+      return false;
+    }
   }
 }
