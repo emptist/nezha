@@ -38,5 +38,6 @@ coverage/
 # Sensitive data
 .secrets/
 AI_providers.md
-!AI_providers.md.example
-.secretes/conversations/
+!.secrets/conversations/
+# Runtime data (conversation logs are operational data, stored in PostgreSQL)
+conversations/
