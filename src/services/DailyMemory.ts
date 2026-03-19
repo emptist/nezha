@@ -256,7 +256,7 @@ export class DailyMemoryService {
     try {
       await fs.access(filePath);
       return true;
-    } catch (err) {
+    } catch {
       logger.debug(`File does not exist: ${filePath}`);
       return false;
     }

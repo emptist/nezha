@@ -17,7 +17,7 @@ function printHeader(): void {
 function printSummary(allResults: Map<string, BenchmarkResult[]>): void {
   printHeader();
 
-  for (const [_suiteName, results] of allResults) {
+  for (const [, results] of allResults) {
     for (const result of results) {
       console.log(
         `  ${result.name}: avg=${result.avgMs.toFixed(2)}ms, p95=${result.p95Ms.toFixed(2)}ms, ops/s=${result.opsPerSec.toFixed(

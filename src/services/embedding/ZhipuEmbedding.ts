@@ -1,4 +1,4 @@
-import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
+import { EmbeddingProvider, EmbeddingConfig } from './types.js';
 import { logApiRequest, isVerboseMode } from '../../utils/verboseLogger.js';
 
 interface ZhipuEmbeddingResponse {

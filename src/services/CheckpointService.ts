@@ -137,7 +137,7 @@ export class CheckpointService {
     try {
       await fs.unlink(this.stateFilePath);
       logger.info('State cleared');
-    } catch (error) {
+    } catch {
       // Ignore if file doesn't exist
     }
   }

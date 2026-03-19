@@ -27,7 +27,7 @@ export class OllamaEmbedding implements EmbeddingProvider {
     return results;
   }
 
-  private async embedSingle(text: string, index: number): Promise<number[]> {
+  private async embedSingle(text: string, _index: number): Promise<number[]> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
     const startTime = isVerboseMode() ? Date.now() : undefined;
@@ -79,7 +79,9 @@ export class OllamaEmbedding implements EmbeddingProvider {
       return data.embedding;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Ollama embedding request timed out after ${this.timeout}ms`);
+        throw new Error(`Ollama embedding request timed out after ${this.timeout}ms`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {

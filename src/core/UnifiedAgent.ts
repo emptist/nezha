@@ -615,7 +615,7 @@ export class UnifiedAgent {
     }
 
     const cacheKey = this.getCacheKey(message);
-    let fallbackUsed = false;
+    const fallbackUsed = false;
     let fromCache = false;
 
     if (this.enableCache) {
@@ -714,7 +714,6 @@ export class UnifiedAgent {
           const staleResponse = this.staleCache.getStale(cacheKey);
           if (staleResponse) {
             logger.warn('Using stale cached response due to errors');
-            fallbackUsed = true;
             return {
               success: true,
               message: staleResponse.data,
@@ -729,7 +728,6 @@ export class UnifiedAgent {
 
           logger.info('Primary transport failed, attempting fallback');
           this.switchMode(this.transportMode === 'http' ? 'cli' : 'http');
-          fallbackUsed = true;
         }
 
         if (attempt < this.maxRetries && isRetryableError(lastError)) {

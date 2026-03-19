@@ -94,7 +94,7 @@ export class SemanticSearchService {
       queryEmbedding = await this.embedding.embed(sanitizedQuery);
     } catch (error) {
       logger.error('Failed to embed query:', error);
-      throw new Error('Failed to generate query embedding');
+      throw new Error('Failed to generate query embedding', { cause: error });
     }
 
     const tableName = DATABASE_TABLES.MEMORY;

@@ -106,6 +106,12 @@ export class ImprovementIdentifier {
       issues.push('Type errors found');
     }
 
+    try {
+      await execAsync('npm run test 2>&1 || true');
+    } catch {
+      issues.push('Test failures found');
+    }
+
     return {
       hasIssues: issues.length > 0,
       issues,
@@ -173,7 +179,7 @@ export class ImprovementIdentifier {
         hasUncommittedChanges,
         hasUnpushedCommits,
       };
-    } catch (error) {
+    } catch {
       return {
         hasUncommittedChanges: false,
         hasUnpushedCommits: false,

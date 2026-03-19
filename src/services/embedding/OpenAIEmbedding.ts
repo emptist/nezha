@@ -1,4 +1,4 @@
-import { EmbeddingProvider, EmbeddingConfig, EmbeddingResult } from './types.js';
+import { EmbeddingProvider, EmbeddingConfig } from './types.js';
 import { logApiRequest, isVerboseMode } from '../../utils/verboseLogger.js';
 
 interface OpenAIEmbeddingResponse {
@@ -98,7 +98,9 @@ export class OpenAIEmbedding implements EmbeddingProvider {
       return sortedEmbeddings.map(item => item.embedding);
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`OpenAI embedding request timed out after ${this.timeout}ms`);
+        throw new Error(`OpenAI embedding request timed out after ${this.timeout}ms`, {
+          cause: error,
+        });
       }
       throw error;
     } finally {

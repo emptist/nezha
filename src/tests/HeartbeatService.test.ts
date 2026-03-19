@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HeartbeatService } from '../services/HeartbeatService.js';
 import { Scheduler } from '../core/Scheduler.js';
-import { UnifiedAgent } from '../core/UnifiedAgent.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 

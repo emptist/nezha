@@ -125,7 +125,6 @@ export class TaskWatchdogService extends EventEmitter {
       this.processCache.set(processId, taskId);
     }
 
-    const tableName = DATABASE_TABLES.TASKS;
     await this.db.query(
       `INSERT INTO stuck_tasks_tracking (task_id, process_id, started_at, last_heartbeat_at, watchdog_check_at, watchdog_timeout_seconds)
        VALUES ($1, $2, $3, $3, $3, $4)

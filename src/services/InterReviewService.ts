@@ -224,7 +224,7 @@ Format:
     try {
       const response = await this.callReviewAI(systemPrompt, prompt);
       return this.parseReviewResponse(response);
-    } catch (error) {
+    } catch {
       return this.fallbackReview(context);
     }
   }

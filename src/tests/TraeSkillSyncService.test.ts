@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TraeSkillSyncService } from '../services/TraeSkillSyncService.js';
-import * as fs from 'fs';
 
 const mockDbClient = {
   query: vi.fn(),
 };
 
-vi.mock('fs', async (importOriginal) => {
+vi.mock('fs', async importOriginal => {
   const actual = await importOriginal<typeof import('fs')>();
   return {
     ...actual,

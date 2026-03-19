@@ -187,12 +187,10 @@ export class ApiKeyService {
   }
 
   async listUserApiKeys(
-    userRole: string
+    _userRole: string
   ): Promise<
     Omit<UserApiKey, 'encryptedValue' | 'encryptedIv' | 'encryptedTag' | 'encryptedSalt'>[]
   > {
-    const canDecrypt = userRole === 'admin' || userRole === 'superadmin';
-
     const result = await this.db.query<{
       id: string;
       name: string;

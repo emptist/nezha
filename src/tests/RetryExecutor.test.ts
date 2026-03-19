@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   RetryExecutor,
   DEFAULT_RETRY_POLICY,
   createRetryExecutor,
-  PRESET_POLICIES,
 } from '../../src/utils/RetryExecutor.js';
 
 describe('RetryExecutor', () => {

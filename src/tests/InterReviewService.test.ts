@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { InterReviewService, InterReviewEvent, type ReviewRequest, type ReviewResult } from '../services/InterReviewService.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  InterReviewService,
+  InterReviewEvent,
+  type ReviewRequest,
+} from '../services/InterReviewService.js';
 
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => ({
@@ -16,12 +20,16 @@ describe('InterReviewService', () => {
     mockDb = {
       query: vi.fn(),
     };
-    service = new InterReviewService(mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient);
+    service = new InterReviewService(
+      mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient
+    );
   });
 
   describe('constructor', () => {
     it('should create service without AI provider', () => {
-      const svc = new InterReviewService(mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient);
+      const svc = new InterReviewService(
+        mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient
+      );
       expect(svc).toBeDefined();
     });
   });
@@ -40,7 +48,9 @@ describe('InterReviewService', () => {
     });
 
     it('should return content when skill found', async () => {
-      vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [{ content: 'test content' }] } as never);
+      vi.mocked(mockDb.query).mockResolvedValueOnce({
+        rows: [{ content: 'test content' }],
+      } as never);
       const result = await service.loadPromptFromSkills('test-prompt');
       expect(result).toBe('test content');
     });
@@ -57,10 +67,10 @@ describe('InterReviewService', () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [] } as never);
       await service.savePromptToSkills('test-prompt', 'test content');
       expect(mockDb.query).toHaveBeenCalledTimes(1);
-      expect(mockDb.query).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO skills'),
-        ['test-prompt', 'test content']
-      );
+      expect(mockDb.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO skills'), [
+        'test-prompt',
+        'test content',
+      ]);
     });
 
     it('should handle save errors gracefully', async () => {
@@ -95,9 +105,7 @@ describe('InterReviewService', () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [{ id: 'r1' }] } as never);
 
       await service.requestReview({ reviewerId: 'agent-1', context: {} });
-      expect(eventHandler).toHaveBeenCalledWith(
-        expect.objectContaining({ reviewId: 'r1' })
-      );
+      expect(eventHandler).toHaveBeenCalledWith(expect.objectContaining({ reviewId: 'r1' }));
     });
   });
 
@@ -110,17 +118,19 @@ describe('InterReviewService', () => {
 
     it('should return review data', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          id: 'r1',
-          task_id: 't1',
-          status: 'completed',
-          summary: 'Good work',
-          findings: [],
-          overall_score: 85,
-          response: null,
-          requested_at: new Date(),
-          completed_at: new Date(),
-        }],
+        rows: [
+          {
+            id: 'r1',
+            task_id: 't1',
+            status: 'completed',
+            summary: 'Good work',
+            findings: [],
+            overall_score: 85,
+            response: null,
+            requested_at: new Date(),
+            completed_at: new Date(),
+          },
+        ],
       } as never);
 
       const result = await service.getReview('r1');
@@ -133,13 +143,15 @@ describe('InterReviewService', () => {
   describe('getPendingReviews', () => {
     it('should return pending reviews', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          id: 'r1',
-          task_id: 't1',
-          reviewer_id: 'agent-1',
-          requested_at: new Date(),
-          pending_minutes: 30,
-        }],
+        rows: [
+          {
+            id: 'r1',
+            task_id: 't1',
+            reviewer_id: 'agent-1',
+            requested_at: new Date(),
+            pending_minutes: 30,
+          },
+        ],
       } as never);
 
       const result = await service.getPendingReviews();
@@ -158,15 +170,17 @@ describe('InterReviewService', () => {
   describe('getReviewStats', () => {
     it('should return review statistics', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          pending_count: '5',
-          completed_count: '20',
-          failed_count: '2',
-          avg_score: '82.5',
-          avg_code_quality: '80',
-          avg_test_coverage: '75',
-          avg_documentation: '85',
-        }],
+        rows: [
+          {
+            pending_count: '5',
+            completed_count: '20',
+            failed_count: '2',
+            avg_score: '82.5',
+            avg_code_quality: '80',
+            avg_test_coverage: '75',
+            avg_documentation: '85',
+          },
+        ],
       } as never);
 
       const result = await service.getReviewStats();
@@ -181,15 +195,17 @@ describe('InterReviewService', () => {
 
     it('should handle null avg scores', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          pending_count: '0',
-          completed_count: '0',
-          failed_count: '0',
-          avg_score: null,
-          avg_code_quality: null,
-          avg_test_coverage: null,
-          avg_documentation: null,
-        }],
+        rows: [
+          {
+            pending_count: '0',
+            completed_count: '0',
+            failed_count: '0',
+            avg_score: null,
+            avg_code_quality: null,
+            avg_test_coverage: null,
+            avg_documentation: null,
+          },
+        ],
       } as never);
 
       const result = await service.getReviewStats();
@@ -214,9 +230,7 @@ describe('InterReviewService', () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [] } as never);
 
       await service.respondToReview('r1', 'Response text');
-      expect(eventHandler).toHaveBeenCalledWith(
-        expect.objectContaining({ reviewId: 'r1' })
-      );
+      expect(eventHandler).toHaveBeenCalledWith(expect.objectContaining({ reviewId: 'r1' }));
     });
   });
 
@@ -229,10 +243,13 @@ describe('InterReviewService', () => {
 
     it('should return formatted learnings context', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          content: '## AI Learning from Inter-Review\n\n**Topic**: TypeScript\n\n**Reminder**: Use strict types\n\n---\nRemember this.',
-          metadata: { topic: 'TypeScript' },
-        }],
+        rows: [
+          {
+            content:
+              '## AI Learning from Inter-Review\n\n**Topic**: TypeScript\n\n**Reminder**: Use strict types\n\n---\nRemember this.',
+            metadata: { topic: 'TypeScript' },
+          },
+        ],
       } as never);
 
       const result = await service.getLearningsForAIContext('TypeScript');
@@ -244,9 +261,7 @@ describe('InterReviewService', () => {
   describe('getSkillsFromLearnings', () => {
     it('should return learnings as skills', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [
-          { name: 'review-learning-typescript', content: 'Use strict types' },
-        ],
+        rows: [{ name: 'review-learning-typescript', content: 'Use strict types' }],
       } as never);
 
       const result = await service.getSkillsFromLearnings();
@@ -258,11 +273,14 @@ describe('InterReviewService', () => {
   describe('extractPatternsFromReviews', () => {
     it('should extract patterns from reviews', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({
-        rows: [{
-          topic: 'TypeScript',
-          reminder: '## AI Learning from Inter-Review\n\n**Topic**: TypeScript\n\n**Reminder**: Use strict types\n\n---',
-          frequency: '5',
-        }],
+        rows: [
+          {
+            topic: 'TypeScript',
+            reminder:
+              '## AI Learning from Inter-Review\n\n**Topic**: TypeScript\n\n**Reminder**: Use strict types\n\n---',
+            frequency: '5',
+          },
+        ],
       } as never);
 
       const result = await service.extractPatternsFromReviews(10);

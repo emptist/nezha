@@ -5,7 +5,6 @@ import {
   containsSensitiveData,
   encryptSensitiveFields,
   decryptSensitiveFields,
-  type EncryptedData,
 } from './EncryptionService.js';
 import { logger } from '../utils/logger.js';
 import { TASK_STATUS } from '../config/constants.js';

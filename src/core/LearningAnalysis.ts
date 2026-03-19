@@ -1,11 +1,10 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES } from '../config/constants.js';
-import { 
-  type TaskOutcome, 
-  type TaskPattern, 
+import {
+  type TaskPattern,
   type LearningInsight,
   type SimilarSolution,
-  type FailureImprovement 
+  type FailureImprovement,
 } from '../config/types.js';
 import { EmbeddingProvider } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
@@ -50,13 +49,11 @@ export class LearningAnalysisService {
     }
   ): Promise<string> {
     const id = crypto.randomUUID();
-    const errorCategory = options?.errorMessage 
-      ? this.categorizeError(options.errorMessage) 
-      : null;
+    const errorCategory = options?.errorMessage ? this.categorizeError(options.errorMessage) : null;
 
     let embeddingVector: number[] | null = null;
     const contentToEmbed = options?.taskDescription || options?.errorMessage || '';
-    
+
     if (contentToEmbed && this.embedding) {
       try {
         embeddingVector = await this.embedding.embed(contentToEmbed);
@@ -109,26 +106,28 @@ export class LearningAnalysisService {
 
   private categorizeError(errorMessage: string): string {
     const lower = errorMessage.toLowerCase();
-    
-    if (/typescript|type error|cannot find type|ts\d+/.test(lower)) return ERROR_CATEGORIES.TYPESCRIPT;
+
+    if (/typescript|type error|cannot find type|ts\d+/.test(lower))
+      return ERROR_CATEGORIES.TYPESCRIPT;
     if (/docker|container|dockerfile|docker-compose/.test(lower)) return ERROR_CATEGORIES.DOCKER;
-    if (/postgres|postgresql|sql|database|table.*not found|connection.*refused/.test(lower)) return ERROR_CATEGORIES.DATABASE;
-    if (/network|timeout|connection|econnrefused|enotfound|socket/.test(lower)) return ERROR_CATEGORIES.NETWORK;
-    if (/permission|denied|eacces|eperm|unauthorized/.test(lower)) return ERROR_CATEGORIES.PERMISSION;
+    if (/postgres|postgresql|sql|database|table.*not found|connection.*refused/.test(lower))
+      return ERROR_CATEGORIES.DATABASE;
+    if (/network|timeout|connection|econnrefused|enotfound|socket/.test(lower))
+      return ERROR_CATEGORIES.NETWORK;
+    if (/permission|denied|eacces|eperm|unauthorized/.test(lower))
+      return ERROR_CATEGORIES.PERMISSION;
     if (/config|configuration|env|environment/.test(lower)) return ERROR_CATEGORIES.CONFIGURATION;
-    if (/dependency|package|npm|yarn|pnpm|cargo|import.*failed|cannot find module/.test(lower)) return ERROR_CATEGORIES.DEPENDENCY;
+    if (/dependency|package|npm|yarn|pnpm|cargo|import.*failed|cannot find module/.test(lower))
+      return ERROR_CATEGORIES.DEPENDENCY;
     if (/api|endpoint|rest|http.*error|404|500|502|503/.test(lower)) return ERROR_CATEGORIES.API;
     if (/build|compile|babel|esbuild|webpack|rollup/.test(lower)) return ERROR_CATEGORIES.BUILD;
     if (/test|jest|vitest|mocha|assertion|expect/.test(lower)) return ERROR_CATEGORIES.TEST;
     if (/deploy|kubernetes|k8s|helm|terraform/.test(lower)) return ERROR_CATEGORIES.DEPLOYMENT;
-    
+
     return ERROR_CATEGORIES.UNKNOWN;
   }
 
-  private async updatePatternForFailure(
-    category: string,
-    context?: string
-  ): Promise<void> {
+  private async updatePatternForFailure(category: string, context?: string): Promise<void> {
     const existing = await this.db.query<TaskPattern>(
       `SELECT * FROM ${DATABASE_TABLES.TASK_PATTERNS} 
        WHERE pattern_category = $1 AND pattern_type = 'failure' 
@@ -198,7 +197,7 @@ export class LearningAnalysisService {
     successRate?: number;
   }): Promise<string> {
     const id = crypto.randomUUID();
-    
+
     let embeddingVector: number[] | null = null;
     if (this.embedding) {
       try {
@@ -232,11 +231,8 @@ export class LearningAnalysisService {
 
   async suggestImprovements(projectId?: string, limit: number = 5): Promise<FailureImprovement[]> {
     const params: unknown[] = [];
-    let paramIndex = 1;
-
     if (projectId) {
       params.push(projectId);
-      paramIndex++;
     }
     params.push(limit);
 
@@ -248,10 +244,7 @@ export class LearningAnalysisService {
       confidence_score: number;
       related_pattern_id: string | null;
       related_memory_id: string | null;
-    }>(
-      `SELECT * FROM suggest_improvements_from_failures($1, $2)`,
-      params
-    );
+    }>(`SELECT * FROM suggest_improvements_from_failures($1, $2)`, params);
 
     return result.rows.map(row => ({
       errorCategory: row.error_category,
@@ -277,11 +270,8 @@ export class LearningAnalysisService {
     const embedding = await this.embedding.embed(problemDescription);
     const embeddingStr = `[${embedding.join(',')}]`;
     const params: unknown[] = [embeddingStr, limit];
-    let paramIndex = 3;
-
     if (projectId) {
       params.push(projectId);
-      paramIndex++;
     }
 
     const result = await this.db.query<{
@@ -292,10 +282,12 @@ export class LearningAnalysisService {
       similarity_score: number;
       execution_time_ms: number;
       attempts: number;
-    }>(
-      `SELECT * FROM find_similar_solutions($1, $2::vector, $3, $4)`,
-      [problemDescription, embeddingStr, projectId ?? null, limit]
-    );
+    }>(`SELECT * FROM find_similar_solutions($1, $2::vector, $3, $4)`, [
+      problemDescription,
+      embeddingStr,
+      projectId ?? null,
+      limit,
+    ]);
 
     return result.rows.map(row => ({
       outcomeId: row.outcome_id,
@@ -443,13 +435,14 @@ export class LearningAnalysisService {
 
   async autoGenerateInsights(): Promise<string[]> {
     const insights: string[] = [];
-    
+
     const failureStats = await this.getFailureStats(7);
-    
+
     if (failureStats.totalFailures > 10) {
-      const sortedCategories = Object.entries(failureStats.byCategory)
-        .sort(([, a], [, b]) => b - a);
-      
+      const sortedCategories = Object.entries(failureStats.byCategory).sort(
+        ([, a], [, b]) => b - a
+      );
+
       if (sortedCategories.length > 0 && sortedCategories[0]) {
         const [topCategory, count] = sortedCategories[0]!;
         const insight = await this.createInsight({
@@ -466,7 +459,8 @@ export class LearningAnalysisService {
 
     const successPatterns = await this.getSuccessPatterns(5);
     if (successPatterns.length > 0 && failureStats.totalFailures > 5) {
-      const avgRate = successPatterns.reduce((sum, p) => sum + p.successRate, 0) / successPatterns.length;
+      const avgRate =
+        successPatterns.reduce((sum, p) => sum + p.successRate, 0) / successPatterns.length;
       if (avgRate > 0.7) {
         const insight = await this.createInsight({
           insightType: 'recommendation',

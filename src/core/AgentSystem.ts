@@ -87,7 +87,7 @@ export class AgentSystem {
       this.heartbeatTimer = null;
     }
 
-    for (const [id, info] of this.agents) {
+    for (const [, info] of this.agents) {
       info.status = 'idle';
     }
 

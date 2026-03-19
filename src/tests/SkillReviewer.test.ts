@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SkillReviewer, ClawHubSkill, SkillReviewResult } from '../services/SkillReviewer.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { SkillReviewer, ClawHubSkill } from '../services/SkillReviewer.js';
 
 describe('SkillReviewer', () => {
   let reviewer: SkillReviewer;

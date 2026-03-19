@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ConversationLogger } from '../core/ConversationLogger.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -17,7 +17,9 @@ describe('ConversationLogger', () => {
     await logger.close();
     try {
       await fs.rm(testDir, { recursive: true, force: true });
-    } catch {}
+    } catch {
+      // ignore
+    }
   });
 
   it('should create an instance', () => {
@@ -250,37 +252,37 @@ describe('ConversationLogger', () => {
 
   it('should throw when searching conversations without database', async () => {
     const loggerNoDb = new ConversationLogger(testDir);
-    await expect(
-      loggerNoDb.searchConversations({ query: 'test' })
-    ).rejects.toThrow('Database client not configured');
+    await expect(loggerNoDb.searchConversations({ query: 'test' })).rejects.toThrow(
+      'Database client not configured'
+    );
   });
 
   it('should throw when getting conversations by task without database', async () => {
     const loggerNoDb = new ConversationLogger(testDir);
-    await expect(
-      loggerNoDb.getConversationByTaskId('task-1')
-    ).rejects.toThrow('Database client not configured');
+    await expect(loggerNoDb.getConversationByTaskId('task-1')).rejects.toThrow(
+      'Database client not configured'
+    );
   });
 
   it('should throw when getting conversations by date range without database', async () => {
     const loggerNoDb = new ConversationLogger(testDir);
-    await expect(
-      loggerNoDb.getConversationsByDateRange(new Date(), new Date())
-    ).rejects.toThrow('Database client not configured');
+    await expect(loggerNoDb.getConversationsByDateRange(new Date(), new Date())).rejects.toThrow(
+      'Database client not configured'
+    );
   });
 
   it('should throw when getting conversation stats without database', async () => {
     const loggerNoDb = new ConversationLogger(testDir);
-    await expect(
-      loggerNoDb.getConversationStats()
-    ).rejects.toThrow('Database client not configured');
+    await expect(loggerNoDb.getConversationStats()).rejects.toThrow(
+      'Database client not configured'
+    );
   });
 
   it('should throw when listing conversations from db without database', async () => {
     const loggerNoDb = new ConversationLogger(testDir);
-    await expect(
-      loggerNoDb.listConversationsFromDb()
-    ).rejects.toThrow('Database client not configured');
+    await expect(loggerNoDb.listConversationsFromDb()).rejects.toThrow(
+      'Database client not configured'
+    );
   });
 
   it('should fall back to JSONL when getting conversation by session id without database', async () => {

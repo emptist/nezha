@@ -300,21 +300,22 @@ export class ConversationLogger {
   private async flushIndexToDisk(newEntry: IndexEntry): Promise<void> {
     const indexPath = path.join(this.logDir, 'index.json');
 
-    let index: IndexEntry[] = [];
-
     try {
       const content = await fs.promises.readFile(indexPath, 'utf-8');
-      index = JSON.parse(content);
+      const index: IndexEntry[] = JSON.parse(content);
+      index.push(newEntry);
+      this.indexCache = index;
+      this.indexDirty = true;
+      await this.writeIndexToDisk(index);
+      this.indexDirty = false;
     } catch {
-      index = [];
+      const index: IndexEntry[] = [];
+      index.push(newEntry);
+      this.indexCache = index;
+      this.indexDirty = true;
+      await this.writeIndexToDisk(index);
+      this.indexDirty = false;
     }
-
-    index.push(newEntry);
-    this.indexCache = index;
-    this.indexDirty = true;
-
-    await this.writeIndexToDisk(index);
-    this.indexDirty = false;
   }
 
   private async writeIndexToDisk(index: IndexEntry[]): Promise<void> {

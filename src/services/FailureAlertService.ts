@@ -2,7 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS, ALERT_CONFIG } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { EventEmitter } from 'events';
-import { ErrorCategory, categorizeError } from '../utils/ErrorClassifier.js';
+import { categorizeError } from '../utils/ErrorClassifier.js';
 
 export enum AlertType {
   REPEATED_FAILURE = 'repeated_failure',
@@ -76,12 +76,16 @@ export class FailureAlertService extends EventEmitter {
   constructor(db: DatabaseClient, config?: AlertConfig) {
     super();
     this.db = db;
-    this.repeatedFailureThreshold = config?.repeatedFailureThreshold ?? ALERT_CONFIG.REPEATED_FAILURE_THRESHOLD;
-    this.stuckTaskThresholdSeconds = config?.stuckTaskThresholdSeconds ?? ALERT_CONFIG.STUCK_TASK_THRESHOLD_SECONDS;
+    this.repeatedFailureThreshold =
+      config?.repeatedFailureThreshold ?? ALERT_CONFIG.REPEATED_FAILURE_THRESHOLD;
+    this.stuckTaskThresholdSeconds =
+      config?.stuckTaskThresholdSeconds ?? ALERT_CONFIG.STUCK_TASK_THRESHOLD_SECONDS;
     this.dlqSizeThreshold = config?.dlqSizeThreshold ?? ALERT_CONFIG.DLQ_SIZE_THRESHOLD;
-    this.consecutiveFailureThreshold = config?.consecutiveFailureThreshold ?? ALERT_CONFIG.CONSECUTIVE_FAILURE_THRESHOLD;
+    this.consecutiveFailureThreshold =
+      config?.consecutiveFailureThreshold ?? ALERT_CONFIG.CONSECUTIVE_FAILURE_THRESHOLD;
     this.checkIntervalMs = config?.checkIntervalMs ?? ALERT_CONFIG.CHECK_INTERVAL_MS;
-    this.autoAcknowledgeAfterMs = config?.autoAcknowledgeAfterMs ?? ALERT_CONFIG.AUTO_ACKNOWLEDGE_AFTER_MS;
+    this.autoAcknowledgeAfterMs =
+      config?.autoAcknowledgeAfterMs ?? ALERT_CONFIG.AUTO_ACKNOWLEDGE_AFTER_MS;
     this.enableWebhooks = config?.enableWebhooks ?? true;
 
     this.initializeDefaultRules();
@@ -262,13 +266,21 @@ export class FailureAlertService extends EventEmitter {
 
     switch (alertType) {
       case AlertType.CONSECUTIVE_FAILURES:
-        return ratio >= 2 ? AlertSeverity.CRITICAL : ratio >= 1.5 ? AlertSeverity.HIGH : AlertSeverity.MEDIUM;
+        return ratio >= 2
+          ? AlertSeverity.CRITICAL
+          : ratio >= 1.5
+            ? AlertSeverity.HIGH
+            : AlertSeverity.MEDIUM;
       case AlertType.STUCK_TASK:
         return AlertSeverity.HIGH;
       case AlertType.DLQ_THRESHOLD:
         return ratio >= 2 ? AlertSeverity.CRITICAL : AlertSeverity.HIGH;
       default:
-        return ratio >= 2 ? AlertSeverity.HIGH : ratio >= 1 ? AlertSeverity.MEDIUM : AlertSeverity.LOW;
+        return ratio >= 2
+          ? AlertSeverity.HIGH
+          : ratio >= 1
+            ? AlertSeverity.MEDIUM
+            : AlertSeverity.LOW;
     }
   }
 
@@ -340,11 +352,15 @@ export class FailureAlertService extends EventEmitter {
     const count = parseInt(result.rows[0]?.count || '0', 10);
 
     if (count >= this.dlqSizeThreshold) {
-      await this.createAlert(AlertType.DLQ_THRESHOLD, `DLQ size threshold exceeded: ${count} items`, {
-        failureCount: count,
-        threshold: this.dlqSizeThreshold,
-        metadata: { dlqSize: count },
-      });
+      await this.createAlert(
+        AlertType.DLQ_THRESHOLD,
+        `DLQ size threshold exceeded: ${count} items`,
+        {
+          failureCount: count,
+          threshold: this.dlqSizeThreshold,
+          metadata: { dlqSize: count },
+        }
+      );
     }
   }
 
@@ -365,14 +381,18 @@ export class FailureAlertService extends EventEmitter {
     );
 
     for (const task of result.rows) {
-      await this.createAlert(AlertType.CONSECUTIVE_FAILURES, `Consecutive failures: ${task.title}`, {
-        taskId: task.id,
-        errorCategory: task.error_category ?? undefined,
-        errorMessage: task.error ?? undefined,
-        failureCount: task.consecutive_failures,
-        threshold: this.consecutiveFailureThreshold,
-        metadata: { severity: 'critical' },
-      });
+      await this.createAlert(
+        AlertType.CONSECUTIVE_FAILURES,
+        `Consecutive failures: ${task.title}`,
+        {
+          taskId: task.id,
+          errorCategory: task.error_category ?? undefined,
+          errorMessage: task.error ?? undefined,
+          failureCount: task.consecutive_failures,
+          threshold: this.consecutiveFailureThreshold,
+          metadata: { severity: 'critical' },
+        }
+      );
     }
   }
 
@@ -457,10 +477,12 @@ export class FailureAlertService extends EventEmitter {
     const categorized = categorizeError(error instanceof Error ? error : new Error(errorMessage));
     const category = categorized.category;
 
-    await this.db.query(
-      `SELECT track_task_failure($1, $2, $3, $4)`,
-      [taskId, errorMessage, category, retryCount]
-    );
+    await this.db.query(`SELECT track_task_failure($1, $2, $3, $4)`, [
+      taskId,
+      errorMessage,
+      category,
+      retryCount,
+    ]);
 
     if (categorized.retryable && retryCount > 0) {
       await this.createAlert(AlertType.REPEATED_FAILURE, `Retryable failure: ${title}`, {
@@ -468,7 +490,10 @@ export class FailureAlertService extends EventEmitter {
         errorCategory: category,
         errorMessage: errorMessage,
         failureCount: retryCount,
-        metadata: { retryable: categorized.retryable, troubleshooting: categorized.troubleshooting },
+        metadata: {
+          retryable: categorized.retryable,
+          troubleshooting: categorized.troubleshooting,
+        },
       });
     }
 
@@ -481,7 +506,9 @@ export class FailureAlertService extends EventEmitter {
     byType: Record<string, number>;
     bySeverity: Record<string, number>;
   }> {
-    const total = await this.db.query<{ count: string }>(`SELECT COUNT(*) as count FROM failure_alerts`);
+    const total = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM failure_alerts`
+    );
     const unack = await this.db.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM failure_alerts WHERE acknowledged = false`
     );
@@ -508,7 +535,9 @@ export class FailureAlertService extends EventEmitter {
       total: parseInt(total.rows[0]?.count || '0', 10),
       unacknowledged: parseInt(unack.rows[0]?.count || '0', 10),
       byType: Object.fromEntries(byTypeResult.rows.map(r => [r.alert_type, parseInt(r.count, 10)])),
-      bySeverity: Object.fromEntries(bySeverityResult.rows.map(r => [r.severity, parseInt(r.count, 10)])),
+      bySeverity: Object.fromEntries(
+        bySeverityResult.rows.map(r => [r.severity, parseInt(r.count, 10)])
+      ),
     };
   }
 

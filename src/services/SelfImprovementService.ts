@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, MEMORY_CONFIG } from '../config/constants.js';
+import { DATABASE_TABLES } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from './embedding/index.js';
 

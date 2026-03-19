@@ -3,9 +3,7 @@ import http from 'http';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
-const mockCacheStore = new Map<string, { value: any; expires: number }>();
-
-const cacheStoreForTests = new Map<string, { value: any; expires: number }>();
+const cacheStoreForTests = new Map<string, { value: unknown; expires: number }>();
 
 const { mockDb, mockStatfs } = vi.hoisted(() => ({
   mockDb: {
@@ -87,7 +85,7 @@ describe('HealthServer', () => {
     });
     mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
     mockStatfs.mockResolvedValue({ bsize: 4096, blocks: 1000000 });
-    
+
     cacheStoreForTests.clear();
   });
 
@@ -125,10 +123,10 @@ describe('HealthServer', () => {
     it('should use OPENCODE_API_URL from env if not provided', () => {
       const original = process.env.OPENCODE_API_URL;
       process.env.OPENCODE_API_URL = 'http://opencode.local:8080';
-      
+
       server = new HealthServer(mockDatabase, 4101);
       expect(server).toBeDefined();
-      
+
       process.env.OPENCODE_API_URL = original;
     });
   });
@@ -151,10 +149,10 @@ describe('HealthServer', () => {
       server = new HealthServer(mockDatabase, 4111);
       await server.start();
 
-      const result = await new Promise<{ statusCode: number; body: string }>((resolve) => {
-        http.get('http://localhost:4111/', (res) => {
+      const result = await new Promise<{ statusCode: number; body: string }>(resolve => {
+        http.get('http://localhost:4111/', res => {
           let body = '';
-          res.on('data', chunk => body += chunk);
+          res.on('data', chunk => (body += chunk));
           res.on('end', () => resolve({ statusCode: res.statusCode || 0, body }));
         });
       });
@@ -168,8 +166,8 @@ describe('HealthServer', () => {
       server = new HealthServer(mockDatabase, 4112);
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        http.get('http://localhost:4112/unknown', (res) => {
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4112/unknown', res => {
           resolve({ statusCode: res.statusCode || 0 });
         });
       });
@@ -182,17 +180,22 @@ describe('HealthServer', () => {
       server = new HealthServer(mockDatabase, 4113);
       await server.start();
 
-      const result = await new Promise<{ statusCode: number; headers: http.IncomingHttpHeaders }>((resolve) => {
-        const req = http.request({
-          hostname: 'localhost',
-          port: 4113,
-          path: '/health',
-          method: 'OPTIONS',
-        }, (res) => {
-          resolve({ statusCode: res.statusCode || 0, headers: res.headers });
-        });
-        req.end();
-      });
+      const result = await new Promise<{ statusCode: number; headers: http.IncomingHttpHeaders }>(
+        resolve => {
+          const req = http.request(
+            {
+              hostname: 'localhost',
+              port: 4113,
+              path: '/health',
+              method: 'OPTIONS',
+            },
+            res => {
+              resolve({ statusCode: res.statusCode || 0, headers: res.headers });
+            }
+          );
+          req.end();
+        }
+      );
 
       await server.stop();
       expect(result.statusCode).toBe(204);
@@ -204,8 +207,8 @@ describe('HealthServer', () => {
       server = new HealthServer(mockDatabase, 4114);
       await server.start();
 
-      const result = await new Promise<{ headers: http.IncomingHttpHeaders }>((resolve) => {
-        http.get('http://localhost:4114/health', (res) => {
+      const result = await new Promise<{ headers: http.IncomingHttpHeaders }>(resolve => {
+        http.get('http://localhost:4114/health', res => {
           resolve({ headers: res.headers });
         });
       });
@@ -224,8 +227,8 @@ describe('HealthServer', () => {
       });
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        http.get('http://localhost:4115/health', (res) => {
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4115/health', res => {
           resolve({ statusCode: res.statusCode || 0 });
         });
       });
@@ -238,8 +241,8 @@ describe('HealthServer', () => {
       server = new HealthServer(mockDatabase, 4116);
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        http.get('http://localhost:4116/health', (res) => {
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4116/health', res => {
           resolve({ statusCode: res.statusCode || 0 });
         });
       });
@@ -256,17 +259,20 @@ describe('HealthServer', () => {
       });
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        const req = http.request({
-          hostname: 'localhost',
-          port: 4117,
-          path: '/health',
-          headers: {
-            Authorization: 'Basic ' + Buffer.from('admin:wrongpassword').toString('base64'),
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: 4117,
+            path: '/health',
+            headers: {
+              Authorization: 'Basic ' + Buffer.from('admin:wrongpassword').toString('base64'),
+            },
           },
-        }, (res) => {
-          resolve({ statusCode: res.statusCode || 0 });
-        });
+          res => {
+            resolve({ statusCode: res.statusCode || 0 });
+          }
+        );
         req.end();
       });
 
@@ -282,8 +288,8 @@ describe('HealthServer', () => {
       });
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        http.get('http://localhost:4118/metrics', (res) => {
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4118/metrics', res => {
           resolve({ statusCode: res.statusCode || 0 });
         });
       });
@@ -300,8 +306,8 @@ describe('HealthServer', () => {
       });
       await server.start();
 
-      const result = await new Promise<{ statusCode: number }>((resolve) => {
-        http.get('http://localhost:4119/agents', (res) => {
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4119/agents', res => {
           resolve({ statusCode: res.statusCode || 0 });
         });
       });
@@ -356,9 +362,13 @@ describe('HealthServer', () => {
     });
 
     it('should handle task counts', async () => {
-      mockDb.query = vi.fn()
+      mockDb.query = vi
+        .fn()
         .mockResolvedValueOnce({ rows: [], rowCount: 0 } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ total: '100', indexed: '50' }], rowCount: 1 } as QueryResult<{ total: string; indexed: string }>);
+        .mockResolvedValueOnce({
+          rows: [{ total: '100', indexed: '50' }],
+          rowCount: 1,
+        } as QueryResult<{ total: string; indexed: string }>);
 
       server = new HealthServer(mockDatabase, 4125);
       const health = await server.getHealth();
@@ -408,7 +418,7 @@ describe('HealthServer', () => {
 
     it('should use cached health response', async () => {
       server = new HealthServer(mockDatabase, 4131);
-      
+
       const health1 = await server.getHealth();
       const health2 = await server.getHealth();
 
@@ -418,7 +428,12 @@ describe('HealthServer', () => {
 
   describe('getMetrics', () => {
     it('should return metrics', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{ count: string }>);
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ count: '0' }],
+        rowCount: 1,
+      } as QueryResult<{
+        count: string;
+      }>);
 
       server = new HealthServer(mockDatabase, 4132);
       const metrics = await server.getMetrics();
@@ -432,11 +447,22 @@ describe('HealthServer', () => {
     it('should calculate success rate correctly', async () => {
       mockDb.query.mockReset();
       mockDb.query
-        .mockResolvedValueOnce({ rows: [{ count: '10' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ count: '80' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ count: '20' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ avg: '1.5' }], rowCount: 1 } as QueryResult<{ avg: string }>)
-        .mockResolvedValueOnce({ rows: [{ total: '100', with_embedding: '80' }], rowCount: 1 } as QueryResult<{ total: string; with_embedding: string }>);
+        .mockResolvedValueOnce({ rows: [{ count: '10' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ count: '80' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ count: '20' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ avg: '1.5' }], rowCount: 1 } as QueryResult<{
+          avg: string;
+        }>)
+        .mockResolvedValueOnce({
+          rows: [{ total: '100', with_embedding: '80' }],
+          rowCount: 1,
+        } as QueryResult<{ total: string; with_embedding: string }>);
 
       server = new HealthServer(mockDatabase, 4133);
       const metrics = await server.getMetrics();
@@ -445,10 +471,15 @@ describe('HealthServer', () => {
     });
 
     it('should use cached metrics response', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{ count: string }>);
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ count: '0' }],
+        rowCount: 1,
+      } as QueryResult<{
+        count: string;
+      }>);
 
       server = new HealthServer(mockDatabase, 4134);
-      
+
       const metrics1 = await server.getMetrics();
       const metrics2 = await server.getMetrics();
 
@@ -456,12 +487,24 @@ describe('HealthServer', () => {
     });
 
     it('should handle zero tasks for success rate calculation', async () => {
-      mockDb.query = vi.fn()
-        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{ count: string }>)
-        .mockResolvedValueOnce({ rows: [{ avg: null }], rowCount: 1 } as QueryResult<{ avg: string | null }>)
-        .mockResolvedValueOnce({ rows: [{ total: '0', with_embedding: '0' }], rowCount: 1 } as QueryResult<{ total: string; with_embedding: string }>);
+      mockDb.query = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ count: '0' }], rowCount: 1 } as QueryResult<{
+          count: string;
+        }>)
+        .mockResolvedValueOnce({ rows: [{ avg: null }], rowCount: 1 } as QueryResult<{
+          avg: string | null;
+        }>)
+        .mockResolvedValueOnce({
+          rows: [{ total: '0', with_embedding: '0' }],
+          rowCount: 1,
+        } as QueryResult<{ total: string; with_embedding: string }>);
 
       server = new HealthServer(mockDatabase, 4135);
       const metrics = await server.getMetrics();
@@ -515,8 +558,22 @@ describe('HealthServer', () => {
     it('should handle multiple agents', () => {
       const mockAgentSystem = {
         getAllAgents: vi.fn().mockReturnValue([
-          { id: 'agent-1', mode: 'http' as const, status: 'idle' as const, registeredAt: new Date(), lastActivity: new Date(), taskCount: 5 },
-          { id: 'agent-2', mode: 'cli' as const, status: 'busy' as const, registeredAt: new Date(), lastActivity: new Date(), taskCount: 10 },
+          {
+            id: 'agent-1',
+            mode: 'http' as const,
+            status: 'idle' as const,
+            registeredAt: new Date(),
+            lastActivity: new Date(),
+            taskCount: 5,
+          },
+          {
+            id: 'agent-2',
+            mode: 'cli' as const,
+            status: 'busy' as const,
+            registeredAt: new Date(),
+            lastActivity: new Date(),
+            taskCount: 10,
+          },
         ]),
         getStats: vi.fn().mockReturnValue({
           totalAgents: 2,
@@ -542,7 +599,12 @@ describe('HealthServer', () => {
 
   describe('updateMetricsFromDb', () => {
     it('should update metrics from database', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [{ count: '5' }], rowCount: 1 } as QueryResult<{ count: string }>);
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ count: '5' }],
+        rowCount: 1,
+      } as QueryResult<{
+        count: string;
+      }>);
 
       server = new HealthServer(mockDatabase, 4139);
       await server.start();

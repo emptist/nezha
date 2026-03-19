@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, TASK_STATUS, LONGTASK_CONFIG } from '../config/constants.js';
+import { DATABASE_TABLES, LONGTASK_CONFIG } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { EventEmitter } from 'events';
 
@@ -60,11 +60,15 @@ export class LongTaskManager extends EventEmitter {
     super();
     this.db = db;
     this.checkIntervalMs = config?.checkIntervalMs ?? LONGTASK_CONFIG.CHECK_INTERVAL_MS;
-    this.defaultMaxRuntimeSeconds = config?.defaultMaxRuntimeSeconds ?? LONGTASK_CONFIG.DEFAULT_MAX_RUNTIME_SECONDS;
-    this.defaultPauseDurationSeconds = config?.defaultPauseDurationSeconds ?? LONGTASK_CONFIG.DEFAULT_PAUSE_DURATION_SECONDS;
+    this.defaultMaxRuntimeSeconds =
+      config?.defaultMaxRuntimeSeconds ?? LONGTASK_CONFIG.DEFAULT_MAX_RUNTIME_SECONDS;
+    this.defaultPauseDurationSeconds =
+      config?.defaultPauseDurationSeconds ?? LONGTASK_CONFIG.DEFAULT_PAUSE_DURATION_SECONDS;
     this.enableAutoResume = config?.enableAutoResume ?? LONGTASK_CONFIG.ENABLE_AUTO_RESUME;
-    this.progressReportIntervalMs = config?.progressReportIntervalMs ?? LONGTASK_CONFIG.PROGRESS_REPORT_INTERVAL_MS;
-    this.minProgressIntervalMs = config?.minProgressIntervalMs ?? LONGTASK_CONFIG.MIN_PROGRESS_INTERVAL_MS;
+    this.progressReportIntervalMs =
+      config?.progressReportIntervalMs ?? LONGTASK_CONFIG.PROGRESS_REPORT_INTERVAL_MS;
+    this.minProgressIntervalMs =
+      config?.minProgressIntervalMs ?? LONGTASK_CONFIG.MIN_PROGRESS_INTERVAL_MS;
     this.minProgressPercent = config?.minProgressPercent ?? LONGTASK_CONFIG.MIN_PROGRESS_PERCENT;
   }
 
@@ -84,7 +88,9 @@ export class LongTaskManager extends EventEmitter {
       });
     }, this.checkIntervalMs);
 
-    logger.info(`LongTaskManager started (interval: ${this.checkIntervalMs}ms, max runtime: ${this.defaultMaxRuntimeSeconds}s)`);
+    logger.info(
+      `LongTaskManager started (interval: ${this.checkIntervalMs}ms, max runtime: ${this.defaultMaxRuntimeSeconds}s)`
+    );
   }
 
   stop(): void {
@@ -166,10 +172,7 @@ export class LongTaskManager extends EventEmitter {
     this.longTasks.delete(taskId);
     this.pausedTasks.delete(taskId);
 
-    await this.db.query(
-      `DELETE FROM long_tasks_pause WHERE task_id = $1`,
-      [taskId]
-    );
+    await this.db.query(`DELETE FROM long_tasks_pause WHERE task_id = $1`, [taskId]);
 
     await this.db.query(
       `UPDATE ${DATABASE_TABLES.TASKS} SET
@@ -209,14 +212,19 @@ export class LongTaskManager extends EventEmitter {
     task.pausedUntil = resumeAt;
     this.pausedTasks.add(taskId);
 
-    await this.db.query(
-      `SELECT pause_long_task($1, $2, $3, $4, $5)`,
-      [taskId, reason, resumeAt, autoResume, pauseDuration]
-    );
+    await this.db.query(`SELECT pause_long_task($1, $2, $3, $4, $5)`, [
+      taskId,
+      reason,
+      resumeAt,
+      autoResume,
+      pauseDuration,
+    ]);
 
     this.emit('paused', { taskId, reason, resumeAt });
 
-    logger.info(`LongTaskManager paused task: ${taskId} (reason: ${reason}, resume at: ${resumeAt.toISOString()})`);
+    logger.info(
+      `LongTaskManager paused task: ${taskId} (reason: ${reason}, resume at: ${resumeAt.toISOString()})`
+    );
     return true;
   }
 
@@ -256,7 +264,9 @@ export class LongTaskManager extends EventEmitter {
       task.elapsedSeconds = Math.floor((now.getTime() - task.startedAt.getTime()) / 1000);
 
       if (task.elapsedSeconds >= task.maxRuntimeSeconds) {
-        logger.warn(`Task ${taskId} exceeded max runtime (${task.elapsedSeconds}s/${task.maxRuntimeSeconds}s)`);
+        logger.warn(
+          `Task ${taskId} exceeded max runtime (${task.elapsedSeconds}s/${task.maxRuntimeSeconds}s)`
+        );
         this.emit('maxRuntimeExceeded', task);
 
         await this.pauseTask(taskId, PauseReason.MAX_RUNTIME, {
@@ -266,8 +276,13 @@ export class LongTaskManager extends EventEmitter {
 
       if (task.lastProgressAt) {
         const progressAge = now.getTime() - task.lastProgressAt.getTime();
-        if (progressAge > this.minProgressIntervalMs && task.progressPercent < this.minProgressPercent) {
-          logger.debug(`Task ${taskId} progress stalled (${task.progressPercent}% in ${progressAge}ms)`);
+        if (
+          progressAge > this.minProgressIntervalMs &&
+          task.progressPercent < this.minProgressPercent
+        ) {
+          logger.debug(
+            `Task ${taskId} progress stalled (${task.progressPercent}% in ${progressAge}ms)`
+          );
           this.emit('progressStalled', { task, progressAge });
         }
       }
@@ -319,9 +334,10 @@ export class LongTaskManager extends EventEmitter {
     const exceededMaxRuntime = tasks.filter(
       t => !t.isPaused && (now.getTime() - t.startedAt.getTime()) / 1000 > t.maxRuntimeSeconds
     ).length;
-    const avgProgress = tasks.length > 0
-      ? Math.round(tasks.reduce((sum, t) => sum + t.progressPercent, 0) / tasks.length)
-      : 0;
+    const avgProgress =
+      tasks.length > 0
+        ? Math.round(tasks.reduce((sum, t) => sum + t.progressPercent, 0) / tasks.length)
+        : 0;
 
     return {
       total: tasks.length,

@@ -1,12 +1,18 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES } from '../config/constants.js';
-import { type KnowledgeLink, type Memory, type TaskPattern } from '../config/types.js';
+import { type KnowledgeLink, type Memory } from '../config/types.js';
 import { EmbeddingProvider } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
 
 export type LinkFromType = 'memory' | 'pattern' | 'outcome';
 export type LinkToType = 'memory' | 'pattern' | 'outcome';
-export type LinkRelation = 'relates-to' | 'causes' | 'solves' | 'contradicts' | 'improves' | 'confirms';
+export type LinkRelation =
+  | 'relates-to'
+  | 'causes'
+  | 'solves'
+  | 'contradicts'
+  | 'improves'
+  | 'confirms';
 
 export interface CreateLinkInput {
   fromType: LinkFromType;
@@ -63,7 +69,9 @@ export class KnowledgeGraphService {
       ]
     );
 
-    logger.info(`[KnowledgeGraph] Created link: ${input.fromType}:${input.fromId} -> ${input.relation} -> ${input.toType}:${input.toId}`);
+    logger.info(
+      `[KnowledgeGraph] Created link: ${input.fromType}:${input.fromId} -> ${input.relation} -> ${input.toType}:${input.toId}`
+    );
     return id;
   }
 
@@ -150,9 +158,9 @@ export class KnowledgeGraphService {
 
     const traverse = async (type: LinkFromType, id: string, currentDepth: number) => {
       if (currentDepth > depth) return;
-      
+
       await addNode(type, id);
-      
+
       const nodeLinks = await this.getLinksForNode(type, id, 'both');
       for (const link of nodeLinks) {
         if (!links.find(l => l.id === link.id)) {
@@ -167,16 +175,14 @@ export class KnowledgeGraphService {
 
     const limitedNodes = nodes.slice(0, limit);
     const nodeIds = new Set(limitedNodes.map(n => `${n.type}:${n.id}`));
-    const filteredLinks = links.filter(l => 
-      nodeIds.has(`${l.fromType}:${l.fromId}`) && nodeIds.has(`${l.toType}:${l.toId}`)
+    const filteredLinks = links.filter(
+      l => nodeIds.has(`${l.fromType}:${l.fromId}`) && nodeIds.has(`${l.toType}:${l.toId}`)
     );
 
     return {
       nodes: limitedNodes.map(n => ({
         ...n,
-        connections: filteredLinks.filter(
-          l => l.fromId === n.id || l.toId === n.id
-        ).length,
+        connections: filteredLinks.filter(l => l.fromId === n.id || l.toId === n.id).length,
       })),
       links: filteredLinks,
     };
@@ -195,10 +201,12 @@ export class KnowledgeGraphService {
         return { content: result.rows[0].content, metadata: result.rows[0].metadata };
       }
     } else if (type === 'pattern') {
-      const result = await this.db.query<{ pattern_content: string; metadata: Record<string, unknown> }>(
-        `SELECT pattern_content, metadata FROM ${DATABASE_TABLES.TASK_PATTERNS} WHERE id = $1`,
-        [id]
-      );
+      const result = await this.db.query<{
+        pattern_content: string;
+        metadata: Record<string, unknown>;
+      }>(`SELECT pattern_content, metadata FROM ${DATABASE_TABLES.TASK_PATTERNS} WHERE id = $1`, [
+        id,
+      ]);
       if (result.rows.length > 0 && result.rows[0]) {
         return { content: result.rows[0].pattern_content, metadata: result.rows[0].metadata };
       }
@@ -212,25 +220,27 @@ export class KnowledgeGraphService {
     relation?: LinkRelation
   ): Promise<Array<{ node: KnowledgeGraphNode; relation: LinkRelation; confidence: number }>> {
     const links = await this.getLinksForNode(nodeType, nodeId, 'both');
-    
-    const filteredLinks = relation 
-      ? links.filter(l => l.relation === relation)
-      : links;
 
-    const results: Array<{ node: KnowledgeGraphNode; relation: LinkRelation; confidence: number }> = [];
-    
+    const filteredLinks = relation ? links.filter(l => l.relation === relation) : links;
+
+    const results: Array<{ node: KnowledgeGraphNode; relation: LinkRelation; confidence: number }> =
+      [];
+
     for (const link of filteredLinks) {
-      const connectedType = link.fromId === nodeId && link.fromType === nodeType 
-        ? link.toType 
-        : link.fromType;
-      const connectedId = link.fromId === nodeId && link.fromType === nodeType 
-        ? link.toId 
-        : link.fromId;
-      
+      const connectedType =
+        link.fromId === nodeId && link.fromType === nodeType ? link.toType : link.fromType;
+      const connectedId =
+        link.fromId === nodeId && link.fromType === nodeType ? link.toId : link.fromId;
+
       const content = await this.getNodeContent(connectedType, connectedId);
       if (content) {
         results.push({
-          node: { id: connectedId, type: connectedType, content: content.content, metadata: content.metadata },
+          node: {
+            id: connectedId,
+            type: connectedType,
+            content: content.content,
+            metadata: content.metadata,
+          },
           relation: link.relation,
           confidence: link.confidence,
         });
@@ -240,7 +250,7 @@ export class KnowledgeGraphService {
     return results.sort((a, b) => b.confidence - a.confidence);
   }
 
-  async autoBuildLinks(projectId?: string): Promise<number> {
+  async autoBuildLinks(_projectId?: string): Promise<number> {
     const result = await this.db.query<{ auto_build_knowledge_links: number }>(
       `SELECT auto_build_knowledge_links()`
     );
@@ -249,7 +259,11 @@ export class KnowledgeGraphService {
     return count;
   }
 
-  async linkMemoryToPattern(memoryId: string, patternId: string, context?: string): Promise<string> {
+  async linkMemoryToPattern(
+    memoryId: string,
+    patternId: string,
+    context?: string
+  ): Promise<string> {
     return this.createLink({
       fromType: 'memory',
       fromId: memoryId,
@@ -326,13 +340,10 @@ export class KnowledgeGraphService {
     };
   }
 
-  async findRelatedMemories(
-    memoryId: string,
-    limit: number = 5
-  ): Promise<Memory[]> {
+  async findRelatedMemories(memoryId: string, limit: number = 5): Promise<Memory[]> {
     const links = await this.getLinksForNode('memory', memoryId, 'outgoing');
     const incomingLinks = await this.getLinksForNode('memory', memoryId, 'incoming');
-    
+
     const relatedIds = [
       ...links.filter(l => l.toType === 'memory').map(l => l.toId),
       ...incomingLinks.filter(l => l.fromType === 'memory').map(l => l.fromId),
@@ -352,20 +363,25 @@ export class KnowledgeGraphService {
     return result.rows;
   }
 
-  async suggestLinks(memoryId: string, limit: number = 3): Promise<Array<{
-    suggestedType: LinkToType;
-    suggestedId: string;
-    suggestedContent: string;
-    confidence: number;
-    reason: string;
-  }>> {
+  async suggestLinks(
+    memoryId: string,
+    limit: number = 3
+  ): Promise<
+    Array<{
+      suggestedType: LinkToType;
+      suggestedId: string;
+      suggestedContent: string;
+      confidence: number;
+      reason: string;
+    }>
+  > {
     const memoryResult = await this.db.query<Memory>(
       `SELECT * FROM ${DATABASE_TABLES.MEMORY} WHERE id = $1`,
       [memoryId]
     );
 
     if (memoryResult.rows.length === 0 || !memoryResult.rows[0]) return [];
-    
+
     const memory = memoryResult.rows[0];
     const suggestions: Array<{
       suggestedType: LinkToType;
@@ -375,7 +391,11 @@ export class KnowledgeGraphService {
       reason: string;
     }> = [];
 
-    const patternResult = await this.db.query<{ id: string; pattern_content: string; pattern_category: string }>(
+    const patternResult = await this.db.query<{
+      id: string;
+      pattern_content: string;
+      pattern_category: string;
+    }>(
       `SELECT id, pattern_content, pattern_category
        FROM ${DATABASE_TABLES.TASK_PATTERNS}
        WHERE is_active = TRUE

@@ -5,7 +5,7 @@ import {
   TASK_CONFIG,
   TASK_STATUS,
 } from '../config/constants.js';
-import { type Task, type TaskStatus, type QueryResult } from '../config/types.js';
+import { type TaskStatus } from '../config/types.js';
 import { logger } from '../utils/logger.js';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
@@ -99,7 +99,6 @@ export class Scheduler {
     if (waitForRunning) {
       logger.info(`Waiting up to ${gracePeriodMs}ms for running tasks to complete...`);
       const startTime = Date.now();
-      const timedOut = false;
 
       while (Date.now() - startTime < gracePeriodMs) {
         const result = await this.db.query<{ count: string }>(

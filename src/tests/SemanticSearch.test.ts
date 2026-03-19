@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
-import type { QueryResult } from '../config/types.js';
 
 const { mockDb, mockEmbedding } = vi.hoisted(() => ({
   mockDb: {
@@ -27,7 +26,7 @@ describe('SemanticSearchService', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-    
+
     mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
     mockEmbedding.embed.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
 

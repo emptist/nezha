@@ -45,7 +45,13 @@ export class DatabaseClient {
     const startTime = isVerboseMode() ? Date.now() : undefined;
     try {
       const result = await this.pool.query<T>(sql, params);
-      logDbQuery(this.sanitizeSql(sql), params, { rowCount: result.rowCount ?? undefined }, undefined, startTime);
+      logDbQuery(
+        this.sanitizeSql(sql),
+        params,
+        { rowCount: result.rowCount ?? undefined },
+        undefined,
+        startTime
+      );
       return {
         rows: result.rows,
         rowCount: result.rowCount || 0,
@@ -112,10 +118,10 @@ export class DatabaseClient {
   }
 
   async getCrossProjectLearnings(days: number = 7, limit: number = 50): Promise<unknown[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM get_cross_project_learnings($1, $2)`,
-      [days, limit]
-    );
+    const result = await this.pool.query(`SELECT * FROM get_cross_project_learnings($1, $2)`, [
+      days,
+      limit,
+    ]);
     return result.rows;
   }
 
@@ -126,10 +132,13 @@ export class DatabaseClient {
     importance: number = 5,
     source: string = 'cross-project-learning'
   ): Promise<string> {
-    const result = await this.pool.query(
-      `SELECT save_cross_project_learning($1, $2, $3, $4, $5)`,
-      [content, projectId, tags, importance, source]
-    );
+    const result = await this.pool.query(`SELECT save_cross_project_learning($1, $2, $3, $4, $5)`, [
+      content,
+      projectId,
+      tags,
+      importance,
+      source,
+    ]);
     return result.rows[0]?.save_cross_project_learning;
   }
 
@@ -240,7 +249,11 @@ export class DatabaseClient {
     return result.rows;
   }
 
-  async getConversationsByDateRange(startDate: Date, endDate: Date, projectId?: string): Promise<Record<string, unknown>[]> {
+  async getConversationsByDateRange(
+    startDate: Date,
+    endDate: Date,
+    projectId?: string
+  ): Promise<Record<string, unknown>[]> {
     const result = await this.pool.query(
       `SELECT * FROM conversations 
        WHERE created_at >= $1 AND created_at <= $2
@@ -256,14 +269,11 @@ export class DatabaseClient {
     startDate?: Date;
     endDate?: Date;
   }): Promise<Record<string, unknown>[]> {
-    const result = await this.pool.query(
-      `SELECT * FROM get_conversation_stats($1, $2, $3)`,
-      [
-        params.projectId || null,
-        params.startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-        params.endDate || new Date(),
-      ]
-    );
+    const result = await this.pool.query(`SELECT * FROM get_conversation_stats($1, $2, $3)`, [
+      params.projectId || null,
+      params.startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      params.endDate || new Date(),
+    ]);
     return result.rows;
   }
 
@@ -287,7 +297,7 @@ export class DatabaseClient {
       values.push(params.conversationType);
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    sql += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx}`;
     values.push(params.limit || 50, params.offset || 0);
 
     const result = await this.pool.query(sql, values);

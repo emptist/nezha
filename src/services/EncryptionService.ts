@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { logger } from '../utils/logger.js';
-import { ENV_KEYS, MEMORY_CONFIG } from '../config/constants.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -109,7 +108,6 @@ export class EncryptionService {
     const iv = Buffer.from(encryptedData.iv, 'base64');
     const data = Buffer.from(encryptedData.encryptedData, 'base64');
     const tag = Buffer.from(encryptedData.tag, 'base64');
-    const salt = Buffer.from(encryptedData.salt, 'base64');
 
     const decipher = crypto.createDecipheriv(ALGORITHM, this.key, iv, {
       authTagLength: TAG_LENGTH,

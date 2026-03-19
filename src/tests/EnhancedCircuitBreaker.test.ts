@@ -44,7 +44,9 @@ describe('EnhancedCircuitBreaker', () => {
       for (let i = 0; i < 3; i++) {
         try {
           await circuitBreaker.execute(() => Promise.reject(new Error('fail')));
-        } catch {}
+        } catch {
+          // expected
+        }
       }
 
       expect(circuitBreaker.getState().state).toBe('open');
@@ -54,7 +56,9 @@ describe('EnhancedCircuitBreaker', () => {
       for (let i = 0; i < 3; i++) {
         try {
           await circuitBreaker.execute(() => Promise.reject(new Error('fail')));
-        } catch {}
+        } catch {
+          // expected
+        }
       }
 
       await expect(circuitBreaker.execute(() => Promise.resolve('success'))).rejects.toThrow(
@@ -70,7 +74,9 @@ describe('EnhancedCircuitBreaker', () => {
 
       try {
         await cb.execute(() => Promise.reject(new Error('fail')));
-      } catch {}
+      } catch {
+        // expected
+      }
 
       expect(cb.getState().state).toBe('open');
 
@@ -89,7 +95,9 @@ describe('EnhancedCircuitBreaker', () => {
 
       try {
         await cb.execute(() => Promise.reject(new Error('fail')));
-      } catch {}
+      } catch {
+        // expected
+      }
 
       expect(cb.getState().state).toBe('open');
 
@@ -106,7 +114,9 @@ describe('EnhancedCircuitBreaker', () => {
       for (let i = 0; i < 3; i++) {
         try {
           await circuitBreaker.execute(() => Promise.reject(new Error('fail')));
-        } catch {}
+        } catch {
+          // expected
+        }
       }
 
       circuitBreaker.reset();
@@ -140,7 +150,9 @@ describe('EnhancedCircuitBreaker', () => {
 
       try {
         await cb.execute(() => Promise.reject(new Error('fail')));
-      } catch {}
+      } catch {
+        // expected
+      }
 
       expect(stateChanges.length).toBeGreaterThan(0);
       expect(stateChanges[0]).toEqual(['closed', 'open']);
@@ -156,7 +168,9 @@ describe('EnhancedCircuitBreaker', () => {
       for (let i = 0; i < 2; i++) {
         try {
           await cb.execute(() => Promise.reject(new Error('fail')));
-        } catch {}
+        } catch {
+          // expected
+        }
       }
 
       expect(failures).toEqual([1, 2]);
@@ -173,7 +187,9 @@ describe('EnhancedCircuitBreaker', () => {
       await cb.execute(() => Promise.resolve('success'));
       try {
         await cb.execute(() => Promise.reject(new Error('fail')));
-      } catch {}
+      } catch {
+        // expected
+      }
 
       expect(cb.getAvailabilityPercentage()).toBe(67);
     });
@@ -197,7 +213,9 @@ describe('ResilientCircuitBreaker', () => {
 
     try {
       await cb.execute(() => Promise.reject(new Error('fail')));
-    } catch {}
+    } catch {
+      // expected
+    }
 
     const result = await cb.executeWithFallback(
       () => Promise.resolve('primary'),
