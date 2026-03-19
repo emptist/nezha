@@ -42,25 +42,26 @@ vi.mock('../services/MetricsService.js', () => ({
 
 vi.mock('../services/CacheService.js', () => {
   const cacheStore = new Map<string, { value: any; expires: number }>();
+  const getCacheMock = vi.fn().mockImplementation((name: string) => ({
+    get: (key: string) => {
+      const item = cacheStore.get(`${name}:${key}`);
+      if (!item) return undefined;
+      if (Date.now() > item.expires) {
+        cacheStore.delete(`${name}:${key}`);
+        return undefined;
+      }
+      return item.value;
+    },
+    set: (key: string, value: any, options?: { ttlMs?: number }) => {
+      const ttl = options?.ttlMs ?? 60000;
+      cacheStore.set(`${name}:${key}`, {
+        value,
+        expires: Date.now() + ttl,
+      });
+    },
+  }));
   return {
-    getCache: vi.fn().mockImplementation((name: string) => ({
-      get: (key: string) => {
-        const item = cacheStore.get(`${name}:${key}`);
-        if (!item) return undefined;
-        if (Date.now() > item.expires) {
-          cacheStore.delete(`${name}:${key}`);
-          return undefined;
-        }
-        return item.value;
-      },
-      set: (key: string, value: any, options?: { ttlMs?: number }) => {
-        const ttl = options?.ttlMs ?? 60000;
-        cacheStore.set(`${name}:${key}`, {
-          value,
-          expires: Date.now() + ttl,
-        });
-      },
-    })),
+    getCache: getCacheMock,
   };
 });
 
@@ -372,27 +373,31 @@ describe('HealthServer', () => {
     });
 
     it('should return warning for low disk space', async () => {
-      vi.useFakeTimers();
-      mockStatfs.mockResolvedValue({ bsize: 4096, blocks: 100 });
-      vi.advanceTimersByTime(31000);
+      const { getCache } = await import('../services/CacheService.js');
+      (getCache as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        get: () => undefined,
+        set: vi.fn(),
+      });
 
+      mockStatfs.mockResolvedValue({ bsize: 4096, blocks: 100 });
       server = new HealthServer(mockDatabase, 4127, {
         diskWarningThreshold: 1024 * 1024 * 1024,
       });
       const health = await server.getHealth();
-      vi.useRealTimers();
 
       expect(health.checks.disk_space.status).toBe('warning');
     });
 
     it('should handle disk check error', async () => {
-      vi.useFakeTimers();
-      mockStatfs.mockRejectedValue(new Error('Disk access error'));
-      vi.advanceTimersByTime(31000);
+      const { getCache } = await import('../services/CacheService.js');
+      (getCache as ReturnType<typeof vi.fn>).mockReturnValueOnce({
+        get: () => undefined,
+        set: vi.fn(),
+      });
 
+      mockStatfs.mockRejectedValue(new Error('Disk access error'));
       server = new HealthServer(mockDatabase, 4128);
       const health = await server.getHealth();
-      vi.useRealTimers();
 
       expect(health.checks.disk_space.status).toBe('error');
       expect(health.checks.disk_space.error).toBe('Disk access error');
