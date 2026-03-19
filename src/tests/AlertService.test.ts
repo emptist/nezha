@@ -101,8 +101,8 @@ describe('AlertService', () => {
 
       const alerts = service.getAlerts();
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].type).toBe('circuit_breaker');
-      expect(alerts[0].severity).toBe('error');
+      expect(alerts[0]?.type).toBe('circuit_breaker');
+      expect(alerts[0]?.severity).toBe('error');
     });
 
     it('should not create alert when circuit is closed', () => {
@@ -118,7 +118,7 @@ describe('AlertService', () => {
       service.trackCircuitBreaker('payment-service', 'open');
 
       const alerts = service.getAlerts();
-      expect(alerts[0].metadata).toEqual({
+      expect(alerts[0]?.metadata).toEqual({
         service: 'payment-service',
         state: 'open',
       });
