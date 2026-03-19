@@ -8,10 +8,11 @@
    - 龙虾没有的功能，优先度降低
 
 2. **当前优先级**
-   - P0: 研究 OpenClaw 持续工作机制 (heartbeat, HEARTBEAT.md)
-   - P0: 研究 OpenClaw 记忆系统 (MEMORY.md, bootstrap files)
-   - P1: 实现 PostgreSQL 任务表和 heartbeat daemon
-   - P1: 实现 AI 驱动的学习系统 (参考 LEARNING_SYSTEM.md)
+   - P0: 实现 AI 驱动的学习系统 (参考 LEARNING_SYSTEM.md)
+   - P0: Process Guardian 进程守护完善
+   - P1: 提高测试覆盖率 (目标 80%)
+   - P1: 完善 Skill System 与 Agent 集成
+   - P2: 向量搜索 (pgvector)
    - P2: 其他功能
 
 3. **学习系统设计原则**
@@ -24,3 +25,12 @@
    - 不要盲目实现，先问"龙虾怎么做的？"
    - 不要编写复杂的 NLP 规则来提取知识
    - 不要用程序硬编码学习逻辑
+
+## 已完成功能
+
+- [x] PostgreSQL 任务表和 heartbeat daemon
+- [x] Process Guardian 孤儿进程清理
+- [x] Conversation Logging 会话日志
+- [x] 客户项目集成教程 (docs/INTEGRATION_TUTORIAL.md)
+- [x] OpenClaw 持续工作机制研究
+- [x] OpenClaw 记忆系统研究

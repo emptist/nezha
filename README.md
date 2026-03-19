@@ -11,7 +11,8 @@
 | **永久记忆** | PostgreSQL 存储 + 任务历史 | ✅ 已实现 |
 | **持续工作** | 心跳机制 + 任务调度 | ✅ 已实现 |
 | **任务执行** | Agent 调用 + 错误处理 | ✅ 已实现 |
-| **技能扩展** | Skill 系统 + 插件机制 | ⚠️ 基础实现 |
+| **Process Guardian** | 孤儿进程清理 + 实例数控制 | ✅ 已实现 |
+| **对话日志** | JSONL 会话记录 + 统计 | ✅ 已实现 |
 | **自主学习** | AI 驱动知识管理 | ❌ 未实现 |
 
 ## 核心设计
@@ -264,7 +265,46 @@ interface AgentSystem {
 - **指数退避**: 重试延迟随次数增加
 - **请求追踪**: 每个请求有唯一 ID
 
-#### 4. Skill System (技能系统) ⚠️
+#### 4. Process Guardian (进程守护) ✅
+
+孤儿进程清理和实例管理：
+
+```bash
+# 启动守护进程
+node dist/cli/process-guardian.js run
+
+# 查看状态
+node dist/cli/process-guardian.js status
+
+# 单次清理
+node dist/cli/process-guardian.js once
+
+# 停止守护
+node dist/cli/process-guardian.js stop
+```
+
+**功能**:
+- 自动清理孤儿进程 (运行超过 1 小时)
+- 实例数量控制 (防止重复启动)
+- 支持 cron 定时任务: `0,10,20,30,40,50 * * * *`
+
+#### 5. Conversation Logging (会话日志) ✅
+
+JSONL 格式的会话记录：
+
+```
+conversations/
+├── index.json              # 会话索引
+└── 2026-03-19/
+    └── session-xxx.jsonl  # 会话详情
+```
+
+**用途**:
+- 任务执行历史追踪
+- 成功率统计
+- AI 协作分析
+
+#### 6. Skill System (技能系统) ⚠️
 
 插件和技能扩展机制：
 
@@ -325,9 +365,11 @@ nezha/
 │   │   ├── constants.ts       # 常量定义 ✅
 │   │   └── types.ts           # 类型定义 ✅
 │   ├── cli/
-│   │   └── index.ts           # CLI 入口 ✅
+│   │   ├── index.ts           # CLI 入口 ✅
+│   │   └── process-guardian.ts # 进程守护 ✅
 │   └── NezhaCore.ts           # 核心入口 ✅
-├── memory/                     # 每日记忆
+├── conversations/             # 会话日志 (JSONL)
+├── memory/                    # 每日记忆
 ├── reviews/                    # 代码评审
 ├── package.json
 ├── tsconfig.json
@@ -466,6 +508,27 @@ nezha tasks
 nezha help
 ```
 
+### Process Guardian 命令
+
+```bash
+# 启动进程守护
+node dist/cli/process-guardian.js run
+
+# 查看进程状态
+node dist/cli/process-guardian.js status
+
+# 单次清理
+node dist/cli/process-guardian.js once
+
+# 停止守护
+node dist/cli/process-guardian.js stop
+```
+
+**Cron 定时清理** (每 10 分钟):
+```bash
+0,10,20,30,40,50 * * * * cd /path/to/nezha && node dist/cli/process-guardian.js once
+```
+
 ## 与 OpenClaw 的关系
 
 ### OpenClaw 核心机制
@@ -522,6 +585,9 @@ OpenClaw 的 Memory 系统主要是：
 - [x] Agent 通信系统
 - [x] 错误处理和重试机制
 - [x] 健康检查接口
+- [x] Process Guardian (孤儿进程清理)
+- [x] Conversation Logging (会话日志)
+- [x] 客户项目集成教程
 
 ### 进行中 🚧
 
