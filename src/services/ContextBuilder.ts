@@ -9,6 +9,7 @@ import {
 import { logger } from '../utils/logger.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { InterReviewService } from './InterReviewService.js';
 
 const DEFAULT_MEMORY_DIR = '.tmp/nezha-memory';
 const MEMORY_FILE = 'MEMORY.md';
@@ -33,12 +34,14 @@ export interface BuiltContext {
   relevantMemories: ContextMemoryResult[];
   todayMemory: string;
   curatedMemory: string;
+  reviewLearnings: string;
   combinedPrompt: string;
 }
 
 export class ContextBuilder {
   private readonly memory: MemoryService;
   private readonly dailyMemory: DailyMemoryService;
+  private readonly interReviewService: InterReviewService;
   private readonly memoryDir: string;
   private readonly embedding?: EmbeddingProvider;
   private cachedCuratedMemory: string = '';
@@ -65,23 +68,26 @@ export class ContextBuilder {
 
     this.memory = new MemoryService(db, undefined, embeddingProvider);
     this.dailyMemory = new DailyMemoryService({ memoryDir: this.memoryDir });
+    this.interReviewService = new InterReviewService(db);
     this.embedding = embeddingProvider;
   }
 
   async buildContext(input: TaskContextInput): Promise<BuiltContext> {
     const taskDescription = input.description || input.title;
 
-    const [relevantMemories, todayMemory, curatedMemory] = await Promise.all([
+    const [relevantMemories, todayMemory, curatedMemory, reviewLearnings] = await Promise.all([
       this.findRelevantMemories(taskDescription),
       this.dailyMemory.readToday(),
       this.loadCuratedMemory(),
+      this.loadReviewLearnings(taskDescription),
     ]);
 
     const combinedPrompt = this.combineContext(
       taskDescription,
       relevantMemories,
       todayMemory,
-      curatedMemory
+      curatedMemory,
+      reviewLearnings
     );
 
     return {
@@ -89,8 +95,18 @@ export class ContextBuilder {
       relevantMemories,
       todayMemory,
       curatedMemory,
+      reviewLearnings,
       combinedPrompt,
     };
+  }
+
+  private async loadReviewLearnings(topic?: string): Promise<string> {
+    try {
+      return await this.interReviewService.getLearningsForAIContext(topic);
+    } catch (error) {
+      logger.debug('Failed to load review learnings:', error);
+      return '';
+    }
   }
 
   private async findRelevantMemories(query: string): Promise<ContextMemoryResult[]> {
@@ -153,12 +169,17 @@ export class ContextBuilder {
     task: string,
     memories: ContextMemoryResult[],
     todayMemory: string,
-    curatedMemory: string
+    curatedMemory: string,
+    reviewLearnings: string
   ): string {
     const parts: string[] = [];
 
     if (curatedMemory) {
       parts.push(`## Long-term Memory\n${curatedMemory}\n`);
+    }
+
+    if (reviewLearnings) {
+      parts.push(`## AI Review Learnings\n${reviewLearnings}\n`);
     }
 
     if (memories.length > 0) {

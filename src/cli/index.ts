@@ -574,27 +574,50 @@ export class Cli {
   }
 
   async addContinuousImprovementTask(): Promise<void> {
-    const description = `Continuous Improvement Cycle:
+    const description = `Continuous Improvement Cycle (PDCA + InterReview):
+
+## Plan
 1. Read HEARTBEAT.md to get task list
-2. For each task in the list:
+2. Prioritize tasks by importance
+
+## Do
+3. For each task:
    a. Execute the task
-   b. Review the results
-   c. If issues found, fix them
-   d. Update documentation if needed
-   e. Run tests/build
-   f. Commit and push changes
-3. Update HEARTBEAT.md with completed tasks and new tasks
-4. System Review - Compare with OpenClaw:
-   a. Read docs/OPENCLAW_VS_NEZHA_CORRECT.md for comparison baseline
-   b. Check if Nezha features match or exceed OpenClaw:
-      - Heartbeat mechanism (持续运行)
-      - Task self-generation (任务自产生)
-      - Memory system (记忆系统)
-      - Skill system (技能系统)
-   c. Identify areas where Nezha is behind OpenClaw
-   d. Create improvement tasks for gaps found
-   e. Document advantages Nezha has over OpenClaw (PostgreSQL, etc.)
-5. Report what was accomplished`;
+   b. Run tests/build
+   c. Commit and push changes
+
+## Check (with InterReview)
+4. Request AI Inter-Review on the commit:
+   - Use: nezha review --commit <hash> --task-id <id>
+   - Review will extract learnings and save them to memory
+5. Review the learnings from InterReview:
+   - Check for patterns in findings
+   - Apply any critical fixes suggested
+
+## Act
+6. If issues found, fix them
+7. Update documentation if needed
+8. Update HEARTBEAT.md with completed tasks and new tasks
+9. Extract patterns from reviews using: memory_search with topic filter
+
+## System Review - Compare with OpenClaw
+10. Read docs/OPENCLAW_VS_NEZHA_CORRECT.md for comparison baseline
+11. Check if Nezha features match or exceed OpenClaw:
+    - Heartbeat mechanism (持续运行)
+    - Task self-generation (任务自产生)
+    - Memory system (记忆系统)
+    - Skill system (技能系统)
+    - InterReview (AI Code Review)
+12. Identify areas where Nezha is behind OpenClaw
+13. Create improvement tasks for gaps found
+14. Document advantages Nezha has over OpenClaw (PostgreSQL, etc.)
+
+## Report
+15. Report what was accomplished, including:
+    - Tasks completed
+    - Reviews requested and scores
+    - Learnings extracted
+    - New patterns discovered`;
 
     await this.addTask('Continuous Improvement Cycle', description, 10);
   }

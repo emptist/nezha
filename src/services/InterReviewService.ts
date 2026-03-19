@@ -55,12 +55,25 @@ export enum InterReviewEvent {
 
 export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
-  private readonly aiProvider: AIProvider;
+  private readonly aiProvider: AIProvider | null;
 
   constructor(db: DatabaseClient, aiProvider?: AIProvider) {
     super();
     this.db = db;
-    this.aiProvider = aiProvider || AIProviderFactory.createFromEnv();
+    this.aiProvider = aiProvider || this.createOptionalAIProvider();
+  }
+
+  private createOptionalAIProvider(): AIProvider | null {
+    try {
+      return AIProviderFactory.createFromEnv();
+    } catch {
+      logger.debug('[InterReview] No AI provider available');
+      return null;
+    }
+  }
+
+  private isAIAvailable(): boolean {
+    return this.aiProvider !== null;
   }
 
   async loadPromptFromSkills(promptName: string): Promise<string | null> {
@@ -93,6 +106,9 @@ export class InterReviewService extends EventEmitter {
   }
 
   private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    if (!this.aiProvider) {
+      throw new Error('AI provider not available');
+    }
     const response = await this.aiProvider.complete(userPrompt, systemPrompt);
     return response.content;
   }

@@ -1,4 +1,5 @@
 import { Scheduler } from '../core/Scheduler.js';
+import { EventBus } from '../core/EventBus.js';
 import { UnifiedAgent, CliAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
 import { type StreamingCallback } from '../core/transports/index.js';
 import { MemoryService } from '../core/Memory.js';
@@ -31,6 +32,8 @@ import { EnhancedCircuitBreaker, type CircuitState } from '../utils/EnhancedCirc
 import { TaskWatchdogService, WatchdogEvent } from './TaskWatchdogService.js';
 import { FailureAlertService, AlertType, type FailureAlert } from './FailureAlertService.js';
 import { LongTaskManager } from './LongTaskManager.js';
+import { InterReviewService, type ReviewResult } from './InterReviewService.js';
+import { AutoReviewService } from './AutoReviewService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -123,6 +126,8 @@ export class HeartbeatService {
   private readonly watchdogService: TaskWatchdogService;
   private readonly alertService: FailureAlertService;
   private readonly longTaskManager: LongTaskManager;
+  private readonly interReviewService: InterReviewService;
+  private readonly autoReviewService: AutoReviewService;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -201,6 +206,24 @@ export class HeartbeatService {
     this.alertService = new FailureAlertService(db);
     this.longTaskManager = new LongTaskManager(db);
 
+    this.interReviewService = new InterReviewService(db);
+
+    if (typeof this.scheduler.getEventBus === 'function') {
+      this.autoReviewService = new AutoReviewService(this.scheduler.getEventBus(), db, {
+        enabled: true,
+        reviewOnSuccess: true,
+        reviewOnFailure: true,
+        reviewerId: `nezha-heartbeat-${Date.now()}`,
+      });
+    } else {
+      this.autoReviewService = new AutoReviewService(new EventBus(db), db, {
+        enabled: false,
+        reviewOnSuccess: false,
+        reviewOnFailure: false,
+        reviewerId: `nezha-heartbeat-${Date.now()}`,
+      });
+    }
+
     this.alertService.setWebhookCallback(async (alert: FailureAlert) => {
       webhookService.sendAlert(alert).catch(err => {
         logger.error('Failed to send alert webhook:', err);
@@ -257,6 +280,7 @@ export class HeartbeatService {
     this.watchdogService.start();
     this.alertService.start();
     this.longTaskManager.start();
+    this.autoReviewService.start();
 
     this.setupWatchdogListeners();
     this.setupLongTaskListeners();
@@ -457,6 +481,7 @@ export class HeartbeatService {
     this.watchdogService.stop();
     this.alertService.stop();
     this.longTaskManager.stop();
+    this.autoReviewService.stop();
 
     // Save final checkpoint on shutdown
     if (this.checkpointService) {
@@ -785,6 +810,55 @@ After completing this task:
 
   isStreamingSupported(): boolean {
     return this.transportMode === 'cli';
+  }
+
+  async getReviewLearningsForContext(topic?: string): Promise<string> {
+    return this.interReviewService.getLearningsForAIContext(topic);
+  }
+
+  async requestInterReview(
+    taskId: string,
+    title: string,
+    commitHash?: string,
+    branch?: string
+  ): Promise<string> {
+    const { execSync } = await import('child_process');
+    const currentCommit = commitHash || (() => {
+      try { return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim(); } catch { return undefined; }
+    })();
+    const currentBranch = branch || (() => {
+      try { return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main'; } catch { return 'main'; }
+    })();
+
+    const request = {
+      taskId,
+      commitHash: currentCommit,
+      branch: currentBranch,
+      reviewerId: `nezha-${Date.now()}`,
+      context: {
+        taskDescription: title,
+        message: 'Manual inter-review requested from HeartbeatService',
+      },
+    };
+
+    return this.interReviewService.requestReview(request);
+  }
+
+  async performInterReview(reviewId: string, prompt: string): Promise<ReviewResult> {
+    return this.interReviewService.performReview(reviewId, prompt);
+  }
+
+  async getInterReviewStats(): Promise<{
+    pendingCount: number;
+    completedCount: number;
+    avgScore: number | null;
+  }> {
+    const stats = await this.interReviewService.getReviewStats();
+    return {
+      pendingCount: stats.pendingCount,
+      completedCount: stats.completedCount,
+      avgScore: stats.avgScore,
+    };
   }
 
   async executeTaskStreaming(

@@ -224,12 +224,45 @@ cat .env | grep NEZHA_DB
 ## 🔄 Inter-Review System
 
 ### Overview
-AI-powered code review system where agents review each other's work.
+AI-powered code review system integrated into the PDCA (Plan-Do-Check-Act) continuous improvement cycle.
 
 ### Components
-- **InterReviewService**: Core review logic stored in `src/services/InterReviewService.ts`
+- **InterReviewService**: Core review logic in `src/services/InterReviewService.ts`
 - **InterReviewCommands**: CLI commands in `src/cli/InterReviewCommands.ts`
 - **AutoReviewService**: Auto-triggers reviews on task completion
+- **ContextBuilder**: Feeds review learnings into task context
+
+### Integration with PDCA Workflow
+
+#### Plan
+- Read HEARTBEAT.md for task list
+- Request Inter-Review on previous commit
+
+#### Do
+- Execute tasks
+- Run tests/build
+- Commit changes
+
+#### Check (InterReview Integration)
+- **AutoReviewService** automatically triggers reviews after task completion
+- Reviews extract **learnings** and save to PostgreSQL memory
+- **ContextBuilder** includes review learnings in next task context
+
+#### Act
+- Apply fixes from review findings
+- Update documentation
+- Update HEARTBEAT.md
+
+### Key Pattern
+```
+Task → Execute → Auto-Review → Extract Learnings → Store in Memory → Next Task (with learnings in context)
+```
+
+### HeartbeatService Integration
+- `interReviewService`: Instance of InterReviewService for manual reviews
+- `autoReviewService`: Auto-triggers reviews on task events
+- `getReviewLearningsForContext()`: Gets learnings for AI context
+- `requestInterReview()`: Manually request a review
 
 ### CLI Commands
 ```bash
@@ -239,15 +272,10 @@ nezha review-stats                 # Show statistics
 nezha review-respond <id> <msg>    # Respond to review
 ```
 
-### Integration with ContinuousImprovementLoop
-- Reviews auto-trigger after improvement tasks complete
-- Learnings extracted and stored in PostgreSQL memory
-- Fallback to self-scoring if review service unavailable
-
-### Key Pattern
-```
-Task → Execute → Review (AI) → Extract Learnings → Store in Memory → Next Cycle
-```
+### Review Learnings Storage
+- Stored in `memory` table with source='inter-review'
+- Stored in `skills` table with name pattern 'review-learning-*'
+- Retrieved via `getLearningsForAIContext()` for task context
 
 ---
 
