@@ -1,5 +1,5 @@
 import { ImprovementIdentifier, Improvement } from './ImprovementIdentifier.js';
-import { MemoryService, type SaveMemoryInput } from './Memory.js';
+import { MemoryService } from './Memory.js';
 import { ConversationLogger } from './ConversationLogger.js';
 import { InterReviewService } from '../services/InterReviewService.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
@@ -435,7 +435,7 @@ export class ContinuousImprovementLoop {
     }
   }
 
-  private extractInsights(task: Task, result: TaskResult, review: Review): string[] {
+  private extractInsights(task: Task, result: TaskResult, _review: Review): string[] {
     const insights: string[] = [];
 
     if (result.success) {
@@ -451,7 +451,7 @@ export class ContinuousImprovementLoop {
     return insights;
   }
 
-  private extractPatterns(task: Task, result: TaskResult, review: Review): string[] {
+  private extractPatterns(task: Task, result: TaskResult, _review: Review): string[] {
     const patterns: string[] = [];
 
     if (task.category === 'infrastructure' && result.success) {
@@ -487,7 +487,6 @@ export class ContinuousImprovementLoop {
         await execAsync('git add -A');
         await execAsync(`git commit -m "auto: continuous improvement cycle ${this.cycleCount}"`);
         await execAsync('git push');
-      } else {
       }
     } catch (error) {
       console.error('   Failed to commit and push:', error);

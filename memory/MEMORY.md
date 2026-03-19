@@ -221,4 +221,34 @@ cat .env | grep NEZHA_DB
 
 ---
 
+## 🔄 Inter-Review System
+
+### Overview
+AI-powered code review system where agents review each other's work.
+
+### Components
+- **InterReviewService**: Core review logic stored in `src/services/InterReviewService.ts`
+- **InterReviewCommands**: CLI commands in `src/cli/InterReviewCommands.ts`
+- **AutoReviewService**: Auto-triggers reviews on task completion
+
+### CLI Commands
+```bash
+nezha review-request [commit]      # Request AI review
+nezha review-show [id]             # Show review details
+nezha review-stats                 # Show statistics
+nezha review-respond <id> <msg>    # Respond to review
+```
+
+### Integration with ContinuousImprovementLoop
+- Reviews auto-trigger after improvement tasks complete
+- Learnings extracted and stored in PostgreSQL memory
+- Fallback to self-scoring if review service unavailable
+
+### Key Pattern
+```
+Task → Execute → Review (AI) → Extract Learnings → Store in Memory → Next Cycle
+```
+
+---
+
 **Remember**: This file is part of the permanent memory system. Update it whenever system configuration changes!
