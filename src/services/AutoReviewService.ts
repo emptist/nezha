@@ -51,8 +51,14 @@ export class AutoReviewService {
   }
 
   stop(): void {
-    this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_COMPLETED, this.handleTaskCompleted.bind(this));
-    this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_FAILED, this.handleTaskFailed.bind(this));
+    if (!this.isListening) {
+      return;
+    }
+
+    if (this.config.enabled) {
+      this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_COMPLETED, this.handleTaskCompleted.bind(this));
+      this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_FAILED, this.handleTaskFailed.bind(this));
+    }
     this.isListening = false;
 
     logger.info('[AutoReview] Stopped');
