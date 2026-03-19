@@ -53,14 +53,14 @@ describe('AlertService', () => {
       service.trackFailure('task-1', 'Error 1');
       service.trackFailure('task-1', 'Error 2');
       const alert = service.getAlerts()[0];
-      expect(alert.severity).toBe('warning');
+      expect(alert?.severity).toBe('warning');
 
       const service2 = new AlertService({ failureThreshold: 3 });
       service2.trackFailure('task-2', 'Error 1');
       service2.trackFailure('task-2', 'Error 2');
       service2.trackFailure('task-2', 'Error 3');
       const alert2 = service2.getAlerts()[0];
-      expect(alert2.severity).toBe('warning');
+      expect(alert2?.severity).toBe('warning');
     });
 
     it('should not duplicate alerts for same task', () => {
