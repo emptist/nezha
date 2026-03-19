@@ -79,9 +79,11 @@ export class DailyMemoryService {
     const memoryFilePath = path.join(this.memoryDir, DEFAULT_MEMORY_FILE);
     try {
       await fs.access(memoryFilePath);
-    } catch {
+    } catch (err) {
       await fs.writeFile(memoryFilePath, DEFAULT_MEMORY_CONTENT, 'utf-8');
-      logger.info(`Created default ${DEFAULT_MEMORY_FILE}`);
+      logger.info(
+        `Created default ${DEFAULT_MEMORY_FILE}: ${err instanceof Error ? err.message : 'File not found'}`
+      );
     }
   }
 
@@ -121,11 +123,10 @@ export class DailyMemoryService {
     const timestamp = new Date().toISOString();
 
     let entry = `- **${timestamp}** | Task: ${input.task}\n`;
-    
+
     if (input.result) {
-      const truncatedResult = input.result.length > 200 
-        ? input.result.substring(0, 200) + '...' 
-        : input.result;
+      const truncatedResult =
+        input.result.length > 200 ? input.result.substring(0, 200) + '...' : input.result;
       entry += `  - Result: ${truncatedResult}\n`;
     }
 
@@ -135,9 +136,8 @@ export class DailyMemoryService {
     }
 
     if (input.solution) {
-      const truncatedSolution = input.solution.length > 150 
-        ? input.solution.substring(0, 150) + '...' 
-        : input.solution;
+      const truncatedSolution =
+        input.solution.length > 150 ? input.solution.substring(0, 150) + '...' : input.solution;
       entry += `  - Solution: ${truncatedSolution}\n`;
     }
 
@@ -177,7 +177,7 @@ export class DailyMemoryService {
       if (exists) {
         const content = await fs.readFile(filePath, 'utf-8');
         const hasLearningsSection = content.includes('## Learnings');
-        
+
         if (hasLearningsSection) {
           const parts = content.split('## Learnings');
           if (parts.length === 2) {
@@ -220,7 +220,7 @@ export class DailyMemoryService {
       if (exists) {
         const content = await fs.readFile(filePath, 'utf-8');
         const hasReflectionsSection = content.includes('## Reflections');
-        
+
         if (hasReflectionsSection) {
           const parts = content.split('## Reflections');
           if (parts.length === 2) {
@@ -256,7 +256,8 @@ export class DailyMemoryService {
     try {
       await fs.access(filePath);
       return true;
-    } catch {
+    } catch (err) {
+      logger.debug(`File does not exist: ${filePath}`);
       return false;
     }
   }
@@ -283,22 +284,25 @@ export class DailyMemoryService {
     for (let i = 0; i < days; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      
+
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
       const day = String(date.getDate()).padStart(2, '0');
       const filename = `${year}-${month}-${day}.md`;
-      
+
       const filePath = path.join(this.memoryDir, filename);
-      
+
       try {
         const exists = await this.fileExists(filePath);
         if (exists) {
           const content = await fs.readFile(filePath, 'utf-8');
           memories.push(content);
         }
-      } catch {
-        // File doesn't exist, skip
+      } catch (err) {
+        // File doesn't exist or read error, skip
+        logger.debug(
+          `Skipping file ${filePath}: ${err instanceof Error ? err.message : 'Unknown error'}`
+        );
       }
     }
 

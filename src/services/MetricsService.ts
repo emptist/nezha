@@ -1,5 +1,7 @@
 // Prometheus-style metrics for Nezha
 
+import { logger } from '../utils/logger.js';
+
 export type MetricType = 'counter' | 'gauge' | 'histogram';
 
 export interface Metric {
@@ -327,7 +329,10 @@ export async function runHealthChecks(): Promise<Record<string, boolean>> {
     checks.map(async ([name, check]) => {
       try {
         results[name] = await check();
-      } catch {
+      } catch (err) {
+        logger.debug(
+          `Health check '${name}' failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+        );
         results[name] = false;
       }
     })

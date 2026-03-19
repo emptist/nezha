@@ -36,7 +36,10 @@ export class GitAutoCommitPlugin implements Plugin {
     try {
       const status = execSync('git status --porcelain', { encoding: 'utf-8' });
       return status.trim().length > 0;
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to check git status: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
       return false;
     }
   }
@@ -48,7 +51,10 @@ export class GitAutoCommitPlugin implements Plugin {
         .split('\n')
         .filter(line => line.trim())
         .map(line => line.substring(3).trim());
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to get changed files: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
       return [];
     }
   }
@@ -69,7 +75,10 @@ export class GitAutoCommitPlugin implements Plugin {
         return firstLine;
       }
       return null;
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to get latest commit message: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
       return null;
     }
   }

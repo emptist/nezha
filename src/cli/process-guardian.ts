@@ -83,7 +83,10 @@ function getRunningProcesses(): Array<{ pid: number; command: string; started: D
     }
 
     return processes;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[Guardian] Failed to get processes: ${err instanceof Error ? err.message : 'Unknown'}`
+    );
     return [];
   }
 }
@@ -186,8 +189,14 @@ function stopGuardian(): void {
     try {
       process.kill(pid, 'SIGTERM');
       console.log(`[Guardian] Stopped guardian (PID: ${pid})`);
-    } catch {
-      console.log('[Guardian] Guardian not running');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ESRCH') {
+        console.log('[Guardian] Guardian not running');
+      } else {
+        console.error(
+          `[Guardian] Failed to stop guardian: ${err instanceof Error ? err.message : 'Unknown'}`
+        );
+      }
     }
   }
 }
