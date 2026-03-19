@@ -495,10 +495,8 @@ export class HealthServer {
       standardMetrics.activeTasks.set(running);
 
       const totalTasks = completed + failed;
-      standardMetrics.tasksTotal.inc(
-        totalTasks - (standardMetrics.tasksTotal as any)._lastValue || 0
-      );
-      (standardMetrics.tasksTotal as any)._lastValue = totalTasks;
+      const lastValue = standardMetrics.tasksTotal.value;
+      standardMetrics.tasksTotal.inc(totalTasks - lastValue);
 
       const memUsage = process.memoryUsage();
       standardMetrics.memoryUsageBytes.set(memUsage.heapUsed);
