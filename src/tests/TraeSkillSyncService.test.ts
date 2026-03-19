@@ -13,7 +13,7 @@ vi.mock('fs', async (importOriginal) => {
     existsSync: vi.fn().mockReturnValue(true),
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
-    readdirSync: vi.fn().mockReturnValue(['skill1.md', 'skill2.md'] as fs.Dirent[]),
+    readdirSync: vi.fn().mockReturnValue([]),
     unlinkSync: vi.fn(),
   };
 });

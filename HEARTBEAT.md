@@ -1,7 +1,7 @@
 # HEARTBEAT - Nezha 持续改进任务列表
 
-**最后更新**: 2026-03-20T21:35:00Z
-**版本**: 1.1
+**最后更新**: 2026-03-20T21:43:00Z
+**版本**: 1.2
 
 ---
 
@@ -26,9 +26,11 @@
 ## P1 - 高优先级
 
 ### [ ] 提高测试覆盖率 (目标 80%)
-- **描述**: 当前测试覆盖率 37.71%，需提升到 80%
+- **描述**: 当前测试覆盖率 40.63%，需提升到 80%
 - **命令**: `npm run test:coverage`
-- **状态**: 待提升（代码覆盖 37.71%，分支 73.92%，函数 68.27%）
+- **状态**: 进行中（代码覆盖 40.63%，分支 73.72%，函数 68.99%）
+  - 新增测试: SkillBuilder.test.ts, SkillReviewer.test.ts, TraeSkillSyncService.test.ts
+  - 新增 28 个测试用例 (541 → 548)
 
 ### [ ] 完善 Skill System 与 Agent 集成
 - **描述**: 完善 Skill System 与 Agent 的集成
@@ -53,6 +55,10 @@
 ## 已完成任务
 
 ### 2026-03-20
+- [x] 新增 SkillBuilder.test.ts (11 tests) - 覆盖 SkillBuilder.ts 72.05%
+- [x] 新增 SkillReviewer.test.ts (10 tests) - 覆盖 SkillReviewer.ts 63.12%
+- [x] 新增 TraeSkillSyncService.test.ts (7 tests) - 覆盖 TraeSkillSyncService.ts
+- [x] 测试覆盖率提升: 37.71% → 40.63%
 - [x] 修复 AgentSystem.test.ts 类型错误 ('stdio' 改为 'cli')
 - [x] 修复 KnowledgeGraph.test.ts 类型错误 (添加可选链)
 - [x] 修复 embedding/index.ts 类型导出 (使用 export type)
