@@ -13,7 +13,6 @@
 
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { join } from 'path';
 
 const PROCESS_PID_FILE = '/tmp/nezha-guardian.pid';
 const GUARDIAN_INTERVAL_MS = 60000;

@@ -6,43 +6,23 @@ import {
   runTransportComparison,
   runUnifiedAgentBenchmarks,
   runAgentComparison,
-  formatResult,
   type BenchmarkResult,
 } from './index.js';
 
-interface BenchmarkSuite {
-  name: string;
-  run: () => Promise<BenchmarkResult[]>;
-}
-
-const suites: BenchmarkSuite[] = [
-  {
-    name: 'ConversationLogger',
-    run: runConversationLoggerBenchmarks,
-  },
-  {
-    name: 'Transport',
-    run: runTransportBenchmarks,
-  },
-  {
-    name: 'UnifiedAgent',
-    run: runUnifiedAgentBenchmarks,
-  },
-];
-
-function printHeader(title: string): void {
+function printHeader(): void {
   console.log('\n' + '='.repeat(60));
-    console.log('='.repeat(60) + '\n');
+  console.log('='.repeat(60) + '\n');
 }
 
 function printSummary(allResults: Map<string, BenchmarkResult[]>): void {
-  printHeader('BENCHMARK SUMMARY');
+  printHeader();
 
-  for (const [suiteName, results] of allResults) {
-        for (const result of results) {
+  for (const [_suiteName, results] of allResults) {
+    for (const result of results) {
       console.log(
-        `  ${result.name}: avg=${result.avgMs.toFixed(2)}ms, p95=${result.p95Ms.toFixed(2)}ms, ops/s=${result.opsPerSec.
-  toFixed(0)}`
+        `  ${result.name}: avg=${result.avgMs.toFixed(2)}ms, p95=${result.p95Ms.toFixed(2)}ms, ops/s=${result.opsPerSec.toFixed(
+          0
+        )}`
       );
     }
   }
@@ -59,9 +39,9 @@ async function main(): Promise<void> {
   const allResults = new Map<string, BenchmarkResult[]>();
 
   console.log('\n' + '='.repeat(60));
-    console.log('='.repeat(60));
+  console.log('='.repeat(60));
   console.log(`\nDate: ${new Date().toISOString()}`);
-      if (runLogger) {
+  if (runLogger) {
     try {
       const results = await runConversationLoggerBenchmarks();
       allResults.set('ConversationLogger', results);
@@ -89,7 +69,7 @@ async function main(): Promise<void> {
   }
 
   if (runComparison) {
-    printHeader('TRANSPORT COMPARISON (HTTP vs CLI)');
+    printHeader();
     try {
       await runTransportComparison();
     } catch (error) {
@@ -107,7 +87,7 @@ async function main(): Promise<void> {
     printSummary(allResults);
   }
 
-  printHeader('BENCHMARKS COMPLETE');
-              }
+  printHeader();
+}
 
 main().catch(console.error);

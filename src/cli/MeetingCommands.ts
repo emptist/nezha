@@ -1,7 +1,6 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { colors, cli } from '../utils/cli.js';
-import { logger } from '../utils/logger.js';
 
 export interface MeetingConfig {
   db: DatabaseClient;
@@ -49,9 +48,11 @@ ${title}
 ${description}
 
 ### Participation
-${participants && participants.length > 0 
-  ? `Participants: ${participants.join(', ')}` 
-  : 'All AI agents are invited to participate.'}
+${
+  participants && participants.length > 0
+    ? `Participants: ${participants.join(', ')}`
+    : 'All AI agents are invited to participate.'
+}
 
 ### Discussion Format
 Please follow the meeting-protocol skill:
@@ -88,7 +89,7 @@ Please follow the meeting-protocol skill:
         TASK_STATUS.PENDING,
         priority,
         'discussion',
-        'collaboration'
+        'collaboration',
       ]
     );
 
@@ -101,7 +102,7 @@ Please follow the meeting-protocol skill:
         null,
         TASK_STATUS.PENDING,
         'Discussion created',
-        JSON.stringify({ type: 'discussion', participants })
+        JSON.stringify({ type: 'discussion', participants }),
       ]
     );
 
@@ -150,7 +151,7 @@ Please follow the meeting-protocol skill:
         row.status,
         row.priority.toString(),
         row.title.substring(0, 40) + (row.title.length > 40 ? '...' : ''),
-        new Date(row.created_at).toLocaleDateString()
+        new Date(row.created_at).toLocaleDateString(),
       ])
     );
     console.log('');
@@ -211,17 +212,6 @@ Please follow the meeting-protocol skill:
     concerns: string[],
     suggestions: string[]
   ): Promise<void> {
-    const opinion: Opinion = {
-      id: crypto.randomUUID(),
-      author,
-      perspective,
-      keyPoints,
-      reasoning,
-      concerns,
-      suggestions,
-      timestamp: new Date()
-    };
-
     await this.db.query(
       `INSERT INTO memory (content, project_id, metadata, importance)
        VALUES ($1, $2, $3, $4)`,
@@ -244,7 +234,7 @@ ${suggestions.length > 0 ? suggestions.map(s => `- ${s}`).join('\n') : 'None'}
 _Recorded for discussion: ${discussionId}_`,
         null,
         JSON.stringify({ type: 'opinion', discussionId, author }),
-        7
+        7,
       ]
     );
 
@@ -279,12 +269,7 @@ _Reached at: ${new Date().toISOString()}_`;
     await this.db.query(
       `INSERT INTO memory (content, project_id, metadata, importance)
        VALUES ($1, $2, $3, $4)`,
-      [
-        consensusContent,
-        null,
-        JSON.stringify({ type: 'consensus', topic, participants }),
-        9
-      ]
+      [consensusContent, null, JSON.stringify({ type: 'consensus', topic, participants }), 9]
     );
 
     await this.db.query(
@@ -297,7 +282,7 @@ _Reached at: ${new Date().toISOString()}_`;
         TASK_STATUS.PENDING,
         10,
         'decision',
-        'collaboration'
+        'collaboration',
       ]
     );
 
@@ -330,9 +315,13 @@ _Reached at: ${new Date().toISOString()}_`;
       const topicMatch = row.content.match(/\*\*Topic\*\*: (.+)/);
       const decisionMatch = row.content.match(/\*\*Decision\*\*: (.+)/);
       const topic = topicMatch ? topicMatch[1] : 'Unknown';
-      const decision = decisionMatch ? decisionMatch[1] ?? 'No decision recorded' : 'No decision recorded';
-      
-      console.log(`${colors.cyan}${new Date(row.created_at).toLocaleDateString()}${colors.reset} | ${topic}`);
+      const decision = decisionMatch
+        ? (decisionMatch[1] ?? 'No decision recorded')
+        : 'No decision recorded';
+
+      console.log(
+        `${colors.cyan}${new Date(row.created_at).toLocaleDateString()}${colors.reset} | ${topic}`
+      );
       console.log(`   ${colors.dim}${decision.substring(0, 60)}${colors.reset}`);
       console.log('');
     }

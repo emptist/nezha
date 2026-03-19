@@ -41,6 +41,7 @@ interface AgentMetrics {
 }
 
 function sanitizeForLog(input: string, maxLength: number = 200): string {
+  // eslint-disable-next-line no-control-regex
   const sanitized = input.replace(/[\x00-\x1F\x7F]/g, '');
   if (sanitized.length <= maxLength) {
     return sanitized;

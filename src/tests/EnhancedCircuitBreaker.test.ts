@@ -132,7 +132,7 @@ describe('EnhancedCircuitBreaker', () => {
 
   describe('state change callbacks', () => {
     it('should call onStateChange callback', async () => {
-      let stateChanges: [string, string][] = [];
+      const stateChanges: [string, string][] = [];
       const cb = new EnhancedCircuitBreaker({
         failureThreshold: 1,
         onStateChange: (from: string, to: string) => stateChanges.push([from, to]),
@@ -147,7 +147,7 @@ describe('EnhancedCircuitBreaker', () => {
     });
 
     it('should call onFailure callback', async () => {
-      let failures: number[] = [];
+      const failures: number[] = [];
       const cb = new EnhancedCircuitBreaker({
         failureThreshold: 3,
         onFailure: (_: Error, count: number) => failures.push(count),

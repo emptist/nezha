@@ -4,6 +4,7 @@ const MAX_PROMPT_LENGTH = 100000;
 const MAX_SERVER_URL_LENGTH = 2048;
 
 function sanitizeStringForCli(input: string): string {
+  // eslint-disable-next-line no-control-regex
   return input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
 }
 
@@ -11,7 +12,7 @@ function validateServerUrl(url: string): void {
   if (url.length > MAX_SERVER_URL_LENGTH) {
     throw new Error(`Server URL exceeds maximum length of ${MAX_SERVER_URL_LENGTH}`);
   }
-  if (!/^[a-zA-Z0-9._~:/\-]+$/.test(url)) {
+  if (!/^[a-zA-Z0-9._~:/-]+$/.test(url)) {
     throw new Error('Server URL contains invalid characters');
   }
 }
@@ -20,6 +21,7 @@ function validatePrompt(prompt: string): void {
   if (prompt.length > MAX_PROMPT_LENGTH) {
     throw new Error(`Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH}`);
   }
+  // eslint-disable-next-line no-control-regex
   const nullBytes = prompt.match(/\x00/g);
   if (nullBytes) {
     throw new Error('Prompt contains null bytes');
@@ -412,6 +414,7 @@ export class CliTransport implements SessionManager {
             resolve(output);
           }
         } else if (!procKilled) {
+          // eslint-disable-next-line no-control-regex
           const sanitizedError = errorOutput.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
           reject(new Error(`opencode exited with code ${code}: ${sanitizedError}`));
         }

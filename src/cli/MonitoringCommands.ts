@@ -1,6 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
-import { logger } from '../utils/logger.js';
+import { TASK_STATUS } from '../config/constants.js';
 import { colors } from '../utils/cli.js';
 import { TaskWatchdogService } from '../services/TaskWatchdogService.js';
 import { FailureAlertService } from '../services/FailureAlertService.js';
@@ -52,14 +51,20 @@ export class MonitoringCommands {
       return;
     }
 
-    console.log(`\n${colors.bright}Dead Letter Queue (${result.rows.length} items):${colors.reset}\n`);
+    console.log(
+      `\n${colors.bright}Dead Letter Queue (${result.rows.length} items):${colors.reset}\n`
+    );
 
     for (const item of result.rows) {
       const categoryColor = this.getCategoryColor(item.error_category);
       console.log(`${colors.red}[${item.review_status || 'pending'}]${colors.reset} ${item.title}`);
       console.log(`  ID: ${item.original_task_id.substring(0, 8)}...`);
-      console.log(`  ${categoryColor}[${item.error_category || 'UNKNOWN'}]${colors.reset} ${item.error_message.substring(0, 80)}...`);
-      console.log(`  Retries: ${item.retry_count}/${item.max_retries} | Watchdog kills: ${item.watchdog_kills}`);
+      console.log(
+        `  ${categoryColor}[${item.error_category || 'UNKNOWN'}]${colors.reset} ${item.error_message.substring(0, 80)}...`
+      );
+      console.log(
+        `  Retries: ${item.retry_count}/${item.max_retries} | Watchdog kills: ${item.watchdog_kills}`
+      );
       console.log(`  Failed: ${new Date(item.failed_at).toLocaleString()}`);
       console.log();
     }
@@ -81,7 +86,10 @@ export class MonitoringCommands {
     }
   }
 
-  async updateDLQReviewStatus(id: string, status: 'pending' | 'reviewed' | 'resolved' | 'ignored'): Promise<void> {
+  async updateDLQReviewStatus(
+    id: string,
+    status: 'pending' | 'reviewed' | 'resolved' | 'ignored'
+  ): Promise<void> {
     const result = await this.db.query(
       `UPDATE dead_letter_queue 
        SET review_status = $2, reviewed_at = NOW(), reviewed_by = 'cli'
@@ -136,7 +144,13 @@ export class MonitoringCommands {
     await this.db.query(
       `INSERT INTO tasks (id, title, description, status, priority, error)
        VALUES ($1, $2, $3, $4, 10, $5)`,
-      [newTaskId, `[RETRY] ${item.title}`, item.description, TASK_STATUS.PENDING, `Retry of failed task: ${item.error_message}`]
+      [
+        newTaskId,
+        `[RETRY] ${item.title}`,
+        item.description,
+        TASK_STATUS.PENDING,
+        `Retry of failed task: ${item.error_message}`,
+      ]
     );
 
     await this.db.query(
@@ -182,12 +196,16 @@ export class MonitoringCommands {
       const ackStatus = alert.acknowledged ? colors.green + '[ACK]' : colors.red + '[NEW]';
       console.log(`${ackStatus}${colors.reset} ${colors.bright}${alert.title}${colors.reset}`);
       console.log(`  Type: ${alert.alert_type} | Category: ${alert.error_category || 'N/A'}`);
-      console.log(`  ${severityColor}Count: ${alert.failure_count}/${alert.threshold}${colors.reset}`);
+      console.log(
+        `  ${severityColor}Count: ${alert.failure_count}/${alert.threshold}${colors.reset}`
+      );
       if (alert.error_message) {
         console.log(`  Error: ${alert.error_message.substring(0, 60)}...`);
       }
       if (alert.acknowledged) {
-        console.log(`  Acked by ${alert.acknowledged_by} at ${new Date(alert.acknowledged_at!).toLocaleString()}`);
+        console.log(
+          `  Acked by ${alert.acknowledged_by} at ${new Date(alert.acknowledged_at!).toLocaleString()}`
+        );
       } else {
         console.log(`  Created: ${new Date(alert.created_at).toLocaleString()}`);
       }
@@ -235,7 +253,9 @@ export class MonitoringCommands {
     const dlqCount = await this.db.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM dead_letter_queue WHERE resolved = false`
     );
-    console.log(`  DLQ size: ${colors.yellow}${parseInt(dlqCount.rows[0]?.count || '0')}${colors.reset}`);
+    console.log(
+      `  DLQ size: ${colors.yellow}${parseInt(dlqCount.rows[0]?.count || '0')}${colors.reset}`
+    );
   }
 
   async getLongTaskStats(): Promise<void> {
@@ -263,7 +283,9 @@ export class MonitoringCommands {
       console.log(`${colors.yellow}[PAUSED]${colors.reset} ${task.title}`);
       console.log(`  ID: ${task.taskId}`);
       console.log(`  Reason: ${task.pauseReason}`);
-      console.log(`  Paused until: ${task.pausedUntil ? new Date(task.pausedUntil).toLocaleString() : 'N/A'}`);
+      console.log(
+        `  Paused until: ${task.pausedUntil ? new Date(task.pausedUntil).toLocaleString() : 'N/A'}`
+      );
       console.log(`  Progress: ${task.progressPercent}%`);
       console.log(`  Runtime: ${task.elapsedSeconds}s / ${task.maxRuntimeSeconds}s`);
       console.log();
@@ -281,7 +303,9 @@ export class MonitoringCommands {
     console.log(`\n${colors.bright}Orphaned Processes (${orphans.length}):${colors.reset}\n`);
 
     for (const orphan of orphans) {
-      console.log(`  PID: ${orphan.pid} | Age: ${orphan.ageMinutes}min | Command: ${orphan.command.substring(0, 40)}...`);
+      console.log(
+        `  PID: ${orphan.pid} | Age: ${orphan.ageMinutes}min | Command: ${orphan.command.substring(0, 40)}...`
+      );
       console.log(`  Task ID: ${orphan.taskId || 'N/A'}`);
       console.log(`  Spawned: ${new Date(orphan.spawnedAt).toLocaleString()}`);
 
@@ -328,14 +352,15 @@ export class MonitoringCommands {
       const failures = row.total_failures.padEnd(10);
       const stuck = row.stuck_count.padEnd(8);
       const kills = row.watchdog_kills.padEnd(8);
-      const avgDur = row.avg_duration_seconds 
+      const avgDur = row.avg_duration_seconds
         ? `${Math.round(parseFloat(row.avg_duration_seconds))}s`.padEnd(14)
         : 'N/A'.padEnd(14);
       const maxRet = row.max_retries || '0';
 
       const catColor = this.getCategoryColor(row.error_category);
       console.log(
-        catColor, cat,
+        catColor,
+        cat,
         failures,
         colors.red + stuck,
         colors.yellow + kills,
@@ -348,14 +373,22 @@ export class MonitoringCommands {
 
   private getCategoryColor(category: string | null): string {
     switch (category) {
-      case 'NETWORK': return colors.cyan;
-      case 'AUTH': return colors.red;
-      case 'TIMEOUT': return colors.yellow;
-      case 'SERVER': return colors.magenta;
-      case 'TRANSPORT': return colors.blue;
-      case 'LOGIC': return colors.red;
-      case 'RESOURCE': return colors.yellow;
-      default: return colors.dim;
+      case 'NETWORK':
+        return colors.cyan;
+      case 'AUTH':
+        return colors.red;
+      case 'TIMEOUT':
+        return colors.yellow;
+      case 'SERVER':
+        return colors.magenta;
+      case 'TRANSPORT':
+        return colors.blue;
+      case 'LOGIC':
+        return colors.red;
+      case 'RESOURCE':
+        return colors.yellow;
+      default:
+        return colors.dim;
     }
   }
 
@@ -368,10 +401,14 @@ export class MonitoringCommands {
 
   private getSeverityLabelColor(severity: string): string {
     switch (severity) {
-      case 'critical': return colors.red;
-      case 'high': return colors.yellow;
-      case 'medium': return colors.cyan;
-      default: return colors.green;
+      case 'critical':
+        return colors.red;
+      case 'high':
+        return colors.yellow;
+      case 'medium':
+        return colors.cyan;
+      default:
+        return colors.green;
     }
   }
 }

@@ -299,7 +299,6 @@ export class ConversationLogger {
 
   private async flushIndexToDisk(newEntry: IndexEntry): Promise<void> {
     const indexPath = path.join(this.logDir, 'index.json');
-    const tempIndexPath = path.join(this.logDir, 'index.json.tmp');
 
     let index: IndexEntry[] = [];
 
@@ -331,7 +330,9 @@ export class ConversationLogger {
     } catch (error) {
       try {
         await fs.promises.unlink(tempIndexPath);
-      } catch {}
+      } catch {
+        // ignore cleanup error
+      }
       throw error;
     }
   }
@@ -450,7 +451,11 @@ export class ConversationLogger {
       throw new Error('Database client not configured');
     }
 
-    const results = await this.dbClient.getConversationsByDateRange(startDate, endDate, this.projectId);
+    const results = await this.dbClient.getConversationsByDateRange(
+      startDate,
+      endDate,
+      this.projectId
+    );
     return results as unknown as ConversationRecord[];
   }
 

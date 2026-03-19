@@ -944,12 +944,14 @@ describe('Security Tests', () => {
   describe('Error Message Sanitization', () => {
     it('should sanitize control characters from error messages', () => {
       const errorWithControlChars = 'Error\x00\x1F message';
+      // eslint-disable-next-line no-control-regex
       const sanitized = errorWithControlChars.replace(/[\x00-\x1F\x7F]/g, '');
       expect(sanitized).toBe('Error message');
     });
 
     it('should truncate long error output', () => {
       const longError = 'x'.repeat(1000);
+      // eslint-disable-next-line no-control-regex
       const truncated = longError.slice(0, 500).replace(/[\x00-\x1F\x7F]/g, '');
       expect(truncated.length).toBe(500);
     });

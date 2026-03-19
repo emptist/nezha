@@ -96,13 +96,13 @@ export class ImprovementIdentifier {
 
     try {
       await execAsync('npm run lint 2>&1 || true');
-    } catch (error) {
+    } catch {
       issues.push('Linting errors found');
     }
 
     try {
       await execAsync('npm run typecheck 2>&1 || true');
-    } catch (error) {
+    } catch {
       issues.push('Type errors found');
     }
 
@@ -328,11 +328,7 @@ export class ImprovementIdentifier {
     const improvements: Improvement[] = [];
 
     const coreDir = path.join(this.projectRoot, 'src/core');
-    const expectedFiles = [
-      'ImprovementIdentifier.ts',
-      'ResultReviewer.ts',
-      'LearningRecorder.ts',
-    ];
+    const expectedFiles = ['ImprovementIdentifier.ts', 'ResultReviewer.ts', 'LearningRecorder.ts'];
 
     for (const file of expectedFiles) {
       const filePath = path.join(coreDir, file);
