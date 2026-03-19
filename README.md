@@ -18,6 +18,7 @@
 | **技能系统**         | DB-only 技能加载 + 安全扫描 | ✅ 已实现 |
 | **AI 构建技能**      | AI 自主生成技能             | ✅ 已实现 |
 | **任务评审**         | 自动化 QC + 学习模式        | ✅ 已实现 |
+| **AI 互相 Review**   | AI 互相 review 代码         | ✅ 已实现 |
 | **知识导入**         | SOUL.md → PostgreSQL        | ✅ 已实现 |
 
 ## 核心设计
@@ -313,7 +314,48 @@ interface TaskReviewSkill {
 - 关键问题 → 避免
 - 常见模式 → 存储
 
-#### 5. Knowledge Import (知识导入) ✅
+#### 5. Inter-Review (AI 互相 Review) ✅
+
+AI 互相 review 代码，提取 learnings 存入 memory：
+
+```typescript
+interface InterReviewService {
+  // 请求 review
+  requestReview(request: ReviewRequest): Promise<string>;
+
+  // 执行 review (AI 调用 AI)
+  performReview(reviewId: string, prompt: string): Promise<ReviewResult>;
+
+  // 提取 learnings 存入 memory
+  saveLearningsToMemory(result: ReviewResult, taskId?: string): Promise<void>;
+}
+```
+
+**核心哲学**: Review 的输出不是反馈，而是 learnings - 帮助未来 AI 避免类似问题的提醒
+
+**Learnings 示例**:
+
+```json
+{
+  "learnings": [
+    {
+      "topic": "TypeScript patterns",
+      "reminder": "Always use non-null assertion after rows.length check"
+    },
+    { "topic": "Database patterns", "reminder": "Use record_spawned_process() when tracking PIDs" }
+  ]
+}
+```
+
+**CLI 命令**:
+
+```bash
+npm run review:request [commit-hash]  # 请求 AI review
+npm run review:show [review-id]      # 查看 review
+npm run review:stats                 # 查看统计
+```
+
+#### 6. Knowledge Import (知识导入) ✅
 
 从传统 markdown 文件导入：
 
@@ -377,14 +419,22 @@ interface ClawHubClient {
 nezha/
 ├── src/
 │   ├── core/
-│   │   ├── Agent.ts           # Agent 通信系统 ✅
-│   │   ├── AgentSystem.ts     # Agent 管理系统 ⚠️
-│   │   ├── EventBus.ts        # 事件总线 ✅
-│   │   ├── Memory.ts          # 记忆系统 ✅
-│   │   ├── Scheduler.ts       # 调度系统 ✅
-│   │   └── SkillSystem.ts     # 技能系统 ⚠️
+│   │   ├── Agent.ts              # Agent 通信系统 ✅
+│   │   ├── AgentSystem.ts        # Agent 管理系统 ✅
+│   │   ├── ContinuousImprovementLoop.ts  # 持续改进循环 ✅
+│   │   ├── EventBus.ts          # 事件总线 ✅
+│   │   ├── Memory.ts            # 记忆系统 ✅
+│   │   ├── Scheduler.ts         # 调度系统 ✅
+│   │   └── SkillSystem.ts       # 技能系统 ✅
 │   ├── services/
-│   │   ├── HeartbeatService.ts # 心跳服务 ✅
+│   │   ├── HeartbeatService.ts  # 心跳服务 ✅
+│   │   ├── InterReviewService.ts # AI 互相 Review ✅
+│   │   ├── AutoReviewService.ts  # 自动触发 Review ✅
+│   │   ├── TaskReviewSkill.ts    # 任务 QC ✅
+│   │   ├── SkillBuilder.ts       # AI 构建技能 ✅
+│   │   ├── ClawHubClient.ts      # ClawHub 集成 ✅
+│   │   ├── MemoryService.ts      # 记忆服务 ✅
+│   │   └── DatabaseSkillLoader.ts # DB-only 技能加载 ✅
 │   │   └── MemoryService.ts   # 记忆服务 ✅
 │   ├── db/
 │   │   ├── DatabaseClient.ts  # 数据库客户端 ✅
@@ -534,6 +584,12 @@ nezha task-add "Review code" "Review src/core for issues" 5
 # 列出任务
 nezha tasks
 
+# AI Review 命令
+nezha review-request [commit]  # 请求 AI review
+nezha review-show [id]         # 查看 review
+nezha review-stats              # 查看统计
+nezha review-respond <id> <msg> # 回应 review
+
 # 帮助
 nezha help
 ```
@@ -621,6 +677,7 @@ OpenClaw 是一个**通用 AI 助手网关**，提供：
 - [x] **Markdown Knowledge Import (SOUL.md → DB)**
 - [x] **Decision Framework (ReAct 模式)**
 - [x] **Dual Storage (JSONL + PostgreSQL)**
+- [x] **Inter-Review (AI 互相 Review)**
 
 ### 进行中 🚧
 

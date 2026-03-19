@@ -8,8 +8,8 @@
    - 龙虾没有的功能，优先度降低
 
 2. **当前优先级**
-   - P0: 实现 AI 驱动的学习系统 (参考 LEARNING_SYSTEM.md)
    - P0: Process Guardian 进程守护完善
+   - P0: Inter-Review 集成到改进循环
    - P1: 提高测试覆盖率 (目标 80%)
    - P1: 完善 Skill System 与 Agent 集成
    - P2: 向量搜索 (pgvector)
@@ -34,3 +34,4 @@
 - [x] 客户项目集成教程 (docs/INTEGRATION_TUTORIAL.md)
 - [x] OpenClaw 持续工作机制研究
 - [x] OpenClaw 记忆系统研究
+- [x] AI Inter-Review 系统 (互相 Review 机制)
