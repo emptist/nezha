@@ -31,6 +31,10 @@ export const DATABASE_TABLES = {
   KNOWLEDGE_LINKS: 'knowledge_links',
   LEARNING_INSIGHTS: 'learning_insights',
   TASK_OUTCOME_FEATURES: 'task_outcome_features',
+  DEAD_LETTER_QUEUE: 'dead_letter_queue',
+  FAILURE_ALERTS: 'failure_alerts',
+  STUCK_TASKS_TRACKING: 'stuck_tasks_tracking',
+  LONG_TASKS_PAUSE: 'long_tasks_pause',
 } as const;
 
 export const DATABASE_CONFIG = {
@@ -105,4 +109,31 @@ export const OPENCODE_API = {
     SESSION: '/session',
     SESSION_STATUS: '/session/status',
   },
+} as const;
+
+export const WATCHDOG_CONFIG = {
+  CHECK_INTERVAL_MS: 30000,
+  DEFAULT_TIMEOUT_SECONDS: 300,
+  MAX_KILLS_PER_TASK: 3,
+  GRACE_PERIOD_MS: 5000,
+  ENABLE_PROCESS_KILL: true,
+} as const;
+
+export const ALERT_CONFIG = {
+  CHECK_INTERVAL_MS: 60000,
+  REPEATED_FAILURE_THRESHOLD: 3,
+  STUCK_TASK_THRESHOLD_SECONDS: 300,
+  DLQ_SIZE_THRESHOLD: 10,
+  CONSECUTIVE_FAILURE_THRESHOLD: 5,
+  AUTO_ACKNOWLEDGE_AFTER_MS: 86400000,
+} as const;
+
+export const LONGTASK_CONFIG = {
+  CHECK_INTERVAL_MS: 60000,
+  DEFAULT_MAX_RUNTIME_SECONDS: 1800,
+  DEFAULT_PAUSE_DURATION_SECONDS: 3600,
+  ENABLE_AUTO_RESUME: true,
+  PROGRESS_REPORT_INTERVAL_MS: 300000,
+  MIN_PROGRESS_INTERVAL_MS: 600000,
+  MIN_PROGRESS_PERCENT: 50,
 } as const;

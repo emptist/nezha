@@ -28,6 +28,9 @@ import { NotificationPlugin, LoggingPlugin } from '../plugins/index.js';
 import { WebhookService, createWebhookConfigFromEnv } from './WebhookService.js';
 import { ContextBuilder } from './ContextBuilder.js';
 import { EnhancedCircuitBreaker, type CircuitState } from '../utils/EnhancedCircuitBreaker.js';
+import { TaskWatchdogService, WatchdogEvent } from './TaskWatchdogService.js';
+import { FailureAlertService, AlertType, type FailureAlert } from './FailureAlertService.js';
+import { LongTaskManager } from './LongTaskManager.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -117,6 +120,9 @@ export class HeartbeatService {
   private readonly agentCircuitBreaker: EnhancedCircuitBreaker;
   private isAgentAvailable: boolean = true;
   private readonly insightIntervalMs: number;
+  private readonly watchdogService: TaskWatchdogService;
+  private readonly alertService: FailureAlertService;
+  private readonly longTaskManager: LongTaskManager;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -191,6 +197,16 @@ export class HeartbeatService {
       },
     });
 
+    this.watchdogService = new TaskWatchdogService(db);
+    this.alertService = new FailureAlertService(db);
+    this.longTaskManager = new LongTaskManager(db);
+
+    this.alertService.setWebhookCallback(async (alert: FailureAlert) => {
+      webhookService.sendAlert(alert).catch(err => {
+        logger.error('Failed to send alert webhook:', err);
+      });
+    });
+
     logger.info(`HeartbeatService initialized with ${this.transportMode} transport mode`);
 
     this.scheduler.onTaskReady = this.executeTask.bind(this);
@@ -238,7 +254,16 @@ export class HeartbeatService {
     this.startCheckpointTimer();
     this.startInsightGeneration();
 
-    // Load checkpoint state and reset orphaned RUNNING tasks
+    this.watchdogService.start();
+    this.alertService.start();
+    this.longTaskManager.start();
+
+    this.setupWatchdogListeners();
+    this.setupLongTaskListeners();
+
+    this.setupWatchdogListeners();
+    this.setupLongTaskListeners();
+
     if (this.checkpointService) {
       const savedState = await this.checkpointService.loadState();
       if (savedState) {
@@ -311,6 +336,50 @@ export class HeartbeatService {
         logger.error('Insight generation failed:', error);
       }
     }, this.insightIntervalMs);
+  }
+
+  private setupWatchdogListeners(): void {
+    this.watchdogService.on(WatchdogEvent.TASK_STUCK, async (task) => {
+      logger.warn(`Watchdog detected stuck task: ${task.title} (${task.taskId})`);
+      await this.alertService.createAlert(AlertType.STUCK_TASK, `Stuck task: ${task.title}`, {
+        taskId: task.taskId,
+        metadata: { elapsedMs: Date.now() - task.lastHeartbeat.getTime() },
+      });
+    });
+
+    this.watchdogService.on(WatchdogEvent.TASK_KILLED, async (result) => {
+      logger.warn(`Watchdog killed task: ${result.taskId} (reason: ${result.reason})`);
+      await this.alertService.createAlert(AlertType.WATCHDOG_KILL, `Watchdog kill: ${result.taskId}`, {
+        taskId: result.taskId,
+        metadata: { reason: result.reason, processId: result.processId },
+      });
+    });
+
+    this.watchdogService.on(WatchdogEvent.HEARTBEAT_MISSED, async (data) => {
+      logger.debug(`Task approaching timeout: ${data.task.title}`);
+    });
+  }
+
+  private setupLongTaskListeners(): void {
+    this.longTaskManager.on('maxRuntimeExceeded', async (task) => {
+      logger.warn(`Long task exceeded max runtime: ${task.title} (${task.taskId})`);
+      await this.alertService.createAlert(AlertType.REPEATED_FAILURE, `Long task timeout: ${task.title}`, {
+        taskId: task.taskId,
+        metadata: { elapsedSeconds: task.elapsedSeconds, maxRuntimeSeconds: task.maxRuntimeSeconds },
+      });
+    });
+
+    this.longTaskManager.on('progressStalled', async (data) => {
+      logger.warn(`Task progress stalled: ${data.task.title} (${data.task.taskId})`);
+    });
+
+    this.longTaskManager.on('paused', async (data) => {
+      logger.info(`Long task paused: ${data.taskId} (reason: ${data.reason})`);
+    });
+
+    this.longTaskManager.on('resumed', async (data) => {
+      logger.info(`Long task resumed: ${data.taskId}`);
+    });
   }
 
   private async runContinuousLoop(): Promise<void> {
@@ -388,6 +457,10 @@ export class HeartbeatService {
       this.insightTimer = null;
     }
 
+    this.watchdogService.stop();
+    this.alertService.stop();
+    this.longTaskManager.stop();
+
     // Save final checkpoint on shutdown
     if (this.checkpointService) {
       this.checkpointService.updateStats(this.stats);
@@ -425,6 +498,9 @@ export class HeartbeatService {
     };
 
     await pluginManager.executeBeforeTask(taskContext);
+
+    await this.watchdogService.trackTask(taskId, title, undefined, timeoutSeconds);
+    await this.longTaskManager.registerTask(taskId, title, { maxRuntimeSeconds: timeoutSeconds });
 
     logger.info(`Executing task: ${title} (attempt ${retryCount + 1}/${maxRetries})`);
 
@@ -547,14 +623,20 @@ After completing this task:
 
         await this.runReflection(title, result.message || 'Completed');
 
+        await this.watchdogService.untrackTask(taskId);
+        await this.longTaskManager.unregisterTask(taskId);
+
         return;
       }
 
       this.stats.tasksFailed++;
 
+      const errorMessage = result.message || 'Unknown error';
+      await this.alertService.categorizeAndRecordFailure(taskId, title, errorMessage, retryCount);
+
       await this.learning.recordOutcome(taskId, 'FAILED', {
         taskDescription: title,
-        errorMessage: result.message || 'Unknown error',
+        errorMessage: errorMessage,
         attempts: retryCount + 1,
       });
 
@@ -608,6 +690,8 @@ After completing this task:
       );
     } catch (error) {
       standardMetrics.activeTasks.dec(1);
+      await this.watchdogService.untrackTask(taskId);
+      await this.longTaskManager.unregisterTask(taskId);
       await pluginManager.executeOnError(
         taskContext,
         error instanceof Error ? error : new Error(String(error))
@@ -626,16 +710,18 @@ After completing this task:
   ): Promise<void> {
     logger.error(`Task failed after ${maxRetries} attempts, moving to dead letter queue`);
 
+    const categorized = await this.alertService.categorizeAndRecordFailure(taskId, title, error, retryCount);
+
     const tableName = DATABASE_TABLES.TASKS;
     await this.db.query(
-      `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
-      [TASK_STATUS.FAILED, `Max retries (${maxRetries}) exceeded: ${error}`, retryCount, taskId]
+      `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, error_category = $4 WHERE id = $5`,
+      [TASK_STATUS.FAILED, `Max retries (${maxRetries}) exceeded: ${error}`, retryCount, categorized, taskId]
     );
 
     await this.db.query(
-      `INSERT INTO dead_letter_queue (original_task_id, title, description, error_message, retry_count, max_retries)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [taskId, title, description || '', error, retryCount, maxRetries]
+      `INSERT INTO dead_letter_queue (original_task_id, title, description, error_message, error_category, retry_count, max_retries)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [taskId, title, description || '', error, categorized, retryCount, maxRetries]
     );
 
     await this.db.query(
@@ -647,9 +733,20 @@ After completing this task:
         TASK_STATUS.RUNNING,
         TASK_STATUS.FAILED,
         `Max retries (${maxRetries}) exceeded: ${error}`,
-        JSON.stringify({ retryCount, maxRetries, movedToDLQ: true }),
+        JSON.stringify({ retryCount, maxRetries, movedToDLQ: true, errorCategory: categorized }),
       ]
     );
+
+    await this.alertService.createAlert(AlertType.DLQ_THRESHOLD, `DLQ entry: ${title}`, {
+      taskId,
+      errorCategory: categorized,
+      errorMessage: error,
+      failureCount: retryCount,
+      metadata: { maxRetries, movedToDLQ: true },
+    });
+
+    await this.watchdogService.untrackTask(taskId);
+    await this.longTaskManager.unregisterTask(taskId);
 
     this.stats.tasksFailed++;
   }

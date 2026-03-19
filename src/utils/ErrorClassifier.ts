@@ -4,6 +4,8 @@ export enum ErrorCategory {
   TIMEOUT = 'TIMEOUT',
   SERVER = 'SERVER',
   TRANSPORT = 'TRANSPORT',
+  LOGIC = 'LOGIC',
+  RESOURCE = 'RESOURCE',
   UNKNOWN = 'UNKNOWN',
 }
 
@@ -21,6 +23,8 @@ export interface ErrorCategoryConfig {
   timeoutPatterns?: RegExp[];
   serverPatterns?: RegExp[];
   transportPatterns?: RegExp[];
+  logicPatterns?: RegExp[];
+  resourcePatterns?: RegExp[];
 }
 
 const DEFAULT_NETWORK_PATTERNS = [
@@ -82,12 +86,53 @@ const DEFAULT_TRANSPORT_PATTERNS = [
   /circuit\s*breaker.*open/i,
 ];
 
+const DEFAULT_LOGIC_PATTERNS = [
+  /assertion\s*failed/i,
+  /invariant\s*violation/i,
+  /cannot\s*read\s*property.*of\s*undefined/i,
+  /null\s*is\s*not\s*a\s*function/i,
+  /undefined\s*is\s*not\s*a\s*function/i,
+  /typeerror/i,
+  /referenceerror/i,
+  /syntaxerror/i,
+  /illegal/i,
+  /malformed/i,
+  /invalid\s*(input|argument|option|parameter)/i,
+  /unexpected\s*token/i,
+  /parse\s*error/i,
+  /schema.*mismatch/i,
+  /validation\s*failed/i,
+  /constraint.*violation/i,
+  /divide\s*by\s*zero/i,
+];
+
+const DEFAULT_RESOURCE_PATTERNS = [
+  /out\s*of\s*memory/i,
+  /heap\s*out\s*of\s*memory/i,
+  /allocation\s*failed/i,
+  /memory\s*exhausted/i,
+  /disk\s*(full|space|quota)/i,
+  /quota\s*exceeded/i,
+  /too\s*many\s*open\s*files/i,
+  /ulimit/i,
+  /max\s*(connections|files|sockets|processes)/i,
+  /rate\s*limit/i,
+  /throttl/i,
+  /backoff/i,
+  /concurrent.*limit/i,
+  /worker.*pool.*exhausted/i,
+  /connection\s*pool.*full/i,
+  /socket.*buffer.*overflow/i,
+];
+
 export class ErrorClassifier {
   private networkPatterns: RegExp[];
   private authPatterns: RegExp[];
   private timeoutPatterns: RegExp[];
   private serverPatterns: RegExp[];
   private transportPatterns: RegExp[];
+  private logicPatterns: RegExp[];
+  private resourcePatterns: RegExp[];
 
   constructor(config?: ErrorCategoryConfig) {
     this.networkPatterns = config?.networkPatterns ?? DEFAULT_NETWORK_PATTERNS;
@@ -95,6 +140,8 @@ export class ErrorClassifier {
     this.timeoutPatterns = config?.timeoutPatterns ?? DEFAULT_TIMEOUT_PATTERNS;
     this.serverPatterns = config?.serverPatterns ?? DEFAULT_SERVER_PATTERNS;
     this.transportPatterns = config?.transportPatterns ?? DEFAULT_TRANSPORT_PATTERNS;
+    this.logicPatterns = config?.logicPatterns ?? DEFAULT_LOGIC_PATTERNS;
+    this.resourcePatterns = config?.resourcePatterns ?? DEFAULT_RESOURCE_PATTERNS;
   }
 
   categorize(error: Error): CategorizedError {
@@ -139,6 +186,22 @@ export class ErrorClassifier {
         'Check your network connection',
         'Verify OpenCode server is running',
         'Check firewall settings',
+      ]);
+    }
+
+    if (this.matchPatterns(combined, this.logicPatterns)) {
+      return this.createCategorizedError(error, ErrorCategory.LOGIC, false, [
+        'This is a code/application logic error',
+        'Check the error stack trace for the source',
+        'This type of error typically requires code fixes and will not retry successfully',
+      ]);
+    }
+
+    if (this.matchPatterns(combined, this.resourcePatterns)) {
+      return this.createCategorizedError(error, ErrorCategory.RESOURCE, true, [
+        'System resources are constrained',
+        'Check memory/disk usage',
+        'Consider scaling up resources or reducing load',
       ]);
     }
 

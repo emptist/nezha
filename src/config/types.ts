@@ -203,6 +203,38 @@ export interface FailureImprovement {
   relatedMemoryId?: string;
 }
 
+export enum ErrorCategory {
+  NETWORK = 'NETWORK',
+  AUTH = 'AUTH',
+  TIMEOUT = 'TIMEOUT',
+  SERVER = 'SERVER',
+  TRANSPORT = 'TRANSPORT',
+  LOGIC = 'LOGIC',
+  RESOURCE = 'RESOURCE',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export interface DeadLetterItem {
+  id: string;
+  originalTaskId: string;
+  title: string;
+  description?: string;
+  errorMessage: string;
+  errorCategory?: ErrorCategory;
+  failurePattern?: string;
+  retryCount: number;
+  maxRetries: number;
+  failedAt: Date;
+  lastRetryAt?: Date;
+  resolved: boolean;
+  resolutionNotes?: string;
+  alertSent: boolean;
+  reviewStatus: 'pending' | 'reviewed' | 'resolved' | 'ignored';
+  reviewedBy?: string;
+  reviewedAt?: Date;
+  watchdogKills: number;
+}
+
 export interface IConfig {
   getDbConfig(): DbConfig;
   getTaskConfig(): TaskConfig;

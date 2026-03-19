@@ -1,6 +1,7 @@
 // Webhook service for task notifications
 
 import { logger } from '../utils/logger.js';
+import type { FailureAlert } from './FailureAlertService.js';
 
 export interface WebhookConfig {
   url: string;
@@ -21,6 +22,22 @@ export interface WebhookPayload {
     result?: string;
     error?: string;
     duration_ms?: number;
+  };
+}
+
+export interface AlertWebhookPayload {
+  event: 'alert:created' | 'alert:acknowledged';
+  timestamp: string;
+  alert: {
+    id: string;
+    alertType: string;
+    title: string;
+    severity: string;
+    errorCategory?: string;
+    errorMessage?: string;
+    failureCount: number;
+    taskId?: string;
+    acknowledged?: boolean;
   };
 }
 
@@ -77,7 +94,25 @@ export class WebhookService {
     });
   }
 
-  private async send(event: string, payload: WebhookPayload): Promise<boolean> {
+  async sendAlert(alert: FailureAlert): Promise<boolean> {
+    return this.send('alert:created', {
+      event: 'alert:created',
+      timestamp: new Date().toISOString(),
+      alert: {
+        id: alert.id,
+        alertType: alert.alertType,
+        title: alert.title,
+        severity: alert.severity,
+        errorCategory: alert.errorCategory,
+        errorMessage: alert.errorMessage,
+        failureCount: alert.failureCount,
+        taskId: alert.taskId,
+        acknowledged: alert.acknowledged,
+      },
+    });
+  }
+
+  private async send(event: string, payload: WebhookPayload | AlertWebhookPayload): Promise<boolean> {
     if (!this.isEnabled()) {
       logger.debug('Webhook disabled, skipping');
       return false;
