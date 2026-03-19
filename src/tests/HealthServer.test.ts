@@ -3,20 +3,21 @@ import http from 'http';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
-const mockDb = {
-  query: vi.fn(),
-  healthCheck: vi.fn(),
-  getPoolStats: vi.fn(),
-  close: vi.fn(),
-};
+const { mockDb, mockFs } = vi.hoisted(() => ({
+  mockDb: {
+    query: vi.fn(),
+    healthCheck: vi.fn(),
+    getPoolStats: vi.fn(),
+    close: vi.fn(),
+  },
+  mockFs: {
+    statfs: vi.fn(),
+  },
+}));
 
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => mockDb),
 }));
-
-const mockFs = {
-  statfs: vi.fn(),
-};
 
 vi.mock('fs/promises', () => ({
   default: mockFs,
