@@ -53,6 +53,12 @@
 ## 已完成任务
 
 ### 2026-03-20
+- [x] 修复 AgentSystem.test.ts 类型错误 ('stdio' 改为 'cli')
+- [x] 修复 KnowledgeGraph.test.ts 类型错误 (添加可选链)
+- [x] 修复 embedding/index.ts 类型导出 (使用 export type)
+- [x] 修复 ai/index.ts 类型导出 (使用 export type)
+- [x] 添加 SkillReviewer.reviewBatch 方法
+- [x] 验证 541 tests 全部通过
 - [x] 修复 CLI 中的类型错误 (LSP缓存问题，已验证build和tests通过)
 - [x] 验证 TypeScript 编译无错误
 - [x] 验证 520 tests 全部通过
