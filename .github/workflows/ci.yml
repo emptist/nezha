@@ -63,4 +63,4 @@ jobs:
       - name: Verify build output
         run: |
           ls -la dist/
-          test -f dist/index.js && echo "Build successful"
+          test -f dist/NezhaCore.js && echo "Build successful"
