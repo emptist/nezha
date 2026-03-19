@@ -492,6 +492,9 @@ export class ConversationLogger {
         });
       });
     }
+    if (this.indexWritePromise) {
+      await this.indexWritePromise;
+    }
     this.currentConversation = null;
   }
 }

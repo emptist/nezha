@@ -583,7 +583,17 @@ export class Cli {
    e. Run tests/build
    f. Commit and push changes
 3. Update HEARTBEAT.md with completed tasks and new tasks
-4. Report what was accomplished`;
+4. System Review - Compare with OpenClaw:
+   a. Read docs/OPENCLAW_VS_NEZHA_CORRECT.md for comparison baseline
+   b. Check if Nezha features match or exceed OpenClaw:
+      - Heartbeat mechanism (持续运行)
+      - Task self-generation (任务自产生)
+      - Memory system (记忆系统)
+      - Skill system (技能系统)
+   c. Identify areas where Nezha is behind OpenClaw
+   d. Create improvement tasks for gaps found
+   e. Document advantages Nezha has over OpenClaw (PostgreSQL, etc.)
+5. Report what was accomplished`;
 
     await this.addTask('Continuous Improvement Cycle', description, 10);
   }
