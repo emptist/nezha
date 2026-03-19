@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { MemoryService, type SaveMemoryInput } from '../core/Memory.js';
+import { MemoryService } from '../core/Memory.js';
 import { DailyMemoryService } from './DailyMemory.js';
 import {
   createEmbeddingProvider,

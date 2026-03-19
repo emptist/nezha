@@ -14,7 +14,7 @@ import {
   EmbeddingConfig,
 } from '../services/embedding/index.js';
 import { logger } from '../utils/logger.js';
-import { DailyMemoryService, memory_save } from './DailyMemory.js';
+import { DailyMemoryService } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
 import { GitAutoCommitPlugin } from '../plugins/index.js';
 import { CheckpointService } from './CheckpointService.js';
@@ -28,7 +28,7 @@ import { getPluginManager, type TaskContext } from '../core/PluginManager.js';
 import { NotificationPlugin, LoggingPlugin } from '../plugins/index.js';
 import { WebhookService, createWebhookConfigFromEnv } from './WebhookService.js';
 import { ContextBuilder } from './ContextBuilder.js';
-import { EnhancedCircuitBreaker, type CircuitState } from '../utils/EnhancedCircuitBreaker.js';
+import { EnhancedCircuitBreaker } from '../utils/EnhancedCircuitBreaker.js';
 import { TaskWatchdogService, WatchdogEvent } from './TaskWatchdogService.js';
 import { FailureAlertService, AlertType, type FailureAlert } from './FailureAlertService.js';
 import { LongTaskManager } from './LongTaskManager.js';

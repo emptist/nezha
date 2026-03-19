@@ -2,7 +2,7 @@ import { EventBus } from '../core/EventBus.js';
 import { SCHEDULER_EVENTS } from '../core/Scheduler.js';
 import { InterReviewService, type ReviewRequest } from './InterReviewService.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { Config } from '../config/Config.js';
+// Config imported for potential future use
 import { logger } from '../utils/logger.js';
 import { execSync } from 'child_process';
 
