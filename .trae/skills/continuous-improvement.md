@@ -278,3 +278,47 @@ ACT: Saved learnings
 - Each cycle should find fewer issues over time
 - Memory accumulates learnings across cycles
 - Both Trae AI and OpenCode AI contribute to improvement
+
+## Task Sync - Prevent "Complete" State
+
+**Critical**: Never let the task queue stay empty!
+
+### Sync Check (After Each Cycle)
+
+```bash
+# Check for pending/running tasks
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT COUNT(*) FROM tasks WHERE status IN ('PENDING', 'RUNNING');"
+```
+
+### If Queue Empty
+
+Create a new review task immediately:
+
+```bash
+node dist/cli/index.js task-add "Continuous review cycle" "PDCA Cycle: REVIEW phase. Check codebase for improvements." 3
+```
+
+### Sync Rules
+
+1. **After ACT**: Check task queue before declaring cycle complete
+2. **If empty**: Create review task to start new cycle
+3. **Never stop**: Always have pending work in the queue
+4. **Sync Trae todos with Nezha tasks**: Keep both in alignment
+
+### Trae Todo ↔ Nezha Task Sync
+
+| Trae Todo Status | Nezha Task Status | Action |
+|------------------|-------------------|--------|
+| pending | PENDING | Wait for execution |
+| in_progress | RUNNING | Monitor progress |
+| completed | COMPLETED | Move to next task |
+| completed | FAILED | Create retry task |
+
+### Anti-Patterns
+
+| Don't | Do Instead |
+|-------|------------|
+| Say "all done" | Say "cycle complete, checking queue" |
+| Stop after ACT | Check queue, create new task if empty |
+| Ignore Nezha tasks | Sync Trae todos with Nezha tasks |
+| Skip sync check | Always verify queue status |
