@@ -1,0 +1,71 @@
+# HEARTBEAT - Nezha 持续改进任务列表
+
+**最后更新**: 2026-03-20
+**版本**: 1.0
+
+---
+
+## P0 - 最高优先级
+
+### [ ] Process Guardian 孤儿进程清理完善
+- **描述**: 检查 Process Guardian 是否能正确处理所有孤儿进程场景
+- **相关文件**: `src/services/ProcessGuardian.ts`
+- **状态**: 已实现，待验证
+
+### [ ] Inter-Review 集成到改进循环
+- **描述**: 将 AI 互相 Review 机制集成到持续改进循环中
+- **相关文件**: `src/services/InterReviewService.ts`
+- **状态**: 已实现，待集成
+
+---
+
+## P1 - 高优先级
+
+### [ ] 提高测试覆盖率 (目标 80%)
+- **描述**: 当前测试覆盖率需提升到 80%
+- **命令**: `npm run coverage`
+- **状态**: 待检查当前覆盖率
+
+### [ ] 完善 Skill System 与 Agent 集成
+- **描述**: 完善 Skill System 与 Agent 的集成
+- **相关文件**: `docs/SKILL_SYSTEM.md`, `src/services/SkillService.ts`
+- **状态**: 设计中
+
+---
+
+## P2 - 中优先级
+
+### [ ] 向量搜索 (pgvector) 集成
+- **描述**: 完成 pgvector 向量搜索功能
+- **相关文件**: `src/services/EmbeddingService.ts`
+- **状态**: 设计中
+
+### [ ] 文档清理与整理
+- **描述**: 整理 docs/ 目录，删除过时文档
+- **状态**: 待执行
+
+---
+
+## 已完成任务
+
+### 2026-03-19
+- [x] Fix duplicate method calls bug in HeartbeatService
+- [x] PostgreSQL 任务表和 heartbeat daemon
+- [x] Process Guardian 孤儿进程清理
+- [x] Conversation Logging 会话日志
+- [x] OpenClaw 持续工作机制研究
+- [x] OpenClaw 记忆系统研究
+- [x] AI Inter-Review 系统
+
+---
+
+## 注意事项
+
+1. **执行顺序**: 按 P0 → P1 → P2 顺序执行
+2. **每个任务后**: 运行 `npm run build && npm test` 确保质量
+3. **完成后**: 更新本文档，记录完成时间和结果
+4. **发现问题**: 立即修复，不要推迟
+
+---
+
+*此文件由 Nezha AI Agent 自动维护*

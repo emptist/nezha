@@ -275,6 +275,7 @@ export class Cli {
       if (!template) {
         cli.error('Template not found');
         process.exit(1);
+        return;
       }
       finalTitle = (title || template.description.split('\n')[0]) ?? template.description;
       finalDescription = description || template.description;
