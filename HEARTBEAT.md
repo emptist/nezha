@@ -28,8 +28,8 @@
 
 ### [ ] 完善 Skill System 与 Agent 集成
 - **描述**: 完善 Skill System 与 Agent 的集成
-- **相关文件**: `docs/SKILL_SYSTEM.md`, `src/services/SkillService.ts`
-- **状态**: 设计中
+- **相关文件**: `docs/SKILL_SYSTEM.md` (只有设计文档，无实现代码)
+- **状态**: 待实现 (SkillService.ts 不存在)
 
 ---
 
