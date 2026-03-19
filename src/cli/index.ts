@@ -1495,6 +1495,8 @@ function showHelp(): void {
     health                        Show health information
     task-add <title> [desc]      Add a new task
     schedule <name> <desc> <cron> Create a scheduled task
+    continuous-improvement       Add a continuous improvement cycle task
+    improve                      (alias for continuous-improvement)
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates

@@ -1,4 +1,5 @@
 // Input validation and sanitization utilities
+/* eslint-disable no-control-regex */
 
 export interface ValidationResult {
   valid: boolean;
