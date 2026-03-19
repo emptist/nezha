@@ -1108,6 +1108,12 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'continuous-improvement':
+      case 'improve': {
+        await cliInstance.addContinuousImprovementTask();
+        break;
+      }
+
       case 'tasks': {
         const tagIndex = args.indexOf('--tag');
         const statusIndex = args.indexOf('--status');

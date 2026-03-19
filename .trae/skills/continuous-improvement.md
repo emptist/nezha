@@ -9,6 +9,47 @@
 - **Description**: PDCA cycle for Trae AI working with Nezha
 - **Author**: Trae AI + Nezha
 
+## Quick Start
+
+### Using the Built-in Function
+
+Nezha has a built-in `addContinuousImprovementTask()` function in `src/cli/index.ts:575`:
+
+```typescript
+async addContinuousImprovementTask(): Promise<void> {
+  const description = `Continuous Improvement Cycle:
+1. Read HEARTBEAT.md to get task list
+2. For each task in the list:
+   a. Execute the task
+   b. Review the results
+   c. If issues found, fix them
+   d. Update documentation if needed
+   e. Run tests/build
+   f. Commit and push changes
+3. Update HEARTBEAT.md with completed tasks and new tasks
+4. Report what was accomplished`;
+
+  await this.addTask('Continuous Improvement Cycle', description, 10);
+}
+```
+
+### Current Workaround (Until CLI Command Added)
+
+Since the function isn't exposed as a CLI command yet, use `task-add`:
+
+```bash
+node dist/cli/index.js task-add "Continuous Improvement Cycle" "PDCA Cycle: 1. Review codebase 2. Plan fixes 3. Execute 4. Check results 5. Update memory" 10
+```
+
+### Future CLI Command (To Be Added)
+
+```bash
+# Once the CLI command is added:
+node dist/cli/index.js continuous-improvement
+# or
+node dist/cli/index.js improve
+```
+
 ## The Improvement Cycle
 
 ```
