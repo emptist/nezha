@@ -132,4 +132,165 @@ export class DatabaseClient {
     );
     return result.rows[0]?.save_cross_project_learning;
   }
+
+  async saveConversation(conversation: {
+    id?: string;
+    projectId?: string;
+    sessionId: string;
+    taskId?: string;
+    conversationType: string;
+    title: string;
+    participants: string[];
+    messages: unknown[];
+    result?: unknown;
+    success?: boolean;
+    durationMs?: number;
+    tokensUsed?: number;
+    model?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<string> {
+    const id = conversation.id || crypto.randomUUID();
+    const result = await this.pool.query(
+      `INSERT INTO conversations (id, project_id, session_id, task_id, conversation_type, title, participants, messages, result, success, duration_ms, tokens_used, model, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       ON CONFLICT (id) DO UPDATE SET
+         messages = EXCLUDED.messages,
+         result = EXCLUDED.result,
+         success = EXCLUDED.success,
+         duration_ms = EXCLUDED.duration_ms,
+         tokens_used = EXCLUDED.tokens_used,
+         metadata = EXCLUDED.metadata,
+         updated_at = NOW()
+       RETURNING id`,
+      [
+        id,
+        conversation.projectId,
+        conversation.sessionId,
+        conversation.taskId,
+        conversation.conversationType,
+        conversation.title,
+        conversation.participants,
+        JSON.stringify(conversation.messages),
+        conversation.result ? JSON.stringify(conversation.result) : null,
+        conversation.success,
+        conversation.durationMs,
+        conversation.tokensUsed,
+        conversation.model,
+        JSON.stringify(conversation.metadata || {}),
+      ]
+    );
+    return result.rows[0]?.id;
+  }
+
+  async getConversation(id: string): Promise<Record<string, unknown> | null> {
+    const result = await this.pool.query(
+      `SELECT c.*, t.title as task_title, t.description as task_description
+       FROM conversations c
+       LEFT JOIN tasks t ON c.task_id = t.id
+       WHERE c.id = $1`,
+      [id]
+    );
+    return result.rows[0] || null;
+  }
+
+  async getConversationBySessionId(sessionId: string): Promise<Record<string, unknown> | null> {
+    const result = await this.pool.query(
+      `SELECT c.*, t.title as task_title, t.description as task_description
+       FROM conversations c
+       LEFT JOIN tasks t ON c.task_id = t.id
+       WHERE c.session_id = $1`,
+      [sessionId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async searchConversations(params: {
+    query?: string;
+    projectId?: string;
+    taskId?: string;
+    conversationType?: string;
+    success?: boolean;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<Record<string, unknown>[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM search_conversations($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        params.query || null,
+        params.projectId || null,
+        params.taskId || null,
+        params.conversationType || null,
+        params.success ?? null,
+        params.startDate || null,
+        params.endDate || null,
+        params.limit || 50,
+        params.offset || 0,
+      ]
+    );
+    return result.rows;
+  }
+
+  async getConversationsByTaskId(taskId: string): Promise<Record<string, unknown>[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM conversations WHERE task_id = $1 ORDER BY created_at DESC`,
+      [taskId]
+    );
+    return result.rows;
+  }
+
+  async getConversationsByDateRange(startDate: Date, endDate: Date, projectId?: string): Promise<Record<string, unknown>[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM conversations 
+       WHERE created_at >= $1 AND created_at <= $2
+       ${projectId ? 'AND project_id = $3' : ''}
+       ORDER BY created_at DESC`,
+      projectId ? [startDate, endDate, projectId] : [startDate, endDate]
+    );
+    return result.rows;
+  }
+
+  async getConversationStats(params: {
+    projectId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Record<string, unknown>[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM get_conversation_stats($1, $2, $3)`,
+      [
+        params.projectId || null,
+        params.startDate || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+        params.endDate || new Date(),
+      ]
+    );
+    return result.rows;
+  }
+
+  async listConversations(params: {
+    projectId?: string;
+    conversationType?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Record<string, unknown>[]> {
+    let sql = `SELECT id, session_id, task_id, conversation_type, title, success, duration_ms, created_at
+               FROM conversations WHERE 1=1`;
+    const values: unknown[] = [];
+    let idx = 1;
+
+    if (params.projectId) {
+      sql += ` AND project_id = $${idx++}`;
+      values.push(params.projectId);
+    }
+    if (params.conversationType) {
+      sql += ` AND conversation_type = $${idx++}`;
+      values.push(params.conversationType);
+    }
+
+    sql += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    values.push(params.limit || 50, params.offset || 0);
+
+    const result = await this.pool.query(sql, values);
+    return result.rows;
+  }
 }

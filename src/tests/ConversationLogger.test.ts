@@ -242,4 +242,61 @@ describe('ConversationLogger', () => {
     const yesterday = await logger.listConversations('1999-01-01');
     expect(yesterday.length).toBe(0);
   });
+
+  it('should report no database when none configured', () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    expect(loggerNoDb.hasDatabase()).toBe(false);
+  });
+
+  it('should throw when searching conversations without database', async () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    await expect(
+      loggerNoDb.searchConversations({ query: 'test' })
+    ).rejects.toThrow('Database client not configured');
+  });
+
+  it('should throw when getting conversations by task without database', async () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    await expect(
+      loggerNoDb.getConversationByTaskId('task-1')
+    ).rejects.toThrow('Database client not configured');
+  });
+
+  it('should throw when getting conversations by date range without database', async () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    await expect(
+      loggerNoDb.getConversationsByDateRange(new Date(), new Date())
+    ).rejects.toThrow('Database client not configured');
+  });
+
+  it('should throw when getting conversation stats without database', async () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    await expect(
+      loggerNoDb.getConversationStats()
+    ).rejects.toThrow('Database client not configured');
+  });
+
+  it('should throw when listing conversations from db without database', async () => {
+    const loggerNoDb = new ConversationLogger(testDir);
+    await expect(
+      loggerNoDb.listConversationsFromDb()
+    ).rejects.toThrow('Database client not configured');
+  });
+
+  it('should fall back to JSONL when getting conversation by session id without database', async () => {
+    const task = { id: 'task-1', title: 'Test Task', description: 'Test description' };
+    logger.startConversation(task);
+    const sessionId = logger.getCurrentSessionId()!;
+    logger.addMessage('user', 'Hello');
+    await logger.endConversation();
+
+    const result = await logger.getConversationBySessionId(sessionId);
+    expect(result).toBeDefined();
+    expect(result?.session_id).toBe(sessionId);
+  });
+
+  it('should return null when session not found by session id', async () => {
+    const result = await logger.getConversationBySessionId('non-existent-session');
+    expect(result).toBeNull();
+  });
 });

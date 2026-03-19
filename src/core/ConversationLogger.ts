@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import type { DatabaseClient } from '../db/DatabaseClient.js';
 
 export interface ConversationMessage {
   role: 'user' | 'assistant' | 'system';
@@ -42,6 +43,25 @@ export interface ConversationLog {
   metadata: ConversationMetadata;
 }
 
+export interface ConversationRecord {
+  id: string;
+  project_id?: string;
+  session_id: string;
+  task_id?: string;
+  conversation_type: string;
+  title: string;
+  participants: string[];
+  messages: ConversationMessage[];
+  result?: ConversationResult;
+  success?: boolean;
+  duration_ms?: number;
+  tokens_used?: number;
+  model?: string;
+  metadata?: Record<string, unknown>;
+  created_at: Date;
+  updated_at: Date;
+}
+
 interface IndexEntry {
   session_id: string;
   timestamp: string;
@@ -59,9 +79,17 @@ export class ConversationLogger {
   private initialized: boolean = false;
   private indexCache: IndexEntry[] | null = null;
   private indexDirty: boolean = false;
+  private readonly dbClient: DatabaseClient | null = null;
+  private readonly projectId?: string;
 
-  constructor(logDir: string = 'conversations') {
+  constructor(logDir: string = 'conversations', dbClient?: DatabaseClient, projectId?: string) {
     this.logDir = logDir;
+    this.dbClient = dbClient || null;
+    this.projectId = projectId;
+  }
+
+  hasDatabase(): boolean {
+    return this.dbClient !== null;
   }
 
   private async ensureInitialized(): Promise<void> {
@@ -180,9 +208,48 @@ export class ConversationLogger {
       await fs.promises.writeFile(logPath, logEntry, 'utf-8');
       await this.updateIndex();
     } catch (error) {
-      console.error('Failed to save conversation:', error);
+      console.error('Failed to save conversation to JSONL:', error);
       throw error;
     }
+
+    if (this.dbClient) {
+      try {
+        await this.saveToDatabase();
+      } catch (error) {
+        console.error('Failed to save conversation to database:', error);
+      }
+    }
+  }
+
+  private async saveToDatabase(): Promise<void> {
+    if (!this.currentConversation || !this.dbClient) {
+      return;
+    }
+
+    const messages = this.currentConversation.messages.map(m => ({
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+    }));
+
+    await this.dbClient.saveConversation({
+      sessionId: this.currentConversation.session_id,
+      taskId: this.currentConversation.task.id,
+      projectId: this.projectId,
+      conversationType: this.currentConversation.conversation_type,
+      title: this.currentConversation.task.title,
+      participants: this.currentConversation.participants,
+      messages,
+      result: this.currentConversation.result,
+      success: this.currentConversation.result?.success,
+      durationMs: this.currentConversation.metadata.duration_ms,
+      tokensUsed: this.currentConversation.metadata.tokens_used,
+      model: this.currentConversation.metadata.model,
+      metadata: {
+        task_description: this.currentConversation.task.description,
+        learning: this.currentConversation.learning,
+      },
+    });
   }
 
   private async ensureDirectoryExists(dirPath: string): Promise<void> {
@@ -335,6 +402,84 @@ export class ConversationLogger {
     } catch {
       return [];
     }
+  }
+
+  async searchConversations(params: {
+    query?: string;
+    taskId?: string;
+    conversationType?: string;
+    success?: boolean;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<ConversationRecord[]> {
+    if (!this.dbClient) {
+      throw new Error('Database client not configured');
+    }
+
+    const results = await this.dbClient.searchConversations({
+      ...params,
+      projectId: this.projectId,
+    });
+
+    return results as unknown as ConversationRecord[];
+  }
+
+  async getConversationByTaskId(taskId: string): Promise<ConversationRecord[]> {
+    if (!this.dbClient) {
+      throw new Error('Database client not configured');
+    }
+
+    const results = await this.dbClient.getConversationsByTaskId(taskId);
+    return results as unknown as ConversationRecord[];
+  }
+
+  async getConversationBySessionId(sessionId: string): Promise<ConversationRecord | null> {
+    if (!this.dbClient) {
+      return this.getConversationLog(sessionId) as Promise<ConversationRecord | null>;
+    }
+
+    const result = await this.dbClient.getConversationBySessionId(sessionId);
+    return result as unknown as ConversationRecord | null;
+  }
+
+  async getConversationsByDateRange(startDate: Date, endDate: Date): Promise<ConversationRecord[]> {
+    if (!this.dbClient) {
+      throw new Error('Database client not configured');
+    }
+
+    const results = await this.dbClient.getConversationsByDateRange(startDate, endDate, this.projectId);
+    return results as unknown as ConversationRecord[];
+  }
+
+  async getConversationStats(startDate?: Date, endDate?: Date): Promise<Record<string, unknown>[]> {
+    if (!this.dbClient) {
+      throw new Error('Database client not configured');
+    }
+
+    return this.dbClient.getConversationStats({
+      projectId: this.projectId,
+      startDate,
+      endDate,
+    });
+  }
+
+  async listConversationsFromDb(params?: {
+    conversationType?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ConversationRecord[]> {
+    if (!this.dbClient) {
+      throw new Error('Database client not configured');
+    }
+
+    const results = await this.dbClient.listConversations({
+      projectId: this.projectId,
+      ...params,
+    });
+
+    return results as unknown as ConversationRecord[];
   }
 
   async close(): Promise<void> {
