@@ -144,8 +144,8 @@ describe('InterReviewService', () => {
 
       const result = await service.getPendingReviews();
       expect(result).toHaveLength(1);
-      expect(result[0].reviewerId).toBe('agent-1');
-      expect(result[0].pendingMinutes).toBe(30);
+      expect(result[0]!.reviewerId).toBe('agent-1');
+      expect(result[0]!.pendingMinutes).toBe(30);
     });
 
     it('should return empty array when no pending reviews', async () => {
@@ -251,7 +251,7 @@ describe('InterReviewService', () => {
 
       const result = await service.getSkillsFromLearnings();
       expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('review-learning-typescript');
+      expect(result[0]!.name).toBe('review-learning-typescript');
     });
   });
 
@@ -267,8 +267,8 @@ describe('InterReviewService', () => {
 
       const result = await service.extractPatternsFromReviews(10);
       expect(result).toHaveLength(1);
-      expect(result[0].topic).toBe('TypeScript');
-      expect(result[0].frequency).toBe(5);
+      expect(result[0]!.topic).toBe('TypeScript');
+      expect(result[0]!.frequency).toBe(5);
     });
   });
 
