@@ -8,7 +8,7 @@ export interface StoredSkill {
   description: string | null;
   instructions: string | null;
   manifest: Record<string, unknown>;
-  source: 'clawhub' | 'local' | 'generated' | 'imported';
+  source: 'clawhub' | 'local' | 'generated' | 'imported' | 'ai-built';
   external_id: string | null;
   version: string;
   author: string | null;
@@ -20,6 +20,8 @@ export interface StoredSkill {
   permissions: string[];
   is_enabled: boolean;
   use_count: number;
+  rating: number;
+  downloads: number;
   last_used_at: Date | null;
   installed_at: Date | null;
   created_at: Date;
