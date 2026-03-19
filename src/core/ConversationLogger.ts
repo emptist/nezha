@@ -325,6 +325,7 @@ export class ConversationLogger {
     const tempContent = JSON.stringify(index, null, 2);
 
     try {
+      await fs.promises.mkdir(this.logDir, { recursive: true });
       await fs.promises.writeFile(tempIndexPath, tempContent, 'utf-8');
       await fs.promises.rename(tempIndexPath, indexPath);
     } catch (error) {
