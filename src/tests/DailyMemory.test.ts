@@ -248,23 +248,23 @@ describe('DailyMemoryService', () => {
 
   describe('readToday', () => {
     it('should return empty string when file does not exist', async () => {
-      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      (fs.access as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Not found'));
 
       const result = await service.readToday();
       expect(result).toBe('');
     });
 
     it('should return file content when exists', async () => {
-      fs.access.mockResolvedValueOnce(undefined);
-      fs.readFile.mockResolvedValueOnce('# Daily Memory content');
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce('# Daily Memory content');
 
       const result = await service.readToday();
       expect(result).toBe('# Daily Memory content');
     });
 
     it('should return empty string on read error', async () => {
-      fs.access.mockResolvedValueOnce(undefined);
-      fs.readFile.mockRejectedValueOnce(new Error('Read error'));
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Read error'));
 
       const result = await service.readToday();
       expect(result).toBe('');
@@ -274,22 +274,25 @@ describe('DailyMemoryService', () => {
 
   describe('readRecentDays', () => {
     it('should return memories from last N days', async () => {
-      fs.access.mockResolvedValue(undefined);
-      fs.readFile.mockResolvedValue('Memory content');
+      const mockFn = fs.access as ReturnType<typeof vi.fn>;
+      const mockReadFn = fs.readFile as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValue(undefined);
+      mockReadFn.mockResolvedValue('Memory content');
 
       const result = await service.readRecentDays(3);
 
       expect(result).toHaveLength(3);
-      expect(fs.access).toHaveBeenCalledTimes(3);
-      expect(fs.readFile).toHaveBeenCalledTimes(3);
+      expect(mockFn).toHaveBeenCalledTimes(3);
+      expect(mockReadFn).toHaveBeenCalledTimes(3);
     });
 
     it('should skip missing days', async () => {
-      fs.access
+      const mockFn = fs.access as ReturnType<typeof vi.fn>;
+      mockFn
         .mockRejectedValueOnce(new Error('Not found'))
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(undefined);
-      fs.readFile.mockResolvedValue('Content');
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValue('Content');
 
       const result = await service.readRecentDays(3);
 
@@ -297,18 +300,19 @@ describe('DailyMemoryService', () => {
     });
 
     it('should use default of 7 days', async () => {
-      fs.access.mockResolvedValue(undefined);
-      fs.readFile.mockResolvedValue('Content');
+      const mockFn = fs.access as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValue('Content');
 
       await service.readRecentDays();
 
-      expect(fs.access).toHaveBeenCalledTimes(7);
+      expect(mockFn).toHaveBeenCalledTimes(7);
     });
   });
 
   describe('fileExists', () => {
     it('should return true when file exists', async () => {
-      fs.access.mockResolvedValueOnce(undefined);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValueOnce(undefined);
 
       const result = await (service as unknown as { fileExists: (path: string) => Promise<boolean> }).fileExists('/test/path');
 
@@ -316,7 +320,7 @@ describe('DailyMemoryService', () => {
     });
 
     it('should return false when file does not exist', async () => {
-      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      (fs.access as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Not found'));
 
       const result = await (service as unknown as { fileExists: (path: string) => Promise<boolean> }).fileExists('/test/path');
 
