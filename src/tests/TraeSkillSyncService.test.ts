@@ -1,19 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TraeSkillSyncService } from '../services/TraeSkillSyncService.js';
+import * as fs from 'fs';
 
 const mockDbClient = {
   query: vi.fn(),
 };
 
-vi.mock('fs', () => ({
-  default: {
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
     existsSync: vi.fn().mockReturnValue(true),
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
-    readdirSync: vi.fn().mockReturnValue(['skill1.md', 'skill2.md']),
+    readdirSync: vi.fn().mockReturnValue(['skill1.md', 'skill2.md'] as fs.Dirent[]),
     unlinkSync: vi.fn(),
-  },
-}));
+  };
+});
 
 describe('TraeSkillSyncService', () => {
   let service: TraeSkillSyncService;
