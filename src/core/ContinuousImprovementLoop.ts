@@ -1,6 +1,8 @@
 import { ImprovementIdentifier, Improvement } from './ImprovementIdentifier.js';
-import { MemoryService } from './MemoryService.js';
+import { MemoryService, type SaveMemoryInput } from './Memory.js';
 import { ConversationLogger } from './ConversationLogger.js';
+import { InterReviewService } from '../services/InterReviewService.js';
+import { DatabaseClient } from '../db/DatabaseClient.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs-extra';
@@ -61,6 +63,8 @@ export class ContinuousImprovementLoop {
   private identifier: ImprovementIdentifier;
   private memoryService: MemoryService;
   private conversationLogger: ConversationLogger;
+  private reviewService: InterReviewService | null = null;
+  private db: DatabaseClient | null = null;
   private isRunning: boolean = false;
   private cycleCount: number = 0;
   private projectRoot: string;
@@ -68,12 +72,19 @@ export class ContinuousImprovementLoop {
   constructor(
     projectRoot: string = process.cwd(),
     memoryService: MemoryService,
-    conversationLogger: ConversationLogger
+    conversationLogger: ConversationLogger,
+    db?: DatabaseClient
   ) {
     this.projectRoot = projectRoot;
     this.identifier = new ImprovementIdentifier(projectRoot);
     this.memoryService = memoryService;
     this.conversationLogger = conversationLogger;
+    this.db = db || null;
+  }
+
+  setDatabaseClient(db: DatabaseClient): void {
+    this.db = db;
+    this.reviewService = new InterReviewService(db);
   }
 
   async start(): Promise<void> {
@@ -331,15 +342,18 @@ export class ContinuousImprovementLoop {
         recommendations: this.generateRecommendations(task, result, review),
       };
 
-      await this.memoryService.store({
-        type: 'learning',
-        content: learning,
+      await this.memoryService.save({
+        id: `learning-${task.id}`,
+        content: JSON.stringify(learning),
         metadata: {
           taskId: task.id,
           category: task.category,
           success: result.success,
           score: review.score,
         },
+        source: 'continuous-improvement',
+        importance: review.score > 70 ? 7 : 5,
+        tags: ['learning', task.category],
       });
     }
   }
