@@ -6,6 +6,7 @@ export { OpenAIEmbedding } from './OpenAIEmbedding.js';
 import { ZhipuEmbedding } from './ZhipuEmbedding.js';
 import { OllamaEmbedding } from './OllamaEmbedding.js';
 import { OpenAIEmbedding } from './OpenAIEmbedding.js';
+import type { EmbeddingConfig, EmbeddingProvider } from './types.js';
 
 export function createEmbeddingProvider(config: EmbeddingConfig): EmbeddingProvider {
   switch (config.provider) {
