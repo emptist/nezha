@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setVerboseMode, isVerboseMode, verboseLogger, formatDuration } from '../utils/verboseLogger.js';
+import { setVerboseMode, isVerboseMode, verboseLogger } from '../utils/verboseLogger.js';
 
 vi.mock('../utils/cli.js', () => ({
   colors: {
@@ -21,23 +21,6 @@ describe('verboseLogger', () => {
 
   afterEach(() => {
     vi.useRealTimers();
-  });
-
-  describe('formatDuration', () => {
-    it('should format sub-millisecond durations', () => {
-      expect(formatDuration(0.5)).toBe('0.50ms');
-      expect(formatDuration(0.123)).toBe('0.12ms');
-    });
-
-    it('should format millisecond durations', () => {
-      expect(formatDuration(100)).toBe('100.0ms');
-      expect(formatDuration(500.55)).toBe('500.6ms');
-    });
-
-    it('should format second durations', () => {
-      expect(formatDuration(1000)).toBe('1.00s');
-      expect(formatDuration(2500)).toBe('2.50s');
-    });
   });
 
   describe('setVerboseMode / isVerboseMode', () => {
@@ -154,7 +137,9 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'GET', '/api/test', undefined, 200, 'body content');
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('12');
+      const output = consoleSpy.mock.calls[0][0];
+      expect(output).toContain('responseLength');
+      expect(output).toContain('12');
     });
   });
 

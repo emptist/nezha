@@ -22,7 +22,7 @@ export function isVerboseMode(): boolean {
   return verboseMode;
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   if (ms < 1) return `${ms.toFixed(2)}ms`;
   if (ms < 1000) return `${ms.toFixed(1)}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
