@@ -114,6 +114,18 @@ export class SkillReviewer {
     };
   }
 
+  async reviewBatch(skills: ClawHubSkill[], contents?: string[]): Promise<SkillReviewResult[]> {
+    const results: SkillReviewResult[] = [];
+    for (let i = 0; i < skills.length; i++) {
+      const skill = skills[i];
+      if (!skill) continue;
+      const content = contents?.[i];
+      const result = await this.reviewSkill(skill, content);
+      results.push(result);
+    }
+    return results;
+  }
+
   private analyzeCode(
     code: string,
     analysis: CodeAnalysis,

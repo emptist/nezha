@@ -1,7 +1,7 @@
 # HEARTBEAT - Nezha 持续改进任务列表
 
-**最后更新**: 2026-03-20
-**版本**: 1.0
+**最后更新**: 2026-03-20T21:35:00Z
+**版本**: 1.1
 
 ---
 
@@ -16,6 +16,10 @@
 - **描述**: 将 AI 互相 Review 机制集成到持续改进循环中
 - **相关文件**: `src/services/AutoReviewService.ts`
 - **状态**: ✅ 已实现 (AutoReviewService 自动触发 reviews 并保存 learnings 到 memory)
+
+### [x] 持续运行验证
+- **描述**: 验证 HeartbeatService 持续运行机制
+- **状态**: ✅ 已验证 Build 通过, 520 Tests 通过
 
 ---
 
@@ -56,6 +60,7 @@
 - [x] 验证 Process Guardian 孤儿进程清理已实现 (TaskWatchdogService)
 - [x] 检查测试覆盖率 (37.71% 语句, 73.92% 分支, 68.27% 函数)
 - [x] 比较 OpenClaw vs Nezha 架构差异
+- [x] PDCA 循环验证 (Build ✅, Tests ✅, P0 任务 ✅)
 
 ### 2026-03-19
 - [x] Fix duplicate method calls bug in HeartbeatService
@@ -65,6 +70,27 @@
 - [x] OpenClaw 持续工作机制研究
 - [x] OpenClaw 记忆系统研究
 - [x] AI Inter-Review 系统
+
+---
+
+## OpenClaw vs Nezha 功能对比
+
+| 功能 | OpenClaw | Nezha | 状态 |
+|------|----------|-------|------|
+| 持续运行 | zen AI 实例 | HeartbeatService | ✅ |
+| 任务自产生 | AI 循环 | Agent 执行 | ✅ |
+| 记忆系统 | 文件 (HEARTBEAT.md) | PostgreSQL + embeddings | ✅ |
+| 技能系统 | 有 | 无 | ❌ P1 待实现 |
+| AI Code Review | 有 | AutoReviewService | ✅ |
+
+### Nezha 优势
+- PostgreSQL 任务存储 (vs 文件)
+- 完善的监控服务 (TaskWatchdogService, FailureAlertService, LongTaskManager)
+- pgvector 向量搜索支持
+
+### 待实现
+- P1: Skill System
+- P2: 向量搜索 (pgvector) 完善
 
 ---
 
