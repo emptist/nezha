@@ -23,6 +23,11 @@ Thumbs.db
 *.swp
 *.swo
 
+# Trae IDE
+.trae/memory/
+!.trae/rules/
+!.trae/skills/
+
 # Test
 coverage/
 .nyc_output/
