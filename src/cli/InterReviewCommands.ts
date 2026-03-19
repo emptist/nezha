@@ -1,21 +1,17 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { InterReviewService, type ReviewRequest } from '../services/InterReviewService.js';
 import { Config } from '../config/Config.js';
+import { AIProviderFactory } from '../services/ai/index.js';
 import { execSync } from 'child_process';
 import { logger } from '../utils/logger.js';
 
 const REVIWER_ID = `nezha-${Date.now()}`;
 
-let reviewServiceInstance: InterReviewService | null = null;
-let dbInstance: DatabaseClient | null = null;
-
-function getReviewService(): InterReviewService {
-  if (!reviewServiceInstance) {
-    const config = Config.getInstance();
-    dbInstance = new DatabaseClient(config);
-    reviewServiceInstance = new InterReviewService(dbInstance);
-  }
-  return reviewServiceInstance;
+function createReviewService(): InterReviewService {
+  const config = Config.getInstance();
+  const db = new DatabaseClient(config);
+  const aiProvider = AIProviderFactory.createFromEnv();
+  return new InterReviewService(db, aiProvider);
 }
 
 export async function requestReviewFromAI(
@@ -23,7 +19,7 @@ export async function requestReviewFromAI(
   taskId?: string,
   taskDescription?: string
 ): Promise<void> {
-  const reviewService = getReviewService();
+  const reviewService = createReviewService();
 
   let commit = commitHash;
   let branch = 'main';
@@ -85,7 +81,7 @@ export async function requestReviewFromAI(
 }
 
 export async function performAIReview(reviewId: string): Promise<void> {
-  const reviewService = getReviewService();
+  const reviewService = createReviewService();
 
   const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.`;
 
@@ -104,13 +100,13 @@ export async function respondToReview(
   response: string,
   accepted?: string[]
 ): Promise<void> {
-  const reviewService = getReviewService();
+  const reviewService = createReviewService();
   await reviewService.respondToReview(reviewId, response, accepted || []);
   console.log(`✅ Response recorded for review: ${reviewId}`);
 }
 
 export async function showReview(reviewId?: string): Promise<void> {
-  const reviewService = getReviewService();
+  const reviewService = createReviewService();
 
   if (reviewId) {
     const review = await reviewService.getReview(reviewId);
@@ -136,7 +132,7 @@ export async function showReview(reviewId?: string): Promise<void> {
 }
 
 export async function showReviewStats(): Promise<void> {
-  const reviewService = getReviewService();
+  const reviewService = createReviewService();
 
   const stats = await reviewService.getReviewStats();
   console.log('\n📊 Inter-Review Statistics\n');

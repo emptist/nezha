@@ -2,6 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
+import { AIProvider, AIProviderFactory } from './ai/index.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -54,10 +55,46 @@ export enum InterReviewEvent {
 
 export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
+  private readonly aiProvider: AIProvider;
 
-  constructor(db: DatabaseClient) {
+  constructor(db: DatabaseClient, aiProvider?: AIProvider) {
     super();
     this.db = db;
+    this.aiProvider = aiProvider || AIProviderFactory.createFromEnv();
+  }
+
+  async loadPromptFromSkills(promptName: string): Promise<string | null> {
+    try {
+      const result = await this.db.query<{ content: string }>(
+        `SELECT content FROM skills WHERE name = $1 AND status = 'approved' LIMIT 1`,
+        [promptName]
+      );
+      if (result.rows.length > 0) {
+        return result.rows[0]!.content;
+      }
+    } catch {
+      logger.debug(`[InterReview] Could not load prompt from skills: ${promptName}`);
+    }
+    return null;
+  }
+
+  async savePromptToSkills(promptName: string, content: string): Promise<void> {
+    try {
+      await this.db.query(
+        `INSERT INTO skills (id, name, content, status, version, created_at, updated_at)
+         VALUES (uuid_generate_v4(), $1, $2, 'approved', '1.0', NOW(), NOW())
+         ON CONFLICT (name) DO UPDATE SET content = $2, updated_at = NOW()`,
+        [promptName, content]
+      );
+      logger.info(`[InterReview] Saved prompt to skills: ${promptName}`);
+    } catch (error) {
+      logger.error(`[InterReview] Failed to save prompt to skills:`, error);
+    }
+  }
+
+  private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    const response = await this.aiProvider.complete(userPrompt, systemPrompt);
+    return response.content;
   }
 
   async requestReview(request: ReviewRequest): Promise<string> {
@@ -226,76 +263,7 @@ Format:
   }
 
   private async callReviewAI(systemPrompt: string, userPrompt: string): Promise<string> {
-    const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
-    const model = process.env.REVIEW_MODEL || 'gpt-4';
-
-    if (!apiKey) {
-      throw new Error('No AI API key configured');
-    }
-
-    if (apiKey.includes('sk-')) {
-      return this.callOpenAI(systemPrompt, userPrompt, model);
-    } else {
-      return this.callAnthropic(systemPrompt, userPrompt, model);
-    }
-  }
-
-  private async callOpenAI(
-    systemPrompt: string,
-    userPrompt: string,
-    model: string
-  ): Promise<string> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data = (await response.json()) as { choices: Array<{ message: { content: string } }> };
-    return data.choices[0]?.message?.content || '';
-  }
-
-  private async callAnthropic(
-    systemPrompt: string,
-    userPrompt: string,
-    model: string
-  ): Promise<string> {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: `${systemPrompt}\n\n${userPrompt}` }],
-        temperature: 0.3,
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.status}`);
-    }
-
-    const data = (await response.json()) as { content: Array<{ text: string }> };
-    return data.content[0]?.text || '';
+    return this.callAI(systemPrompt, userPrompt);
   }
 
   private parseReviewResponse(response: string): ReviewResult {
