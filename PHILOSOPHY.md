@@ -35,12 +35,14 @@
 ## OpenClaw's Approach (File-Based)
 
 OpenClaw stores everything in files:
+
 - `.openclaw/workspace/TASKS.md` - Task list
 - `.openclaw/workspace/SOUL.md` - Agent identity
 - `.openclaw/workspace/memory/` - Daily memories
 - `.openclaw/bootstrap/` - Skills and prompts
 
 **Pros:**
+
 - Simple - just files and folders
 - Human readable
 - No database setup needed
@@ -48,6 +50,7 @@ OpenClaw stores everything in files:
 - Works out of the box
 
 **Cons:**
+
 - Hard to query (grep/sed only)
 - No complex filtering/sorting
 - Race conditions with concurrent access
@@ -66,22 +69,22 @@ PostgreSQL (Operational) ←→ Files (Human Reference)
 
 ### What Goes in PostgreSQL:
 
-| Table | Purpose | Why Database? |
-|-------|---------|----------------|
-| `tasks` | Task queue | Queryable, concurrent, status tracking |
-| `scheduled_tasks` | Cron jobs | Time-based queries, reliability |
-| `memory` | Knowledge base | Vector search, semantic retrieval |
-| `workers` | Worker pool | State management, health tracking |
-| `audit_log` | Activity history | Reliable logging |
+| Table             | Purpose          | Why Database?                          |
+| ----------------- | ---------------- | -------------------------------------- |
+| `tasks`           | Task queue       | Queryable, concurrent, status tracking |
+| `scheduled_tasks` | Cron jobs        | Time-based queries, reliability        |
+| `memory`          | Knowledge base   | Vector search, semantic retrieval      |
+| `workers`         | Worker pool      | State management, health tracking      |
+| `audit_log`       | Activity history | Reliable logging                       |
 
 ### What Stays in Files:
 
-| Path | Purpose | Why Files? |
-|------|---------|-------------|
-| `.tmp/nezha-memory/` | Daily memory | Human readable, append-only |
-| `.tmp/nezha-memory/MEMORY.md` | Long-term memory | Curated, human-editable |
-| `.env` | Configuration | Security, per-machine |
-| `docs/` | Documentation | Human reference |
+| Path                          | Purpose          | Why Files?                  |
+| ----------------------------- | ---------------- | --------------------------- |
+| `.tmp/nezha-memory/`          | Daily memory     | Human readable, append-only |
+| `.tmp/nezha-memory/MEMORY.md` | Long-term memory | Curated, human-editable     |
+| `.env`                        | Configuration    | Security, per-machine       |
+| `docs/`                       | Documentation    | Human reference             |
 
 ---
 
@@ -91,12 +94,12 @@ PostgreSQL (Operational) ←→ Files (Human Reference)
 
 ```sql
 -- Find all failed tasks from last week
-SELECT * FROM tasks 
-WHERE status = 'FAILED' 
+SELECT * FROM tasks
+WHERE status = 'FAILED'
 AND updated_at > NOW() - INTERVAL '7 days';
 
 -- Find tasks by priority and status
-SELECT * FROM tasks 
+SELECT * FROM tasks
 WHERE status IN ('PENDING', 'RUNNING')
 ORDER BY priority DESC, created_at ASC
 LIMIT 10;
@@ -107,6 +110,7 @@ Files can't do this efficiently.
 ### 2. **Concurrent Access**
 
 Multiple processes can safely:
+
 - Pick up tasks simultaneously
 - Update task status
 - Query progress
@@ -116,8 +120,9 @@ File-based systems have race conditions.
 ### 3. **Semantic Search**
 
 PostgreSQL with pgvector enables:
+
 ```sql
-SELECT * FROM memory 
+SELECT * FROM memory
 ORDER BY embedding <=> $query_embedding
 LIMIT 5;
 ```
@@ -133,6 +138,7 @@ This is impossible with files.
 ### 5. **Universal Portability**
 
 Export entire knowledge base:
+
 ```bash
 pg_dump nezha > backup.sql
 ```
@@ -147,15 +153,15 @@ Import on any machine with PostgreSQL. No file path dependencies.
 
 ### What This Means:
 
-| Data Type | Database | File Only | Notes |
-|-----------|----------|-----------|-------|
-| Task queue | ✅ | ❌ | Must be queryable |
-| Task results | ✅ | ❌ | Need to search |
-| Skill definitions | ✅ | ❌ | Import from files |
-| Agent prompts | ✅ | ❌ | Version control via SQL |
-| Daily logs | ✅ | ✅ | DB primary, file backup |
-| Secrets/keys | ❌ | ✅ | Machine-specific |
-| User docs | ❌ | ✅ | Purely human |
+| Data Type         | Database | File Only | Notes                   |
+| ----------------- | -------- | --------- | ----------------------- |
+| Task queue        | ✅       | ❌        | Must be queryable       |
+| Task results      | ✅       | ❌        | Need to search          |
+| Skill definitions | ✅       | ❌        | Import from files       |
+| Agent prompts     | ✅       | ❌        | Version control via SQL |
+| Daily logs        | ✅       | ✅        | DB primary, file backup |
+| Secrets/keys      | ❌       | ✅        | Machine-specific        |
+| User docs         | ❌       | ✅        | Purely human            |
 
 ---
 
@@ -169,13 +175,13 @@ Import on any machine with PostgreSQL. No file path dependencies.
 
 ### Differences:
 
-| Aspect | OpenClaw | Nezha |
-|--------|----------|-------|
-| Task storage | Markdown files | PostgreSQL |
-| Search | grep/ripgrep | SQL + vectors |
-| Concurrent | File locks | Database transactions |
-| Portability | File copy | pg_dump/sql |
-| Setup complexity | Low | Medium |
+| Aspect           | OpenClaw       | Nezha                 |
+| ---------------- | -------------- | --------------------- |
+| Task storage     | Markdown files | PostgreSQL            |
+| Search           | grep/ripgrep   | SQL + vectors         |
+| Concurrent       | File locks     | Database transactions |
+| Portability      | File copy      | pg_dump/sql           |
+| Setup complexity | Low            | Medium                |
 
 ---
 
@@ -189,6 +195,7 @@ We want Nezha to work with OpenClaw skills:
 4. **Execute** from database
 
 This gives us the best of both:
+
 - OpenClaw's skill ecosystem
 - Nezha's queryable database
 
@@ -197,16 +204,19 @@ This gives us the best of both:
 ## Implementation Priority
 
 ### Phase 1: Core Tables (Done)
+
 - [x] tasks
-- [x] scheduled_tasks  
+- [x] scheduled_tasks
 - [x] memory
 
 ### Phase 2: Skills System
+
 - [ ] Import skills from files to DB
 - [ ] Skill execution from database
 - [ ] Skill version tracking
 
 ### Phase 3: Full Parity
+
 - [ ] Import all OpenClaw workspace data
 - [ ] Convert TASKS.md → tasks table
 - [ ] Convert SOUL.md → agent_config table
@@ -217,14 +227,15 @@ This gives us the best of both:
 
 We don't use Docker unless we have a strong reason:
 
-| Reason to use Docker | Why not needed |
-|---------------------|----------------|
-| "Easy setup" | PostgreSQL app is simple enough |
-| "Everyone uses it" | Not a valid reason |
-| "Portable" | pg_dump is portable enough |
-| "Isolated" | Local development doesn't need it |
+| Reason to use Docker | Why not needed                    |
+| -------------------- | --------------------------------- |
+| "Easy setup"         | PostgreSQL app is simple enough   |
+| "Everyone uses it"   | Not a valid reason                |
+| "Portable"           | pg_dump is portable enough        |
+| "Isolated"           | Local development doesn't need it |
 
 **Our approach:**
+
 - PostgreSQL app (macOS) - just start it
 - No container complexity
 - Easier debugging
@@ -235,16 +246,17 @@ We don't use Docker unless we have a strong reason:
 
 We use PostgreSQL because it **solves our exact problems**:
 
-| Problem | PostgreSQL Solution |
-|---------|-------------------|
+| Problem                          | PostgreSQL Solution            |
+| -------------------------------- | ------------------------------ |
 | Skills → Projects (many-to-many) | JOINs via project_skills table |
-| Find tasks by status + priority | SQL WHERE + ORDER BY |
-| Semantic memory search | pgvector |
-| Reliable state | ACID transactions |
-| Skills registry | Foreign keys, indexes |
-| Multi-project support | project_id column |
+| Find tasks by status + priority  | SQL WHERE + ORDER BY           |
+| Semantic memory search           | pgvector                       |
+| Reliable state                   | ACID transactions              |
+| Skills registry                  | Foreign keys, indexes          |
+| Multi-project support            | project_id column              |
 
 **NOT valid reasons:**
+
 - ❌ "Everyone uses it"
 - ❌ "It's standard"
 - ❌ "Docker makes it easy"
@@ -258,12 +270,14 @@ We use PostgreSQL because it **solves our exact problems**:
 Some data is **global** (reusable), some is **project-specific**:
 
 ### Global (scope = 'global')
+
 - `skills` - central skills registry
 - `tool_definitions` - available tools
 - `agent_soul` - core identity templates
 - `agent_identity` - identity patterns
 
 ### Project-Specific (scope = 'project')
+
 - `agent_configs` - project agents
 - `user_profiles` - project users
 - `heartbeat_configs` - project schedules
@@ -271,6 +285,7 @@ Some data is **global** (reusable), some is **project-specific**:
 - `tasks` - project tasks
 
 **Database advantage:** Easy to query globally or per-project:
+
 ```sql
 -- All global skills
 SELECT * FROM skills WHERE scope = 'global';
@@ -299,6 +314,7 @@ skills (global) ◄── project_skills (link) ──► projects
 ```
 
 **Benefits:**
+
 - One skill → many projects
 - Easy to search/filter
 - Version tracking
@@ -315,12 +331,14 @@ skills (global) ◄── project_skills (link) ──► projects
 4. **Project ID for isolation** - multi-project support
 5. **No Docker unless strong reason** - keep it simple
 6. **Choose tools that solve problems** - not because of popularity
+7. **AI communication via database** - tasks + memory for safety filtering
 
 ---
 
 ## Quick Reference for New Session
 
 ### Start Services
+
 ```bash
 # PostgreSQL
 /Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18-2 -l /Users/jk/Library/Application\ Support/Postgres/var-18-2/logfile start
@@ -334,11 +352,13 @@ nohup node dist/cli/index.js start > .nezha.log 2>&1 &
 ```
 
 ### Check Status
+
 ```bash
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT status, COUNT(*) FROM tasks GROUP BY status;"
 ```
 
 ### Key Tables
+
 - `tasks` - task queue
 - `skills` - central skills registry
 - `project_skills` - skill → project links
