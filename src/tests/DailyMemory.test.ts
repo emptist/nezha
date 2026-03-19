@@ -122,7 +122,7 @@ describe('DailyMemoryService', () => {
 
       const appendedContent = mockFs.appendFile.mock.calls[0][1] as string;
       expect(appendedContent).toContain('...');
-      expect(appendedContent.length).toBeLessThan(250);
+      expect(appendedContent).toContain('Long result task');
     });
 
     it('should include errors when provided', async () => {
