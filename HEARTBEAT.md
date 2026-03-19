@@ -48,6 +48,11 @@
 
 ## 已完成任务
 
+### 2026-03-20
+- [x] 修复 CLI 中的类型错误 (LSP缓存问题，已验证build和tests通过)
+- [x] 验证 TypeScript 编译无错误
+- [x] 验证 466 tests 全部通过
+
 ### 2026-03-19
 - [x] Fix duplicate method calls bug in HeartbeatService
 - [x] PostgreSQL 任务表和 heartbeat daemon
