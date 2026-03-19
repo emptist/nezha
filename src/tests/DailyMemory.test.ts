@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 import { DailyMemoryService, type MemorySaveInput } from '../services/DailyMemory.js';
 import { logger } from '../utils/logger.js';
 
-vi.mock('fs/promises');
+vi.mock('fs/promises', () => ({
+  access: vi.fn(),
+  mkdir: vi.fn(),
+  writeFile: vi.fn(),
+  readFile: vi.fn(),
+  appendFile: vi.fn(),
+}));
+
 vi.mock('../utils/logger.js', () => ({
   logger: {
     info: vi.fn(),
@@ -16,7 +22,6 @@ vi.mock('../utils/logger.js', () => ({
 describe('DailyMemoryService', () => {
   let service: DailyMemoryService;
   const testDir = '/tmp/nezha-memory-test';
-  const mockFs = fs as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
