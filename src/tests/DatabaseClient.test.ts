@@ -22,7 +22,6 @@ const createMockConfig = (): IConfig => ({
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,
   }),
-  getAppConfig: vi.fn().mockReturnValue({}),
 });
 
 describe('DatabaseClient', () => {
@@ -209,9 +208,18 @@ describe('DatabaseClient', () => {
 
   describe('saveCrossProjectLearning', () => {
     it('should save learning and return id', async () => {
-      mockPool.query.mockResolvedValue({ rows: [{ save_cross_project_learning: 'new-id' }], rowCount: 1 });
+      mockPool.query.mockResolvedValue({
+        rows: [{ save_cross_project_learning: 'new-id' }],
+        rowCount: 1,
+      });
 
-      const result = await client.saveCrossProjectLearning('test content', 'proj-1', ['tag1'], 5, 'source');
+      const result = await client.saveCrossProjectLearning(
+        'test content',
+        'proj-1',
+        ['tag1'],
+        5,
+        'source'
+      );
 
       expect(result).toBe('new-id');
       expect(mockPool.query).toHaveBeenCalledWith(
@@ -221,7 +229,10 @@ describe('DatabaseClient', () => {
     });
 
     it('should use default values for optional parameters', async () => {
-      mockPool.query.mockResolvedValue({ rows: [{ save_cross_project_learning: 'new-id' }], rowCount: 1 });
+      mockPool.query.mockResolvedValue({
+        rows: [{ save_cross_project_learning: 'new-id' }],
+        rowCount: 1,
+      });
 
       await client.saveCrossProjectLearning('test content');
 
@@ -282,10 +293,9 @@ describe('DatabaseClient', () => {
       const result = await client.getConversation('conv-1');
 
       expect(result).toEqual(mockConv);
-      expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE c.id = $1'),
-        ['conv-1']
-      );
+      expect(mockPool.query).toHaveBeenCalledWith(expect.stringContaining('WHERE c.id = $1'), [
+        'conv-1',
+      ]);
     });
 
     it('should return null when not found', async () => {
@@ -394,10 +404,11 @@ describe('DatabaseClient', () => {
 
       await client.getConversationsByDateRange(startDate, endDate, 'proj-1');
 
-      expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining('AND project_id = $3'),
-        [startDate, endDate, 'proj-1']
-      );
+      expect(mockPool.query).toHaveBeenCalledWith(expect.stringContaining('AND project_id = $3'), [
+        startDate,
+        endDate,
+        'proj-1',
+      ]);
     });
   });
 
