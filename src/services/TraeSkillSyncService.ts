@@ -14,7 +14,6 @@ interface SkillRow {
   version: string | null;
   author: string | null;
   tags: string[] | null;
-  category: string | null;
 }
 
 export class TraeSkillSyncService {
@@ -67,7 +66,7 @@ export class TraeSkillSyncService {
     };
 
     const result = await client.query<SkillRow>(
-      `SELECT id, name, description, instructions, manifest, source, version, author, tags, category
+      `SELECT id, name, description, instructions, manifest, source, version, author, tags
        FROM skills 
        WHERE name IS NOT NULL AND name != ''
        ORDER BY name`
@@ -107,7 +106,6 @@ export class TraeSkillSyncService {
       `- **Description**: ${skill.description || 'N/A'}`,
       `- **Author**: ${skill.author || 'Nezha AI'}`,
       `- **Source**: ${skill.source || 'nezha'}`,
-      `- **Category**: ${skill.category || 'general'}`,
       `- **Tags**: ${tags.join(', ') || 'none'}`,
       '',
       '## Instructions',
