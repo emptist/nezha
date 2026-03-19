@@ -26,6 +26,11 @@ export const DATABASE_TABLES = {
   CONVERSATIONS: 'conversations',
   AGENTS: 'agents',
   SKILLS: 'skills',
+  TASK_OUTCOMES: 'task_outcomes',
+  TASK_PATTERNS: 'task_patterns',
+  KNOWLEDGE_LINKS: 'knowledge_links',
+  LEARNING_INSIGHTS: 'learning_insights',
+  TASK_OUTCOME_FEATURES: 'task_outcome_features',
 } as const;
 
 export const DATABASE_CONFIG = {

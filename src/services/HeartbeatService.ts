@@ -2,6 +2,7 @@ import { Scheduler } from '../core/Scheduler.js';
 import { UnifiedAgent, CliAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
 import { type StreamingCallback } from '../core/transports/index.js';
 import { MemoryService } from '../core/Memory.js';
+import { LearningAnalysisService } from '../core/LearningAnalysis.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
@@ -84,6 +85,7 @@ export class HeartbeatService {
   private readonly scheduler: Scheduler;
   private readonly agent: UnifiedAgent;
   private readonly memory: MemoryService;
+  private readonly learning: LearningAnalysisService;
   private readonly dailyMemory: DailyMemoryService;
   private readonly selfImprovement: SelfImprovementService;
   private checkpointService?: CheckpointService;
@@ -104,6 +106,7 @@ export class HeartbeatService {
   private memoryCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private memoryCompactionTimer: ReturnType<typeof setInterval> | null = null;
   private checkpointTimer: ReturnType<typeof setInterval> | null = null;
+  private insightTimer: ReturnType<typeof setInterval> | null = null;
   private readonly memoryCleanupIntervalMs: number;
   private readonly memoryCompactionIntervalMs: number;
   private readonly defaultMaxRetries: number;
@@ -113,6 +116,7 @@ export class HeartbeatService {
   private enableMemoryContext: boolean;
   private readonly agentCircuitBreaker: EnhancedCircuitBreaker;
   private isAgentAvailable: boolean = true;
+  private readonly insightIntervalMs: number;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -157,6 +161,7 @@ export class HeartbeatService {
     }
 
     this.memory = new MemoryService(db, undefined, embeddingProvider);
+    this.learning = new LearningAnalysisService(db, embeddingProvider);
     this.dailyMemory = new DailyMemoryService();
     this.selfImprovement = getSelfImprovement(db, config?.embedding);
     this.workspaceDir = config?.workspaceDir ?? process.cwd();
@@ -168,6 +173,7 @@ export class HeartbeatService {
     this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
     this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
+    this.insightIntervalMs = 3600000;
     this.enableMemoryContext = config?.agent?.enableMemoryContext ?? true;
 
     this.contextBuilder = new ContextBuilder(db, {
@@ -230,6 +236,7 @@ export class HeartbeatService {
     this.startMemoryCleanup();
     this.startMemoryCompaction();
     this.startCheckpointTimer();
+    this.startInsightGeneration();
 
     // Load checkpoint state and reset orphaned RUNNING tasks
     if (this.checkpointService) {
@@ -290,6 +297,20 @@ export class HeartbeatService {
         logger.error('Checkpoint save failed:', error);
       }
     }, this.checkpointIntervalMs);
+  }
+
+  private startInsightGeneration(): void {
+    logger.info(`Starting insight generation (interval: ${this.insightIntervalMs}ms)`);
+    this.insightTimer = setInterval(async () => {
+      try {
+        const insights = await this.learning.autoGenerateInsights();
+        if (insights.length > 0) {
+          logger.info(`Generated ${insights.length} new insights`);
+        }
+      } catch (error) {
+        logger.error('Insight generation failed:', error);
+      }
+    }, this.insightIntervalMs);
   }
 
   private async runContinuousLoop(): Promise<void> {
@@ -360,6 +381,11 @@ export class HeartbeatService {
     if (this.checkpointTimer) {
       clearInterval(this.checkpointTimer);
       this.checkpointTimer = null;
+    }
+
+    if (this.insightTimer) {
+      clearInterval(this.insightTimer);
+      this.insightTimer = null;
     }
 
     // Save final checkpoint on shutdown
@@ -497,6 +523,12 @@ After completing this task:
           metadata: { type: 'task_result', success: true },
         });
 
+        await this.learning.recordOutcome(taskId, 'COMPLETED', {
+          taskDescription: title,
+          executionTimeMs: Date.now() - startTime,
+          attempts: retryCount + 1,
+        });
+
         await this.dailyMemory.save({
           task: title,
           result: result.message || 'Completed',
@@ -519,6 +551,12 @@ After completing this task:
       }
 
       this.stats.tasksFailed++;
+
+      await this.learning.recordOutcome(taskId, 'FAILED', {
+        taskDescription: title,
+        errorMessage: result.message || 'Unknown error',
+        attempts: retryCount + 1,
+      });
 
       await this.dailyMemory.save({
         task: title,
@@ -784,6 +822,12 @@ After completing this task:
           metadata: { type: 'task_result', success: true, streaming: true },
         });
 
+        await this.learning.recordOutcome(taskId, 'COMPLETED', {
+          taskDescription: title,
+          executionTimeMs: Date.now() - startTime,
+          attempts: retryCount + 1,
+        });
+
         await this.dailyMemory.save({
           task: title,
           result: resultMessage || 'Completed',
@@ -806,6 +850,12 @@ After completing this task:
       }
 
       this.stats.tasksFailed++;
+
+      await this.learning.recordOutcome(taskId, 'FAILED', {
+        taskDescription: title,
+        errorMessage: resultMessage || 'Unknown error',
+        attempts: retryCount + 1,
+      });
 
       await pluginManager.executeAfterTask({
         ...taskContext,

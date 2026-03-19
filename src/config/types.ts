@@ -119,6 +119,90 @@ export interface DatabaseClient {
   close(): Promise<void>;
 }
 
+export interface TaskOutcome {
+  id: string;
+  taskId: string;
+  projectId?: string;
+  taskType?: string;
+  taskDescription?: string;
+  status: string;
+  errorMessage?: string;
+  errorCategory?: string;
+  solutionApplied?: string;
+  solutionWorked?: boolean;
+  executionTimeMs?: number;
+  attempts: number;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TaskPattern {
+  id: string;
+  projectId?: string;
+  patternType: 'success' | 'failure' | 'workaround';
+  patternCategory: string;
+  patternContent: string;
+  patternContext?: string;
+  successRate: number;
+  occurrenceCount: number;
+  firstSeenAt: Date;
+  lastSeenAt: Date;
+  lastConfirmedAt?: Date;
+  metadata?: Record<string, unknown>;
+  embedding?: number[];
+  isActive: boolean;
+}
+
+export interface KnowledgeLink {
+  id: string;
+  fromType: 'memory' | 'pattern' | 'outcome';
+  fromId: string;
+  toType: 'memory' | 'pattern' | 'outcome';
+  toId: string;
+  relation: 'relates-to' | 'causes' | 'solves' | 'contradicts' | 'improves' | 'confirms';
+  confidence: number;
+  context?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface LearningInsight {
+  id: string;
+  projectId?: string;
+  insightType: 'improvement' | 'warning' | 'pattern' | 'recommendation';
+  title: string;
+  content: string;
+  evidence: unknown[];
+  priority: number;
+  confidence: number;
+  isApplied: boolean;
+  appliedAt?: Date;
+  expiresAt?: Date;
+  metadata?: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface SimilarSolution {
+  outcomeId: string;
+  taskDescription: string;
+  solutionApplied: string;
+  solutionWorked: boolean;
+  similarityScore: number;
+  executionTimeMs?: number;
+  attempts: number;
+}
+
+export interface FailureImprovement {
+  errorCategory: string;
+  failureCount: number;
+  avgExecutionTimeMs?: number;
+  suggestedImprovement: string;
+  confidenceScore: number;
+  relatedPatternId?: string;
+  relatedMemoryId?: string;
+}
+
 export interface IConfig {
   getDbConfig(): DbConfig;
   getTaskConfig(): TaskConfig;
