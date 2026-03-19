@@ -208,36 +208,9 @@ Save agreements to memory:
 
 **Read more**: `reviews/openclaw_multiagent_research.md`
 
----
-
-## Nezha's Implementation (OpenCode-based)
-
-Nezha spawns **OpenCode** AI instances for task execution.
-
-### How to Spawn OpenCode AIs
-
-```bash
-# Method 1: Create subagent
-opencode agent create --mode subagent --description "Task executor"
-
-# Method 2: Run with specific agent
-opencode run --agent <agent-name> "Your task"
-
-# Method 3: Headless server
-opencode serve --port 4096
-opencode run --attach http://localhost:4096 "Task"
-```
-
-### Nezha Parallel Spawning
-
-```bash
-# Create multiple tasks - Nezha spawns multiple OpenCode instances
-node dist/cli/index.js task-add "Spawn Request: AI 1" "Task 1" 9
-node dist/cli/index.js task-add "Spawn Request: AI 2" "Task 2" 9
-```
-
 ## See Also
 
 - [AI_COLLABORATION.md](../../docs/AI_COLLABORATION.md) - Full collaboration framework
+- [OPENCODE_INTEGRATION.md](../../docs/OPENCODE_INTEGRATION.md) - OpenCode spawning methods
 - [continuous-improvement.md](./continuous-improvement.md) - PDCA cycle skill
 - [openclaw_multiagent_research.md](../../reviews/openclaw_multiagent_research.md) - Gas Town research
