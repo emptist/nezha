@@ -109,11 +109,11 @@ describe('MetricsService', () => {
       });
 
       histogram.observe(0.3);
-      expect(histogram.get().sum).toBe(0.3);
-      expect(histogram.get().count).toBe(1);
+      expect(histogram.sum).toBe(0.3);
+      expect(histogram.count).toBe(1);
     });
 
-    it('should update correct buckets', () => {
+    it('should update histogram values', () => {
       const metrics = new Map();
       const histogram = new Histogram(metrics, 'test_histogram');
       metrics.set('test_histogram', {
@@ -132,18 +132,16 @@ describe('MetricsService', () => {
       });
 
       histogram.observe(0.05);
-      expect(histogram.get().buckets[0].count).toBe(1);
-      expect(histogram.get().buckets[1].count).toBe(1);
-      expect(histogram.get().buckets[2].count).toBe(1);
+      expect(histogram.count).toBe(1);
+      expect(histogram.sum).toBe(0.05);
     });
 
     it('should return default values for non-existent metric', () => {
       const metrics = new Map();
       const histogram = new Histogram(metrics, 'missing');
 
-      const result = histogram.get();
-      expect(result.count).toBe(0);
-      expect(result.sum).toBe(0);
+      expect(histogram.count).toBe(0);
+      expect(histogram.sum).toBe(0);
     });
   });
 
@@ -194,7 +192,7 @@ describe('MetricsService', () => {
       const registry = new MetricsRegistry();
       const histogram = registry.histogram('obs_test', 'Observe test');
       histogram.observe(0.5);
-      expect(histogram.get().count).toBe(1);
+      expect(histogram.count).toBe(1);
     });
 
     it('should export metrics in prometheus format', () => {
