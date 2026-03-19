@@ -50,6 +50,6 @@ export class AIProviderFactory {
   }
 }
 
-export { AIProvider, AIProviderConfig, AICompletionResponse } from './AIProvider.js';
+export type { AIProvider, AIProviderConfig, AICompletionResponse } from './AIProvider.js';
 export { OpenAIProvider } from './OpenAIProvider.js';
 export { AnthropicProvider } from './AnthropicProvider.js';
