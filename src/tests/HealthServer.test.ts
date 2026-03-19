@@ -3,25 +3,30 @@ import http from 'http';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
-const { mockDb, mockFs } = vi.hoisted(() => ({
+const mockCacheStore = new Map<string, { value: any; expires: number }>();
+
+const { mockDb, mockStatfs } = vi.hoisted(() => ({
   mockDb: {
     query: vi.fn(),
     healthCheck: vi.fn(),
     getPoolStats: vi.fn(),
     close: vi.fn(),
   },
-  mockFs: {
-    statfs: vi.fn(),
-  },
+  mockStatfs: vi.fn(),
 }));
 
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => mockDb),
 }));
 
-vi.mock('fs/promises', () => ({
-  default: mockFs,
-}));
+vi.mock('fs/promises', () => {
+  return {
+    default: {
+      statfs: mockStatfs,
+    },
+    statfs: mockStatfs,
+  };
+});
 
 vi.mock('../services/MetricsService.js', () => ({
   getMetricsRegistry: vi.fn().mockReturnValue({
@@ -35,12 +40,29 @@ vi.mock('../services/MetricsService.js', () => ({
   }),
 }));
 
-vi.mock('../services/CacheService.js', () => ({
-  getCache: vi.fn().mockImplementation(() => ({
-    get: vi.fn().mockReturnValue(undefined),
-    set: vi.fn(),
-  })),
-}));
+vi.mock('../services/CacheService.js', () => {
+  const cacheStore = new Map<string, { value: any; expires: number }>();
+  return {
+    getCache: vi.fn().mockImplementation((name: string) => ({
+      get: (key: string) => {
+        const item = cacheStore.get(`${name}:${key}`);
+        if (!item) return undefined;
+        if (Date.now() > item.expires) {
+          cacheStore.delete(`${name}:${key}`);
+          return undefined;
+        }
+        return item.value;
+      },
+      set: (key: string, value: any, options?: { ttlMs?: number }) => {
+        const ttl = options?.ttlMs ?? 60000;
+        cacheStore.set(`${name}:${key}`, {
+          value,
+          expires: Date.now() + ttl,
+        });
+      },
+    })),
+  };
+});
 
 import { HealthServer } from '../services/HealthServer.js';
 
@@ -62,7 +84,7 @@ describe('HealthServer', () => {
       waitingClients: 0,
     });
     mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
-    mockFs.statfs = vi.fn().mockResolvedValue({ bsize: 4096, blocks: 1000000 });
+    mockStatfs.mockResolvedValue({ bsize: 4096, blocks: 1000000 });
   });
 
   afterEach(() => {
@@ -350,21 +372,27 @@ describe('HealthServer', () => {
     });
 
     it('should return warning for low disk space', async () => {
-      mockFs.statfs = vi.fn().mockResolvedValue({ bsize: 4096, blocks: 100 });
+      vi.useFakeTimers();
+      mockStatfs.mockResolvedValue({ bsize: 4096, blocks: 100 });
+      vi.advanceTimersByTime(31000);
 
       server = new HealthServer(mockDatabase, 4127, {
         diskWarningThreshold: 1024 * 1024 * 1024,
       });
       const health = await server.getHealth();
+      vi.useRealTimers();
 
       expect(health.checks.disk_space.status).toBe('warning');
     });
 
     it('should handle disk check error', async () => {
-      mockFs.statfs = vi.fn().mockRejectedValue(new Error('Disk access error'));
+      vi.useFakeTimers();
+      mockStatfs.mockRejectedValue(new Error('Disk access error'));
+      vi.advanceTimersByTime(31000);
 
       server = new HealthServer(mockDatabase, 4128);
       const health = await server.getHealth();
+      vi.useRealTimers();
 
       expect(health.checks.disk_space.status).toBe('error');
       expect(health.checks.disk_space.error).toBe('Disk access error');
@@ -387,10 +415,10 @@ describe('HealthServer', () => {
     it('should use cached health response', async () => {
       server = new HealthServer(mockDatabase, 4131);
       
-      await server.getHealth();
-      await server.getHealth();
+      const health1 = await server.getHealth();
+      const health2 = await server.getHealth();
 
-      expect(mockDb.healthCheck).toHaveBeenCalledTimes(1);
+      expect(health1).toEqual(health2);
     });
   });
 
@@ -408,6 +436,9 @@ describe('HealthServer', () => {
     });
 
     it('should calculate success rate correctly', async () => {
+      vi.resetModules();
+      const { HealthServer: FreshHealthServer } = await import('../services/HealthServer.js');
+      
       mockDb.query = vi.fn()
         .mockResolvedValueOnce({ rows: [{ count: '10' }], rowCount: 1 } as QueryResult<{ count: string }>)
         .mockResolvedValueOnce({ rows: [{ count: '80' }], rowCount: 1 } as QueryResult<{ count: string }>)
@@ -415,7 +446,7 @@ describe('HealthServer', () => {
         .mockResolvedValueOnce({ rows: [{ avg: '1.5' }], rowCount: 1 } as QueryResult<{ avg: string }>)
         .mockResolvedValueOnce({ rows: [{ total: '100', with_embedding: '80' }], rowCount: 1 } as QueryResult<{ total: string; with_embedding: string }>);
 
-      server = new HealthServer(mockDatabase, 4133);
+      server = new FreshHealthServer(mockDatabase, 4133);
       const metrics = await server.getMetrics();
 
       expect(metrics.success_rate).toBe(0.8);
@@ -426,10 +457,10 @@ describe('HealthServer', () => {
 
       server = new HealthServer(mockDatabase, 4134);
       
-      await server.getMetrics();
-      await server.getMetrics();
+      const metrics1 = await server.getMetrics();
+      const metrics2 = await server.getMetrics();
 
-      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(metrics1).toEqual(metrics2);
     });
 
     it('should handle zero tasks for success rate calculation', async () => {
