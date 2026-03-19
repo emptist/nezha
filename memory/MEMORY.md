@@ -111,6 +111,14 @@ host    all             all             ::1/128                 trust
 **Solution**: Document all possible installation methods
 **Impact**: Affects binary locations, PATH, authentication
 
+### Lesson 4: CI Artifact Naming Mismatch
+
+**Problem**: CI workflow looked for `dist/index.js` but actual output was `dist/NezhaCore.js`
+**Root Cause**: Build output filename changed without updating CI workflow
+**Solution**: Always verify CI workflow references match actual build outputs
+**Impact**: CI passes but verification step fails
+**Pattern**: After any build configuration change, audit all CI workflow files for artifact references
+
 ---
 
 ## 🔄 Memory System Improvements
@@ -159,12 +167,13 @@ host    all             all             ::1/128                 trust
 ## 🎯 Action Items
 
 - [x] Fix `Config.validate()` to allow empty password
-- [ ] Update `.env` to use empty password
-- [ ] Test database connection
-- [ ] Store this configuration in database memory table
+- [x] Update `.env` to use empty password
+- [x] Test database connection
+- [x] Store this configuration in database memory table
 - [ ] Update HEARTBEAT.md with system state
 - [ ] Create automatic configuration detection script
 - [ ] Update all documentation
+- [x] Fix CI artifact reference: `dist/index.js` → `dist/NezhaCore.js`
 
 ---
 
