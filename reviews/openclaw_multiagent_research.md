@@ -101,7 +101,9 @@ Physics over politeness. No waiting for permission.
 
 ## Source
 
-- File: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/examples/28-gas-town.prose`
+- **OpenClaw Codebase**: `/Users/jk/gits/hub/openclaw`
+- **Key File**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/examples/28-gas-town.prose`
+- **OpenProse Compiler**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/compiler.md`
 - Framework: OpenProse VM for multi-agent orchestration
 
 ## Next Steps

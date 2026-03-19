@@ -188,6 +188,10 @@ Save agreements to memory:
 
 **OpenClaw already has a multi-agent system called Gas Town!**
 
+**OpenClaw Codebase**: `/Users/jk/gits/hub/openclaw`
+
+**Key File**: `/Users/jk/gits/hub/openclaw/extensions/open-prose/skills/prose/examples/28-gas-town.prose`
+
 ### Gas Town Key Concepts
 
 | Concept | Description |
