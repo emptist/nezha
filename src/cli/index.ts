@@ -18,6 +18,7 @@ import {
   respondToReview,
 } from './InterReviewCommands.js';
 import { MonitoringCommands } from './MonitoringCommands.js';
+import { MeetingCommands, parseKeyPoints } from './MeetingCommands.js';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -52,6 +53,7 @@ export class Cli {
   private readonly SHUTDOWN_TIMEOUT_MS: number = 30000;
   private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
   private monitoringCommands: MonitoringCommands | null = null;
+  private meetingCommands: MeetingCommands | null = null;
 
   constructor() {
     this.config = Config.getInstance();
@@ -71,6 +73,14 @@ export class Cli {
       this.monitoringCommands = new MonitoringCommands({ db });
     }
     return this.monitoringCommands;
+  }
+
+  public async getMeetingCommands(): Promise<MeetingCommands> {
+    if (!this.meetingCommands) {
+      const db = await this.getDb();
+      this.meetingCommands = new MeetingCommands({ db });
+    }
+    return this.meetingCommands;
   }
 
   async start(): Promise<void> {
@@ -1520,6 +1530,126 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'meeting': {
+        const subcommand = args[1];
+        const meeting = await cliInstance.getMeetingCommands();
+
+        if (subcommand === 'discuss' || subcommand === 'create') {
+          const title = args[2];
+          const description = args.slice(3).join(' ') || 'No description provided';
+          let priority = 5;
+          const participants: string[] = [];
+
+          const priorityIndex = args.indexOf('--priority');
+          if (priorityIndex !== -1 && args[priorityIndex + 1]) {
+            priority = parseInt(args[priorityIndex + 1]!, 10) || 5;
+          }
+
+          const participantsIndex = args.indexOf('--participants');
+          if (participantsIndex !== -1 && args[participantsIndex + 1]) {
+            participants.push(...args[participantsIndex + 1]!.split(','));
+          }
+
+          if (!title) {
+            cli.error('Discussion title is required');
+            console.log('\nUsage: nezha meeting discuss <title> [description] [--priority <n>] [--participants <ai1,ai2>]');
+            console.log('\nExamples:');
+            console.log('  nezha meeting discuss "API Design" "Should we use REST or GraphQL?"');
+            console.log('  nezha meeting discuss "Database Choice" "PostgreSQL vs MongoDB" --priority 8');
+            console.log('  nezha meeting discuss "Testing Strategy" --participants nezha-1,nezha-2');
+            process.exit(1);
+          }
+
+          await meeting.createDiscussion(title, description, participants, priority);
+        } else if (subcommand === 'list') {
+          const statusIndex = args.indexOf('--status');
+          const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+          await meeting.listDiscussions(status);
+        } else if (subcommand === 'show') {
+          const id = args[2];
+          await meeting.showDiscussion(id);
+        } else if (subcommand === 'opinion') {
+          const discussionId = args[2];
+          const author = args[3];
+          const perspective = args[4] || '';
+          const keyPointsRaw = args.slice(5).join(' ');
+
+          if (!discussionId || !author) {
+            cli.error('Discussion ID and author are required');
+            console.log('\nUsage: nezha meeting opinion <discussion-id> <author> <perspective> [key-points...]');
+            console.log('\nExample:');
+            console.log('  nezha meeting opinion abc123 nezha-1 "REST is simpler" "Easy to understand" "Better tooling" "HTTP caching"');
+            process.exit(1);
+          }
+
+          await meeting.addOpinion(
+            discussionId,
+            author,
+            perspective,
+            parseKeyPoints(keyPointsRaw),
+            '',
+            [],
+            []
+          );
+        } else if (subcommand === 'consensus') {
+          const topic = args[2];
+          const participantsRaw = args[3];
+          const decision = args[4] || '';
+
+          if (!topic || !participantsRaw || !decision) {
+            cli.error('Topic, participants, and decision are required');
+            console.log('\nUsage: nezha meeting consensus <topic> <participants> <decision> [--agreed <points>] [--next <steps>]');
+            console.log('\nExamples:');
+            console.log('  nezha meeting consensus "API Choice" "nezha-1,nezha-2" "Use REST"');
+            console.log('  nezha meeting consensus "DB Choice" "nezha-1" "PostgreSQL" --agreed "ACID compliance" --next "Set up schema"');
+            process.exit(1);
+          }
+
+          const agreedIndex = args.indexOf('--agreed');
+          const agreedPoints = agreedIndex !== -1 && args[agreedIndex + 1] 
+            ? args[agreedIndex + 1]!.split('|') 
+            : [decision];
+
+          const nextIndex = args.indexOf('--next');
+          const nextSteps = nextIndex !== -1 && args[nextIndex + 1] 
+            ? args[nextIndex + 1]!.split('|') 
+            : [];
+
+          await meeting.reachConsensus(
+            topic,
+            participantsRaw.split(','),
+            agreedPoints,
+            decision,
+            nextSteps
+          );
+        } else if (subcommand === 'history') {
+          const limit = parseInt(args[args.indexOf('--limit') + 1] || '20', 10);
+          await meeting.listConsensus(limit);
+        } else if (!subcommand || subcommand === 'help') {
+          console.log('\nUsage: nezha meeting <subcommand> [options]');
+          console.log('\nSubcommands:');
+          console.log('  discuss <title> [desc]     Create a new AI discussion');
+          console.log('  list [--status <status>]   List active discussions');
+          console.log('  show [id]                  Show discussion details');
+          console.log('  opinion <id> <author> <p> Record an opinion');
+          console.log('  consensus <t> <p> <d>       Record consensus');
+          console.log('  history [--limit <n>]      Show consensus history');
+          console.log('\nOptions:');
+          console.log('  --priority <n>             Set discussion priority (default: 5)');
+          console.log('  --participants <ai1,ai2>   Comma-separated participant list');
+          console.log('  --agreed <p1|p2|...>       Pipe-separated agreed points');
+          console.log('  --next <s1|s2|...>         Pipe-separated next steps');
+          console.log('\nExamples:');
+          console.log('  nezha meeting discuss "API Design" "REST vs GraphQL?"');
+          console.log('  nezha meeting list');
+          console.log('  nezha meeting history');
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha meeting <discuss|list|show|opinion|consensus|history>');
+        }
+        break;
+      }
+
       case 'help':
       default:
         showHelp();
@@ -1575,6 +1705,14 @@ function showHelp(): void {
     longtasks paused              List paused tasks
     longtasks failures            Show failure statistics by category
 
+  ${colors.bright}Meeting Commands:${colors.reset}
+    meeting discuss <title>       Create an AI discussion
+    meeting list [--status]       List active discussions
+    meeting show [id]             Show discussion details
+    meeting opinion <id> <author> Record an opinion
+    meeting consensus <t> <p> <d> Record consensus reached
+    meeting history [--limit]     Show consensus history
+
     help                          Show this help
 
  ${colors.bright}Options:${colors.reset}
@@ -1594,17 +1732,20 @@ function showHelp(): void {
    NEZHA_TRANSPORT_MODE          Default transport mode (http or cli)
    NEZHA_OPENCODE_API_URL       OpenCode API URL for HTTP transport
 
- ${colors.bright}Examples:${colors.reset}
-   ${colors.cyan}$ nezha start${colors.reset}
-   ${colors.cyan}$ nezha start --transport cli --verbose${colors.reset}
-   ${colors.cyan}$ nezha task-add "Review PR #123" "Check for bugs" --priority 5${colors.reset}
-   ${colors.cyan}$ nezha task-add "Deploy" "Deploy to prod" --depends-on build-uuid --dry-run${colors.reset}
-   ${colors.cyan}$ nezha task-add "Fix bug" "Critical bug" --json${colors.reset}
-   ${colors.cyan}$ nezha schedule "Daily Cleanup" "Clean up" "0 2 * * *" --priority 10${colors.reset}
-   ${colors.cyan}$ nezha tasks --status PENDING --tag urgent${colors.reset}
-   ${colors.cyan}$ nezha tasks --category bugfix --json${colors.reset}
-   ${colors.cyan}$ nezha tasks --format=json${colors.reset}
- `);
+  ${colors.bright}Examples:${colors.reset}
+    ${colors.cyan}$ nezha start${colors.reset}
+    ${colors.cyan}$ nezha start --transport cli --verbose${colors.reset}
+    ${colors.cyan}$ nezha task-add "Review PR #123" "Check for bugs" --priority 5${colors.reset}
+    ${colors.cyan}$ nezha task-add "Deploy" "Deploy to prod" --depends-on build-uuid --dry-run${colors.reset}
+    ${colors.cyan}$ nezha task-add "Fix bug" "Critical bug" --json${colors.reset}
+    ${colors.cyan}$ nezha schedule "Daily Cleanup" "Clean up" "0 2 * * *" --priority 10${colors.reset}
+    ${colors.cyan}$ nezha tasks --status PENDING --tag urgent${colors.reset}
+    ${colors.cyan}$ nezha tasks --category bugfix --json${colors.reset}
+    ${colors.cyan}$ nezha tasks --format=json${colors.reset}
+    ${colors.cyan}$ nezha meeting discuss "API Design" "REST or GraphQL?"${colors.reset}
+    ${colors.cyan}$ nezha meeting list${colors.reset}
+    ${colors.cyan}$ nezha meeting history${colors.reset}
+  `);
 }
 
 main();
