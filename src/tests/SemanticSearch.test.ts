@@ -2,29 +2,34 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
-vi.mock('../db/DatabaseClient.js');
+const { mockDb, mockEmbedding } = vi.hoisted(() => ({
+  mockDb: {
+    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+    close: vi.fn(),
+  },
+  mockEmbedding: {
+    embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
+  },
+}));
+
+vi.mock('../db/DatabaseClient.js', () => ({
+  DatabaseClient: vi.fn().mockImplementation(() => mockDb),
+}));
+
+vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
+  OllamaEmbedding: vi.fn().mockImplementation(() => mockEmbedding),
+}));
 
 describe('SemanticSearchService', () => {
-  let mockDb: any;
   let SemanticSearchService: any;
   let service: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-
-    mockDb = {
-      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-      close: vi.fn(),
-    };
-
-    const mockEmbedding = {
-      embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
-    };
-
-    vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
-      OllamaEmbedding: vi.fn(() => mockEmbedding),
-    }));
+    
+    mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockEmbedding.embed.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
 
     const module = await import('../services/SemanticSearch.js');
     SemanticSearchService = module.SemanticSearchService;
