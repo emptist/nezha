@@ -51,9 +51,11 @@
 ### 2026-03-20
 - [x] 修复 CLI 中的类型错误 (LSP缓存问题，已验证build和tests通过)
 - [x] 验证 TypeScript 编译无错误
-- [x] 验证 466 tests 全部通过
+- [x] 验证 520 tests 全部通过
 - [x] 验证 InterReview 已集成到改进循环 (AutoReviewService)
 - [x] 验证 Process Guardian 孤儿进程清理已实现 (TaskWatchdogService)
+- [x] 检查测试覆盖率 (37.71% 语句, 73.92% 分支, 68.27% 函数)
+- [x] 比较 OpenClaw vs Nezha 架构差异
 
 ### 2026-03-19
 - [x] Fix duplicate method calls bug in HeartbeatService
