@@ -1,0 +1,196 @@
+import { DatabaseClient } from '../db/DatabaseClient.js';
+import { MemoryService, type SaveMemoryInput } from '../core/Memory.js';
+import { DailyMemoryService } from './DailyMemory.js';
+import {
+  createEmbeddingProvider,
+  type EmbeddingProvider,
+  type EmbeddingConfig,
+} from './embedding/index.js';
+import { logger } from '../utils/logger.js';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+
+const DEFAULT_MEMORY_DIR = '.tmp/nezha-memory';
+const MEMORY_FILE = 'MEMORY.md';
+const CONTEXT_MEMORY_LIMIT = 5;
+const CURATED_MEMORY_TTL_MS = 60000;
+
+export interface ContextMemoryResult {
+  id: string;
+  content: string;
+  similarity: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface TaskContextInput {
+  taskId: string;
+  title: string;
+  description?: string;
+}
+
+export interface BuiltContext {
+  originalTask: string;
+  relevantMemories: ContextMemoryResult[];
+  todayMemory: string;
+  curatedMemory: string;
+  combinedPrompt: string;
+}
+
+export class ContextBuilder {
+  private readonly memory: MemoryService;
+  private readonly dailyMemory: DailyMemoryService;
+  private readonly memoryDir: string;
+  private readonly embedding?: EmbeddingProvider;
+  private cachedCuratedMemory: string = '';
+  private curatedMemoryLoaded: number = 0;
+
+  constructor(
+    db: DatabaseClient,
+    config?: {
+      memoryDir?: string;
+      embedding?: EmbeddingConfig;
+    }
+  ) {
+    this.memoryDir = config?.memoryDir ?? DEFAULT_MEMORY_DIR;
+    
+    let embeddingProvider: EmbeddingProvider | undefined;
+    if (config?.embedding) {
+      try {
+        embeddingProvider = createEmbeddingProvider(config.embedding);
+        logger.info(`ContextBuilder embedding provider: ${config.embedding.provider}`);
+      } catch (error) {
+        logger.warn('Failed to initialize embedding provider for ContextBuilder:', error);
+      }
+    }
+
+    this.memory = new MemoryService(db, undefined, embeddingProvider);
+    this.dailyMemory = new DailyMemoryService({ memoryDir: this.memoryDir });
+    this.embedding = embeddingProvider;
+  }
+
+  async buildContext(input: TaskContextInput): Promise<BuiltContext> {
+    const taskDescription = input.description || input.title;
+
+    const [relevantMemories, todayMemory, curatedMemory] = await Promise.all([
+      this.findRelevantMemories(taskDescription),
+      this.dailyMemory.readToday(),
+      this.loadCuratedMemory(),
+    ]);
+
+    const combinedPrompt = this.combineContext(
+      taskDescription,
+      relevantMemories,
+      todayMemory,
+      curatedMemory
+    );
+
+    return {
+      originalTask: taskDescription,
+      relevantMemories,
+      todayMemory,
+      curatedMemory,
+      combinedPrompt,
+    };
+  }
+
+  private async findRelevantMemories(query: string): Promise<ContextMemoryResult[]> {
+    if (!this.embedding) {
+      logger.debug('No embedding provider, using keyword search');
+      const results = await this.memory.search(query, CONTEXT_MEMORY_LIMIT);
+      return results.map(m => ({
+        id: m.id,
+        content: m.content,
+        similarity: 0.5,
+        metadata: m.metadata,
+      }));
+    }
+
+    try {
+      const vectorResults = await this.memory.vectorSearch(
+        query,
+        undefined,
+        CONTEXT_MEMORY_LIMIT,
+        0.5
+      );
+
+      return vectorResults.map(r => ({
+        id: r.id,
+        content: r.content,
+        similarity: r.similarity,
+        metadata: r.metadata,
+      }));
+    } catch (error) {
+      logger.warn('Vector search failed, falling back to keyword search:', error);
+      const results = await this.memory.search(query, CONTEXT_MEMORY_LIMIT);
+      return results.map(m => ({
+        id: m.id,
+        content: m.content,
+        similarity: 0.5,
+        metadata: m.metadata,
+      }));
+    }
+  }
+
+  private async loadCuratedMemory(): Promise<string> {
+    const now = Date.now();
+    if (this.cachedCuratedMemory && now - this.curatedMemoryLoaded < CURATED_MEMORY_TTL_MS) {
+      return this.cachedCuratedMemory;
+    }
+
+    try {
+      const filePath = path.join(this.memoryDir, MEMORY_FILE);
+      await fs.access(filePath);
+      const content = await fs.readFile(filePath, 'utf-8');
+      this.cachedCuratedMemory = content;
+      this.curatedMemoryLoaded = now;
+      return content;
+    } catch {
+      return '';
+    }
+  }
+
+  private combineContext(
+    task: string,
+    memories: ContextMemoryResult[],
+    todayMemory: string,
+    curatedMemory: string
+  ): string {
+    const parts: string[] = [];
+
+    if (curatedMemory) {
+      parts.push(`## Long-term Memory\n${curatedMemory}\n`);
+    }
+
+    if (memories.length > 0) {
+      const memoryList = memories
+        .map(m => `- ${m.content.substring(0, 200)}${m.content.length > 200 ? '...' : ''} (relevance: ${(m.similarity * 100).toFixed(0)}%)`)
+        .join('\n');
+      parts.push(`## Relevant Past Experience\n${memoryList}\n`);
+    }
+
+    if (todayMemory) {
+      const todayEntries = todayMemory.split('\n').filter(l => l.trim()).slice(0, 5).join('\n');
+      if (todayEntries) {
+        parts.push(`## Today's Activity\n${todayEntries}\n`);
+      }
+    }
+
+    parts.push(`## Current Task\n${task}`);
+
+    return parts.join('\n\n');
+  }
+
+  async updateCuratedMemory(newContent: string): Promise<void> {
+    try {
+      await fs.mkdir(this.memoryDir, { recursive: true });
+      const filePath = path.join(this.memoryDir, MEMORY_FILE);
+      await fs.writeFile(filePath, newContent, 'utf-8');
+      this.cachedCuratedMemory = newContent;
+      this.curatedMemoryLoaded = Date.now();
+      logger.info('Updated curated memory');
+    } catch (error) {
+      logger.error('Failed to update curated memory:', error);
+      throw error;
+    }
+  }
+}

@@ -25,6 +25,8 @@ import { createStandardMetrics } from './MetricsService.js';
 import { getPluginManager, type TaskContext } from '../core/PluginManager.js';
 import { NotificationPlugin, LoggingPlugin } from '../plugins/index.js';
 import { WebhookService, createWebhookConfigFromEnv } from './WebhookService.js';
+import { ContextBuilder } from './ContextBuilder.js';
+import { EnhancedCircuitBreaker, type CircuitState } from '../utils/EnhancedCircuitBreaker.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -47,6 +49,9 @@ export interface HeartbeatServiceConfig {
     serverUrl?: string;
     enableLogging?: boolean;
     logDir?: string;
+    enableMemoryContext?: boolean;
+    circuitBreakerThreshold?: number;
+    circuitBreakerResetMs?: number;
   };
   plugins?: {
     logging?: boolean;
@@ -104,6 +109,10 @@ export class HeartbeatService {
   private readonly defaultMaxRetries: number;
   private readonly defaultRetryDelayMs: number;
   private readonly transportMode: AgentTransportMode;
+  private readonly contextBuilder: ContextBuilder;
+  private enableMemoryContext: boolean;
+  private readonly agentCircuitBreaker: EnhancedCircuitBreaker;
+  private isAgentAvailable: boolean = true;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -159,6 +168,22 @@ export class HeartbeatService {
     this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
     this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
+    this.enableMemoryContext = config?.agent?.enableMemoryContext ?? true;
+
+    this.contextBuilder = new ContextBuilder(db, {
+      memoryDir: this.workspaceDir + '/.tmp/nezha-memory',
+      embedding: config?.embedding,
+    });
+
+    this.agentCircuitBreaker = new EnhancedCircuitBreaker({
+      failureThreshold: config?.agent?.circuitBreakerThreshold ?? 5,
+      resetTimeoutMs: config?.agent?.circuitBreakerResetMs ?? 60000,
+      successThreshold: 2,
+      onStateChange: (from, to) => {
+        logger.warn(`Agent circuit breaker state: ${from} -> ${to}`);
+        this.isAgentAvailable = to !== 'open';
+      },
+    });
 
     logger.info(`HeartbeatService initialized with ${this.transportMode} transport mode`);
 
@@ -198,6 +223,9 @@ export class HeartbeatService {
   async start(): Promise<void> {
     logger.info('Starting HeartbeatService...');
     this.abortController = new AbortController();
+
+    await this.dailyMemory.initialize();
+    logger.info('Memory system initialized');
 
     this.startMemoryCleanup();
     this.startMemoryCompaction();
@@ -374,8 +402,40 @@ export class HeartbeatService {
 
     logger.info(`Executing task: ${title} (attempt ${retryCount + 1}/${maxRetries})`);
 
+    let taskPrompt = description || title;
+
+    if (this.enableMemoryContext) {
+      try {
+        const context = await this.contextBuilder.buildContext({
+          taskId,
+          title,
+          description,
+        });
+        taskPrompt = context.combinedPrompt;
+
+        logger.debug(`Task context built with ${context.relevantMemories.length} relevant memories`);
+      } catch (error) {
+        logger.warn('Failed to build task context, using original prompt:', error);
+      }
+    }
+
+    const learningPrompt = `${taskPrompt}
+
+---
+
+## Learning Reminder
+After completing this task:
+1. Reflect on what you learned
+2. If you discovered something valuable, save it to memory using memory_save
+3. Consider how this knowledge could help in future tasks`;
+
+    if (!this.agentCircuitBreaker.isAvailable()) {
+      logger.warn('Agent circuit breaker is not available, skipping task execution');
+      throw new Error('Agent service temporarily unavailable (circuit breaker open)');
+    }
+
     try {
-      const result = await this.agent.executeTask(description || title);
+      const result = await this.agent.executeTask(learningPrompt);
 
       const durationSeconds = (Date.now() - startTime) / 1000;
       standardMetrics.taskDurationSeconds.observe(durationSeconds);
@@ -459,6 +519,12 @@ export class HeartbeatService {
       }
 
       this.stats.tasksFailed++;
+
+      await this.dailyMemory.save({
+        task: title,
+        result: 'Task failed',
+        errors: result.message ? [result.message] : undefined,
+      });
 
       await pluginManager.executeAfterTask({
         ...taskContext,
@@ -621,9 +687,39 @@ export class HeartbeatService {
       `Executing task with streaming: ${title} (attempt ${retryCount + 1}/${maxRetries})`
     );
 
+    let taskPrompt = description || title;
+
+    if (this.enableMemoryContext) {
+      try {
+        const context = await this.contextBuilder.buildContext({
+          taskId,
+          title,
+          description,
+        });
+        taskPrompt = context.combinedPrompt;
+      } catch (error) {
+        logger.warn('Failed to build task context for streaming:', error);
+      }
+    }
+
+    const learningPrompt = `${taskPrompt}
+
+---
+
+## Learning Reminder
+After completing this task:
+1. Reflect on what you learned
+2. If you discovered something valuable, save it to memory using memory_save
+3. Consider how this knowledge could help in future tasks`;
+
+    if (!this.agentCircuitBreaker.isAvailable()) {
+      logger.warn('Agent circuit breaker is not available (streaming), skipping task execution');
+      throw new Error('Agent service temporarily unavailable (circuit breaker open)');
+    }
+
     try {
       const result = await (this.agent as UnifiedAgent).executeTaskStreaming(
-        description || title,
+        learningPrompt,
         onChunk
       );
 

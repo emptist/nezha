@@ -3,6 +3,39 @@ import * as path from 'path';
 import { logger } from '../utils/logger.js';
 
 const DEFAULT_MEMORY_DIR = '.tmp/nezha-memory';
+const DEFAULT_MEMORY_FILE = 'MEMORY.md';
+
+const DEFAULT_MEMORY_CONTENT = `# Nezha Long-term Memory
+
+## Core Identity
+- I'm Nezha, an autonomous AI agent
+- I execute tasks from PostgreSQL queue via heartbeat
+- I use opencode serve HTTP API for task execution
+
+## How I Work
+1. Heartbeat polls DB every 30s for PENDING tasks
+2. Tasks are sent to opencode serve via HTTP
+3. Results stored in DB with full response JSON
+4. After each task, I reflect on what I learned
+
+## Tools Available
+- memory_save() - Save important learnings to memory
+- memory_search() - Find relevant past experiences
+- learn() - Save insights from task reflections
+- suggest_prompt_update() - Propose system prompt improvements
+
+## Key Learnings
+- OpenClaw inspired this architecture
+- File-based daily memory + DB for semantic search
+- Circuit breaker prevents cascade failures
+
+## Important Patterns
+- Use exponential backoff for retries
+- Check for stuck RUNNING tasks on each heartbeat
+- Save task results to both DB and daily memory
+
+Last updated: ${new Date().toISOString().split('T')[0]}
+`;
 
 export interface DailyMemoryConfig {
   memoryDir?: string;
@@ -11,6 +44,23 @@ export interface DailyMemoryConfig {
 export interface MemorySaveInput {
   task: string;
   result: string;
+  errors?: string[];
+  solution?: string;
+  prompt?: string;
+}
+
+export interface DailyMemoryEntry {
+  date: string;
+  tasks: Array<{
+    id?: string;
+    title: string;
+    prompt?: string;
+    result?: string;
+    errors?: string[];
+    solution?: string;
+  }>;
+  learnings: string[];
+  reflections: string[];
 }
 
 export class DailyMemoryService {
@@ -18,6 +68,21 @@ export class DailyMemoryService {
 
   constructor(config?: DailyMemoryConfig) {
     this.memoryDir = config?.memoryDir ?? DEFAULT_MEMORY_DIR;
+  }
+
+  async initialize(): Promise<void> {
+    await this.ensureDirectory();
+    await this.ensureMemoryFile();
+  }
+
+  private async ensureMemoryFile(): Promise<void> {
+    const memoryFilePath = path.join(this.memoryDir, DEFAULT_MEMORY_FILE);
+    try {
+      await fs.access(memoryFilePath);
+    } catch {
+      await fs.writeFile(memoryFilePath, DEFAULT_MEMORY_CONTENT, 'utf-8');
+      logger.info(`Created default ${DEFAULT_MEMORY_FILE}`);
+    }
   }
 
   async ensureDirectory(): Promise<void> {
@@ -54,7 +119,29 @@ export class DailyMemoryService {
 
     const filePath = this.getFilePath();
     const timestamp = new Date().toISOString();
-    const entry = `- ${timestamp} | Task: ${input.task} | Result: ${input.result}\n`;
+
+    let entry = `- **${timestamp}** | Task: ${input.task}\n`;
+    
+    if (input.result) {
+      const truncatedResult = input.result.length > 200 
+        ? input.result.substring(0, 200) + '...' 
+        : input.result;
+      entry += `  - Result: ${truncatedResult}\n`;
+    }
+
+    if (input.errors && input.errors.length > 0) {
+      const errorSummary = input.errors.join('; ').substring(0, 150);
+      entry += `  - Errors: ${errorSummary}\n`;
+    }
+
+    if (input.solution) {
+      const truncatedSolution = input.solution.length > 150 
+        ? input.solution.substring(0, 150) + '...' 
+        : input.solution;
+      entry += `  - Solution: ${truncatedSolution}\n`;
+    }
+
+    entry += '\n';
 
     try {
       const exists = await this.fileExists(filePath);
@@ -62,13 +149,105 @@ export class DailyMemoryService {
       if (exists) {
         await fs.appendFile(filePath, entry);
       } else {
-        const header = `# Daily Memory - ${this.getTodayDate()}\n\n`;
+        const header = `# Daily Memory - ${this.getTodayDate()}
+
+## Tasks Executed
+
+`;
         await fs.writeFile(filePath, header + entry);
       }
 
       logger.info(`Memory saved to ${filePath}`);
     } catch (error) {
       logger.error('Failed to save memory:', error);
+      throw error;
+    }
+  }
+
+  async addLearning(learning: string): Promise<void> {
+    await this.ensureDirectory();
+
+    const filePath = this.getFilePath();
+    const timestamp = new Date().toISOString();
+    const entry = `- **${timestamp}** | Learnings: ${learning}\n\n`;
+
+    try {
+      const exists = await this.fileExists(filePath);
+
+      if (exists) {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const hasLearningsSection = content.includes('## Learnings');
+        
+        if (hasLearningsSection) {
+          const parts = content.split('## Learnings');
+          if (parts.length === 2) {
+            const newContent = parts[0] + '## Learnings\n' + entry + parts[1];
+            await fs.writeFile(filePath, newContent);
+          } else {
+            await fs.appendFile(filePath, '\n## Learnings\n' + entry);
+          }
+        } else {
+          await fs.appendFile(filePath, '\n## Learnings\n' + entry);
+        }
+      } else {
+        const header = `# Daily Memory - ${this.getTodayDate()}
+
+## Tasks Executed
+
+## Learnings
+
+`;
+        await fs.writeFile(filePath, header + entry);
+      }
+
+      logger.info(`Learning saved to ${filePath}`);
+    } catch (error) {
+      logger.error('Failed to save learning:', error);
+      throw error;
+    }
+  }
+
+  async addReflection(reflection: string): Promise<void> {
+    await this.ensureDirectory();
+
+    const filePath = this.getFilePath();
+    const timestamp = new Date().toISOString();
+    const entry = `- **${timestamp}** | Reflection: ${reflection}\n\n`;
+
+    try {
+      const exists = await this.fileExists(filePath);
+
+      if (exists) {
+        const content = await fs.readFile(filePath, 'utf-8');
+        const hasReflectionsSection = content.includes('## Reflections');
+        
+        if (hasReflectionsSection) {
+          const parts = content.split('## Reflections');
+          if (parts.length === 2) {
+            const newContent = parts[0] + '## Reflections\n' + entry + parts[1];
+            await fs.writeFile(filePath, newContent);
+          } else {
+            await fs.appendFile(filePath, '\n## Reflections\n' + entry);
+          }
+        } else {
+          await fs.appendFile(filePath, '\n## Reflections\n' + entry);
+        }
+      } else {
+        const header = `# Daily Memory - ${this.getTodayDate()}
+
+## Tasks Executed
+
+## Learnings
+
+## Reflections
+
+`;
+        await fs.writeFile(filePath, header + entry);
+      }
+
+      logger.info(`Reflection saved to ${filePath}`);
+    } catch (error) {
+      logger.error('Failed to save reflection:', error);
       throw error;
     }
   }
@@ -95,6 +274,35 @@ export class DailyMemoryService {
       logger.error('Failed to read memory:', error);
       return '';
     }
+  }
+
+  async readRecentDays(days: number = 7): Promise<string[]> {
+    const memories: string[] = [];
+    const today = new Date();
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const filename = `${year}-${month}-${day}.md`;
+      
+      const filePath = path.join(this.memoryDir, filename);
+      
+      try {
+        const exists = await this.fileExists(filePath);
+        if (exists) {
+          const content = await fs.readFile(filePath, 'utf-8');
+          memories.push(content);
+        }
+      } catch {
+        // File doesn't exist, skip
+      }
+    }
+
+    return memories;
   }
 }
 
