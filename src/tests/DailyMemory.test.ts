@@ -48,29 +48,29 @@ describe('DailyMemoryService', () => {
 
   describe('initialize', () => {
     it('should ensure directory and file exist', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.writeFile.mockResolvedValueOnce(undefined);
 
       await service.initialize();
 
-      expect(mockFs.mkdir).toHaveBeenCalledWith(testDir, { recursive: true });
-      expect(mockFs.writeFile).toHaveBeenCalled();
+      expect(fs.mkdir).toHaveBeenCalledWith(testDir, { recursive: true });
+      expect(fs.writeFile).toHaveBeenCalled();
     });
   });
 
   describe('ensureDirectory', () => {
     it('should create directory recursively', async () => {
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
 
       await service.ensureDirectory();
 
-      expect(mockFs.mkdir).toHaveBeenCalledWith(testDir, { recursive: true });
+      expect(fs.mkdir).toHaveBeenCalledWith(testDir, { recursive: true });
       expect(logger.info).not.toHaveBeenCalled();
     });
 
     it('should throw error on directory creation failure', async () => {
       const error = new Error('Permission denied');
-      mockFs.mkdir.mockRejectedValueOnce(error);
+      fs.mkdir.mockRejectedValueOnce(error);
 
       await expect(service.ensureDirectory()).rejects.toThrow('Permission denied');
       expect(logger.error).toHaveBeenCalledWith('Failed to create memory directory:', error);
@@ -79,9 +79,9 @@ describe('DailyMemoryService', () => {
 
   describe('save', () => {
     it('should create new file with header if not exists', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.writeFile.mockResolvedValueOnce(undefined);
 
       const input: MemorySaveInput = {
         task: 'Test task',
@@ -90,15 +90,15 @@ describe('DailyMemoryService', () => {
 
       await service.save(input);
 
-      const callArgs = mockFs.writeFile.mock.calls[0];
+      const callArgs = fs.writeFile.mock.calls[0];
       expect(callArgs[0]).toContain('2026-03-20');
       expect(callArgs[1]).toContain('Test task');
     });
 
     it('should append to existing file', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       const input: MemorySaveInput = {
         task: 'Appended task',
@@ -107,15 +107,15 @@ describe('DailyMemoryService', () => {
 
       await service.save(input);
 
-      const callArgs = mockFs.appendFile.mock.calls[0];
+      const callArgs = fs.appendFile.mock.calls[0];
       expect(callArgs[0]).toContain('2026-03-20');
       expect(callArgs[1]).toContain('Appended task');
     });
 
     it('should truncate long results', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       const longResult = 'A'.repeat(300);
       const input: MemorySaveInput = {
@@ -125,15 +125,15 @@ describe('DailyMemoryService', () => {
 
       await service.save(input);
 
-      const appendedContent = mockFs.appendFile.mock.calls[0][1] as string;
+      const appendedContent = fs.appendFile.mock.calls[0][1] as string;
       expect(appendedContent).toContain('...');
       expect(appendedContent).toContain('Long result task');
     });
 
     it('should include errors when provided', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       const input: MemorySaveInput = {
         task: 'Task with errors',
@@ -143,16 +143,16 @@ describe('DailyMemoryService', () => {
 
       await service.save(input);
 
-      expect(mockFs.appendFile).toHaveBeenCalledWith(
+      expect(fs.appendFile).toHaveBeenCalledWith(
         expect.anything(),
         expect.stringContaining('Errors: Error 1; Error 2')
       );
     });
 
     it('should include solution when provided', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       const input: MemorySaveInput = {
         task: 'Fixed bug',
@@ -162,16 +162,16 @@ describe('DailyMemoryService', () => {
 
       await service.save(input);
 
-      expect(mockFs.appendFile).toHaveBeenCalledWith(
+      expect(fs.appendFile).toHaveBeenCalledWith(
         expect.anything(),
         expect.stringContaining('Solution: Added null check')
       );
     });
 
     it('should throw error on write failure', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockRejectedValueOnce(new Error('Write failed'));
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockRejectedValueOnce(new Error('Write failed'));
 
       const input: MemorySaveInput = {
         task: 'Fail task',
@@ -184,87 +184,87 @@ describe('DailyMemoryService', () => {
 
   describe('addLearning', () => {
     it('should add learning to new file', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.writeFile.mockResolvedValueOnce(undefined);
 
       await service.addLearning('Always use type assertions');
 
-      const callArgs = mockFs.writeFile.mock.calls[0];
+      const callArgs = fs.writeFile.mock.calls[0];
       expect(callArgs[0]).toContain('2026');
       expect(callArgs[1]).toContain('Always use type assertions');
     });
 
     it('should append learning to existing file without learnings section', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockResolvedValueOnce('# Daily Memory\n\n## Tasks\n');
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.readFile.mockResolvedValueOnce('# Daily Memory\n\n## Tasks\n');
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       await service.addLearning('New learning');
 
-      const callArgs = mockFs.appendFile.mock.calls[0];
+      const callArgs = fs.appendFile.mock.calls[0];
       expect(callArgs[1]).toContain('## Learnings');
     });
 
     it('should insert learning in existing learnings section', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockResolvedValueOnce('# Daily Memory\n\n## Learnings\n- Old learning\n');
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.readFile.mockResolvedValueOnce('# Daily Memory\n\n## Learnings\n- Old learning\n');
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.writeFile.mockResolvedValueOnce(undefined);
 
       await service.addLearning('New learning');
 
-      const callArgs = mockFs.writeFile.mock.calls[0];
+      const callArgs = fs.writeFile.mock.calls[0];
       expect(callArgs[1]).toContain('New learning');
     });
   });
 
   describe('addReflection', () => {
     it('should add reflection to new file', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.writeFile.mockResolvedValueOnce(undefined);
 
       await service.addReflection('Reflection on task execution');
 
-      const callArgs = mockFs.writeFile.mock.calls[0];
+      const callArgs = fs.writeFile.mock.calls[0];
       expect(callArgs[0]).toContain('2026');
       expect(callArgs[1]).toContain('Reflection on task execution');
     });
 
     it('should append reflection to existing file', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockResolvedValueOnce('# Daily Memory\n\n');
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.appendFile.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.readFile.mockResolvedValueOnce('# Daily Memory\n\n');
+      fs.mkdir.mockResolvedValueOnce(undefined);
+      fs.appendFile.mockResolvedValueOnce(undefined);
 
       await service.addReflection('Today I learned something');
 
-      const callArgs = mockFs.appendFile.mock.calls[0];
+      const callArgs = fs.appendFile.mock.calls[0];
       expect(callArgs[1]).toContain('## Reflections');
     });
   });
 
   describe('readToday', () => {
     it('should return empty string when file does not exist', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
 
       const result = await service.readToday();
       expect(result).toBe('');
     });
 
     it('should return file content when exists', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockResolvedValueOnce('# Daily Memory content');
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.readFile.mockResolvedValueOnce('# Daily Memory content');
 
       const result = await service.readToday();
       expect(result).toBe('# Daily Memory content');
     });
 
     it('should return empty string on read error', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockRejectedValueOnce(new Error('Read error'));
+      fs.access.mockResolvedValueOnce(undefined);
+      fs.readFile.mockRejectedValueOnce(new Error('Read error'));
 
       const result = await service.readToday();
       expect(result).toBe('');
@@ -274,22 +274,22 @@ describe('DailyMemoryService', () => {
 
   describe('readRecentDays', () => {
     it('should return memories from last N days', async () => {
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readFile.mockResolvedValue('Memory content');
+      fs.access.mockResolvedValue(undefined);
+      fs.readFile.mockResolvedValue('Memory content');
 
       const result = await service.readRecentDays(3);
 
       expect(result).toHaveLength(3);
-      expect(mockFs.access).toHaveBeenCalledTimes(3);
-      expect(mockFs.readFile).toHaveBeenCalledTimes(3);
+      expect(fs.access).toHaveBeenCalledTimes(3);
+      expect(fs.readFile).toHaveBeenCalledTimes(3);
     });
 
     it('should skip missing days', async () => {
-      mockFs.access
+      fs.access
         .mockRejectedValueOnce(new Error('Not found'))
         .mockResolvedValueOnce(undefined)
         .mockResolvedValueOnce(undefined);
-      mockFs.readFile.mockResolvedValue('Content');
+      fs.readFile.mockResolvedValue('Content');
 
       const result = await service.readRecentDays(3);
 
@@ -297,18 +297,18 @@ describe('DailyMemoryService', () => {
     });
 
     it('should use default of 7 days', async () => {
-      mockFs.access.mockResolvedValue(undefined);
-      mockFs.readFile.mockResolvedValue('Content');
+      fs.access.mockResolvedValue(undefined);
+      fs.readFile.mockResolvedValue('Content');
 
       await service.readRecentDays();
 
-      expect(mockFs.access).toHaveBeenCalledTimes(7);
+      expect(fs.access).toHaveBeenCalledTimes(7);
     });
   });
 
   describe('fileExists', () => {
     it('should return true when file exists', async () => {
-      mockFs.access.mockResolvedValueOnce(undefined);
+      fs.access.mockResolvedValueOnce(undefined);
 
       const result = await (service as unknown as { fileExists: (path: string) => Promise<boolean> }).fileExists('/test/path');
 
@@ -316,7 +316,7 @@ describe('DailyMemoryService', () => {
     });
 
     it('should return false when file does not exist', async () => {
-      mockFs.access.mockRejectedValueOnce(new Error('Not found'));
+      fs.access.mockRejectedValueOnce(new Error('Not found'));
 
       const result = await (service as unknown as { fileExists: (path: string) => Promise<boolean> }).fileExists('/test/path');
 
