@@ -95,6 +95,23 @@ const review = await review_task({
 // Review saves patterns to memory automatically
 ```
 
+### AI Inter-Review
+
+AI peer review - reviews extract learnings for future AI:
+
+```bash
+# Request AI review
+npm run review:request [commit-hash]
+
+# Show pending/completed reviews
+npm run review:show [review-id]
+
+# View statistics
+npm run review:stats
+```
+
+**Key principle**: Reviews extract `learnings` - reminders for future AI, not just feedback.
+
 ## Knowledge Import
 
 Import from traditional markdown files:
@@ -126,6 +143,7 @@ await import_markdown_knowledge('./docs');
 | `src/core/SkillSystem.ts`                 | Skill system (DB-only) |
 | `src/services/SkillBuilder.ts`            | AI skill builder       |
 | `src/services/TaskReviewSkill.ts`         | Task QC + learning     |
+| `src/services/InterReviewService.ts`      | AI peer review         |
 | `src/services/MarkdownKnowledgeLoader.ts` | File → DB import       |
 | `src/services/ClawHubClient.ts`           | ClawHub integration    |
 
@@ -779,3 +797,97 @@ The 5 instances demonstrate:
 - Use priority to control execution order
 - Track statistics (tasks executed, succeeded, failed)
 - Save results to memory for future reference
+
+---
+
+## AI Inter-Review System
+
+The inter-review system enables AI peer reviews between agents, implementing the self-driven improvement philosophy.
+
+### Core Philosophy
+
+**Reviews are NOT just feedback - they are LEARNING OPPORTUNITIES**
+
+The key output of every review is "learnings" - specific reminders/prompts that get saved to memory to help future AI work better.
+
+```
+Review Output
+├── Summary (what changed)
+├── Learnings (AI-generated reminders for future)  ← Most Valuable
+├── Issues (problems found)
+├── Suggestions (improvements)
+└── Scores (0-100)
+```
+
+### Architecture
+
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────┐
+│    Task     │────▶│ InterReview  │────▶│  AI     │
+│  Completed  │     │   Service    │     │ Reviewer│
+└─────────────┘     └──────────────┘     └─────────┘
+                            │
+                     PostgreSQL
+                     ├── inter_reviews (findings)
+                     └── memory (learnings)  ← AI builds its own knowledge
+```
+
+### How Learnings Work
+
+When AI reviews code, it extracts actionable reminders like:
+
+```json
+{
+  "learnings": [
+    {
+      "topic": "TypeScript patterns",
+      "reminder": "Always use non-null assertion after rows.length check"
+    },
+    { "topic": "Database patterns", "reminder": "Use record_spawned_process() when tracking PIDs" },
+    {
+      "topic": "CLI patterns",
+      "reminder": "Config.getInstance() returns singleton, no need to store"
+    }
+  ]
+}
+```
+
+These get saved to memory and become part of AI's knowledge base for future work.
+
+### CLI Commands
+
+```bash
+# Request AI review of current changes
+npm run review:request [commit-hash]
+
+# Show review details or pending reviews
+npm run review:show [review-id]
+
+# Show review statistics
+npm run review:stats
+
+# Respond to a review
+npm run review:respond <review-id> <response>
+```
+
+### Programmatic Usage
+
+```typescript
+import { InterReviewService } from './services/InterReviewService.js';
+
+// Request review - AI will extract learnings
+const reviewId = await reviewService.requestReview({
+  taskId: 'task-123',
+  commitHash: 'abc123',
+  reviewerId: 'nezha-peer-1',
+  context: { taskDescription: 'Add inter-review system' },
+});
+
+const result = await reviewService.performReview(reviewId, systemPrompt);
+
+// Learnings are automatically saved to memory
+console.log(`Extracted ${result.learnings.length} learnings`);
+
+// Later, AI can search memories for relevant patterns
+const patterns = await reviewService.extractPatternsFromReviews();
+```

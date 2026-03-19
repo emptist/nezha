@@ -11,6 +11,13 @@ import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
 import { setVerboseMode } from '../utils/verboseLogger.js';
 import { AgentSystem } from '../core/AgentSystem.js';
+import {
+  requestReviewFromAI,
+  showReview,
+  showReviewStats,
+  respondToReview,
+} from './InterReviewCommands.js';
+import { MonitoringCommands } from './MonitoringCommands.js';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -44,6 +51,7 @@ export class Cli {
   private isShuttingDown: boolean = false;
   private readonly SHUTDOWN_TIMEOUT_MS: number = 30000;
   private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
+  private monitoringCommands: MonitoringCommands | null = null;
 
   constructor() {
     this.config = Config.getInstance();
@@ -55,6 +63,14 @@ export class Cli {
       this.db = new DatabaseClient(this.config);
     }
     return this.db;
+  }
+
+  public async getMonitoringCommands(): Promise<MonitoringCommands> {
+    if (!this.monitoringCommands) {
+      const db = await this.getDb();
+      this.monitoringCommands = new MonitoringCommands({ db });
+    }
+    return this.monitoringCommands;
   }
 
   async start(): Promise<void> {
@@ -886,9 +902,7 @@ export class Cli {
 
     cli.step('Deleting auto-tag rule...');
 
-    await db.query(`DELETE FROM auto_tag_rules WHERE keyword = $1`, [
-      keyword.toLowerCase(),
-    ]);
+    await db.query(`DELETE FROM auto_tag_rules WHERE keyword = $1`, [keyword.toLowerCase()]);
 
     cli.success(`Auto-tag rule "${keyword}" deleted`);
   }
@@ -1294,6 +1308,161 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'review-request': {
+        const commitHash = args[1];
+        const taskId = args[2];
+        const description = args.slice(3).join(' ');
+        await requestReviewFromAI(commitHash, taskId, description || undefined);
+        break;
+      }
+
+      case 'review-show': {
+        const reviewId = args[1];
+        await showReview(reviewId);
+        break;
+      }
+
+      case 'review-stats': {
+        await showReviewStats();
+        break;
+      }
+
+      case 'review-respond': {
+        const reviewId = args[1];
+        const response = args[2];
+        if (!reviewId || !response) {
+          cli.error('Review ID and response are required');
+          console.log('\nUsage: nezha review-respond <review-id> <response>');
+          process.exit(1);
+        }
+        await respondToReview(reviewId, response);
+        break;
+      }
+
+      case 'dlq': {
+        const subcommand = args[1];
+        const monitor = await cliInstance.getMonitoringCommands();
+
+        if (subcommand === 'list' || !subcommand) {
+          const limit = parseInt(args[args.indexOf('--limit') + 1] || '50', 10);
+          const showResolved = args.includes('--all');
+          await monitor.listDLQ(limit, showResolved);
+        } else if (subcommand === 'resolve') {
+          const id = args[2];
+          const notesIndex = args.indexOf('--notes');
+          const notes = notesIndex !== -1 ? args[notesIndex + 1] : undefined;
+          if (!id) {
+            cli.error('DLQ ID is required');
+            console.log('\nUsage: nezha dlq resolve <id> [--notes <notes>]');
+            process.exit(1);
+          }
+          await monitor.resolveDLQ(id, notes);
+        } else if (subcommand === 'retry') {
+          const id = args[2];
+          if (!id) {
+            cli.error('DLQ ID is required');
+            console.log('\nUsage: nezha dlq retry <id>');
+            process.exit(1);
+          }
+          await monitor.retryDLQ(id);
+        } else if (subcommand === 'delete') {
+          const id = args[2];
+          if (!id) {
+            cli.error('DLQ ID is required');
+            console.log('\nUsage: nezha dlq delete <id>');
+            process.exit(1);
+          }
+          await monitor.deleteDLQ(id);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha dlq <list|resolve|retry|delete> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha dlq list');
+          console.log('  nezha dlq list --all');
+          console.log('  nezha dlq resolve <id> --notes "Fixed the issue"');
+          console.log('  nezha dlq retry <id>');
+          console.log('  nezha dlq delete <id>');
+        }
+        break;
+      }
+
+      case 'alerts': {
+        const subcommand = args[1];
+        const monitor = await cliInstance.getMonitoringCommands();
+
+        if (subcommand === 'list' || !subcommand) {
+          const limit = parseInt(args[args.indexOf('--limit') + 1] || '50', 10);
+          const showAcknowledged = args.includes('--all');
+          await monitor.listAlerts(limit, showAcknowledged);
+        } else if (subcommand === 'ack' || subcommand === 'acknowledge') {
+          const id = args[2];
+          const byIndex = args.indexOf('--by');
+          const acknowledgedBy = byIndex !== -1 ? args[byIndex + 1] : 'cli';
+          if (!id) {
+            cli.error('Alert ID is required');
+            console.log('\nUsage: nezha alerts ack <id> [--by <user>]');
+            process.exit(1);
+          }
+          await monitor.acknowledgeAlert(id, acknowledgedBy);
+        } else if (subcommand === 'stats') {
+          await monitor.getAlertStats();
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha alerts <list|ack|stats> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha alerts list');
+          console.log('  nezha alerts list --all');
+          console.log('  nezha alerts ack <id>');
+          console.log('  nezha alerts stats');
+        }
+        break;
+      }
+
+      case 'watchdog': {
+        const subcommand = args[1];
+        const monitor = await cliInstance.getMonitoringCommands();
+
+        if (!subcommand || subcommand === 'stats') {
+          await monitor.getWatchdogStats();
+        } else if (subcommand === 'cleanup') {
+          const thresholdIndex = args.indexOf('--threshold');
+          const threshold = thresholdIndex !== -1 && args[thresholdIndex + 1] 
+            ? parseInt(args[thresholdIndex + 1]!, 10) 
+            : 60;
+          await monitor.cleanupOrphanedProcesses(threshold);
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha watchdog <stats|cleanup> [options]');
+          console.log('\nExamples:');
+          console.log('  nezha watchdog stats');
+          console.log('  nezha watchdog cleanup --threshold 60');
+        }
+        break;
+      }
+
+      case 'longtasks': {
+        const subcommand = args[1];
+        const monitor = await cliInstance.getMonitoringCommands();
+
+        if (subcommand === 'stats') {
+          await monitor.getLongTaskStats();
+        } else if (subcommand === 'paused') {
+          await monitor.listPausedTasks();
+        } else if (subcommand === 'failures') {
+          await monitor.getFailureStatistics();
+        } else if (!subcommand) {
+          await monitor.getLongTaskStats();
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha longtasks <stats|paused|failures>');
+          console.log('\nExamples:');
+          console.log('  nezha longtasks stats');
+          console.log('  nezha longtasks paused');
+          console.log('  nezha longtasks failures');
+        }
+        break;
+      }
+
       case 'help':
       default:
         showHelp();
@@ -1311,23 +1480,42 @@ async function main(): Promise<void> {
 function showHelp(): void {
   cli.header('Nezha CLI - Autonomous Development System');
   console.log(`
- ${colors.bright}Usage:${colors.reset} nezha <command> [options]
+  ${colors.bright}Usage:${colors.reset} nezha <command> [options]
 
- ${colors.bright}Commands:${colors.reset}
-   start                         Start the heartbeat service
-   stop                          Stop the heartbeat service
-   status                        Show current status
-   health                        Show health information
-   task-add <title> [desc]      Add a new task
-   schedule <name> <desc> <cron> Create a scheduled task
-   tasks [--tag <tag>]          List tasks (filter by tag, status, category)
-   table-of-tasks (tot)          Show task table with summary
-   templates <cmd>               Manage task templates
-   auto-tag-rules <cmd>         Manage auto-tagging rules
-   api-key create <name>         Create API key
-   api-key list                  List API keys
-   api-key revoke <name>         Revoke API key
-   help                          Show this help
+  ${colors.bright}Commands:${colors.reset}
+    start                         Start the heartbeat service
+    stop                          Stop the heartbeat service
+    status                        Show current status
+    health                        Show health information
+    task-add <title> [desc]      Add a new task
+    schedule <name> <desc> <cron> Create a scheduled task
+    tasks [--tag <tag>]          List tasks (filter by tag, status, category)
+    table-of-tasks (tot)          Show task table with summary
+    templates <cmd>               Manage task templates
+    auto-tag-rules <cmd>         Manage auto-tagging rules
+    api-key create <name>         Create API key
+    api-key list                  List API keys
+    api-key revoke <name>         Revoke API key
+    review-request [commit]       Request AI review of current changes
+    review-show [id]              Show review details or pending reviews
+    review-stats                  Show review statistics
+    review-respond <id> <msg>     Respond to a review
+
+  ${colors.bright}Monitoring Commands:${colors.reset}
+    dlq list                      List dead letter queue
+    dlq resolve <id> [--notes]    Mark DLQ item as resolved
+    dlq retry <id>                Retry DLQ item as new task
+    dlq delete <id>               Delete DLQ item
+    alerts list                   List failure alerts
+    alerts ack <id>               Acknowledge an alert
+    alerts stats                  Show alert statistics
+    watchdog stats                Show watchdog statistics
+    watchdog cleanup              Clean up orphaned processes
+    longtasks stats               Show long task statistics
+    longtasks paused              List paused tasks
+    longtasks failures            Show failure statistics by category
+
+    help                          Show this help
 
  ${colors.bright}Options:${colors.reset}
    --transport <mode>           Transport mode: http or cli (default: http)

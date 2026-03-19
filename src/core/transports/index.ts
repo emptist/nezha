@@ -202,20 +202,27 @@ export class HttpTransport implements SessionManager {
 /**
  * CLI-based transport that spawns opencode process for local execution.
  * Supports streaming responses via stderr parsing.
+ * Tracks PIDs for orphan cleanup.
  */
 export class CliTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
+  private readonly dbClient: unknown;
+  private readonly taskId: string | null;
 
   /**
    * Creates a new CliTransport instance.
    * @param serverUrl - Server address to pass to opencode
    * @param timeout - Process timeout in milliseconds
+   * @param dbClient - Optional database client for PID tracking
+   * @param taskId - Optional task ID for PID association
    */
-  constructor(serverUrl: string, timeout: number) {
+  constructor(serverUrl: string, timeout: number, dbClient?: unknown, taskId?: string) {
     validateServerUrl(serverUrl);
     this.serverUrl = sanitizeStringForCli(serverUrl);
     this.timeout = timeout;
+    this.dbClient = dbClient || null;
+    this.taskId = taskId || null;
   }
 
   /** @inheritDoc - CLI mode always returns null (no session concept) */
@@ -249,6 +256,38 @@ export class CliTransport implements SessionManager {
     return this.runCommand(message, true, onChunk);
   }
 
+  private async recordSpawnedProcess(pid: number, command: string, args: string[]): Promise<void> {
+    if (!this.dbClient) return;
+
+    try {
+      const client = this.dbClient as {
+        query: (sql: string, params?: unknown[]) => Promise<unknown>;
+      };
+      await client.query(`SELECT record_spawned_process($1, $2, $3, $4, $5, NULL, NULL)`, [
+        pid,
+        this.taskId,
+        command,
+        JSON.stringify(args),
+        process.cwd(),
+      ]);
+    } catch {
+      // PID tracking is optional, don't fail on error
+    }
+  }
+
+  private async markProcessTerminated(pid: number, status: string = 'terminated'): Promise<void> {
+    if (!this.dbClient) return;
+
+    try {
+      const client = this.dbClient as {
+        query: (sql: string, params?: unknown[]) => Promise<unknown>;
+      };
+      await client.query(`SELECT mark_process_terminated($1, $2)`, [pid, status]);
+    } catch {
+      // PID tracking is optional, don't fail on error
+    }
+  }
+
   private runCommand(
     prompt: string,
     streaming: boolean,
@@ -270,12 +309,19 @@ export class CliTransport implements SessionManager {
 
       let proc: ChildProcess;
       let procKilled = false;
+      const pid = Date.now(); // Temporary PID for tracking
 
       try {
         proc = spawn('opencode', args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env },
+          detached: false, // Don't detach - we want to track it
         });
+
+        // Record the spawned process
+        if (proc.pid) {
+          this.recordSpawnedProcess(proc.pid, 'opencode', args).catch(() => {});
+        }
         proc.stdin?.end();
       } catch (err) {
         reject(
@@ -284,11 +330,12 @@ export class CliTransport implements SessionManager {
         return;
       }
 
+      const actualPid = proc.pid || pid;
       const outputParts: string[] = [];
       const errorOutputParts: string[] = [];
       let stderrBuffer = '';
 
-      const cleanup = () => {
+      const cleanup = async () => {
         if (!procKilled && proc && !proc.killed) {
           procKilled = true;
           proc.kill('SIGTERM');
@@ -297,6 +344,10 @@ export class CliTransport implements SessionManager {
               proc.kill('SIGKILL');
             }
           }, 5000);
+        }
+        // Mark process as terminated
+        if (actualPid) {
+          await this.markProcessTerminated(actualPid, procKilled ? 'terminated' : 'orphaned');
         }
       };
 
@@ -340,10 +391,15 @@ export class CliTransport implements SessionManager {
         reject(new Error(`Command timed out after ${this.timeout}ms`));
       }, this.timeout);
 
-      proc.on('close', code => {
+      proc.on('close', async code => {
         clearTimeout(timeoutId);
         process.removeListener('SIGTERM', cleanup);
         process.removeListener('SIGINT', cleanup);
+
+        // Mark process as terminated in DB
+        if (actualPid) {
+          await this.markProcessTerminated(actualPid, code === 0 ? 'terminated' : 'failed');
+        }
 
         const output = outputParts.join('');
         const errorOutput = errorOutputParts.join('');

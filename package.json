@@ -41,6 +41,10 @@
     "benchmark:transport": "tsx src/benchmarks/run.ts --transport",
     "benchmark:agent": "tsx src/benchmarks/run.ts --agent",
     "benchmark:compare": "tsx src/benchmarks/run.ts --compare",
+    "review:request": "tsx src/cli/index.ts review-request",
+    "review:show": "tsx src/cli/index.ts review-show",
+    "review:stats": "tsx src/cli/index.ts review-stats",
+    "review:respond": "tsx src/cli/index.ts review-respond",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },

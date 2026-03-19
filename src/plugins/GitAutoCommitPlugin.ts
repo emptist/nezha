@@ -6,6 +6,7 @@ export interface GitAutoCommitConfig {
   autoPush?: boolean;
   commitMessagePrefix?: string;
   autoAdd?: boolean;
+  useActualCommitMessage?: boolean;
 }
 
 export class GitAutoCommitPlugin implements Plugin {
@@ -16,23 +17,29 @@ export class GitAutoCommitPlugin implements Plugin {
   private readonly autoPush: boolean;
   private readonly commitMessagePrefix: string;
   private readonly autoAdd: boolean;
+  private readonly useActualCommitMessage: boolean;
 
   constructor(config: GitAutoCommitConfig = {}) {
     this.config = {
       autoPush: config.autoPush ?? true,
       commitMessagePrefix: config.commitMessagePrefix ?? 'Task completed:',
       autoAdd: config.autoAdd ?? true,
+      useActualCommitMessage: config.useActualCommitMessage ?? true,
     };
     this.autoPush = config.autoPush ?? true;
     this.commitMessagePrefix = config.commitMessagePrefix ?? 'Task completed:';
     this.autoAdd = config.autoAdd ?? true;
+    this.useActualCommitMessage = config.useActualCommitMessage ?? true;
   }
 
   private hasGitChanges(): boolean {
     try {
       const status = execSync('git status --porcelain', { encoding: 'utf-8' });
       return status.trim().length > 0;
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to check git status: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
       return false;
     }
   }
@@ -44,8 +51,35 @@ export class GitAutoCommitPlugin implements Plugin {
         .split('\n')
         .filter(line => line.trim())
         .map(line => line.substring(3).trim());
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to get changed files: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
       return [];
+    }
+  }
+
+  private getLatestCommitMessage(): string | null {
+    try {
+      const msg = execSync('git log -1 --format=%B', { encoding: 'utf-8' }).trim();
+      const lines = msg.split('\n');
+      const firstLine = lines[0] || '';
+      if (
+        firstLine.startsWith('Task completed:') ||
+        firstLine.startsWith('feat:') ||
+        firstLine.startsWith('fix:') ||
+        firstLine.startsWith('docs:') ||
+        firstLine.startsWith('test:') ||
+        firstLine.startsWith('refactor:')
+      ) {
+        return firstLine;
+      }
+      return null;
+    } catch (err) {
+      logger.debug(
+        `[GitAutoCommit] Failed to get latest commit message: ${err instanceof Error ? err.message : 'Unknown'}`
+      );
+      return null;
     }
   }
 
@@ -67,9 +101,22 @@ export class GitAutoCommitPlugin implements Plugin {
         logger.debug('[GitAutoCommit] Added files to staging');
       }
 
-      const commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+      let commitMsg: string;
+
+      if (this.useActualCommitMessage) {
+        const actualMsg = this.getLatestCommitMessage();
+        if (actualMsg) {
+          commitMsg = actualMsg;
+          logger.debug('[GitAutoCommit] Using actual commit message:', actualMsg);
+        } else {
+          commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+        }
+      } else {
+        commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
+      }
+
       execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { encoding: 'utf-8' });
-      logger.info(`[GitAutoCommit] Committed: ${taskTitle}`);
+      logger.info(`[GitAutoCommit] Committed: ${commitMsg.split('\n')[0]}`);
 
       if (this.autoPush) {
         try {

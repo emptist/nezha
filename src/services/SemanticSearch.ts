@@ -77,7 +77,10 @@ export class SemanticSearchService {
 
     try {
       return JSON.parse(embeddingStr);
-    } catch {
+    } catch (err) {
+      logger.debug(
+        `Failed to parse embedding: ${err instanceof Error ? err.message : 'Unknown error'}`
+      );
       return null;
     }
   }

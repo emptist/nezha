@@ -35,6 +35,7 @@ export const DATABASE_TABLES = {
   FAILURE_ALERTS: 'failure_alerts',
   STUCK_TASKS_TRACKING: 'stuck_tasks_tracking',
   LONG_TASKS_PAUSE: 'long_tasks_pause',
+  PROCESS_PIDS: 'process_pids',
 } as const;
 
 export const DATABASE_CONFIG = {

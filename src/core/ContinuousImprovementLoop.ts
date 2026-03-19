@@ -1,6 +1,9 @@
 import { ImprovementIdentifier, Improvement } from './ImprovementIdentifier.js';
-import { MemoryService } from './MemoryService.js';
+import { MemoryService } from './Memory.js';
 import { ConversationLogger } from './ConversationLogger.js';
+import { InterReviewService } from '../services/InterReviewService.js';
+import { DatabaseClient } from '../db/DatabaseClient.js';
+import { logger } from '../utils/logger.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs-extra';
@@ -61,6 +64,8 @@ export class ContinuousImprovementLoop {
   private identifier: ImprovementIdentifier;
   private memoryService: MemoryService;
   private conversationLogger: ConversationLogger;
+  private reviewService: InterReviewService | null = null;
+  private db: DatabaseClient | null = null;
   private isRunning: boolean = false;
   private cycleCount: number = 0;
   private projectRoot: string;
@@ -68,12 +73,22 @@ export class ContinuousImprovementLoop {
   constructor(
     projectRoot: string = process.cwd(),
     memoryService: MemoryService,
-    conversationLogger: ConversationLogger
+    conversationLogger: ConversationLogger,
+    db?: DatabaseClient
   ) {
     this.projectRoot = projectRoot;
     this.identifier = new ImprovementIdentifier(projectRoot);
     this.memoryService = memoryService;
     this.conversationLogger = conversationLogger;
+    this.db = db || null;
+    if (this.db) {
+      this.reviewService = new InterReviewService(this.db);
+    }
+  }
+
+  setDatabaseClient(db: DatabaseClient): void {
+    this.db = db;
+    this.reviewService = new InterReviewService(db);
   }
 
   async start(): Promise<void> {
@@ -239,28 +254,99 @@ export class ContinuousImprovementLoop {
       const result = results[i];
       if (!task || !result) continue;
 
-      const review: Review = {
-        success: result.success,
-        score: this.calculateScore(result),
-        feedback: this.generateFeedback(result),
-        improvements: result.success
-          ? []
-          : [
-              {
-                type: 'improvement',
-                title: `Retry: ${task.title}`,
-                description: `Task failed: ${result.error || 'Unknown error'}`,
+      let review: Review;
+
+      if (this.reviewService) {
+        try {
+          const request = {
+            taskId: task.id,
+            reviewerId: 'continuous-improvement-loop',
+            context: {
+              taskDescription: task.description,
+              changes: result.output,
+              message: task.title,
+            },
+          };
+
+          const reviewId = await this.reviewService.requestReview(request);
+          const reviewResult = await this.reviewService.performReview(
+            reviewId,
+            `Review this improvement task result. Task: ${task.title}. Result: ${result.success ? 'success' : 'failed'}. Output: ${result.output}`
+          );
+
+          review = {
+            success: result.success,
+            score: reviewResult.overallScore,
+            feedback: [reviewResult.summary, ...reviewResult.findings.map(f => f.message)],
+            improvements: reviewResult.findings
+              .filter(f => f.type === 'suggestion')
+              .map(f => ({
+                type: 'improvement' as const,
+                title: f.message,
+                description: f.suggestion || f.message,
                 priority: task.priority,
-                category: 'code',
+                category: task.category as
+                  | 'infrastructure'
+                  | 'code'
+                  | 'documentation'
+                  | 'testing'
+                  | 'feature',
                 autoFixable: false,
+              })),
+          };
+
+          if (reviewResult.learnings.length > 0) {
+            await this.memoryService.save({
+              id: `improvement-learning-${task.id}`,
+              content: JSON.stringify({
+                task: task.title,
+                category: task.category,
+                learnings: reviewResult.learnings,
+              }),
+              metadata: {
+                taskId: task.id,
+                category: task.category,
+                source: 'continuous-improvement',
               },
-            ],
-      };
+              importance: reviewResult.overallScore > 70 ? 7 : 5,
+              tags: ['learning', 'improvement', task.category],
+            });
+          }
+        } catch (error) {
+          logger.warn(
+            `Review service failed for task ${task.id}, falling back to self-score:`,
+            error
+          );
+          review = this.createFallbackReview(task, result);
+        }
+      } else {
+        review = this.createFallbackReview(task, result);
+      }
 
       reviews.push(review);
     }
 
     return reviews;
+  }
+
+  private createFallbackReview(task: Task, result: TaskResult): Review {
+    return {
+      success: result.success,
+      score: this.calculateScore(result),
+      feedback: this.generateFeedback(result),
+      improvements: result.success
+        ? []
+        : [
+            {
+              type: 'improvement',
+              title: `Retry: ${task.title}`,
+              description: `Task failed: ${result.error || 'Unknown error'}`,
+              priority: task.priority,
+              category: 'code',
+              autoFixable: false,
+            },
+          ],
+    };
   }
 
   private calculateScore(result: TaskResult): number {
@@ -308,7 +394,9 @@ export class ContinuousImprovementLoop {
       const task = tasks[i];
       const result = results[i];
       const review = reviews[i];
-      if (!task || !result || !review) continue;
+      if (!task || !result || !review) {
+        continue;
+      }
 
       const learning: Learning = {
         timestamp: new Date(),
@@ -331,20 +419,23 @@ export class ContinuousImprovementLoop {
         recommendations: this.generateRecommendations(task, result, review),
       };
 
-      await this.memoryService.store({
-        type: 'learning',
-        content: learning,
+      await this.memoryService.save({
+        id: `learning-${task.id}`,
+        content: JSON.stringify(learning),
         metadata: {
           taskId: task.id,
           category: task.category,
           success: result.success,
           score: review.score,
         },
+        source: 'continuous-improvement',
+        importance: review.score > 70 ? 7 : 5,
+        tags: ['learning', task.category],
       });
     }
   }
 
-  private extractInsights(task: Task, result: TaskResult, review: Review): string[] {
+  private extractInsights(task: Task, result: TaskResult, _review: Review): string[] {
     const insights: string[] = [];
 
     if (result.success) {
@@ -360,7 +451,7 @@ export class ContinuousImprovementLoop {
     return insights;
   }
 
-  private extractPatterns(task: Task, result: TaskResult, review: Review): string[] {
+  private extractPatterns(task: Task, result: TaskResult, _review: Review): string[] {
     const patterns: string[] = [];
 
     if (task.category === 'infrastructure' && result.success) {
@@ -396,7 +487,6 @@ export class ContinuousImprovementLoop {
         await execAsync('git add -A');
         await execAsync(`git commit -m "auto: continuous improvement cycle ${this.cycleCount}"`);
         await execAsync('git push');
-      } else {
       }
     } catch (error) {
       console.error('   Failed to commit and push:', error);
