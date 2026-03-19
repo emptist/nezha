@@ -100,4 +100,36 @@ export class DatabaseClient {
   getTableNames(): typeof DATABASE_TABLES {
     return DATABASE_TABLES;
   }
+
+  async setProjectContext(projectId: string | null): Promise<void> {
+    if (projectId === null) {
+      await this.pool.query(`SELECT disable_cross_project_learning()`);
+    } else if (projectId === 'ALL') {
+      await this.pool.query(`SELECT enable_cross_project_learning()`);
+    } else {
+      await this.pool.query(`SELECT set_project_context($1)`, [projectId]);
+    }
+  }
+
+  async getCrossProjectLearnings(days: number = 7, limit: number = 50): Promise<unknown[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM get_cross_project_learnings($1, $2)`,
+      [days, limit]
+    );
+    return result.rows;
+  }
+
+  async saveCrossProjectLearning(
+    content: string,
+    projectId: string | null,
+    tags: string[] = [],
+    importance: number = 5,
+    source: string = 'cross-project-learning'
+  ): Promise<string> {
+    const result = await this.pool.query(
+      `SELECT save_cross_project_learning($1, $2, $3, $4, $5)`,
+      [content, projectId, tags, importance, source]
+    );
+    return result.rows[0]?.save_cross_project_learning;
+  }
 }

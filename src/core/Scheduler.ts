@@ -20,6 +20,7 @@ const standardMetrics = createStandardMetrics();
 
 export interface ScheduledTask {
   id: string;
+  projectId?: string;
   data: Record<string, unknown>;
   scheduledAt: Date;
   intervalMs?: number;
@@ -430,12 +431,13 @@ export class Scheduler {
     const data = JSON.stringify(task.data);
     const now = new Date();
     const retries = maxRetries ?? TASK_CONFIG.DEFAULT_MAX_RETRIES;
+    const projectId = task.projectId ?? null;
 
     await this.db.query(
-      `INSERT INTO ${tableName} (id, status, data, max_retries, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (id) DO UPDATE SET data = $3, max_retries = $4, updated_at = $6`,
-      [id, TASK_STATUS.PENDING, data, retries, now, now]
+      `INSERT INTO ${tableName} (id, project_id, status, data, max_retries, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO UPDATE SET data = $4, max_retries = $5, project_id = $2, updated_at = $7`,
+      [id, projectId, TASK_STATUS.PENDING, data, retries, now, now]
     );
 
     if (task.intervalMs) {

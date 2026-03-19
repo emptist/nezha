@@ -452,4 +452,94 @@ export class MemoryService {
       totalAfter,
     };
   }
+
+  async searchAllProjects(
+    searchTerm: string,
+    limit?: number,
+    offset?: number
+  ): Promise<Memory[]> {
+    const sanitized = sanitizeSearchQuery(searchTerm);
+    if (!sanitized.valid) {
+      logger.warn(`Invalid cross-project search query: ${sanitized.error}`);
+      return [];
+    }
+
+    const tableName = DATABASE_TABLES.MEMORY;
+    const queryLimit = Math.min(limit ?? 50, 100);
+    const queryOffset = offset ?? 0;
+
+    const result = await this.db.query<Memory>(
+      `SELECT id, project_id as "projectId", content, metadata, created_at as "createdAt", updated_at as "updatedAt"
+       FROM ${tableName}
+       WHERE content ILIKE $1
+       ORDER BY importance DESC, updated_at DESC
+       LIMIT $2 OFFSET $3`,
+      [`%${sanitized.sanitized}%`, queryLimit, queryOffset]
+    );
+
+    return result.rows;
+  }
+
+  async getRecentLearnings(days: number = 7, limit: number = 50): Promise<Memory[]> {
+    const tableName = DATABASE_TABLES.MEMORY;
+
+    const result = await this.db.query<Memory>(
+      `SELECT id, project_id as "projectId", content, metadata, created_at as "createdAt", updated_at as "updatedAt"
+       FROM ${tableName}
+       WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+         AND (source LIKE '%learning%' OR tags && ARRAY['learning', 'insight', 'improvement'])
+       ORDER BY importance DESC, created_at DESC
+       LIMIT $2`,
+      [days, limit]
+    );
+
+    return result.rows;
+  }
+
+  async saveGlobalLearning(input: Omit<SaveMemoryInput, 'projectId'>): Promise<string> {
+    const sanitizedContent = sanitizeMemoryContent(input.content);
+    if (!sanitizedContent.valid) {
+      throw new Error(sanitizedContent.error);
+    }
+
+    const tableName = DATABASE_TABLES.MEMORY;
+    const now = new Date();
+    const metadata = input.metadata ? JSON.stringify(input.metadata) : null;
+    const tags = input.tags ?? null;
+    const importance = Math.min(Math.max(input.importance ?? 5, 0), 10);
+    const source = input.source ?? 'global-learning';
+
+    let embeddingVector: number[] | null = null;
+
+    if (input.generateEmbedding !== false && this.embedding) {
+      try {
+        embeddingVector = await this.embedding.embed(sanitizedContent.sanitized!);
+      } catch (error) {
+        logger.error('Failed to generate embedding for global learning:', error);
+      }
+    }
+
+    const embeddingStr = embeddingVector ? `[${embeddingVector.join(',')}]` : null;
+
+    const id = crypto.randomUUID();
+
+    await this.db.query(
+      `INSERT INTO ${tableName} (id, project_id, content, metadata, tags, importance, source, embedding, created_at, updated_at)
+       VALUES ($1, NULL, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        id,
+        sanitizedContent.sanitized,
+        metadata,
+        tags,
+        importance,
+        source,
+        embeddingStr,
+        now,
+        now,
+      ]
+    );
+
+    searchCache.clear();
+    return id;
+  }
 }

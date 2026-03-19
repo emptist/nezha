@@ -223,7 +223,8 @@ export class Cli {
     dryRun: boolean = false,
     templateName?: string,
     category?: string,
-    jsonOutput: boolean = false
+    jsonOutput: boolean = false,
+    projectId?: string
   ): Promise<{ id: string; title: string } | undefined> {
     cli.step('Validating task input...');
 
@@ -326,9 +327,10 @@ export class Cli {
     const maxRetries = this.config.getTaskConfig().maxRetries;
     const taskId = crypto.randomUUID();
     await db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to, category) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         taskId,
+        projectId || null,
         taskData.title,
         taskData.description,
         TASK_STATUS.PENDING,

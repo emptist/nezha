@@ -60,6 +60,7 @@ export enum TaskStatus {
 
 export interface Task {
   id: string;
+  projectId?: string;
   status: TaskStatus;
   data: Record<string, unknown>;
   result?: Record<string, unknown>;

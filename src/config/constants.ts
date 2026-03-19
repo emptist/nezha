@@ -23,6 +23,7 @@ export type TaskType = (typeof TASK_TYPE)[keyof typeof TASK_TYPE];
 export const DATABASE_TABLES = {
   TASKS: 'tasks',
   MEMORY: 'memory',
+  CONVERSATIONS: 'conversations',
   AGENTS: 'agents',
   SKILLS: 'skills',
 } as const;
