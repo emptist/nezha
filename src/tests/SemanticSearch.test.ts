@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
 vi.mock('../db/DatabaseClient.js');
@@ -8,6 +7,7 @@ describe('SemanticSearchService', () => {
   let mockDb: any;
   let SemanticSearchService: any;
   let service: any;
+  let mockEmbedding: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -18,7 +18,7 @@ describe('SemanticSearchService', () => {
       close: vi.fn(),
     };
 
-    const mockEmbedding = {
+    mockEmbedding = {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
     };
 
@@ -99,12 +99,8 @@ describe('SemanticSearchService', () => {
   describe('search', () => {
     it('should return search results with matching dimensions', async () => {
       const embeddingVector = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+      mockEmbedding.embed.mockResolvedValue(embeddingVector);
       
-      const { default: mockOllama } = await import('../services/embedding/OllamaEmbedding.js');
-      const mockEmbedFn = vi.fn().mockResolvedValue(embeddingVector);
-      (mockOllama as any).mockImplementation(() => ({ embed: mockEmbedFn }));
-      
-      const s = new SemanticSearchService(mockDb);
       mockDb.query.mockResolvedValue({
         rows: [
           {
@@ -123,7 +119,7 @@ describe('SemanticSearchService', () => {
         rowCount: 1,
       } as QueryResult<any>);
 
-      const results = await s.search('test');
+      const results = await service.search('test');
 
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('mem-1');
@@ -140,13 +136,9 @@ describe('SemanticSearchService', () => {
     });
 
     it('should throw error when embedding fails', async () => {
-      const { default: mockOllama } = await import('../services/embedding/OllamaEmbedding.js');
-      const mockEmbedFn = vi.fn().mockRejectedValue(new Error('Embedding API error'));
-      (mockOllama as any).mockImplementation(() => ({ embed: mockEmbedFn }));
+      mockEmbedding.embed.mockRejectedValue(new Error('Embedding API error'));
 
-      const errorService = new SemanticSearchService(mockDb);
-
-      await expect(errorService.search('test')).rejects.toThrow('Failed to generate query embedding');
+      await expect(service.search('test')).rejects.toThrow('Failed to generate query embedding');
     });
 
     it('should handle empty results', async () => {
@@ -322,8 +314,8 @@ describe('getSemanticSearch', () => {
     const module = await import('../services/SemanticSearch.js');
     const { getSemanticSearch } = module;
 
-    const instance1 = getSemanticSearch({} as DatabaseClient);
-    const instance2 = getSemanticSearch({} as DatabaseClient);
+    const instance1 = getSemanticSearch({} as any);
+    const instance2 = getSemanticSearch({} as any);
 
     expect(instance1).toBe(instance2);
   });
@@ -349,9 +341,9 @@ describe('semantic_search', () => {
   it('should format search results when initialized', async () => {
     vi.resetModules();
     
-    const mockEmbedding = { embed: vi.fn().mockResolvedValue([1, 0, 0, 0]) };
+    const embeddingMock = { embed: vi.fn().mockResolvedValue([1, 0, 0, 0, 0, 0, 0, 0]) };
     vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
-      OllamaEmbedding: vi.fn(() => mockEmbedding),
+      OllamaEmbedding: vi.fn(() => embeddingMock),
     }));
     vi.mock('../db/DatabaseClient.js', () => ({
       DatabaseClient: vi.fn(),
@@ -368,7 +360,7 @@ describe('semantic_search', () => {
             tags: null,
             importance: null,
             source: null,
-            embedding: JSON.stringify([1, 0, 0, 0]),
+            embedding: JSON.stringify([1, 0, 0, 0, 0, 0, 0, 0]),
             created_at: new Date(),
             updated_at: new Date(),
           },
