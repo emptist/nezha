@@ -138,7 +138,7 @@ describe('KnowledgeGraphService', () => {
       const links = await graphService.getLinksForNode('memory', 'mem-1', 'both');
       
       expect(links).toHaveLength(1);
-      expect(links[0].id).toBe('link-1');
+      expect(links[0]?.id).toBe('link-1');
     });
 
     it('should return empty array when no links found', async () => {

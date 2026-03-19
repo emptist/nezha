@@ -32,7 +32,7 @@ describe('AgentSystem', () => {
       const config: AgentSystemConfig = {
         maxAgents: 5,
         heartbeatIntervalMs: 10000,
-        defaultMode: 'stdio',
+        defaultMode: 'cli',
       };
       const system = new AgentSystem(config);
       expect(system).toBeDefined();
