@@ -184,7 +184,44 @@ Save agreements to memory:
 - Consensus is **emergent**, not enforced
 - Agreements are **AI decisions**, not programmatic constraints
 
+## Important Context: OpenClaw Gas Town
+
+**OpenClaw already has a multi-agent system called Gas Town!**
+
+### Gas Town Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **GUPP** | Gas Town Universal Propulsion Principle: "If work on hook, RUN IT" |
+| **BEADS** | Atomic work units stored in Git-backed JSON |
+| **MOLECULES** | Workflows encoded as chains of beads |
+| **HOOKS** | Work queue for each worker |
+| **MAIL** | Message inbox for workers |
+| **CONVOYS** | Work-order units tracking delivery |
+
+### Gas Town Worker Roles
+
+| Role | Purpose |
+|------|---------|
+| **Mayor** | Concierge, receives user requests |
+| **Polecats** | Ephemeral workers that swarm on work |
+| **Refinery** | Merge queue processor |
+| **Witness** | Swarm health monitor |
+| **Deacon** | Daemon beacon, propagates heartbeat |
+| **Dogs** | Maintenance crew |
+| **Crew** | Long-lived coding agents |
+
+### How This Affects Our Meeting Protocol
+
+1. **GUPP Principle**: AIs should self-propel - "if work on hook, run it"
+2. **Hooks Pattern**: Each AI has a work queue (hook) to check
+3. **Mail Pattern**: AIs can send messages to each other's inboxes
+4. **Convoys**: Track delivery of work orders across multiple AIs
+
+**Read more**: `reviews/openclaw_multiagent_research.md`
+
 ## See Also
 
 - [AI_COLLABORATION.md](../../docs/AI_COLLABORATION.md) - Full collaboration framework
 - [continuous-improvement.md](./continuous-improvement.md) - PDCA cycle skill
+- [openclaw_multiagent_research.md](../../reviews/openclaw_multiagent_research.md) - Gas Town research

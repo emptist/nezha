@@ -8,7 +8,8 @@ interface SkillRow {
   id: string;
   name: string;
   description: string | null;
-  content: Record<string, unknown> | null;
+  instructions: string | null;
+  manifest: Record<string, unknown> | null;
   source: string | null;
   version: string | null;
   author: string | null;
@@ -66,7 +67,7 @@ export class TraeSkillSyncService {
     };
 
     const result = await client.query<SkillRow>(
-      `SELECT id, name, description, content, source, version, author, tags, category
+      `SELECT id, name, description, instructions, manifest, source, version, author, tags, category
        FROM skills 
        WHERE name IS NOT NULL AND name != ''
        ORDER BY name`
@@ -129,19 +130,20 @@ export class TraeSkillSyncService {
   }
 
   private extractInstructions(skill: SkillRow): string | null {
-    if (!skill.content || typeof skill.content !== 'object') {
+    if (skill.instructions && typeof skill.instructions === 'string' && skill.instructions.trim()) {
+      return skill.instructions;
+    }
+
+    if (!skill.manifest || typeof skill.manifest !== 'object') {
       return null;
     }
 
-    const content = skill.content as Record<string, unknown>;
-    if (content.instructions && typeof content.instructions === 'string') {
-      return content.instructions;
+    const manifest = skill.manifest as Record<string, unknown>;
+    if (manifest.prompt && typeof manifest.prompt === 'string') {
+      return manifest.prompt;
     }
-    if (content.prompt && typeof content.prompt === 'string') {
-      return content.prompt;
-    }
-    if (content.description && typeof content.description === 'string') {
-      return content.description;
+    if (manifest.description && typeof manifest.description === 'string') {
+      return manifest.description;
     }
 
     return null;
