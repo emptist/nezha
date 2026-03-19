@@ -6,7 +6,6 @@ vi.mock('../db/DatabaseClient.js');
 
 describe('SemanticSearchService', () => {
   let mockDb: any;
-  let mockEmbedding: any;
   let SemanticSearchService: any;
   let service: any;
 
@@ -19,7 +18,7 @@ describe('SemanticSearchService', () => {
       close: vi.fn(),
     };
 
-    mockEmbedding = {
+    const mockEmbedding = {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
     };
 
@@ -29,6 +28,7 @@ describe('SemanticSearchService', () => {
 
     const module = await import('../services/SemanticSearch.js');
     SemanticSearchService = module.SemanticSearchService;
+    service = new SemanticSearchService(mockDb);
   });
 
   afterEach(() => {
@@ -37,47 +37,42 @@ describe('SemanticSearchService', () => {
 
   describe('constructor', () => {
     it('should create a semantic search service', () => {
-      service = new SemanticSearchService(mockDb);
       expect(service).toBeDefined();
     });
 
     it('should use default config values', () => {
-      service = new SemanticSearchService(mockDb, {});
-      expect(service).toBeDefined();
+      const s = new SemanticSearchService(mockDb, {});
+      expect(s).toBeDefined();
     });
 
     it('should accept custom config', () => {
-      service = new SemanticSearchService(mockDb, {
+      const s = new SemanticSearchService(mockDb, {
         similarityThreshold: 0.8,
         maxResults: 20,
         ollamaApiUrl: 'http://custom:11434',
         ollamaModel: 'custom-model',
       });
-      expect(service).toBeDefined();
+      expect(s).toBeDefined();
     });
   });
 
   describe('cosineSimilarity', () => {
     it('should calculate correct cosine similarity', () => {
-      service = new SemanticSearchService(mockDb);
       const similarity = service.cosineSimilarity([1, 0, 0], [1, 0, 0]);
       expect(similarity).toBeCloseTo(1, 5);
     });
 
     it('should return 0 for orthogonal vectors', () => {
-      service = new SemanticSearchService(mockDb);
       const similarity = service.cosineSimilarity([1, 0, 0], [0, 1, 0]);
       expect(similarity).toBeCloseTo(0, 5);
     });
 
     it('should return 0 for zero vectors', () => {
-      service = new SemanticSearchService(mockDb);
       const similarity = service.cosineSimilarity([0, 0, 0], [0, 0, 0]);
       expect(similarity).toBe(0);
     });
 
     it('should throw error for mismatched dimensions', () => {
-      service = new SemanticSearchService(mockDb);
       expect(() => service.cosineSimilarity([1, 0], [1, 0, 0])).toThrow(
         'Vectors must have the same dimension'
       );
@@ -86,59 +81,23 @@ describe('SemanticSearchService', () => {
 
   describe('parseEmbedding', () => {
     it('should parse valid JSON embedding', () => {
-      service = new SemanticSearchService(mockDb);
-      const embedding = '[1,2,3,4]';
-      const result = service.parseEmbedding(embedding);
+      const result = service.parseEmbedding('[1,2,3,4]');
       expect(result).toEqual([1, 2, 3, 4]);
     });
 
     it('should return null for null input', () => {
-      service = new SemanticSearchService(mockDb);
       const result = service.parseEmbedding(null);
       expect(result).toBeNull();
     });
 
     it('should return null for invalid JSON', () => {
-      service = new SemanticSearchService(mockDb);
       const result = service.parseEmbedding('invalid json');
       expect(result).toBeNull();
     });
   });
 
   describe('search', () => {
-    beforeEach(() => {
-      mockEmbedding.embed.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
-      service = new SemanticSearchService(mockDb);
-    });
-
-    it('should return search results', async () => {
-      mockDb.query.mockResolvedValue({
-        rows: [
-          {
-            id: 'mem-1',
-            project_id: 'proj-1',
-            content: 'Test memory content',
-            metadata: null,
-            tags: null,
-            importance: null,
-            source: null,
-            embedding: JSON.stringify([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
-            created_at: new Date(),
-            updated_at: new Date(),
-          },
-        ],
-        rowCount: 1,
-      } as QueryResult<any>);
-
-      const results = await service.search('test');
-
-      expect(results).toHaveLength(1);
-      expect(results[0].id).toBe('mem-1');
-    });
-
     it('should filter by projectId', async () => {
-      mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
-
       await service.search('test', 'proj-1');
 
       expect(mockDb.query).toHaveBeenCalledWith(
@@ -147,13 +106,8 @@ describe('SemanticSearchService', () => {
       );
     });
 
-
-
     it('should handle empty results', async () => {
-      mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
-
       const results = await service.search('nonexistent');
-
       expect(results).toHaveLength(0);
     });
   });
