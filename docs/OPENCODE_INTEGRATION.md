@@ -5,6 +5,74 @@
 
 ---
 
+## OpenCode AI Spawning Methods
+
+> **Important**: Nezha spawns OpenCode AI instances for task execution. Here's how to spawn multiple OpenCode AIs.
+
+### Method 1: Create Subagent Agent
+
+```bash
+# Create a specialized subagent
+opencode agent create --mode subagent --description "Task executor"
+
+# Available modes:
+# - all: Full agent with all capabilities
+# - primary: Main agent
+# - subagent: Child agent for specific tasks
+```
+
+### Method 2: Run with Specific Agent
+
+```bash
+# Run OpenCode with a specific agent
+opencode run --agent <agent-name> "Your task here"
+
+# Run with specific model
+opencode run --agent <agent-name> -m provider/model "Your task"
+```
+
+### Method 3: Headless Server Mode
+
+```bash
+# Start headless server
+opencode serve --port 4096
+
+# Attach to running server
+opencode attach http://localhost:4096
+
+# Run against server
+opencode run --attach http://localhost:4096 "Your task"
+```
+
+### Method 4: Parallel Execution (via Nezha Tasks)
+
+Nezha can spawn multiple OpenCode instances by creating multiple tasks:
+
+```bash
+# Create multiple tasks - Nezha daemon will spawn multiple OpenCode instances
+node dist/cli/index.js task-add "Spawn Request: AI Instance 1" "Task for AI 1" 9
+node dist/cli/index.js task-add "Spawn Request: AI Instance 2" "Task for AI 2" 9
+node dist/cli/index.js task-add "Spawn Request: AI Instance 3" "Task for AI 3" 9
+```
+
+### OpenCode Agent Configuration
+
+| Option | Description |
+|--------|-------------|
+| `--mode` | Agent mode: all, primary, subagent |
+| `--tools` | Comma-separated tools: bash, read, write, edit, list, glob, grep, webfetch, task, todowrite, todoread |
+| `--model` | Model to use: provider/model |
+| `--description` | What the agent should do |
+
+### Listing Available Agents
+
+```bash
+# List all available agents
+opencode agent list
+```
+
+---
+
 ## 快速开始
 
 ### 1. 启动 OpenCode Server（必须的第一步！）

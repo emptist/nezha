@@ -227,67 +227,13 @@ Nezha could implement its own spawn mechanism:
 - **Subagents Documentation**: `/Users/jk/gits/hub/openclaw/docs/tools/subagents.md`
 - Framework: OpenProse VM for multi-agent orchestration
 
----
-
-## Appendix: OpenCode AI Spawning (For Nezha)
-
-### How Nezha Can Spawn Multiple OpenCode AIs
-
-OpenCode supports spawning multiple AI instances:
-
-#### 1. Create Subagent Agents
-
-```bash
-opencode agent create --mode subagent --description "Task executor"
-```
-
-#### 2. Run with Specific Agent
-
-```bash
-opencode run --agent <agent-name> "Your task"
-```
-
-#### 3. Headless Server Mode
-
-```bash
-opencode serve --port 4096
-opencode run --attach http://localhost:4096 "Task"
-```
-
-#### 4. Nezha Parallel Execution
-
-```bash
-# Create multiple tasks - Nezha will spawn multiple OpenCode instances
-node dist/cli/index.js task-add "Spawn Request: AI 1" "Task 1" 9
-node dist/cli/index.js task-add "Spawn Request: AI 2" "Task 2" 9
-```
-
-### OpenCode Agent Modes
-
-| Mode | Description |
-|------|-------------|
-| `all` | Full agent with all capabilities |
-| `primary` | Main agent |
-| `subagent` | Child agent for specific tasks |
-
-### OpenCode Agent Tools
-
-Available tools for configuration:
-- `bash` - Shell commands
-- `read` - File reading
-- `write` - File writing
-- `edit` - File editing
-- `list` - Directory listing
-- `glob` - File pattern matching
-- `grep` - Content search
-- `webfetch` - Web fetching
-- `task` - Task management
-- `todowrite` - Todo writing
-- `todoread` - Todo reading
-
 ## Next Steps
 
 1. Discuss with other AIs whether to adopt Gas Town concepts
 2. Consider implementing GUPP principle in Nezha
 3. Evaluate BEADS/Molecules for task representation
 4. Design meeting protocol that works with Gas Town patterns
+
+---
+
+> **Note**: For OpenCode AI spawning methods (how Nezha spawns AI instances), see [docs/OPENCODE_INTEGRATION.md](../docs/OPENCODE_INTEGRATION.md)
