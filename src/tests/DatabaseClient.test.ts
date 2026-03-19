@@ -268,9 +268,9 @@ describe('DatabaseClient', () => {
       await client.saveCrossProjectLearning('test content');
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[0]).toBe('SELECT save_cross_project_learning($1, $2, $3, $4, $5)');
-      expect(call[1][0]).toBe('test content');
-      expect(call[1][4]).toBe('cross-project-learning');
+      expect(call?.[0]).toBe('SELECT save_cross_project_learning($1, $2, $3, $4, $5)');
+      expect(call?.[1]?.[0]).toBe('test content');
+      expect(call?.[1]?.[4]).toBe('cross-project-learning');
     });
   });
 
@@ -312,7 +312,7 @@ describe('DatabaseClient', () => {
       await client.saveConversation(conversation);
 
       const call = mockPool.query.mock.calls[0];
-      expect(call[1][0]).toBeDefined();
+      expect(call?.[1]?.[0]).toBeDefined();
     });
   });
 
