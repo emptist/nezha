@@ -1,0 +1,223 @@
+import { clawHubClient } from '../services/ClawHubClient.js';
+import { taskReviewSkill, type TaskReviewInput } from '../services/TaskReviewSkill.js';
+import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
+
+export async function reviewTask(
+  taskId: string,
+  taskTitle: string,
+  taskDescription: string,
+  result: unknown,
+  options?: {
+    error?: string;
+    duration?: number;
+    filesChanged?: string[];
+    testsRun?: boolean;
+    testsPassed?: boolean;
+  }
+): Promise<void> {
+  console.log('\n🔍 Running task review...\n');
+
+  const input: TaskReviewInput = {
+    taskId,
+    taskTitle,
+    taskDescription,
+    result,
+    error: options?.error,
+    duration: options?.duration || 0,
+    filesChanged: options?.filesChanged,
+    testsRun: options?.testsRun,
+    testsPassed: options?.testsPassed,
+  };
+
+  const review = await taskReviewSkill.review(input);
+
+  console.log('='.repeat(60));
+  console.log(`📋 Task Review: ${taskTitle}`);
+  console.log('='.repeat(60));
+
+  const statusIcon = review.passed ? '✅' : '❌';
+  console.log(`\n${statusIcon} Status: ${review.passed ? 'PASSED' : 'FAILED'}`);
+  console.log(`📊 Quality Score: ${review.score}/100`);
+  console.log(`🏆 Quality Level: ${review.qualityLevel.toUpperCase()}`);
+
+  if (review.issues.length > 0) {
+    console.log('\n⚠️  Issues Found:');
+    for (const issue of review.issues) {
+      const icon =
+        issue.severity === 'critical' ? '🔴' : issue.severity === 'warning' ? '🟡' : '🔵';
+      console.log(`  ${icon} [${issue.severity}] ${issue.category}`);
+      console.log(`     ${issue.message}`);
+      if (issue.fixSuggestion) {
+        console.log(`     💡 Fix: ${issue.fixSuggestion}`);
+      }
+    }
+  }
+
+  if (review.suggestions.length > 0) {
+    console.log('\n💡 Suggestions:');
+    for (const suggestion of review.suggestions) {
+      console.log(`  • ${suggestion}`);
+    }
+  }
+
+  if (review.learnedPatterns.length > 0) {
+    console.log('\n🧠 Learned Patterns:');
+    for (const pattern of review.learnedPatterns) {
+      console.log(`  • ${pattern}`);
+    }
+    console.log('\n  📝 These patterns have been saved to memory for future reference.');
+  }
+
+  console.log('\n' + '-'.repeat(60));
+
+  if (!review.passed) {
+    console.log('\n❌ Task did not pass quality review.');
+    console.log('   Review the issues above and consider reworking the solution.\n');
+  } else if (review.qualityLevel === 'excellent') {
+    console.log('\n🌟 Excellent work! This solution sets a high standard.\n');
+  } else {
+    console.log('\n✅ Task completed successfully.\n');
+  }
+}
+
+export async function browseClawHubSkills(query?: string, tags?: string[]): Promise<void> {
+  console.log(`\n🔍 Searching ClawHub for: ${query || 'all skills'}...`);
+
+  const skills = await clawHubClient.searchSkills({ query, tags, limit: 10 });
+
+  if (skills.length === 0) {
+    console.log('No skills found.');
+    return;
+  }
+
+  console.log(`\nFound ${skills.length} skill(s):\n`);
+
+  for (let i = 0; i < skills.length; i++) {
+    const skill = skills[i];
+    if (!skill) continue;
+
+    const review = await clawHubClient.reviewSkill(skill);
+
+    const status = review.isSafe ? '✓' : '✗';
+    const scoreColor =
+      review.score >= 80 ? '\x1b[32m' : review.score >= 60 ? '\x1b[33m' : '\x1b[31m';
+    const reset = '\x1b[0m';
+
+    console.log(`${i + 1}. ${status} ${skill.name} ${skill.verified ? '(verified)' : ''}`);
+    console.log(`   ${skill.description}`);
+    console.log(
+      `   Author: ${skill.author} | Downloads: ${skill.downloads} | Rating: ${skill.rating}`
+    );
+    console.log(`   Safety: ${scoreColor}${review.score}/100${reset}`);
+
+    if (review.warnings.length > 0) {
+      console.log(`   ⚠ ${review.warnings.length} warning(s)`);
+    }
+
+    if (!review.isSafe) {
+      console.log(`   ❌ BLOCKED: ${review.issues.join(', ')}`);
+    }
+
+    console.log();
+  }
+}
+
+export async function installSkillFromClawHub(
+  skillId: string,
+  autoApprove = false
+): Promise<boolean> {
+  console.log(`\n📦 Installing skill: ${skillId}`);
+
+  const skills = await clawHubClient.searchSkills({ query: skillId, limit: 1 });
+
+  if (skills.length === 0) {
+    console.log(`Skill not found: ${skillId}`);
+    return false;
+  }
+
+  const skill = skills[0];
+  if (!skill) {
+    console.log(`Skill not found: ${skillId}`);
+    return false;
+  }
+
+  const review = await clawHubClient.reviewSkill(skill);
+
+  console.log('\n' + '='.repeat(60));
+  console.log(`📦 ${skill.name}`);
+  console.log('='.repeat(60));
+  console.log(`Description: ${skill.description}`);
+  console.log(`Author: ${skill.author}`);
+  console.log(`Safety Score: ${review.score}/100`);
+
+  if (review.codeAnalysis?.permissions.length) {
+    console.log(`\n🔒 Required Permissions: ${review.codeAnalysis.permissions.join(', ')}`);
+  }
+
+  if (!review.isSafe) {
+    console.log('\n❌ BLOCKED: This skill failed safety review.');
+    console.log(`   Issues: ${review.issues.join(', ')}`);
+    return false;
+  }
+
+  if (!autoApprove) {
+    console.log('\n⚠️  This skill will be saved to the database.');
+    console.log('   It requires admin approval before use.\n');
+    console.log('   To auto-approve, use: --auto-approve\n');
+  }
+
+  const skillId_saved = await databaseSkillLoader.saveSkillFromClawHub(skill, review);
+
+  if (skillId_saved) {
+    console.log(`✅ Skill saved to database (ID: ${skillId_saved})`);
+    console.log('   Run: nezha skills approve ' + skillId_saved + '\n');
+    return true;
+  }
+
+  console.log('❌ Failed to save skill to database.\n');
+  return false;
+}
+
+export async function listDatabaseSkills(): Promise<void> {
+  const skills = await databaseSkillLoader.getAllSkills();
+
+  if (skills.length === 0) {
+    console.log('\n📦 No skills in database.');
+    console.log('   Use: nezha skills install <skill-name>\n');
+    return;
+  }
+
+  console.log(`\n📦 Database Skills (${skills.length}):\n`);
+
+  for (const skill of skills) {
+    const statusIcon =
+      skill.status === 'approved' ? '✅' : skill.status === 'pending' ? '⏳' : '❌';
+    const safetyIcon = skill.safety_score >= 80 ? '🟢' : skill.safety_score >= 60 ? '🟡' : '🔴';
+
+    console.log(`  ${statusIcon} ${skill.name} ${safetyIcon}${skill.safety_score}`);
+    console.log(`     ${skill.description || 'No description'}`);
+    console.log(`     Used: ${skill.use_count}x | Version: ${skill.version}`);
+    if (skill.tags.length > 0) {
+      console.log(`     Tags: ${skill.tags.join(', ')}`);
+    }
+    console.log();
+  }
+}
+
+export async function searchDatabaseSkills(query: string): Promise<void> {
+  const results = await databaseSkillLoader.searchSkills(query);
+
+  if (results.length === 0) {
+    console.log(`\nNo skills found matching: ${query}\n`);
+    return;
+  }
+
+  console.log(`\n🔍 Found ${results.length} skill(s):\n`);
+
+  for (const skill of results) {
+    console.log(`  📦 ${skill.name}`);
+    console.log(`     ${skill.description || 'No description'}`);
+    console.log(`     Safety: ${skill.safety_score}/100 | Used: ${skill.use_count}x`);
+    console.log();
+  }
+}
