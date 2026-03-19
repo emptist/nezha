@@ -26,11 +26,12 @@
 ## P1 - 高优先级
 
 ### [ ] 提高测试覆盖率 (目标 80%)
-- **描述**: 当前测试覆盖率 40.63%，需提升到 80%
+- **描述**: 当前测试覆盖率 41.48%，需提升到 80%
 - **命令**: `npm run test:coverage`
-- **状态**: 进行中（代码覆盖 40.63%，分支 73.72%，函数 68.99%）
+- **状态**: 进行中（代码覆盖 41.48%，分支 75.69%，函数 70.61%）
+  - 新增测试: Sanitization.test.ts (56 tests, 100% 覆盖), VerboseLogger.test.ts (18 tests, 90% 覆盖), Wait.test.ts (2 tests)
   - 新增测试: SkillBuilder.test.ts, SkillReviewer.test.ts, TraeSkillSyncService.test.ts
-  - 新增 28 个测试用例 (541 → 548)
+  - 测试总数: 624 tests (+83 新测试)
 
 ### [ ] 完善 Skill System 与 Agent 集成
 - **描述**: 完善 Skill System 与 Agent 的集成
@@ -55,22 +56,22 @@
 ## 已完成任务
 
 ### 2026-03-20
-- [x] 新增 SkillBuilder.test.ts (11 tests) - 覆盖 SkillBuilder.ts 72.05%
-- [x] 新增 SkillReviewer.test.ts (10 tests) - 覆盖 SkillReviewer.ts 63.12%
-- [x] 新增 TraeSkillSyncService.test.ts (7 tests) - 覆盖 TraeSkillSyncService.ts
-- [x] 测试覆盖率提升: 37.71% → 40.63%
+- [x] 新增 Sanitization.test.ts (56 tests) - sanitization.ts 100% 覆盖
+- [x] 新增 VerboseLogger.test.ts (18 tests) - verboseLogger.ts 90% 覆盖
+- [x] 新增 Wait.test.ts (2 tests) - wait.ts 20% 覆盖
+- [x] 测试覆盖率提升: 40.63% → 41.48%
+- [x] 新增测试: SkillBuilder.test.ts (11 tests) - 覆盖 SkillBuilder.ts 72.05%
+- [x] 新增测试: SkillReviewer.test.ts (10 tests) - 覆盖 SkillReviewer.ts 63.12%
+- [x] 新增测试: TraeSkillSyncService.test.ts (7 tests) - 覆盖 TraeSkillSyncService.ts
+- [x] 测试总数: 541 → 624 tests (+83 tests)
 - [x] 修复 AgentSystem.test.ts 类型错误 ('stdio' 改为 'cli')
 - [x] 修复 KnowledgeGraph.test.ts 类型错误 (添加可选链)
 - [x] 修复 embedding/index.ts 类型导出 (使用 export type)
 - [x] 修复 ai/index.ts 类型导出 (使用 export type)
 - [x] 添加 SkillReviewer.reviewBatch 方法
-- [x] 验证 541 tests 全部通过
-- [x] 修复 CLI 中的类型错误 (LSP缓存问题，已验证build和tests通过)
-- [x] 验证 TypeScript 编译无错误
-- [x] 验证 520 tests 全部通过
+- [x] 验证 624 tests 全部通过
 - [x] 验证 InterReview 已集成到改进循环 (AutoReviewService)
 - [x] 验证 Process Guardian 孤儿进程清理已实现 (TaskWatchdogService)
-- [x] 检查测试覆盖率 (37.71% 语句, 73.92% 分支, 68.27% 函数)
 - [x] 比较 OpenClaw vs Nezha 架构差异
 - [x] PDCA 循环验证 (Build ✅, Tests ✅, P0 任务 ✅)
 

@@ -52,7 +52,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logDbQuery('SELECT', ['param1'], { rowCount: 5 }, undefined, Date.now() - 100);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('[DB]');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('[DB]');
     });
 
     it('should log failed query', () => {
@@ -61,8 +62,9 @@ describe('verboseLogger', () => {
       const error = new Error('Query failed');
       verboseLogger.logDbQuery('SELECT', undefined, undefined, error);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('✗');
-      expect(consoleSpy.mock.calls[0][0]).toContain('Query failed');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('✗');
+      expect(output).toContain('Query failed');
     });
 
     it('should include params in log when provided', () => {
@@ -70,7 +72,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logDbQuery('INSERT', ['value1', 'value2'], { rowCount: 1 });
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('value1');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('value1');
     });
 
     it('should include rowCount in log', () => {
@@ -78,7 +81,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logDbQuery('SELECT', undefined, { rowCount: 10 });
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('10');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('10');
     });
   });
 
@@ -94,8 +98,9 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'GET', '/api/test', undefined, 200, '{}', undefined, Date.now() - 50);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('[API]');
-      expect(consoleSpy.mock.calls[0][0]).toContain('✓');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('[API]');
+      expect(output).toContain('✓');
     });
 
     it('should log failed API request with error', () => {
@@ -104,8 +109,9 @@ describe('verboseLogger', () => {
       const error = new Error('Network error');
       verboseLogger.logApiRequest('fetch', 'GET', '/api/test', undefined, undefined, undefined, error);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('✗');
-      expect(consoleSpy.mock.calls[0][0]).toContain('Network error');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('✗');
+      expect(output).toContain('Network error');
     });
 
     it('should log 4xx response as failure', () => {
@@ -113,7 +119,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'POST', '/api/test', {}, 404);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('✗');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('✗');
     });
 
     it('should log 5xx response as failure', () => {
@@ -121,7 +128,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'GET', '/api/test', undefined, 500);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('✗');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('✗');
     });
 
     it('should include request body in log', () => {
@@ -129,7 +137,8 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'POST', '/api/test', { key: 'value' }, 201);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('key');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('key');
     });
 
     it('should include response length for string body', () => {
@@ -137,7 +146,7 @@ describe('verboseLogger', () => {
       const consoleSpy = vi.spyOn(console, 'log');
       verboseLogger.logApiRequest('fetch', 'GET', '/api/test', undefined, 200, 'body content');
       expect(consoleSpy).toHaveBeenCalled();
-      const output = consoleSpy.mock.calls[0][0];
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
       expect(output).toContain('responseLength');
       expect(output).toContain('12');
     });
@@ -156,8 +165,9 @@ describe('verboseLogger', () => {
       const error = new Error('Something went wrong');
       verboseLogger.logError('operation', error);
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('[ERROR]');
-      expect(consoleSpy.mock.calls[0][0]).toContain('operation');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('[ERROR]');
+      expect(output).toContain('operation');
     });
 
     it('should include extra context if provided', () => {
@@ -166,7 +176,8 @@ describe('verboseLogger', () => {
       const error = new Error('Error');
       verboseLogger.logError('context', error, { userId: '123', action: 'test' });
       expect(consoleSpy).toHaveBeenCalled();
-      expect(consoleSpy.mock.calls[0][0]).toContain('userId');
+      const output = consoleSpy.mock.calls[0]?.[0] ?? '';
+      expect(output).toContain('userId');
     });
   });
 });
