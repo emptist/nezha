@@ -225,18 +225,19 @@ export class FailureAlertService extends EventEmitter {
         return null;
       }
 
+      const row = result.rows[0]!;
       const alert: FailureAlert = {
-        id: result.rows[0].id,
-        alertType: result.rows[0].alert_type as AlertType,
-        taskId: result.rows[0].task_id ?? undefined,
-        title: result.rows[0].title,
-        errorCategory: result.rows[0].error_category ?? undefined,
-        errorMessage: result.rows[0].error_message ?? undefined,
-        failureCount: result.rows[0].failure_count,
-        threshold: result.rows[0].threshold,
+        id: row.id,
+        alertType: row.alert_type as AlertType,
+        taskId: row.task_id ?? undefined,
+        title: row.title,
+        errorCategory: row.error_category ?? undefined,
+        errorMessage: row.error_message ?? undefined,
+        failureCount: row.failure_count,
+        threshold: row.threshold,
         severity,
-        acknowledged: result.rows[0].acknowledged,
-        createdAt: result.rows[0].created_at,
+        acknowledged: row.acknowledged,
+        createdAt: row.created_at,
       };
 
       this.recentAlerts.set(cooldownKey, new Date());
@@ -425,22 +426,25 @@ export class FailureAlertService extends EventEmitter {
       [limit ?? 50]
     );
 
-    return result.rows.map(row => ({
-      id: row.id,
-      alertType: row.alert_type as AlertType,
-      taskId: row.task_id ?? undefined,
-      originalTaskId: row.original_task_id ?? undefined,
-      title: row.title,
-      errorCategory: row.error_category ?? undefined,
-      errorMessage: row.error_message ?? undefined,
-      failureCount: row.failure_count,
-      threshold: row.threshold,
-      severity: this.calculateSeverity(row.alert_type as AlertType, row.failure_count, row.threshold),
-      acknowledged: row.acknowledged,
-      acknowledgedBy: row.acknowledged_by ?? undefined,
-      acknowledgedAt: row.acknowledged_at ?? undefined,
-      createdAt: row.created_at,
-    }));
+    return result.rows.map(row => {
+      const r = row!;
+      return {
+        id: r.id,
+        alertType: r.alert_type as AlertType,
+        taskId: r.task_id ?? undefined,
+        originalTaskId: r.original_task_id ?? undefined,
+        title: r.title,
+        errorCategory: r.error_category ?? undefined,
+        errorMessage: r.error_message ?? undefined,
+        failureCount: r.failure_count,
+        threshold: r.threshold,
+        severity: this.calculateSeverity(r.alert_type as AlertType, r.failure_count, r.threshold),
+        acknowledged: r.acknowledged,
+        acknowledgedBy: r.acknowledged_by ?? undefined,
+        acknowledgedAt: r.acknowledged_at ?? undefined,
+        createdAt: r.created_at,
+      };
+    });
   }
 
   async categorizeAndRecordFailure(

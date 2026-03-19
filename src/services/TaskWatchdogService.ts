@@ -204,7 +204,7 @@ export class TaskWatchdogService extends EventEmitter {
     }
   }
 
-  private async killTask(taskId: string, processId?: number, reason: string): Promise<WatchdogResult> {
+  private async killTask(taskId: string, processId: number | undefined, reason: string): Promise<WatchdogResult> {
     const result: WatchdogResult = {
       killed: false,
       taskId,
