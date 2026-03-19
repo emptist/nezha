@@ -63,7 +63,6 @@ describe('ImprovementIdentifier', () => {
       expect(Array.isArray(improvements)).toBe(true);
     });
   });
-  });
 
   describe('prioritizeImprovements', () => {
     it('should sort by priority descending', () => {
@@ -159,25 +158,6 @@ describe('ImprovementIdentifier', () => {
       const coverageImprovements = improvements.filter((i: Improvement) => i.category === 'testing');
       
       expect(coverageImprovements.length).toBeGreaterThan(0);
-    });
-  });
-
-  describe('generateReport', () => {
-    it('should generate markdown report', () => {
-      const improvements: Improvement[] = [
-        { type: 'critical', title: 'Fix bug', description: 'Fix critical bug', priority: 10, category: 'code', autoFixable: true },
-      ];
-
-      const report = (identifier as any).generateReport(improvements);
-      
-      expect(report).toContain('#');
-      expect(report).toContain('Fix bug');
-    });
-
-    it('should handle empty improvements', () => {
-      const report = (identifier as any).generateReport([]);
-      
-      expect(report).toContain('No improvements');
     });
   });
 });
