@@ -445,13 +445,20 @@ Format:
 
   async saveLearningsToMemory(result: ReviewResult, taskId?: string): Promise<void> {
     for (const learning of result.learnings) {
-      const content = `## AI Learning from Inter-Review\n\n**Topic**: ${learning.topic}\n\n**Reminder**: ${learning.reminder}\n\n---\n\nThis is a reminder extracted from code review. Future AI should remember this when working on similar tasks.`;
+      const memoryContent = `## AI Learning from Inter-Review
+
+**Topic**: ${learning.topic}
+
+**Reminder**: ${learning.reminder}
+
+---
+This is a reminder extracted from code review. Future AI should remember this when working on similar tasks.`;
 
       await this.db.query(
         `INSERT INTO memory (id, content, metadata, tags, importance, source, created_at, updated_at)
          VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, NOW(), NOW())`,
         [
-          content,
+          memoryContent,
           JSON.stringify({
             topic: learning.topic,
             source: 'inter-review',
@@ -464,8 +471,70 @@ Format:
         ]
       );
 
-      logger.info(`[InterReview] Saved learning: ${learning.topic}`);
+      const skillContent = `## AI Review Learning: ${learning.topic}
+
+### Reminder
+${learning.reminder}
+
+### When to Apply
+Apply this when working on tasks related to: ${learning.topic}
+
+### Source
+Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScore}/100)`;
+
+      await this.db.query(
+        `INSERT INTO skills (id, name, content, status, version, created_at, updated_at)
+         VALUES (uuid_generate_v4(), $1, $2, 'approved', '1.0', NOW(), NOW())
+         ON CONFLICT (name) DO UPDATE SET content = $2, updated_at = NOW()`,
+        [`review-learning-${learning.topic.toLowerCase().replace(/\s+/g, '-')}`, skillContent]
+      );
+
+      logger.info(`[InterReview] Saved learning to memory and skill: ${learning.topic}`);
     }
+  }
+
+  async getLearningsForAIContext(topic?: string, limit: number = 10): Promise<string> {
+    let query = `
+      SELECT content, metadata 
+      FROM memory 
+      WHERE source = 'inter-review' AND content ILIKE $1
+      ORDER BY importance DESC, created_at DESC
+      LIMIT $2
+    `;
+
+    if (!topic) {
+      query = `
+        SELECT content, metadata 
+        FROM memory 
+        WHERE source = 'inter-review'
+        ORDER BY importance DESC, created_at DESC
+        LIMIT $1
+      `;
+    }
+
+    const result = topic
+      ? await this.db.query(query, [`%${topic}%`, limit])
+      : await this.db.query(query, [limit]);
+
+    if (result.rows.length === 0) {
+      return '';
+    }
+
+    const context = `## AI Review Learnings (${result.rows.length} recent)
+
+${result.rows.map((row, idx) => `${idx + 1}. ${(row.metadata as Record<string, string>)?.topic || 'General'}: ${row.content.replace(/^## AI Learning.*?\n\n/, '').replace(/\n\n---.*$/s, '')}`).join('\n')}
+
+---
+These learnings were extracted from code reviews. Apply them to avoid similar issues.`;
+
+    return context;
+  }
+
+  async getSkillsFromLearnings(): Promise<Array<{ name: string; content: string }>> {
+    const result = await this.db.query<{ name: string; content: string }>(
+      `SELECT name, content FROM skills WHERE name LIKE 'review-learning-%' AND status = 'approved' ORDER BY updated_at DESC`
+    );
+    return result.rows;
   }
 
   async extractPatternsFromReviews(limit: number = 20): Promise<
