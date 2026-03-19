@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { IConfig } from '../config/types.js';
+import type {
+  IConfig,
+  DbConfig,
+  TaskConfig,
+  MemoryConfig,
+  TransportConfig,
+} from '../config/types.js';
 
 vi.mock('pg');
 
@@ -11,17 +17,42 @@ const mockPool = {
   waitingCount: 2,
 };
 
+const mockDbConfig: DbConfig = {
+  host: 'localhost',
+  port: 5432,
+  database: 'test_db',
+  user: 'test_user',
+  password: 'test_password',
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
+};
+
+const mockTaskConfig: TaskConfig = {
+  heartbeatIntervalMs: 30000,
+  maxRetries: 3,
+  retryDelayMs: 5000,
+  taskTimeoutMs: 300000,
+};
+
+const mockMemoryConfig: MemoryConfig = {
+  bootstrapDir: './bootstrap',
+  maxMemoryAgeMs: 86400000,
+};
+
+const mockTransportConfig: TransportConfig = {
+  mode: 'cli',
+  opencodeApiUrl: 'http://localhost:4096',
+};
+
 const createMockConfig = (): IConfig => ({
-  getDbConfig: vi.fn().mockReturnValue({
-    host: 'localhost',
-    port: 5432,
-    database: 'test_db',
-    user: 'test_user',
-    password: 'test_password',
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-  }),
+  getDbConfig: vi.fn().mockReturnValue(mockDbConfig),
+  getTaskConfig: vi.fn().mockReturnValue(mockTaskConfig),
+  getMemoryConfig: vi.fn().mockReturnValue(mockMemoryConfig),
+  getEmbeddingConfig: vi.fn().mockReturnValue(undefined),
+  getEnv: vi.fn().mockReturnValue('test'),
+  getTransportConfig: vi.fn().mockReturnValue(mockTransportConfig),
+  validate: vi.fn().mockReturnValue(true),
 });
 
 describe('DatabaseClient', () => {
