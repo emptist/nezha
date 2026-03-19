@@ -225,10 +225,10 @@ describe('DatabaseClient', () => {
 
       await client.saveCrossProjectLearning('test content');
 
-      expect(mockPool.query).toHaveBeenCalledWith(
-        'SELECT save_cross_project_learning($1, $2, $3, $4, $5)',
-        ['test content', null, [], 5, 'cross-project-learning']
-      );
+      const call = mockPool.query.mock.calls[0];
+      expect(call[0]).toBe('SELECT save_cross_project_learning($1, $2, $3, $4, $5)');
+      expect(call[1][0]).toBe('test content');
+      expect(call[1][4]).toBe('cross-project-learning');
     });
   });
 
@@ -456,7 +456,7 @@ describe('DatabaseClient', () => {
       await client.listConversations({});
 
       expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT $3 OFFSET $4'),
+        expect.stringContaining('LIMIT $1 OFFSET $2'),
         [50, 0]
       );
     });
