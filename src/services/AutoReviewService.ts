@@ -38,6 +38,11 @@ export class AutoReviewService {
       return;
     }
 
+    if (!this.config.enabled) {
+      logger.debug('[AutoReview] Disabled, skipping event subscription');
+      return;
+    }
+
     this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_COMPLETED, this.handleTaskCompleted.bind(this));
     this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_FAILED, this.handleTaskFailed.bind(this));
     this.isListening = true;
