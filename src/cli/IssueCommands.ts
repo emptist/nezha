@@ -353,4 +353,56 @@ export class IssueCommands {
 
     console.log(`${C.green}Created milestone: ${title}${C.reset}`);
   }
+
+  async toTask(id: string, priority?: number): Promise<void> {
+    const result = await this.db.query<{
+      title: string;
+      description: string;
+      severity: string;
+      discovered_by: string;
+    }>(`SELECT title, description, severity, discovered_by FROM issues WHERE id = $1`, [id]);
+
+    if (result.rows.length === 0) {
+      console.log(`${C.red}Issue not found: ${id}${C.reset}`);
+      return;
+    }
+
+    const issue = result.rows[0]!;
+    const taskId = crypto.randomUUID();
+    const taskPriority =
+      priority ??
+      (issue.severity === 'critical'
+        ? 9
+        : issue.severity === 'high'
+          ? 7
+          : issue.severity === 'medium'
+            ? 5
+            : 3);
+
+    await this.db.query(
+      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by, tags)
+       VALUES ($1, $2, $3, 'PENDING', $4, 'implementation', 'issue-resolution', $5, $6)`,
+      [
+        taskId,
+        `[Issue] ${issue.title}`,
+        issue.description || `Created from issue ${id}`,
+        taskPriority,
+        issue.discovered_by,
+        ['from-issue', issue.severity],
+      ]
+    );
+
+    await this.db.query(`UPDATE issues SET status = 'in_progress' WHERE id = $1`, [id]);
+
+    console.log(`${C.green}Created task from issue #${id.slice(0, 8)}${C.reset}`);
+    console.log(`  Task ID: ${taskId.slice(0, 8)}`);
+    console.log(`  Priority: ${taskPriority}`);
+  }
+
+  async linkReview(id: string, reviewId: string): Promise<void> {
+    await this.db.query(`UPDATE issues SET review_id = $2 WHERE id = $1`, [id, reviewId]);
+    console.log(
+      `${C.green}Linked issue #${id.slice(0, 8)} to review #${reviewId.slice(0, 8)}${C.reset}`
+    );
+  }
 }

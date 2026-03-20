@@ -1603,6 +1603,26 @@ async function main(): Promise<void> {
             process.exit(1);
           }
           await issueCmd.milestone(title, description);
+        } else if (subcommand === 'to-task') {
+          const id = args[2];
+          const priorityIndex = args.indexOf('--priority');
+          const priority =
+            priorityIndex !== -1 ? parseInt(args[priorityIndex + 1]!, 10) : undefined;
+          if (!id) {
+            cli.error('Issue ID is required');
+            console.log('\nUsage: nezha issues to-task <id> [--priority <n>]');
+            process.exit(1);
+          }
+          await issueCmd.toTask(id, priority);
+        } else if (subcommand === 'link-review') {
+          const issueId = args[2];
+          const reviewId = args[3];
+          if (!issueId || !reviewId) {
+            cli.error('Issue ID and Review ID are required');
+            console.log('\nUsage: nezha issues link-review <issue-id> <review-id>');
+            process.exit(1);
+          }
+          await issueCmd.linkReview(issueId, reviewId);
         } else {
           console.log(`\n${colors.bright}Issue Management Commands:${colors.reset}\n`);
           console.log('  nezha issues list [--status <status>] [--severity <severity>]');
@@ -1618,6 +1638,8 @@ async function main(): Promise<void> {
           console.log('  nezha issues assign <id> <assignee>');
           console.log('  nezha issues labels [--list]');
           console.log('  nezha issues milestone <title> [--description <desc>]');
+          console.log('  nezha issues to-task <id> [--priority <n>]');
+          console.log('  nezha issues link-review <issue-id> <review-id>');
           console.log('\nStatuses: open, resolved, all');
           console.log('Severities: critical, high, medium, low\n');
         }
