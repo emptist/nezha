@@ -1,22 +1,27 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { BroadcastService } from '../services/BroadcastService.js';
-import { ActivityLoggingService } from '../services/ActivityLoggingService.js';
+import { BroadcastService, BroadcastPriority } from '../services/BroadcastService.js';
+import { ActivityLogService } from '../services/ActivityLogService.js';
 import { colors } from '../utils/cli.js';
 import { Config } from '../config/Config.js';
 
 export class BroadcastCommands {
   private readonly broadcastService: BroadcastService;
-  private readonly activityLog: ActivityLoggingService;
+  private readonly activityLog: ActivityLogService;
 
   constructor(db: DatabaseClient) {
     this.broadcastService = new BroadcastService(db);
-    this.activityLog = new ActivityLoggingService(db);
+    this.activityLog = new ActivityLogService(db);
   }
 
-  async send(message: string, target?: string): Promise<void> {
-    const id = await this.broadcastService.sendBroadcast(message, target);
-    console.log(`${colors.green}Broadcast sent: ${id}${colors.reset}`);
+  async send(message: string, target?: string, priority?: BroadcastPriority): Promise<void> {
+    const id = await this.broadcastService.sendBroadcast(message, {
+      targetAgent: target,
+      priority: priority,
+    });
+    const icon = priority === 'critical' ? '🚨' : priority === 'high' ? '⚠️' : '📢';
+    console.log(`${colors.green}${icon} Broadcast sent: ${id}${colors.reset}`);
     console.log(`  To: ${target || 'all agents'}`);
+    console.log(`  Priority: ${priority || 'normal'}`);
     console.log(`  Message: ${message}`);
   }
 
@@ -31,11 +36,15 @@ export class BroadcastCommands {
     console.log(`\n${colors.bright}Recent Broadcasts:${colors.reset}\n`);
 
     for (const b of broadcasts) {
-      const isToAll = b.target === 'all';
+      const icon = b.priority === 'critical' ? '🚨' : b.priority === 'high' ? '⚠️' : '📢';
+      const readIcon = b.readAt ? '✓' : '○';
       console.log(`${colors.cyan}[${new Date(b.createdAt).toLocaleString()}]${colors.reset}`);
-      console.log(`  From: ${b.fromAgent.substring(0, 8)}...`);
-      console.log(`  To: ${isToAll ? colors.yellow + 'ALL' : b.target}`);
-      console.log(`  Message: ${b.message}`);
+      console.log(`  ${icon} [${b.priority}] ${readIcon}`);
+      console.log(`  From: ${b.fromAgentName || b.fromAgent.substring(0, 12)}...`);
+      if (b.gitHash) {
+        console.log(`  Git: ${b.gitHash} (${b.gitBranch || 'unknown'})`);
+      }
+      console.log(`  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`);
       console.log();
     }
   }
@@ -51,11 +60,13 @@ export class BroadcastCommands {
     console.log(`\n${colors.bright}Unread Broadcasts (${broadcasts.length}):${colors.reset}\n`);
 
     for (const b of broadcasts) {
+      const icon = b.priority === 'critical' ? '🚨' : b.priority === 'high' ? '⚠️' : '📢';
       console.log(
         `${colors.green}[NEW]${colors.reset} ${colors.cyan}[${new Date(b.createdAt).toLocaleString()}]${colors.reset}`
       );
-      console.log(`  From: ${b.fromAgent.substring(0, 8)}...`);
-      console.log(`  Message: ${b.message}`);
+      console.log(`  ${icon} [${b.priority}]`);
+      console.log(`  From: ${b.fromAgentName || b.fromAgent.substring(0, 12)}...`);
+      console.log(`  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`);
       console.log();
 
       await this.broadcastService.markAsRead(b.id);
@@ -73,63 +84,67 @@ export class BroadcastCommands {
   }
 
   async activity(agentId?: string, limit: number = 50): Promise<void> {
-    const activity = await this.activityLog.getRecentActivity(agentId, limit);
+    const activities = agentId
+      ? await this.activityLog.getActivitiesByAgent(agentId, limit)
+      : await this.activityLog.getRecentActivities(limit);
 
-    if (activity.length === 0) {
+    if (activities.length === 0) {
       console.log('\nNo activity found');
       return;
     }
 
     console.log(`\n${colors.bright}AI Activity Log:${colors.reset}\n`);
 
-    for (const a of activity) {
+    for (const a of activities) {
       const activityColor = this.getActivityColor(a.activity);
       console.log(`${colors.cyan}[${new Date(a.timestamp).toLocaleString()}]${colors.reset}`);
       console.log(`  ${activityColor}${a.activity}${colors.reset}`);
-      console.log(`  Agent: ${a.agentId.substring(0, 8)}...`);
+      console.log(`  Agent: ${a.agentId.substring(0, 12)}...`);
       console.log(`  Git: ${a.gitHash || 'unknown'}@${a.gitBranch || 'unknown'}`);
+      console.log(`  Env: ${a.environment}`);
       if (Object.keys(a.context).length > 0) {
-        console.log(`  Context: ${JSON.stringify(a.context)}`);
+        console.log(`  Context: ${JSON.stringify(a.context).substring(0, 100)}...`);
       }
       console.log();
     }
   }
 
-  async activityStats(agentId?: string): Promise<void> {
-    const stats = await this.activityLog.getActivityStats(agentId);
+  async activityStats(): Promise<void> {
+    const stats = await this.activityLog.getActivityStats();
 
     console.log(`\n${colors.bright}Activity Statistics:${colors.reset}\n`);
     console.log(`Total Activities: ${stats.totalActivities}`);
-    console.log(`Tasks Completed: ${colors.green}${stats.tasksCompleted}${colors.reset}`);
-    console.log(`Reviews Completed: ${colors.green}${stats.reviewsCompleted}${colors.reset}`);
-    console.log(`Discussions Joined: ${colors.green}${stats.discussionsJoined}${colors.reset}`);
-    console.log(`\nGit Versions Seen:`);
-    for (const v of stats.gitVersions) {
-      console.log(`  - ${v}`);
-    }
-  }
+    console.log(`Recent Errors (24h): ${stats.recentErrors}`);
 
-  async gitInfo(): Promise<void> {
-    const info = this.activityLog.getGitInfo();
-    console.log(`\n${colors.bright}Current Git Info:${colors.reset}\n`);
-    console.log(`Hash: ${info.hash}`);
-    console.log(`Branch: ${info.branch}`);
+    console.log(`\n${colors.bright}By Type:${colors.reset}`);
+    for (const [type, count] of Object.entries(stats.activitiesByType)) {
+      console.log(`  ${type}: ${count}`);
+    }
+
+    console.log(`\n${colors.bright}By Agent (Top 10):${colors.reset}`);
+    for (const [agent, count] of Object.entries(stats.activitiesByAgent)) {
+      console.log(`  ${agent.substring(0, 12)}...: ${count}`);
+    }
   }
 
   private getActivityColor(activity: string): string {
     switch (activity) {
-      case 'task_start':
+      case 'task_started':
         return colors.blue;
-      case 'task_complete':
+      case 'task_completed':
         return colors.green;
-      case 'task_fail':
+      case 'task_failed':
         return colors.red;
-      case 'skill_use':
+      case 'skill_created':
+      case 'skill_used':
         return colors.magenta;
-      case 'review_complete':
+      case 'review_created':
+      case 'review_completed':
         return colors.yellow;
-      case 'discussion_participate':
+      case 'announcement_sent':
         return colors.cyan;
+      case 'error_encountered':
+        return colors.red;
       default:
         return colors.white;
     }

@@ -447,13 +447,15 @@ export class HeartbeatService {
       const improvements = await identifier.identify();
 
       const agentId = Config.getInstance().getAgentId();
+      const gitInfo = this.getGitInfo();
+      const environment = this.getEnvironment();
       let issuesCreated = 0;
 
       for (const imp of improvements) {
         if (imp.priority >= 7 && imp.type !== 'optimization') {
           await this.db.query(
-            `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, metadata)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, metadata, git_hash, git_branch, environment)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT DO NOTHING`,
             [
               imp.title,
@@ -463,6 +465,9 @@ export class HeartbeatService {
               agentId,
               [imp.category],
               JSON.stringify({ source: 'auto-check', priority: imp.priority }),
+              gitInfo.hash,
+              gitInfo.branch,
+              environment,
             ]
           );
           issuesCreated++;
@@ -1044,11 +1049,13 @@ After completing this task:
 
       if (title) {
         const agentId = Config.getInstance().getAgentId();
+        const gitInfo = this.getGitInfo();
+        const environment = this.getEnvironment();
         await this.db.query(
-          `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, task_id, metadata)
+          `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, task_id, metadata, git_hash, git_branch, environment)
            VALUES ($1, $2, $3, $4, $5, $6, (
              SELECT id FROM tasks WHERE title = $7 ORDER BY created_at DESC LIMIT 1
-           ), $8)`,
+           ), $8, $9, $10, $11)`,
           [
             title,
             description,
@@ -1058,6 +1065,9 @@ After completing this task:
             tags,
             taskTitle,
             JSON.stringify({ source: 'reflection', reflectionOutput: output.substring(0, 1000) }),
+            gitInfo.hash,
+            gitInfo.branch,
+            environment,
           ]
         );
         count++;
@@ -1408,5 +1418,23 @@ After completing this task:
       logger.error('Failed to decrypt task result:', error);
       return { encrypted: true, accessDenied: true };
     }
+  }
+
+  private getGitInfo(): { hash: string | null; branch: string | null } {
+    try {
+      const hash = require('child_process')
+        .execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' })
+        .trim();
+      const branch = require('child_process')
+        .execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8' })
+        .trim();
+      return { hash: hash || null, branch: branch || null };
+    } catch {
+      return { hash: null, branch: null };
+    }
+  }
+
+  private getEnvironment(): string {
+    return process.env.NODE_ENV || 'development';
   }
 }

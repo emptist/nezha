@@ -19,6 +19,7 @@ import {
 } from './InterReviewCommands.js';
 import { MonitoringCommands } from './MonitoringCommands.js';
 import { MeetingCommands, parseKeyPoints } from './MeetingCommands.js';
+import { ReviewManagementCommands } from './ReviewCommands.js';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -1412,6 +1413,122 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'reviews': {
+        const subcommand = args[1];
+        const db = await cliInstance.getDb();
+        const reviewCmd = new ReviewManagementCommands(db);
+
+        if (subcommand === 'create' || subcommand === 'new') {
+          const typeIndex = args.indexOf('--type');
+          const type = (typeIndex !== -1 ? (args[typeIndex + 1] || 'qc') : 'qc') as 'code' | 'design' | 'qc' | 'peer' | 'task' | 'security' | 'other';
+          const targetIndex = args.indexOf('--target');
+          const target = targetIndex !== -1 ? args[targetIndex + 1] : undefined;
+          const titleIndex = args.indexOf('--title');
+          const title = titleIndex !== -1 ? (args[titleIndex + 1] || 'Untitled Review') : args.slice(2).join(' ') || 'Untitled Review';
+          const descIndex = args.indexOf('--description');
+          const description = descIndex !== -1 ? args[descIndex + 1] : undefined;
+
+          await reviewCmd.create({ type, target, title, description });
+        } else if (subcommand === 'list' || subcommand === 'ls') {
+          const statusIndex = args.indexOf('--status');
+          const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+          await reviewCmd.list(status);
+        } else if (subcommand === 'start') {
+          const reviewId = args[2];
+          if (!reviewId) {
+            cli.error('Review ID is required');
+            console.log('\nUsage: nezha reviews start <review-id>');
+            process.exit(1);
+          }
+          await reviewCmd.start(reviewId);
+        } else if (subcommand === 'complete' || subcommand === 'done') {
+          const reviewId = args[2];
+          if (!reviewId) {
+            cli.error('Review ID is required');
+            console.log('\nUsage: nezha reviews complete <review-id> --findings <json> --action-items <json>');
+            process.exit(1);
+          }
+          const findingsIndex = args.indexOf('--findings');
+          const findingsJson = findingsIndex !== -1 ? (args[findingsIndex + 1] || '[]') : '[]';
+          const actionsIndex = args.indexOf('--action-items');
+          const actionsJson = actionsIndex !== -1 ? (args[actionsIndex + 1] || '[]') : '[]';
+
+          let findings: any[] = [];
+          let actionItems: any[] = [];
+          try {
+            findings = JSON.parse(findingsJson);
+            actionItems = JSON.parse(actionsJson);
+          } catch {
+            cli.error('Invalid JSON for findings or action-items');
+            process.exit(1);
+          }
+
+          await reviewCmd.complete(reviewId, findings, actionItems);
+        } else if (subcommand === 'follow-ups' || subcommand === 'followups') {
+          await reviewCmd.followUps();
+        } else if (subcommand === 'stats') {
+          await reviewCmd.stats();
+        } else {
+          console.log(`\n${colors.bright}Review Management Commands:${colors.reset}\n`);
+          console.log('  nezha reviews create --type <type> --title <title> [--target <id>] [--description <desc>]');
+          console.log('  nezha reviews list [--status <status>]');
+          console.log('  nezha reviews start <review-id>');
+          console.log('  nezha reviews complete <review-id> --findings <json> --action-items <json>');
+          console.log('  nezha reviews follow-ups');
+          console.log('  nezha reviews stats');
+          console.log('\nTypes: code, design, qc, peer, task, security, other');
+          console.log('Statuses: pending, in_progress, completed, follow_up, closed\n');
+        }
+        break;
+      }
+          await reviewCmd.start(reviewId);
+        } else if (subcommand === 'complete' || subcommand === 'done') {
+          const reviewId = args[2];
+          if (!reviewId) {
+            cli.error('Review ID is required');
+            console.log(
+              '\nUsage: nezha reviews complete <review-id> --findings <json> --action-items <json>'
+            );
+            process.exit(1);
+          }
+          const findingsIndex = args.indexOf('--findings');
+          const findingsJson = findingsIndex !== -1 ? args[findingsIndex + 1] : '[]';
+          const actionsIndex = args.indexOf('--action-items');
+          const actionsJson = actionsIndex !== -1 ? args[actionsIndex + 1] : '[]';
+
+          let findings: any[] = [];
+          let actionItems: any[] = [];
+          try {
+            findings = JSON.parse(findingsJson);
+            actionItems = JSON.parse(actionsJson);
+          } catch {
+            cli.error('Invalid JSON for findings or action-items');
+            process.exit(1);
+          }
+
+          await reviewCmd.complete(reviewId, findings, actionItems);
+        } else if (subcommand === 'follow-ups' || subcommand === 'followups') {
+          await reviewCmd.followUps();
+        } else if (subcommand === 'stats') {
+          await reviewCmd.stats();
+        } else {
+          console.log(`\n${colors.bright}Review Management Commands:${colors.reset}\n`);
+          console.log(
+            '  nezha reviews create --type <type> --title <title> [--target <id>] [--description <desc>]'
+          );
+          console.log('  nezha reviews list [--status <status>]');
+          console.log('  nezha reviews start <review-id>');
+          console.log(
+            '  nezha reviews complete <review-id> --findings <json> --action-items <json>'
+          );
+          console.log('  nezha reviews follow-ups');
+          console.log('  nezha reviews stats');
+          console.log('\nTypes: code, design, qc, peer, task, security, other');
+          console.log('Statuses: pending, in_progress, completed, follow_up, closed\n');
+        }
+        break;
+      }
+
       case 'dlq': {
         const subcommand = args[1];
         const monitor = await cliInstance.getMonitoringCommands();
@@ -1671,6 +1788,342 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'announce': {
+        const message = args.slice(1).join(' ');
+        const priorityIndex = args.indexOf('--priority');
+        const priority = priorityIndex !== -1 ? args[priorityIndex + 1] : 'normal';
+        const targetIndex = args.indexOf('--to');
+        const target = targetIndex !== -1 ? args[targetIndex + 1] : undefined;
+
+        if (!message || message.startsWith('--')) {
+          cli.error('Message is required');
+          console.log(
+            '\nUsage: nezha announce <message> [--priority <low|normal|high|critical>] [--to <agent-id>]'
+          );
+          console.log('\nExamples:');
+          console.log('  nezha announce "System maintenance in 5 minutes"');
+          console.log('  nezha announce "Critical bug found!" --priority critical');
+          console.log('  nezha announce "Hey OpenCode" --to opencode-ai --priority high');
+          process.exit(1);
+        }
+
+        const db = await cliInstance.getDb();
+        const { BroadcastService } = await import('../services/BroadcastService.js');
+        const broadcastService = new BroadcastService(db);
+
+        const validPriorities = ['low', 'normal', 'high', 'critical'];
+        const broadcastPriority = validPriorities.includes(priority || 'normal')
+          ? (priority as 'low' | 'normal' | 'high' | 'critical')
+          : 'normal';
+
+        const id = await broadcastService.sendBroadcast(message, {
+          priority: broadcastPriority,
+          targetAgent: target,
+        });
+
+        const icon =
+          broadcastPriority === 'critical' ? '🚨' : broadcastPriority === 'high' ? '⚠️' : '📢';
+        console.log(`\n${icon} Broadcast sent successfully!`);
+        console.log(`   ID: ${id}`);
+        console.log(`   Priority: ${broadcastPriority}`);
+        console.log(`   Target: ${target || 'all-ais'}`);
+        break;
+      }
+
+      case 'who-is-working':
+      case 'working': {
+        const db = await cliInstance.getDb();
+
+        const runningTasks = await db.query<{
+          id: string;
+          title: string;
+          status: string;
+          priority: number;
+          assigned_to: string | null;
+          started_at: Date | null;
+          created_by: string | null;
+        }>(
+          `SELECT id, title, status, priority, assigned_to, started_at, created_by
+           FROM tasks
+           WHERE status = 'RUNNING'
+           ORDER BY priority DESC, started_at DESC`
+        );
+
+        const pendingTasks = await db.query<{
+          id: string;
+          title: string;
+          status: string;
+          priority: number;
+          assigned_to: string | null;
+          created_at: Date;
+        }>(
+          `SELECT id, title, status, priority, assigned_to, created_at
+           FROM tasks
+           WHERE status = 'PENDING'
+           ORDER BY priority DESC, created_at ASC
+           LIMIT 10`
+        );
+
+        console.log(
+          '\n' +
+            colors.bright +
+            '═══════════════════════════════════════════════════════════════' +
+            colors.reset
+        );
+        console.log(colors.bright + '  WHO IS WORKING ON WHAT' + colors.reset);
+        console.log(
+          colors.bright +
+            '═══════════════════════════════════════════════════════════════' +
+            colors.reset
+        );
+
+        if (runningTasks.rows.length === 0) {
+          console.log('\n  No tasks currently running.');
+        } else {
+          console.log('\n' + colors.bright + '  🔄 RUNNING TASKS:' + colors.reset);
+          for (const task of runningTasks.rows) {
+            const assignedTo = task.assigned_to || 'unassigned';
+            const started = task.started_at
+              ? new Date(task.started_at).toLocaleTimeString()
+              : 'N/A';
+            console.log(`\n  📋 ${task.title}`);
+            console.log(`     Priority: ${task.priority} | Assigned: ${assignedTo}`);
+            console.log(`     Started: ${started} | ID: ${task.id.substring(0, 8)}...`);
+          }
+        }
+
+        if (pendingTasks.rows.length > 0) {
+          console.log('\n' + colors.bright + '  ⏳ URGENT PENDING TASKS:' + colors.reset);
+          for (const task of pendingTasks.rows) {
+            const created = new Date(task.created_at).toLocaleTimeString();
+            console.log(`\n  📋 ${task.title}`);
+            console.log(`     Priority: ${task.priority} | Created: ${created}`);
+          }
+        }
+
+        const activityLog = await db.query<{
+          agent_id: string;
+          activity: string;
+          context: Record<string, unknown>;
+          timestamp: Date;
+          git_hash: string | null;
+        }>(
+          `SELECT agent_id, activity, context, timestamp, git_hash
+           FROM activity_log
+           WHERE activity IN ('task_started', 'task_completed', 'task_failed')
+           ORDER BY timestamp DESC
+           LIMIT 10`
+        );
+
+        if (activityLog.rows.length > 0) {
+          console.log('\n' + colors.bright + '  📊 RECENT ACTIVITY:' + colors.reset);
+          for (const log of activityLog.rows) {
+            const time = new Date(log.timestamp).toLocaleTimeString();
+            const icon =
+              log.activity === 'task_completed'
+                ? '✅'
+                : log.activity === 'task_failed'
+                  ? '❌'
+                  : '🔄';
+            const taskTitle = log.context?.taskTitle || log.context?.taskId || 'unknown';
+            console.log(
+              `  ${icon} ${log.agent_id.substring(0, 8)}... ${log.activity}: ${taskTitle} (${time})`
+            );
+          }
+        }
+
+        console.log(
+          '\n' +
+            colors.bright +
+            '═══════════════════════════════════════════════════════════════' +
+            colors.reset
+        );
+        break;
+      }
+
+      case 'activity': {
+        const subcommand = args[1];
+        const db = await cliInstance.getDb();
+        const { ActivityLogService } = await import('../services/ActivityLogService.js');
+        const activityService = new ActivityLogService(db);
+
+        if (subcommand === 'stats') {
+          const stats = await activityService.getActivityStats();
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+          console.log(colors.bright + '  ACTIVITY STATISTICS' + colors.reset);
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+          console.log(`\n  Total Activities: ${stats.totalActivities}`);
+          console.log(`  Recent Errors (24h): ${stats.recentErrors}`);
+
+          console.log('\n' + colors.bright + '  By Type:' + colors.reset);
+          for (const [type, count] of Object.entries(stats.activitiesByType)) {
+            console.log(`    ${type}: ${count}`);
+          }
+
+          console.log('\n' + colors.bright + '  By Agent (Top 10):' + colors.reset);
+          for (const [agent, count] of Object.entries(stats.activitiesByAgent)) {
+            console.log(`    ${agent.substring(0, 12)}...: ${count}`);
+          }
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+        } else if (subcommand === 'recent') {
+          const limit = parseInt(args[args.indexOf('--limit') + 1] || '20', 10);
+          const activities = await activityService.getRecentActivities(limit);
+
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+          console.log(colors.bright + '  RECENT ACTIVITIES' + colors.reset);
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+
+          for (const activity of activities) {
+            const time = new Date(activity.timestamp).toLocaleString();
+            console.log(`\n  📌 ${activity.activity}`);
+            console.log(`     Agent: ${activity.agentId.substring(0, 12)}...`);
+            console.log(`     Time: ${time}`);
+            if (activity.gitHash) {
+              console.log(`     Git: ${activity.gitHash} (${activity.gitBranch || 'unknown'})`);
+            }
+            console.log(`     Env: ${activity.environment}`);
+          }
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+        } else {
+          console.log('\nUsage: nezha activity <subcommand>');
+          console.log('\nSubcommands:');
+          console.log('  stats              Show activity statistics');
+          console.log('  recent [--limit]   Show recent activities');
+        }
+        break;
+      }
+
+      case 'broadcasts': {
+        const subcommand = args[1];
+        const db = await cliInstance.getDb();
+        const { BroadcastService } = await import('../services/BroadcastService.js');
+        const broadcastService = new BroadcastService(db);
+
+        if (subcommand === 'list') {
+          const broadcasts = await broadcastService.getBroadcasts(20);
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+          console.log(colors.bright + '  BROADCASTS' + colors.reset);
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+
+          for (const broadcast of broadcasts) {
+            const icon =
+              broadcast.priority === 'critical'
+                ? '🚨'
+                : broadcast.priority === 'high'
+                  ? '⚠️'
+                  : '📢';
+            const readIcon = broadcast.readAt ? '✓' : '○';
+            const time = new Date(broadcast.createdAt).toLocaleString();
+            console.log(`\n  ${icon} [${broadcast.priority}] ${readIcon}`);
+            console.log(
+              `     ${broadcast.message.substring(0, 100)}${broadcast.message.length > 100 ? '...' : ''}`
+            );
+            console.log(
+              `     From: ${broadcast.fromAgentName || broadcast.fromAgent.substring(0, 12)}...`
+            );
+            if (broadcast.gitHash) {
+              console.log(`     Git: ${broadcast.gitHash} (${broadcast.gitBranch || 'unknown'})`);
+            }
+            console.log(`     Time: ${time}`);
+          }
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+        } else if (subcommand === 'unread') {
+          const broadcasts = await broadcastService.getUnreadBroadcasts();
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+          console.log(colors.bright + '  UNREAD BROADCASTS' + colors.reset);
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+
+          if (broadcasts.length === 0) {
+            console.log('\n  No unread broadcasts.');
+          } else {
+            for (const broadcast of broadcasts) {
+              const icon =
+                broadcast.priority === 'critical'
+                  ? '🚨'
+                  : broadcast.priority === 'high'
+                    ? '⚠️'
+                    : '📢';
+              const time = new Date(broadcast.createdAt).toLocaleString();
+              console.log(`\n  ${icon} [${broadcast.priority}]`);
+              console.log(
+                `     ${broadcast.message.substring(0, 100)}${broadcast.message.length > 100 ? '...' : ''}`
+              );
+              console.log(
+                `     From: ${broadcast.fromAgentName || broadcast.fromAgent.substring(0, 12)}...`
+              );
+              console.log(`     Time: ${time}`);
+            }
+          }
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+        } else if (subcommand === 'read') {
+          const count = await broadcastService.markAllAsRead();
+          console.log(`\n✓ Marked ${count} broadcasts as read.`);
+        } else {
+          console.log('\nUsage: nezha broadcasts <subcommand>');
+          console.log('\nSubcommands:');
+          console.log('  list    List all broadcasts');
+          console.log('  unread  List unread broadcasts');
+          console.log('  read    Mark all broadcasts as read');
+        }
+        break;
+      }
+
       case 'help':
       default:
         showHelp();
@@ -1733,6 +2186,17 @@ function showHelp(): void {
     meeting opinion <id> <author> Record an opinion
     meeting consensus <t> <p> <d> Record consensus reached
     meeting history [--limit]     Show consensus history
+
+  ${colors.bright}Broadcast & Activity Commands:${colors.reset}
+    announce <message>            Broadcast message to all AIs
+    announce <msg> --priority <p> Broadcast with priority (low|normal|high|critical)
+    announce <msg> --to <agent>   Send direct message to specific AI
+    who-is-working                Show which AI is working on what
+    broadcasts list               List all broadcasts
+    broadcasts unread             List unread broadcasts
+    broadcasts read               Mark all broadcasts as read
+    activity stats                Show activity statistics
+    activity recent [--limit]     Show recent activities
 
     help                          Show this help
 

@@ -1,6 +1,9 @@
 import { clawHubClient } from '../services/ClawHubClient.js';
 import { taskReviewSkill, type TaskReviewInput } from '../services/TaskReviewSkill.js';
 import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
+import { ReviewService, type ReviewFinding } from '../services/ReviewService.js';
+import { DatabaseClient } from '../db/DatabaseClient.js';
+import { colors } from '../utils/cli.js';
 
 export async function reviewTask(
   taskId: string,
@@ -219,5 +222,152 @@ export async function searchDatabaseSkills(query: string): Promise<void> {
     console.log(`     ${skill.description || 'No description'}`);
     console.log(`     Safety: ${skill.safety_score}/100 | Used: ${skill.use_count}x`);
     console.log();
+  }
+}
+
+export class ReviewManagementCommands {
+  private readonly reviewService: ReviewService;
+
+  constructor(db: DatabaseClient) {
+    this.reviewService = new ReviewService(db);
+  }
+
+  async create(options: {
+    type: 'code' | 'design' | 'qc' | 'peer' | 'task' | 'security' | 'other';
+    target?: string;
+    title: string;
+    description?: string;
+  }): Promise<void> {
+    const id = await this.reviewService.createReview(
+      options.type,
+      options.title,
+      options.target,
+      undefined,
+      options.description
+    );
+
+    console.log(`${colors.green}Review created: ${id}${colors.reset}`);
+    console.log(`  Type: ${options.type}`);
+    console.log(`  Title: ${options.title}`);
+    if (options.target) console.log(`  Target: ${options.target}`);
+  }
+
+  async list(status?: string): Promise<void> {
+    const reviews = await this.getReviewsByStatus(status);
+
+    if (reviews.length === 0) {
+      console.log('\nNo reviews found');
+      return;
+    }
+
+    console.log(`\n${colors.bright}Reviews (${reviews.length}):${colors.reset}\n`);
+
+    for (const review of reviews) {
+      const statusColor = this.getStatusColor(review.status);
+      console.log(`${statusColor}[${review.status.toUpperCase()}]${colors.reset} ${review.title}`);
+      console.log(`  ID: ${review.id.substring(0, 8)}...`);
+      console.log(
+        `  Type: ${review.reviewType} | Reviewer: ${review.reviewerId?.substring(0, 8) || 'unassigned'}...`
+      );
+      console.log(`  Created: ${new Date(review.createdAt).toLocaleString()}`);
+      if (review.findings?.length > 0) {
+        console.log(`  Findings: ${review.findings.length}`);
+      }
+      if (review.actionItems?.length > 0) {
+        console.log(`  Action Items: ${review.actionItems.length}`);
+      }
+      console.log();
+    }
+  }
+
+  async start(reviewId: string): Promise<void> {
+    await this.reviewService.startReview(reviewId);
+    console.log(`${colors.green}Review started: ${reviewId}${colors.reset}`);
+  }
+
+  async complete(
+    reviewId: string,
+    findings: ReviewFinding[],
+    actionItems: { description: string }[]
+  ): Promise<void> {
+    await this.reviewService.completeReview(reviewId, findings, actionItems);
+    console.log(`${colors.green}Review completed: ${reviewId}${colors.reset}`);
+    console.log(`  Findings: ${findings.length}`);
+    console.log(`  Action Items: ${actionItems.length}`);
+  }
+
+  async followUps(): Promise<void> {
+    const reviews = await this.reviewService.getPendingFollowUps();
+
+    if (reviews.length === 0) {
+      console.log('\nNo pending follow-ups');
+      return;
+    }
+
+    console.log(`\n${colors.bright}Follow-ups Required (${reviews.length}):${colors.reset}\n`);
+
+    for (const review of reviews) {
+      const dueDate = review.followUpDue ? new Date(review.followUpDue) : null;
+      const isOverdue = dueDate && dueDate < new Date();
+
+      console.log(
+        `${isOverdue ? colors.red : colors.yellow}[${review.followUpStatus?.toUpperCase() || 'PENDING'}]${colors.reset} ${review.title}`
+      );
+      console.log(`  ID: ${review.id.substring(0, 8)}...`);
+      console.log(`  Due: ${dueDate?.toLocaleString() || 'No deadline'}`);
+      if (review.actionItems?.length > 0) {
+        console.log(
+          `  Pending Actions: ${review.actionItems.filter(a => a.status === 'pending').length}`
+        );
+      }
+      console.log();
+    }
+  }
+
+  async stats(): Promise<void> {
+    const stats = await this.reviewService.getReviewStats();
+
+    console.log(`\n${colors.bright}Review Statistics:${colors.reset}\n`);
+    console.log(`Total Reviews: ${stats.total}`);
+    console.log(`${colors.yellow}Pending: ${stats.pending}${colors.reset}`);
+    console.log(`${colors.blue}In Progress: ${stats.inProgress}${colors.reset}`);
+    console.log(`${colors.green}Completed: ${stats.completed}${colors.reset}`);
+    console.log(`${colors.cyan}Follow-ups: ${stats.followUp}${colors.reset}`);
+    if (stats.overdue > 0) {
+      console.log(`${colors.red}Overdue: ${stats.overdue}${colors.reset}`);
+    }
+    if (stats.avgCompletionTimeHours > 0) {
+      console.log(`\nAvg Completion Time: ${stats.avgCompletionTimeHours.toFixed(1)} hours`);
+    }
+  }
+
+  private async getReviewsByStatus(status?: string): Promise<any[]> {
+    if (status) {
+      const result = await this.reviewService['db'].query(
+        `SELECT * FROM reviews WHERE status = $1 ORDER BY created_at DESC LIMIT 50`,
+        [status]
+      );
+      return result.rows;
+    }
+
+    const result = await this.reviewService['db'].query(
+      `SELECT * FROM reviews ORDER BY created_at DESC LIMIT 50`
+    );
+    return result.rows;
+  }
+
+  private getStatusColor(status: string): string {
+    switch (status) {
+      case 'completed':
+        return colors.green;
+      case 'in_progress':
+        return colors.blue;
+      case 'follow_up':
+        return colors.yellow;
+      case 'closed':
+        return colors.gray;
+      default:
+        return colors.white;
+    }
   }
 }
