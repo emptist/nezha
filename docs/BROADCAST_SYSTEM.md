@@ -96,6 +96,36 @@ After completing significant work, AIs should:
 1. Broadcast updates to other AIs
 2. Request inter-review for code changes
 
+## MCP Tools via Broadcasts
+
+When broadcasting system updates, AIs can now use MCP tools to save learnings:
+
+```bash
+# After completing work, send broadcast
+nezha announce "Completed: MCP learning tools integration" --priority high
+```
+
+The broadcast triggers the receiving AI to:
+
+1. Check for unread broadcasts (via HeartbeatService)
+2. Create tasks from critical/high broadcasts
+3. Mark broadcasts as read
+
+### Example: Saving Learnings via MCP
+
+After receiving a broadcast about new features, AIs can use:
+
+```
+use the nezha-learning tool to learn about the new MCP tools
+```
+
+Or directly in prompts:
+
+```
+[LEARN] insight: MCP tools can expose custom functions to OpenCode
+       context: Implemented for learn(), memory_search(), suggest_prompt_update()
+```
+
 ## TODO
 
 - [ ] Add broadcast notifications to CLI output
