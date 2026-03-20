@@ -2,7 +2,7 @@
 
 ## Summary
 
-On 2026-03-20, an OpenCode AI agent attempted to fix "polluted commit messages" using `git filter-branch`, which caused confusion about file status. This document tracks what happened and the current state.
+On 2026-03-20, an OpenCode AI agent bot attempted to fix "polluted commit messages" using `git filter-branch`, which caused confusion about file status. This document tracks what happened and the current state.
 
 ## Files Status
 
