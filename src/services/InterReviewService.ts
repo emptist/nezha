@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { AIProvider, AIProviderFactory } from './ai/index.js';
+import { getSelfImprovement } from './SelfImprovementService.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -168,6 +169,8 @@ export class InterReviewService extends EventEmitter {
         const review = await this.getReview(reviewId);
         await this.saveLearningsToMemory(reviewResult, review?.taskId || undefined);
         logger.info(`[InterReview] Saved ${reviewResult.learnings.length} learnings to memory`);
+
+        await this.suggestPromptUpdatesFromLearnings(reviewResult, review?.taskId || undefined);
       }
 
       return reviewResult;
@@ -584,5 +587,49 @@ These learnings were extracted from code reviews. Apply them to avoid similar is
         .replace(/\n\n---\n\n.*$/s, ''),
       frequency: parseInt(row.frequency, 10),
     }));
+  }
+
+  private async suggestPromptUpdatesFromLearnings(
+    result: ReviewResult,
+    taskId?: string
+  ): Promise<void> {
+    const selfImprovement = getSelfImprovement(this.db);
+
+    for (const learning of result.learnings) {
+      if (this.isPromptWorthyLearning(learning)) {
+        try {
+          await selfImprovement.remember({
+            lesson: learning.reminder,
+            fromTask: taskId || 'inter-review',
+            tags: ['review-learning', learning.topic.toLowerCase().replace(/\s+/g, '-')],
+          });
+          logger.info(`[InterReview] Created self-improvement reminder for: ${learning.topic}`);
+        } catch (error) {
+          logger.debug(`[InterReview] Could not create prompt suggestion:`, error);
+        }
+      }
+    }
+  }
+
+  private isPromptWorthyLearning(learning: Learning): boolean {
+    const highValueTopics = [
+      'typescript',
+      'patterns',
+      'architecture',
+      'database',
+      'error-handling',
+      'testing',
+      'async',
+      'memory',
+    ];
+    const topic = learning.topic.toLowerCase();
+    const reminder = learning.reminder.toLowerCase();
+    return (
+      highValueTopics.some(t => topic.includes(t)) ||
+      learning.reminder.length > 50 ||
+      reminder.includes('always') ||
+      reminder.includes('never') ||
+      reminder.includes('must')
+    );
   }
 }

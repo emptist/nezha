@@ -596,13 +596,15 @@ export class Cli {
    b. Run tests/build
    c. Commit and push changes
 
-## Check (with InterReview)
+## Check (with InterReview + SelfImprovement)
 4. Request AI Inter-Review on the commit:
    - Use: nezha review --commit <hash> --task-id <id>
    - Review will extract learnings and save them to memory
+   - Review learnings trigger SelfImprovementService (learn() + remember())
 5. Review the learnings from InterReview:
    - Check for patterns in findings
    - Apply any critical fixes suggested
+   - Check pending prompt suggestions: nezha prompt suggestions
 
 ## Act
 6. If issues found, fix them
@@ -618,6 +620,7 @@ export class Cli {
     - Memory system (记忆系统)
     - Skill system (技能系统)
     - InterReview (AI Code Review)
+    - SelfImprovement (自动学习与提示词优化)
 12. Identify areas where Nezha is behind OpenClaw
 13. Create improvement tasks for gaps found
 14. Document advantages Nezha has over OpenClaw (PostgreSQL, etc.)
@@ -627,6 +630,7 @@ export class Cli {
     - Tasks completed
     - Reviews requested and scores
     - Learnings extracted
+    - Prompt suggestions created
     - New patterns discovered`;
 
     await this.addTask('Continuous Improvement Cycle', description, 10);
@@ -1493,9 +1497,10 @@ async function main(): Promise<void> {
           await monitor.getWatchdogStats();
         } else if (subcommand === 'cleanup') {
           const thresholdIndex = args.indexOf('--threshold');
-          const threshold = thresholdIndex !== -1 && args[thresholdIndex + 1] 
-            ? parseInt(args[thresholdIndex + 1]!, 10) 
-            : 60;
+          const threshold =
+            thresholdIndex !== -1 && args[thresholdIndex + 1]
+              ? parseInt(args[thresholdIndex + 1]!, 10)
+              : 60;
           await monitor.cleanupOrphanedProcesses(threshold);
         } else {
           cli.error(`Unknown subcommand: ${subcommand}`);
@@ -1552,11 +1557,17 @@ async function main(): Promise<void> {
 
           if (!title) {
             cli.error('Discussion title is required');
-            console.log('\nUsage: nezha meeting discuss <title> [description] [--priority <n>] [--participants <ai1,ai2>]');
+            console.log(
+              '\nUsage: nezha meeting discuss <title> [description] [--priority <n>] [--participants <ai1,ai2>]'
+            );
             console.log('\nExamples:');
             console.log('  nezha meeting discuss "API Design" "Should we use REST or GraphQL?"');
-            console.log('  nezha meeting discuss "Database Choice" "PostgreSQL vs MongoDB" --priority 8');
-            console.log('  nezha meeting discuss "Testing Strategy" --participants nezha-1,nezha-2');
+            console.log(
+              '  nezha meeting discuss "Database Choice" "PostgreSQL vs MongoDB" --priority 8'
+            );
+            console.log(
+              '  nezha meeting discuss "Testing Strategy" --participants nezha-1,nezha-2'
+            );
             process.exit(1);
           }
 
@@ -1576,9 +1587,13 @@ async function main(): Promise<void> {
 
           if (!discussionId || !author) {
             cli.error('Discussion ID and author are required');
-            console.log('\nUsage: nezha meeting opinion <discussion-id> <author> <perspective> [key-points...]');
+            console.log(
+              '\nUsage: nezha meeting opinion <discussion-id> <author> <perspective> [key-points...]'
+            );
             console.log('\nExample:');
-            console.log('  nezha meeting opinion abc123 nezha-1 "REST is simpler" "Easy to understand" "Better tooling" "HTTP caching"');
+            console.log(
+              '  nezha meeting opinion abc123 nezha-1 "REST is simpler" "Easy to understand" "Better tooling" "HTTP caching"'
+            );
             process.exit(1);
           }
 
@@ -1598,22 +1613,26 @@ async function main(): Promise<void> {
 
           if (!topic || !participantsRaw || !decision) {
             cli.error('Topic, participants, and decision are required');
-            console.log('\nUsage: nezha meeting consensus <topic> <participants> <decision> [--agreed <points>] [--next <steps>]');
+            console.log(
+              '\nUsage: nezha meeting consensus <topic> <participants> <decision> [--agreed <points>] [--next <steps>]'
+            );
             console.log('\nExamples:');
             console.log('  nezha meeting consensus "API Choice" "nezha-1,nezha-2" "Use REST"');
-            console.log('  nezha meeting consensus "DB Choice" "nezha-1" "PostgreSQL" --agreed "ACID compliance" --next "Set up schema"');
+            console.log(
+              '  nezha meeting consensus "DB Choice" "nezha-1" "PostgreSQL" --agreed "ACID compliance" --next "Set up schema"'
+            );
             process.exit(1);
           }
 
           const agreedIndex = args.indexOf('--agreed');
-          const agreedPoints = agreedIndex !== -1 && args[agreedIndex + 1] 
-            ? args[agreedIndex + 1]!.split('|') 
-            : [decision];
+          const agreedPoints =
+            agreedIndex !== -1 && args[agreedIndex + 1]
+              ? args[agreedIndex + 1]!.split('|')
+              : [decision];
 
           const nextIndex = args.indexOf('--next');
-          const nextSteps = nextIndex !== -1 && args[nextIndex + 1] 
-            ? args[nextIndex + 1]!.split('|') 
-            : [];
+          const nextSteps =
+            nextIndex !== -1 && args[nextIndex + 1] ? args[nextIndex + 1]!.split('|') : [];
 
           await meeting.reachConsensus(
             topic,

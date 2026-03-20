@@ -310,4 +310,75 @@ describe('InterReviewService', () => {
       expect(failedHandler).toHaveBeenCalled();
     });
   });
+
+  describe('isPromptWorthyLearning (private)', () => {
+    it('should identify high-value topics as prompt-worthy', () => {
+      const serviceAny = service as unknown as {
+        isPromptWorthyLearning: (learning: { topic: string; reminder: string }) => boolean;
+      };
+
+      expect(
+        serviceAny.isPromptWorthyLearning({
+          topic: 'TypeScript patterns',
+          reminder: 'Use strict types',
+        })
+      ).toBe(true);
+      expect(
+        serviceAny.isPromptWorthyLearning({
+          topic: 'Database patterns',
+          reminder: 'Use transactions',
+        })
+      ).toBe(true);
+      expect(
+        serviceAny.isPromptWorthyLearning({
+          topic: 'error-handling',
+          reminder: 'Always use try-catch',
+        })
+      ).toBe(true);
+    });
+
+    it('should identify reminders with strong language as prompt-worthy', () => {
+      const serviceAny = service as unknown as {
+        isPromptWorthyLearning: (learning: { topic: string; reminder: string }) => boolean;
+      };
+
+      expect(
+        serviceAny.isPromptWorthyLearning({ topic: 'General', reminder: 'Always check for null' })
+      ).toBe(true);
+      expect(
+        serviceAny.isPromptWorthyLearning({
+          topic: 'General',
+          reminder: 'Never forget to close connections',
+        })
+      ).toBe(true);
+      expect(
+        serviceAny.isPromptWorthyLearning({ topic: 'General', reminder: 'You must validate input' })
+      ).toBe(true);
+    });
+
+    it('should identify long reminders as prompt-worthy', () => {
+      const serviceAny = service as unknown as {
+        isPromptWorthyLearning: (learning: { topic: string; reminder: string }) => boolean;
+      };
+
+      const longReminder =
+        'This is a very important reminder that should be remembered for future work because it has significant implications for the codebase.';
+      expect(serviceAny.isPromptWorthyLearning({ topic: 'General', reminder: longReminder })).toBe(
+        true
+      );
+    });
+
+    it('should not identify low-value topics as prompt-worthy', () => {
+      const serviceAny = service as unknown as {
+        isPromptWorthyLearning: (learning: { topic: string; reminder: string }) => boolean;
+      };
+
+      expect(serviceAny.isPromptWorthyLearning({ topic: 'General', reminder: 'Nice work' })).toBe(
+        false
+      );
+      expect(
+        serviceAny.isPromptWorthyLearning({ topic: 'Minor fix', reminder: 'Short reminder' })
+      ).toBe(false);
+    });
+  });
 });
