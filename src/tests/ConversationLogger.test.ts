@@ -27,7 +27,7 @@ describe('ConversationLogger', () => {
   });
 
   it('should initialize log directory on first use', async () => {
-    await fs.stat(testDir).catch(() => {});
+    await fs.stat(testDir).catch(() => {}); // Ignore if doesn't exist
     const task = { id: 'task-1', title: 'Test Task', description: 'Test description' };
     logger.startConversation(task);
     await logger.endConversation();

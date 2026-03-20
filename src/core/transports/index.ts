@@ -322,7 +322,9 @@ export class CliTransport implements SessionManager {
 
         // Record the spawned process
         if (proc.pid) {
-          this.recordSpawnedProcess(proc.pid, 'opencode', args).catch(() => {});
+          this.recordSpawnedProcess(proc.pid, 'opencode', args).catch(() => {
+            // Intentionally ignored - process tracking is non-critical
+          });
         }
         proc.stdin?.end();
       } catch (err) {

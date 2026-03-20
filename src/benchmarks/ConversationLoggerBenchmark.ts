@@ -93,7 +93,7 @@ export async function runConversationLoggerBenchmarks(): Promise<BenchmarkResult
     console.log(formatResult(result));
   }
 
-  await fs.rm(testDir, { recursive: true, force: true }).catch(() => {});
+  await fs.rm(testDir, { recursive: true, force: true }).catch(() => {}); // Ignore cleanup errors
 
   return results;
 }

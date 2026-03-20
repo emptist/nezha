@@ -256,7 +256,7 @@ describe('HeartbeatService', () => {
     expect(heartbeatService.isRunning()).toBe(true);
 
     await heartbeatService.stop();
-    await startPromise.catch(() => {});
+    await startPromise.catch(() => {}); // Expected rejection on stop
     expect(heartbeatService.isRunning()).toBe(false);
   });
 
@@ -271,7 +271,7 @@ describe('HeartbeatService', () => {
     const startPromise = heartbeatService.start();
     await new Promise(resolve => setTimeout(resolve, 50));
     await heartbeatService.stop();
-    await startPromise.catch(() => {});
+    await startPromise.catch(() => {}); // Expected rejection on stop
 
     const health = heartbeatService.getHealth();
     expect(health.stats.tasksExecuted).toBeGreaterThanOrEqual(0);

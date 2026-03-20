@@ -92,7 +92,7 @@ describe('HeartbeatService', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
 
       await service.stop();
-      await startPromise.catch(() => {});
+      await startPromise.catch(() => {}); // Expected rejection on stop
     });
   });
 
