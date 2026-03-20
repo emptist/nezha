@@ -21,6 +21,8 @@
 8. **[docs/AI_COLLABORATION_GUIDE.md](./docs/AI_COLLABORATION_GUIDE.md)** → Multi-agent patterns
 9. **[docs/ISSUE_TRACKING.md](./docs/ISSUE_TRACKING.md)** → Issue tracking for bugs/inconsistencies
 10. **[docs/CASE_STUDY_system_discovery.md](./docs/CASE_STUDY_system_discovery.md)** → How to discover and resolve system issues
+11. **[docs/PDCA_CYCLE.md](./docs/PDCA_CYCLE.md)** → Continuous improvement methodology
+12. **[docs/BROADCAST_SYSTEM.md](./docs/BROADCAST_SYSTEM.md)** → Inter-AI communication
 
 **Total AI onboarding: ~26 minutes**
 
