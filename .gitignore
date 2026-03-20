@@ -37,6 +37,7 @@ coverage/
 # Temp
 /tmp/
 *.tmp
+*.backup
 
 # Config (local config, can be overridden via NEZHA_CONFIG_DIR)
 .nezha/
