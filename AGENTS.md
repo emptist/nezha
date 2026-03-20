@@ -35,6 +35,7 @@
 - [x] OpenClaw 持续工作机制研究
 - [x] OpenClaw 记忆系统研究
 - [x] AI Inter-Review 系统 (互相 Review 机制)
+- [x] 测试覆盖率提升：新增 102 个测试 (DatabaseSkillLoader, FailureAnalysisService, ContextBuilder)
 
 ## AI 通信方法
 

@@ -547,4 +547,91 @@ export class MonitoringCommands {
     console.log(`\n${colors.green}Created ${taskIds.length} improvement tasks`);
     return taskIds;
   }
+
+  async showRecoveryStats(): Promise<void> {
+    const stats = await this.db.query<{
+      failed_tasks_recoverable: string;
+      stuck_tasks: string;
+      dlq_items_pending: string;
+      last_auto_recovery: Date | null;
+    }>(
+      `SELECT 
+        (SELECT COUNT(*) FROM tasks 
+         WHERE status = 'FAILED' 
+         AND retry_count < 3
+         AND error_category NOT IN ('FATAL', 'PERMANENT', 'INVALID_INPUT'))::TEXT as failed_tasks_recoverable,
+        (SELECT COUNT(*) FROM tasks 
+         WHERE status = 'RUNNING' 
+         AND started_at < NOW() - INTERVAL '10 minutes')::TEXT as stuck_tasks,
+        (SELECT COUNT(*) FROM dead_letter_queue WHERE resolved = false)::TEXT as dlq_items_pending,
+        (SELECT created_at FROM tasks 
+         WHERE created_by = 'trae-auto-recovery'
+         ORDER BY created_at DESC LIMIT 1) as last_auto_recovery`
+    );
+
+    const row = stats.rows[0];
+    if (!row) return;
+
+    console.log('\n📊 Auto-Recovery Statistics\n');
+    console.log(`   Recoverable Failed Tasks: ${row.failed_tasks_recoverable}`);
+    console.log(`   Stuck Tasks (RUNNING >10m): ${row.stuck_tasks}`);
+    console.log(`   Pending DLQ Items:         ${row.dlq_items_pending}`);
+    console.log(`   Last Auto-Recovery:        ${row.last_auto_recovery || 'Never'}`);
+    console.log('');
+  }
+
+  async runManualRecovery(): Promise<{
+    failedTasks: number;
+    stuckTasks: number;
+    dlqItems: number;
+  }> {
+    console.log(colors.bright, '\n🔧 Running manual recovery...\n');
+
+    const failedTasks = await this.db.query<{ id: string; title: string }>(
+      `UPDATE tasks 
+       SET status = 'PENDING', 
+           error = NULL,
+           next_retry_at = NOW() + INTERVAL '60 seconds',
+           updated_at = NOW()
+       WHERE status = 'FAILED'
+         AND retry_count < 3
+         AND error_category NOT IN ('FATAL', 'PERMANENT', 'INVALID_INPUT')
+       RETURNING id, title`
+    );
+
+    if (failedTasks.rows.length > 0) {
+      console.log(colors.green, `  ✓ Recovered ${failedTasks.rows.length} failed tasks`);
+      for (const task of failedTasks.rows) {
+        console.log(`    - ${task.title}`);
+      }
+    }
+
+    const stuckTasks = await this.db.query<{ id: string; title: string }>(
+      `UPDATE tasks 
+       SET status = 'PENDING', 
+           error = 'Manual recovery: stuck in RUNNING state',
+           retry_count = COALESCE(retry_count, 0) + 1,
+           updated_at = NOW()
+       WHERE status = 'RUNNING'
+         AND started_at < NOW() - INTERVAL '10 minutes'
+       RETURNING id, title`
+    );
+
+    if (stuckTasks.rows.length > 0) {
+      console.log(colors.yellow, `  ⚠ Recovered ${stuckTasks.rows.length} stuck tasks`);
+      for (const task of stuckTasks.rows) {
+        console.log(`    - ${task.title}`);
+      }
+    }
+
+    const dlqResult = await this.retryAllDLQ();
+
+    console.log(colors.green, '\n✓ Manual recovery complete\n');
+
+    return {
+      failedTasks: failedTasks.rows.length,
+      stuckTasks: stuckTasks.rows.length,
+      dlqItems: dlqResult,
+    };
+  }
 }

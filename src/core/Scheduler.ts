@@ -18,6 +18,7 @@ import {
   decryptSensitiveFields,
 } from '../services/EncryptionService.js';
 import { Config } from '../config/Config.js';
+import { TraeAutoRecoveryService } from '../services/TraeAutoRecoveryService.js';
 
 const standardMetrics = createStandardMetrics();
 
@@ -50,6 +51,7 @@ export class Scheduler {
   private readonly heartbeatIntervalMs: number;
   private readonly eventBus: EventBus;
   private readonly encryption: EncryptionService;
+  private readonly autoRecovery: TraeAutoRecoveryService | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private isHeartbeatRunning: boolean = false;
   private recurringTaskTimers: Map<string, ReturnType<typeof setInterval>> = new Map();
@@ -68,6 +70,12 @@ export class Scheduler {
     this.heartbeatIntervalMs = heartbeatIntervalMs ?? TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.eventBus = eventBus ?? new EventBus(db);
     this.encryption = EncryptionService.getInstance();
+    this.autoRecovery = new TraeAutoRecoveryService(db.getPool(), {
+      enabled: true,
+      checkIntervalMs: 60000,
+      failedTaskResetDelayMs: 300000,
+      maxAutoRetries: 3,
+    });
   }
 
   getEventBus(): EventBus {
@@ -84,6 +92,9 @@ export class Scheduler {
         logger.error('Scheduler heartbeat failed:', err);
       });
     }, this.heartbeatIntervalMs);
+    if (this.autoRecovery) {
+      this.autoRecovery.start();
+    }
     await this.heartbeat();
   }
 
@@ -132,6 +143,9 @@ export class Scheduler {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+    if (this.autoRecovery) {
+      this.autoRecovery.stop();
     }
     for (const timer of this.recurringTaskTimers.values()) {
       clearInterval(timer);
