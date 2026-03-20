@@ -1326,6 +1326,116 @@ Agent 更新数据库状态
 
 ---
 
+## 🔌 Plugin System
+
+### Overview
+
+Nezha uses a plugin system to extend functionality. Plugins hook into the task lifecycle and can respond to events like task completion, startup, and shutdown.
+
+### Core Philosophy
+
+**Important**: Plugins should **help and remind**, not **replace AI decisions**.
+
+| Correct Design | Wrong Design |
+|----------------|--------------|
+| Plugin reminds AI to commit | Plugin commits automatically |
+| AI decides when/how | Plugin decides |
+| AI writes meaningful messages | Plugin generates garbage |
+| AI is responsible | Plugin takes over |
+
+### GitReminder Plugin
+
+The `GitAutoCommitPlugin` (internally named `git-reminder`) is a plugin that reminds about uncommitted changes after task completion.
+
+**What it does:**
+- Logs a reminder when tasks complete with uncommitted changes
+- Reports git status on startup
+- Warns about uncommitted changes on shutdown
+
+**What it does NOT do:**
+- ❌ Does NOT commit automatically
+- ❌ Does NOT push automatically
+- ❌ Does NOT generate commit messages
+
+**Why this design:**
+
+The previous version auto-committed after every task, which caused:
+- 180+ polluted commits with garbage messages like "Task completed: Test Task"
+- Violation of Nezha philosophy (replacing AI decisions)
+- History pollution that required `git filter-branch` to fix
+
+**Current behavior:**
+```
+Task completes
+    ↓
+Plugin checks git status
+    ↓
+If uncommitted changes:
+    └── Logs: "[GitReminder] Task completed with X uncommitted file(s)"
+    └── Logs: "[GitReminder] Reminder: Please commit your changes"
+    ↓
+AI is responsible for committing
+```
+
+**Configuration:**
+```typescript
+new GitAutoCommitPlugin({
+  remindOnUncommitted: true,  // Log reminder for uncommitted changes
+  logGitStatus: true,         // Log git status on startup
+})
+```
+
+### Creating Custom Plugins
+
+Plugins implement the `Plugin` interface:
+
+```typescript
+interface Plugin {
+  name: string;
+  version: string;
+  description?: string;
+  hooks: PluginHooks;
+  config?: Record<string, unknown>;
+}
+
+interface PluginHooks {
+  beforeTask?: (context: TaskContext) => Promise<void> | void;
+  afterTask?: (context: TaskContext) => Promise<void> | void;
+  onError?: (context: TaskContext, error: Error) => Promise<void> | void;
+  onStartup?: () => Promise<void> | void;
+  onShutdown?: () => Promise<void> | void;
+  onHeartbeat?: () => Promise<void> | void;
+}
+```
+
+**Example:**
+```typescript
+export class MyPlugin implements Plugin {
+  name = 'my-plugin';
+  version = '1.0.0';
+  description = 'My custom plugin';
+  
+  hooks = {
+    afterTask: async (context: TaskContext) => {
+      if (context.status === 'COMPLETED') {
+        logger.info(`[MyPlugin] Task completed: ${context.title}`);
+      }
+    },
+    onStartup: async () => {
+      logger.info('[MyPlugin] Starting up...');
+    },
+  };
+}
+```
+
+**Best Practices:**
+1. Use `logger.info()` for important messages, `logger.debug()` for details
+2. Follow the naming convention: `[PluginName] Message`
+3. Don't replace AI decisions - only help/remind
+4. Keep logging minimal to avoid polluting the system
+
+---
+
 **创建时间**: 2026-03-16  
 **状态**: 完整指南  
 **维护者**: Nezha Team
