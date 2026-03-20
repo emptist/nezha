@@ -53,6 +53,7 @@ export interface HeartbeatServiceConfig {
   maxReconnectAttempts?: number;
   embedding?: EmbeddingConfig;
   checkpointIntervalMs?: number;
+  insightIntervalMs?: number;
   agent?: {
     mode?: AgentTransportMode;
     timeout?: number;
@@ -192,7 +193,7 @@ export class HeartbeatService {
     this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
     this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
-    this.insightIntervalMs = 3600000;
+    this.insightIntervalMs = config?.insightIntervalMs ?? 300000; // 5 minutes default
     this.enableMemoryContext = config?.agent?.enableMemoryContext ?? true;
 
     this.contextBuilder = new ContextBuilder(db, {
@@ -367,7 +368,7 @@ export class HeartbeatService {
 
   private startInsightGeneration(): void {
     logger.info(`Starting insight generation (interval: ${this.insightIntervalMs}ms)`);
-    this.insightTimer = setInterval(async () => {
+    const runInsightChecks = async (): Promise<void> => {
       try {
         const insights = await this.learning.autoGenerateInsights();
         if (insights.length > 0) {
@@ -383,7 +384,9 @@ export class HeartbeatService {
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
-    }, this.insightIntervalMs);
+    };
+    runInsightChecks().catch(err => logger.error('Initial insight check failed:', err));
+    this.insightTimer = setInterval(runInsightChecks, this.insightIntervalMs);
   }
 
   private async checkMeetingInvites(): Promise<void> {
