@@ -16,6 +16,208 @@ export interface RememberInput {
   tags?: string[];
 }
 
+export interface ReflectionTemplate {
+  name: string;
+  scenario: string;
+  prompt: string;
+}
+
+export const REFLECTION_TEMPLATES: ReflectionTemplate[] = [
+  {
+    name: 'default',
+    scenario: 'General task reflection',
+    prompt: `## Task Reflection
+
+You just completed a task: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Please reflect on the following:
+
+1. **What worked well?**
+2. **What could be improved?**
+3. **Did you discover any novel solutions or patterns?**
+4. **Is there anything worth remembering for future tasks?**
+
+If you discovered something valuable, save it using this format:
+
+\`\`\`
+[LEARN]
+insight: <your key learning in one sentence>
+context: <optional context about when this applies>
+\`\`\`
+
+If you found a pattern that suggests a system prompt improvement:
+
+\`\`\`
+[PROMPT_UPDATE]
+current: <what the current prompt says>
+suggested: <what it should say instead>
+reason: <why this change would help>
+\`\`\`
+`,
+  },
+  {
+    name: 'bug-fix',
+    scenario: 'Bug fixing and error resolution',
+    prompt: `## Bug Fix Reflection
+
+You just fixed a bug: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this bug fix:
+
+1. **Root cause discovered:** What was the actual cause of the bug?
+2. **Detection method:** How was this bug found? (error message, test, manual, etc.)
+3. **Fix approach:** What pattern did you use to fix it?
+4. **Prevention:** How can we prevent similar bugs in the future?
+5. **Testing added:** Were new tests added to catch this regression?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+
+Also report any issues found:
+\`\`\`
+[ISSUE]
+title: <issue title>
+description: <what needs to be addressed>
+type: <bug|improvement|feature>
+severity: <critical|high|medium|low>
+\`\`\`
+`,
+  },
+  {
+    name: 'feature',
+    scenario: 'New feature development',
+    prompt: `## Feature Development Reflection
+
+You just implemented a feature: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this feature development:
+
+1. **Requirements clarity:** Were the requirements clear, or did you need to make assumptions?
+2. **Architecture decisions:** What design choices did you make?
+3. **Code organization:** How well was the code structured?
+4. **Testing coverage:** Is the feature adequately tested?
+5. **Technical debt:** Did you notice any areas that could use refactoring?
+6. **Dependencies:** Any new dependencies introduced? Are they well-maintained?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+`,
+  },
+  {
+    name: 'refactoring',
+    scenario: 'Code refactoring and optimization',
+    prompt: `## Refactoring Reflection
+
+You just refactored code: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this refactoring:
+
+1. **Before/after:** What improved after the refactoring?
+2. **Risk assessment:** How risky was this change? How did you mitigate risks?
+3. **Test coverage:** Did existing tests catch any issues?
+4. **Performance impact:** Did the refactoring affect performance?
+5. **Maintainability:** How does this improve future development?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+`,
+  },
+  {
+    name: 'research',
+    scenario: 'Research and investigation tasks',
+    prompt: `## Research Reflection
+
+You just completed research: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this research:
+
+1. **Key findings:** What were the most important discoveries?
+2. **Methodology:** How effective was your research approach?
+3. **Next steps:** What should be done with these findings?
+4. **Knowledge gaps:** What still needs to be explored?
+5. **Documentation:** Is the findings documented well enough for others?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+`,
+  },
+  {
+    name: 'review',
+    scenario: 'Code review or inter-review',
+    prompt: `## Review Reflection
+
+You just completed a review: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this review:
+
+1. **Quality observations:** What was done well?
+2. **Issues found:** What problems did you identify?
+3. **Suggestions:** What improvements did you recommend?
+4. **Learning:** Did you learn anything new from reviewing this code?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+`,
+  },
+  {
+    name: 'debugging',
+    scenario: 'Debugging complex issues',
+    prompt: `## Debugging Reflection
+
+You just debugged an issue: "{{TASK_TITLE}}"
+
+Result: {{TASK_RESULT}}
+
+Reflect on this debugging session:
+
+1. **Symptoms identified:** What were the observable symptoms?
+2. **Root cause:** What was the underlying cause?
+3. **Tools used:** What debugging tools or techniques helped?
+4. **Time spent:** How long did it take? Was it efficient?
+5. **Prevention:** How can this issue be caught earlier?
+
+Format insights as:
+\`\`\`
+[LEARN]
+insight: <key learning>
+context: <when this applies>
+\`\`\`
+`,
+  },
+];
+
 export interface PromptSuggestion {
   id: string;
   currentPrompt: string;
@@ -146,38 +348,68 @@ export class SelfImprovementService {
     logger.info(`Prompt suggestion rejected: ${suggestionId}`);
   }
 
-  async getReflectionPrompt(taskTitle: string, taskResult: string): Promise<string> {
-    return `
-## Task Reflection
+  getReflectionTemplate(taskTitle?: string, taskType?: string): ReflectionTemplate {
+    const title = (taskTitle || '').toLowerCase();
+    const type = (taskType || '').toLowerCase();
 
-You just completed a task: "${taskTitle}"
+    if (
+      title.includes('fix') ||
+      title.includes('bug') ||
+      title.includes('error') ||
+      type === 'bug-fix'
+    ) {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'bug-fix')!;
+    }
+    if (
+      title.includes('refactor') ||
+      title.includes('optimize') ||
+      title.includes('improve') ||
+      type === 'refactoring'
+    ) {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'refactoring')!;
+    }
+    if (
+      title.includes('research') ||
+      title.includes('investigate') ||
+      title.includes('analyze') ||
+      type === 'research'
+    ) {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'research')!;
+    }
+    if (title.includes('review') || type === 'review') {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'review')!;
+    }
+    if (title.includes('debug') || title.includes('troubleshoot') || type === 'debugging') {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'debugging')!;
+    }
+    if (
+      title.includes('feature') ||
+      title.includes('implement') ||
+      title.includes('add') ||
+      title.includes('create') ||
+      type === 'feature'
+    ) {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'feature')!;
+    }
 
-Result: ${taskResult.substring(0, 500)}
+    return REFLECTION_TEMPLATES[0]!;
+  }
 
-Please reflect on the following:
+  async getReflectionPrompt(
+    taskTitle: string,
+    taskResult: string,
+    taskType?: string
+  ): Promise<string> {
+    const template = this.getReflectionTemplate(taskTitle, taskType);
+    const truncatedResult = taskResult.substring(0, 500);
 
-1. **What worked well?** 
-2. **What could be improved?**
-3. **Did you discover any novel solutions or patterns?**
-4. **Is there anything worth remembering for future tasks?**
+    return template.prompt
+      .replace(/\{\{TASK_TITLE\}\}/g, taskTitle)
+      .replace(/\{\{TASK_RESULT\}\}/g, truncatedResult);
+  }
 
-If you discovered something valuable, save it using this format:
-
-\`\`\`
-[LEARN]
-insight: <your key learning in one sentence>
-context: <optional context about when this applies>
-\`\`\`
-
-If you found a pattern that suggests a system prompt improvement:
-
-\`\`\`
-[PROMPT_UPDATE]
-current: <what the current prompt says>
-suggested: <what it should say instead>
-reason: <why this change would help>
-\`\`\`
-`;
+  getAvailableTemplates(): ReflectionTemplate[] {
+    return [...REFLECTION_TEMPLATES];
   }
 }
 

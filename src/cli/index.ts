@@ -1351,6 +1351,16 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'import-docs': {
+        const heartbeat = new HeartbeatService(new DatabaseClient(Config.getInstance()));
+        console.log('\n  Importing docs to memory...\n');
+        const result = await heartbeat.importAllDocs();
+        console.log(`  ✓ Imported: ${result.imported} docs`);
+        console.log(`  - Skipped: ${result.skipped} docs (already imported)`);
+        console.log();
+        break;
+      }
+
       case 'reflect': {
         const text = args.slice(1).join(' ');
         if (!text) {
@@ -2691,6 +2701,7 @@ function showHelp(): void {
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
     reflection-stats              Show reflection system statistics
     reflection-summary            Generate daily reflection summary
+    import-docs                   Import docs/ folder to memory
     reflect <text>               Broadcast a reflection to all AIs
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary

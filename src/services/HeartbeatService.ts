@@ -1122,10 +1122,11 @@ After completing this task:
 
       const files = await loader.scanDirectory(docsDir);
       let imported = 0;
+      let skipped = 0;
 
-      for (const file of files.slice(0, 5)) {
+      for (const file of files.slice(0, 10)) {
         const existing = await this.db.query<{ id: string }>(
-          `SELECT id FROM memory WHERE metadata->>'file' = $1`,
+          `SELECT id FROM memory WHERE metadata->>'filepath' = $1`,
           [file.path]
         );
 
@@ -1133,15 +1134,46 @@ After completing this task:
           await loader.importFile(file, 'markdown-import');
           imported++;
           logger.info(`[Docs] Imported: ${file.path}`);
+        } else {
+          skipped++;
         }
       }
 
       if (imported > 0) {
-        logger.info(`[Docs] Imported ${imported} new doc(s) to memory`);
+        logger.info(
+          `[Docs] Imported ${imported} new doc(s) to memory (${skipped} already imported)`
+        );
       }
     } catch (error) {
       logger.warn('[Docs] Docs import check failed:', error);
     }
+  }
+
+  async importAllDocs(): Promise<{ imported: number; skipped: number }> {
+    const loader = new MarkdownKnowledgeLoader();
+    loader.setDatabaseClient(this.db);
+    const docsDir = path.join(process.cwd(), 'docs');
+
+    const files = await loader.scanDirectory(docsDir);
+    let imported = 0;
+    let skipped = 0;
+
+    for (const file of files) {
+      const existing = await this.db.query<{ id: string }>(
+        `SELECT id FROM memory WHERE metadata->>'filepath' = $1`,
+        [file.path]
+      );
+
+      if (existing.rows.length === 0) {
+        await loader.importFile(file, 'markdown-import');
+        imported++;
+      } else {
+        skipped++;
+      }
+    }
+
+    logger.info(`[Docs] Full import complete: ${imported} imported, ${skipped} skipped`);
+    return { imported, skipped };
   }
 
   private async checkBroadcasts(): Promise<void> {

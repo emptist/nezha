@@ -269,21 +269,23 @@ export class MarkdownKnowledgeLoader {
       parsed.type = file.type;
 
       const id = crypto.randomUUID();
+      const metadata = {
+        filename: file.name,
+        filepath: file.path,
+        type: file.type,
+        title: parsed.title,
+        sectionCount: parsed.sections.length,
+        importedAt: new Date().toISOString(),
+        ...parsed.metadata,
+      };
+
       const contentId = await this.saveToMemory({
         id,
         content: parsed.content,
         source: `markdown:${file.type}`,
         tags: [...parsed.tags, file.type, 'imported'],
         importance: parsed.importance,
-        metadata: {
-          filename: file.name,
-          filepath: file.path,
-          type: file.type,
-          title: parsed.title,
-          sectionCount: parsed.sections.length,
-          importedAt: new Date().toISOString(),
-          ...parsed.metadata,
-        },
+        metadata,
         projectId,
       });
 
