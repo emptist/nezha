@@ -387,6 +387,7 @@ export class HeartbeatService {
         await this.checkDLQToIssues();
         await this.checkIssueTaskLinks();
         await this.checkDocsImport();
+        await this.checkDailyReflectionSummary();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
