@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import { type ClawHubSkill, type SkillReviewResult } from './SkillReviewer.js';
+import type { EmbeddingProvider } from './embedding/index.js';
 
 export interface StoredSkill {
   id: string;
@@ -18,6 +19,8 @@ export interface StoredSkill {
   quick_start: string | null;
   examples: string[];
   emoji: string | null;
+  category: string | null;
+  content: Record<string, unknown>;
   safety_score: number;
   scan_status: 'pending' | 'clean' | 'suspicious' | 'malicious' | 'reviewed';
   verified: boolean;
@@ -31,6 +34,9 @@ export interface StoredSkill {
   installed_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  builder?: string | null;
+  maintainer?: string | null;
+  embedding?: number[];
 }
 
 export interface SkillMatch {
@@ -46,6 +52,23 @@ export interface SkillExecutionContext {
   projectId?: string;
   userId?: string;
   timestamp: Date;
+}
+
+export interface SkillVersion {
+  id: string;
+  skill_id: string;
+  version: string;
+  instructions: string | null;
+  manifest: Record<string, unknown>;
+  change_summary: string | null;
+  improved_by: string | null;
+  created_at: Date;
+  embedding?: number[];
+}
+
+export interface VectorSearchResult {
+  skill: StoredSkill;
+  similarity: number;
 }
 
 export class DatabaseSkillLoader {

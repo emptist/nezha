@@ -37,6 +37,7 @@ import { InterReviewService, type ReviewResult } from './InterReviewService.js';
 import { AutoReviewService } from './AutoReviewService.js';
 import { MeetingHandler } from './MeetingHandler.js';
 import { ReviewService } from './ReviewService.js';
+import { FailureAnalysisService } from './FailureAnalysisService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -132,6 +133,7 @@ export class HeartbeatService {
   private readonly interReviewService: InterReviewService;
   private readonly autoReviewService: AutoReviewService;
   private readonly reviewService: ReviewService;
+  private readonly failureAnalysisService: FailureAnalysisService;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -212,6 +214,7 @@ export class HeartbeatService {
 
     this.interReviewService = new InterReviewService(db);
     this.reviewService = new ReviewService(db);
+    this.failureAnalysisService = new FailureAnalysisService(db);
 
     if (typeof this.scheduler.getEventBus === 'function') {
       this.autoReviewService = new AutoReviewService(this.scheduler.getEventBus(), db, {
@@ -363,6 +366,7 @@ export class HeartbeatService {
         await this.checkDocConsistency();
         await this.checkReviewFollowUps();
         await this.checkMeetingInvites();
+        await this.checkFailurePatterns();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -929,6 +933,8 @@ After completing this task:
     await this.watchdogService.untrackTask(taskId);
     await this.longTaskManager.unregisterTask(taskId);
 
+    await this.runFailureAnalysis(taskId);
+
     this.stats.tasksFailed++;
   }
 
@@ -947,6 +953,54 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[Bootstrap] Bootstrap failed (non-fatal):', error);
+    }
+  }
+
+  private async runFailureAnalysis(taskId: string): Promise<void> {
+    try {
+      const analysis = await this.failureAnalysisService.analyzeFailure(taskId);
+      if (analysis) {
+        logger.info(
+          `[FailureAnalysis] Analyzed failure for task ${taskId}: ${analysis.errorCategory}`
+        );
+
+        if (analysis.isMissionImpossible) {
+          logger.warn(`[FailureAnalysis] Task ${taskId} marked as potentially impossible`);
+          await this.alertService.createAlert(
+            AlertType.REPEATED_FAILURE,
+            `Potentially impossible task: ${taskId}`,
+            { taskId, metadata: { reasons: analysis.missionImpossibleReasons } }
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn('[FailureAnalysis] Analysis failed (non-fatal):', error);
+    }
+  }
+
+  private async checkFailurePatterns(): Promise<void> {
+    try {
+      const stats = await this.failureAnalysisService.getFailureStats();
+      if (stats.missionImpossibleTasks > 0) {
+        logger.info(
+          `[FailureAnalysis] Found ${stats.missionImpossibleTasks} potentially impossible tasks`
+        );
+      }
+
+      for (const pattern of stats.topPatterns.slice(0, 3)) {
+        if (pattern.occurrenceCount > 10 && pattern.successRate < 0.3) {
+          await this.alertService.createAlert(
+            AlertType.DLQ_THRESHOLD,
+            `Recurring failure pattern: ${pattern.errorPattern}`,
+            {
+              threshold: pattern.occurrenceCount,
+              metadata: { patternId: pattern.id, successRate: pattern.successRate },
+            }
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn('[FailureAnalysis] Pattern check failed (non-fatal):', error);
     }
   }
 

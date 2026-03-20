@@ -1826,10 +1826,13 @@ async function main(): Promise<void> {
           status: string;
           priority: number;
           assigned_to: string | null;
+          agent_id: string | null;
+          agent_name: string | null;
+          git_hash: string | null;
           started_at: Date | null;
           created_by: string | null;
         }>(
-          `SELECT id, title, status, priority, assigned_to, started_at, created_by
+          `SELECT id, title, status, priority, assigned_to, agent_id, agent_name, git_hash, started_at, created_by
            FROM tasks
            WHERE status = 'RUNNING'
            ORDER BY priority DESC, started_at DESC`
@@ -1868,12 +1871,13 @@ async function main(): Promise<void> {
         } else {
           console.log('\n' + colors.bright + '  🔄 RUNNING TASKS:' + colors.reset);
           for (const task of runningTasks.rows) {
-            const assignedTo = task.assigned_to || 'unassigned';
+            const agentDisplay = task.agent_name || task.agent_id?.substring(0, 8) || task.assigned_to || 'unassigned';
             const started = task.started_at
               ? new Date(task.started_at).toLocaleTimeString()
               : 'N/A';
+            const gitInfo = task.git_hash ? ` @ ${task.git_hash}` : '';
             console.log(`\n  📋 ${task.title}`);
-            console.log(`     Priority: ${task.priority} | Assigned: ${assignedTo}`);
+            console.log(`     Priority: ${task.priority} | Agent: ${agentDisplay}${gitInfo}`);
             console.log(`     Started: ${started} | ID: ${task.id.substring(0, 8)}...`);
           }
         }
