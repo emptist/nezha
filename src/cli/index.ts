@@ -1269,6 +1269,42 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'reflection-stats': {
+        const db = new DatabaseClient(Config.getInstance());
+
+        const totalResult = await db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM memory WHERE source = 'reflection-parser'`
+        );
+        const total = parseInt(totalResult.rows[0]?.count || '0', 10);
+
+        const byTagResult = await db.query<{ tag: string; count: string }>(
+          `SELECT UNNEST(tags) as tag, COUNT(*) as count 
+           FROM memory WHERE source = 'reflection-parser'
+           GROUP BY tag ORDER BY count DESC LIMIT 10`
+        );
+
+        const sentimentResult = await db.query<{ sentiment: string; count: string }>(
+          `SELECT metadata->>'sentiment' as sentiment, COUNT(*) as count 
+           FROM memory WHERE 'sentiment' = ANY(tags)
+           GROUP BY sentiment ORDER BY count DESC`
+        );
+
+        console.log('\n  Reflection System Statistics\n');
+        console.log(`  Total Reflections: ${total}`);
+        console.log('\n  By Category:');
+        for (const row of byTagResult.rows.slice(0, 8)) {
+          console.log(`    ${row.tag}: ${row.count}`);
+        }
+        console.log('\n  Sentiment:');
+        for (const row of sentimentResult.rows) {
+          console.log(`    ${row.sentiment || 'unknown'}: ${row.count}`);
+        }
+        console.log();
+
+        await db.close();
+        break;
+      }
+
       case 'learn': {
         const insight = args.slice(1).find(a => !a.startsWith('--')) || '';
         const contextIndex = args.indexOf('--context');
@@ -1304,13 +1340,15 @@ async function main(): Promise<void> {
         if (!text) {
           cli.error('Reflection text is required');
           console.log('\nUsage: nezha trae-reflect "Your reflection with [LEARN] markers"');
-          console.log('\nThis command is designed for Trae AI (editor-based) to use reflection markers.');
+          console.log(
+            '\nThis command is designed for Trae AI (editor-based) to use reflection markers.'
+          );
           console.log('\nMarkers supported:');
           console.log('  [LEARN] insight: <learning> context: <optional context>');
+          console.log('  [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>');
           console.log(
-            '  [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>'
+            '  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <critical|high|medium|low>'
           );
-          console.log('  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <critical|high|medium|low>');
           process.exit(1);
         }
 
@@ -2562,6 +2600,7 @@ function showHelp(): void {
     continuous-improvement       Add a continuous improvement cycle task
     improve                      (alias for continuous-improvement)
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
+    reflection-stats              Show reflection system statistics
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
