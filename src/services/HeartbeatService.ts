@@ -36,6 +36,7 @@ import { LongTaskManager } from './LongTaskManager.js';
 import { InterReviewService, type ReviewResult } from './InterReviewService.js';
 import { AutoReviewService } from './AutoReviewService.js';
 import { MeetingHandler } from './MeetingHandler.js';
+import { ReviewService } from './ReviewService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -130,6 +131,7 @@ export class HeartbeatService {
   private readonly longTaskManager: LongTaskManager;
   private readonly interReviewService: InterReviewService;
   private readonly autoReviewService: AutoReviewService;
+  private readonly reviewService: ReviewService;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -209,6 +211,7 @@ export class HeartbeatService {
     this.longTaskManager = new LongTaskManager(db);
 
     this.interReviewService = new InterReviewService(db);
+    this.reviewService = new ReviewService(db);
 
     if (typeof this.scheduler.getEventBus === 'function') {
       this.autoReviewService = new AutoReviewService(this.scheduler.getEventBus(), db, {
@@ -358,10 +361,38 @@ export class HeartbeatService {
         }
 
         await this.checkDocConsistency();
+        await this.checkReviewFollowUps();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
     }, this.insightIntervalMs);
+  }
+
+  private async checkReviewFollowUps(): Promise<void> {
+    try {
+      const overdue = await this.reviewService.markOverdueFollowUps();
+      if (overdue > 0) {
+        logger.info(`[Review] Found ${overdue} overdue follow-ups`);
+      }
+
+      const pendingFollowUps = await this.reviewService.getPendingFollowUps();
+      for (const review of pendingFollowUps.slice(0, 5)) {
+        const agentId = Config.getInstance().getAgentId();
+        await this.db.query(
+          `INSERT INTO ${DATABASE_TABLES.TASKS}
+           (id, title, description, status, priority, type, category)
+           VALUES ($1, $2, $3, 'PENDING', 7, 'review-followup', 'quality')`,
+          [
+            crypto.randomUUID(),
+            `Review Follow-up: ${review.title}`,
+            `Complete pending action items for review: ${review.title}`,
+          ]
+        );
+        logger.info(`[Review] Created follow-up task for review: ${review.id}`);
+      }
+    } catch (error) {
+      logger.warn('[Review] Follow-up check failed:', error);
+    }
   }
 
   private async checkDocConsistency(): Promise<void> {

@@ -24,9 +24,11 @@ Thumbs.db
 *.swo
 
 # Trae IDE
-.trae/memory/
-!.trae/rules/
-!.trae/skills/
+.trae/*
+
+#.trae/memory/
+#.trae/rules/
+#.trae/skills/
 
 # Test
 coverage/
