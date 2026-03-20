@@ -274,6 +274,7 @@ export class HeartbeatService {
     await this.dailyMemory.initialize();
     logger.info('Memory system initialized');
 
+    await this.runBootstrap();
     this.startMemoryCleanup();
     this.startMemoryCompaction();
     this.startCheckpointTimer();
@@ -847,6 +848,24 @@ After completing this task:
     await this.longTaskManager.unregisterTask(taskId);
 
     this.stats.tasksFailed++;
+  }
+
+  private async runBootstrap(): Promise<void> {
+    try {
+      const result = await this.db.query<{ needs_bootstrap: boolean }>(`SELECT needs_bootstrap()`);
+
+      if (result.rows[0]?.needs_bootstrap) {
+        logger.info('[Bootstrap] Running essential knowledge bootstrap...');
+
+        await this.db.query(`SELECT load_essential_knowledge()`);
+
+        logger.info('[Bootstrap] Essential knowledge loaded');
+      } else {
+        logger.debug('[Bootstrap] Bootstrap already completed, skipping');
+      }
+    } catch (error) {
+      logger.warn('[Bootstrap] Bootstrap failed (non-fatal):', error);
+    }
   }
 
   private async executeDiscussionTask(
