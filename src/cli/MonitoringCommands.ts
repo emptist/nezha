@@ -413,4 +413,138 @@ export class MonitoringCommands {
         return colors.green;
     }
   }
+
+  async resetFailedTasks(olderThanHours: number = 0): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE tasks 
+       SET status = 'PENDING', 
+           error = NULL, 
+           retry_count = 0, 
+           next_retry_at = NULL,
+           updated_at = NOW()
+       WHERE status = 'FAILED'
+         AND ($1 = 0 OR completed_at < NOW() - ($1 || ' hours')::INTERVAL)
+       RETURNING id, title`,
+      [olderThanHours]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(colors.yellow, 'No failed tasks to reset');
+      return 0;
+    }
+
+    console.log(colors.green, `Reset ${result.rows.length} failed tasks to PENDING:`);
+    for (const row of result.rows) {
+      console.log(`  - ${row.title}`);
+    }
+
+    return result.rows.length;
+  }
+
+  async retryAllDLQ(): Promise<number> {
+    const dlqItems = await this.db.query<{
+      id: string;
+      original_task_id: string;
+      title: string;
+      description: string;
+      error_message: string;
+    }>(
+      `SELECT id, original_task_id, title, description, error_message 
+       FROM dead_letter_queue 
+       WHERE resolved = false
+       ORDER BY failed_at ASC`
+    );
+
+    if (dlqItems.rows.length === 0) {
+      console.log(colors.yellow, 'No unresolved DLQ items to retry');
+      return 0;
+    }
+
+    console.log(colors.bright, `Retrying ${dlqItems.rows.length} DLQ items...\n`);
+    let successCount = 0;
+    const createdBy = process.env.NEZHA_AGENT_NAME || 'system';
+
+    for (const item of dlqItems.rows) {
+      try {
+        const newTaskId = crypto.randomUUID();
+
+        await this.db.query(
+          `INSERT INTO tasks (id, title, description, status, priority, error, created_by)
+           VALUES ($1, $2, $3, $4, 10, $5, $6)`,
+          [
+            newTaskId,
+            `[RETRY] ${item.title}`,
+            item.description || '',
+            TASK_STATUS.PENDING,
+            `Retry from DLQ: ${item.error_message}`,
+            createdBy,
+          ]
+        );
+
+        await this.db.query(
+          `UPDATE dead_letter_queue 
+           SET resolved = true, 
+               review_status = 'resolved', 
+               resolution_notes = 'Retried as new task via retry-all'
+           WHERE id = $1`,
+          [item.id]
+        );
+
+        console.log(colors.green, `  ✓ ${item.title}`);
+        successCount++;
+      } catch (error) {
+        console.log(colors.red, `  ✗ ${item.title}: ${error}`);
+      }
+    }
+
+    console.log(`\n${colors.green}Successfully retried ${successCount}/${dlqItems.rows.length} DLQ items`);
+    return successCount;
+  }
+
+  async learnFromFailures(): Promise<string[]> {
+    const insights = await this.db.query<{
+      error_category: string;
+      failure_count: number;
+      suggested_improvement: string;
+      confidence_score: number;
+    }>(
+      `SELECT error_category, failure_count, suggested_improvement, confidence_score
+       FROM suggest_improvements_from_failures(NULL, 10)
+       WHERE confidence_score > 0.5`
+    );
+
+    if (insights.rows.length === 0) {
+      console.log(colors.yellow, 'No improvement suggestions from failures');
+      return [];
+    }
+
+    console.log(colors.bright, `\nCreating improvement tasks from ${insights.rows.length} failure patterns...\n`);
+    const taskIds: string[] = [];
+    const createdBy = process.env.NEZHA_AGENT_NAME || 'system';
+
+    for (const insight of insights.rows) {
+      const taskId = crypto.randomUUID();
+      const title = `Improve ${insight.error_category} error handling (${insight.failure_count} failures)`;
+
+      await this.db.query(
+        `INSERT INTO tasks (id, title, description, status, priority, category, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          taskId,
+          title,
+          insight.suggested_improvement,
+          TASK_STATUS.PENDING,
+          Math.min(10, Math.floor(insight.failure_count / 2) + 3),
+          'improvement',
+          createdBy,
+        ]
+      );
+
+      console.log(colors.cyan, `  + ${title}`);
+      taskIds.push(taskId);
+    }
+
+    console.log(`\n${colors.green}Created ${taskIds.length} improvement tasks`);
+    return taskIds;
+  }
 }

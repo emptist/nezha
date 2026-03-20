@@ -1524,6 +1524,8 @@ async function main(): Promise<void> {
             process.exit(1);
           }
           await monitor.retryDLQ(id);
+        } else if (subcommand === 'retry-all') {
+          await monitor.retryAllDLQ();
         } else if (subcommand === 'delete') {
           const id = args[2];
           if (!id) {
@@ -1534,14 +1536,29 @@ async function main(): Promise<void> {
           await monitor.deleteDLQ(id);
         } else {
           cli.error(`Unknown subcommand: ${subcommand}`);
-          console.log('\nUsage: nezha dlq <list|resolve|retry|delete> [options]');
+          console.log('\nUsage: nezha dlq <list|resolve|retry|retry-all|delete> [options]');
           console.log('\nExamples:');
           console.log('  nezha dlq list');
           console.log('  nezha dlq list --all');
           console.log('  nezha dlq resolve <id> --notes "Fixed the issue"');
           console.log('  nezha dlq retry <id>');
+          console.log('  nezha dlq retry-all');
           console.log('  nezha dlq delete <id>');
         }
+        break;
+      }
+
+      case 'reset-failed': {
+        const monitor = await cliInstance.getMonitoringCommands();
+        const olderThanIndex = args.indexOf('--older-than');
+        const olderThanHours = olderThanIndex !== -1 ? parseInt(args[olderThanIndex + 1] || '0', 10) : 0;
+        await monitor.resetFailedTasks(olderThanHours);
+        break;
+      }
+
+      case 'learn-from-failures': {
+        const monitor = await cliInstance.getMonitoringCommands();
+        await monitor.learnFromFailures();
         break;
       }
 
@@ -2138,7 +2155,10 @@ function showHelp(): void {
     dlq list                      List dead letter queue
     dlq resolve <id> [--notes]    Mark DLQ item as resolved
     dlq retry <id>                Retry DLQ item as new task
+    dlq retry-all                 Retry all DLQ items as new tasks
     dlq delete <id>               Delete DLQ item
+    reset-failed [--older-than]   Reset all FAILED tasks to PENDING
+    learn-from-failures           Create improvement tasks from failure patterns
     alerts list                   List failure alerts
     alerts ack <id>               Acknowledge an alert
     alerts stats                  Show alert statistics
