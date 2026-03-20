@@ -251,7 +251,7 @@ export class MarkdownKnowledgeLoader {
     return Math.min(10, score);
   }
 
-  async importFile(file: KnowledgeFile, projectId?: string): Promise<ImportResult> {
+  async importFile(file: KnowledgeFile): Promise<ImportResult> {
     const result: ImportResult = {
       success: false,
       file: file.path,
@@ -286,7 +286,6 @@ export class MarkdownKnowledgeLoader {
         tags: [...parsed.tags, file.type, 'imported'],
         importance: parsed.importance,
         metadata,
-        projectId,
       });
 
       if (contentId) {
@@ -307,7 +306,6 @@ export class MarkdownKnowledgeLoader {
               sectionLevel: section.level,
               importedAt: new Date().toISOString(),
             },
-            projectId,
           });
 
           if (sectionId) {
