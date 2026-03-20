@@ -136,10 +136,10 @@ describe('Scheduler', () => {
       'task-1',
       'Test Task',
       'Test description',
-      expect.anything(),
-      expect.any(Number),
-      expect.any(Number),
-      expect.any(Number)
+      null,
+      0,
+      3,
+      300
     );
     expect(scheduler.getTotalTasksExecuted()).toBe(1);
   });
