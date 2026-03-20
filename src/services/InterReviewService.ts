@@ -117,12 +117,12 @@ export class InterReviewService extends EventEmitter {
         `SELECT id FROM skills WHERE name = $1`,
         [promptName]
       );
-      
+
       if (existing.rows.length > 0) {
-        await this.db.query(
-          `UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`,
-          [promptName, JSON.stringify({ markdown: content })]
-        );
+        await this.db.query(`UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`, [
+          promptName,
+          JSON.stringify({ markdown: content }),
+        ]);
       } else {
         await this.db.query(
           `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
@@ -328,20 +328,64 @@ Format:
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
+
+        const findings: ReviewFinding[] = [];
+
+        if (Array.isArray(parsed.findings)) {
+          findings.push(
+            ...parsed.findings.map((f: Record<string, unknown>) => ({
+              type: f.type || 'suggestion',
+              severity: f.severity || 'medium',
+              file: f.file,
+              line: f.line,
+              message: f.message || '',
+              suggestion: f.suggestion,
+            }))
+          );
+        }
+
+        if (Array.isArray(parsed.issues)) {
+          findings.push(
+            ...parsed.issues.map((f: Record<string, unknown>) => ({
+              type: 'issue' as const,
+              severity: f.severity || 'medium',
+              file: f.file,
+              line: f.line,
+              message: f.issue || f.description || '',
+            }))
+          );
+        }
+
+        if (Array.isArray(parsed.suggestions)) {
+          findings.push(
+            ...parsed.suggestions.map((s: Record<string, unknown>) => ({
+              type: 'suggestion' as const,
+              severity: s.severity || 'medium',
+              file: s.file,
+              line: s.line,
+              message: s.suggestion || '',
+              suggestion: s.suggestion,
+            }))
+          );
+        }
+
+        if (Array.isArray(parsed.praise)) {
+          findings.push(
+            ...parsed.praise.map((p: Record<string, unknown>) => ({
+              type: 'praise' as const,
+              severity: 'low' as const,
+              message: typeof p === 'string' ? p : p.praise || '',
+            }))
+          );
+        }
+
         return {
           reviewId: '',
           summary: parsed.summary || 'No summary provided',
-          findings: (parsed.findings || []).map((f: Record<string, unknown>) => ({
-            type: f.type || 'suggestion',
-            severity: f.severity || 'medium',
-            file: f.file,
-            line: f.line,
-            message: f.message || '',
-            suggestion: f.suggestion,
-          })),
+          findings,
           learnings: (parsed.learnings || []).map((l: Record<string, string>) => ({
             topic: l.topic || 'general',
-            reminder: l.reminder || '',
+            reminder: l.reminder || (typeof l === 'string' ? l : ''),
             source: 'inter-review',
           })),
           overallScore: parsed.overallScore || 50,
@@ -544,12 +588,12 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
         `SELECT id FROM skills WHERE name = $1`,
         [skillName]
       );
-      
+
       if (existing.rows.length > 0) {
-        await this.db.query(
-          `UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`,
-          [skillName, JSON.stringify({ markdown: skillContent })]
-        );
+        await this.db.query(`UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`, [
+          skillName,
+          JSON.stringify({ markdown: skillContent }),
+        ]);
       } else {
         await this.db.query(
           `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
