@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  DatabaseSkillLoader,
-  type StoredSkill,
-  type SkillMatch,
-} from '../services/DatabaseSkillLoader.js';
+import { DatabaseSkillLoader, type StoredSkill } from '../services/DatabaseSkillLoader.js';
 
 describe('DatabaseSkillLoader', () => {
   let loader: DatabaseSkillLoader;

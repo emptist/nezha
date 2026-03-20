@@ -1323,12 +1323,20 @@ After completing this task:
       const context = match[2]?.trim() || null;
 
       if (insight) {
+        const importance = insight.length > 100 ? 7 : 5;
         await this.db.query(
           `INSERT INTO memory (content, tags, source, importance, metadata) 
            VALUES ($1, ARRAY['learning', 'reflection'], 'reflection-parser', $2, $3)`,
-          [insight, 5, JSON.stringify({ taskTitle, context })]
+          [insight, importance, JSON.stringify({ taskTitle, context })]
         );
         count++;
+
+        if (importance >= 7) {
+          await this.broadcastService.sendBroadcast(
+            `**Learning:** ${insight.substring(0, 200)}${insight.length > 200 ? '...' : ''}`,
+            { priority: 'normal' }
+          );
+        }
       }
     }
 

@@ -1,9 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  ContextBuilder,
-  type BuiltContext,
-  type ContextMemoryResult,
-} from '../services/ContextBuilder.js';
+import { ContextBuilder, type ContextMemoryResult } from '../services/ContextBuilder.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 
 vi.mock('fs/promises');
