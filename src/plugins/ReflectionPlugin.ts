@@ -1,24 +1,29 @@
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
+import type { DatabaseClient } from '../db/DatabaseClient.js';
+import { Config } from '../config/Config.js';
 
 export interface ReflectionConfig {
   reflectOnComplete?: boolean;
   reflectOnFail?: boolean;
   minDurationForReflection?: number;
   createIssueOnPattern?: boolean;
+  db?: DatabaseClient;
 }
 
 interface ReflectionResult {
   success: boolean;
   learning?: string;
   issue?: string;
+  severity?: string;
 }
 
 export class ReflectionPlugin implements Plugin {
   name = 'reflection';
-  version = '1.0.0';
+  version = '1.1.0';
   description = 'Triggers automatic reflection after task completion';
-  config: Required<ReflectionConfig>;
+  config: Required<Omit<ReflectionConfig, 'db'>>;
+  private db: DatabaseClient | null = null;
 
   constructor(config: ReflectionConfig = {}) {
     this.config = {
@@ -27,6 +32,11 @@ export class ReflectionPlugin implements Plugin {
       minDurationForReflection: config.minDurationForReflection ?? 10000,
       createIssueOnPattern: config.createIssueOnPattern ?? true,
     };
+    this.db = config.db ?? null;
+  }
+
+  setDatabaseClient(db: DatabaseClient): void {
+    this.db = db;
   }
 
   hooks = {
@@ -39,8 +49,8 @@ export class ReflectionPlugin implements Plugin {
         logger.info(`[Reflection] ${context.taskId}: ${reflection.learning}`);
       }
 
-      if (reflection.issue) {
-        logger.warn(`[Reflection] Issue discovered: ${reflection.issue}`);
+      if (reflection.issue && this.config.createIssueOnPattern) {
+        await this.createIssue(context, reflection.issue, reflection.severity ?? 'medium');
       }
     },
 
@@ -49,8 +59,11 @@ export class ReflectionPlugin implements Plugin {
 
       const reflection = await this.reflectOnError(context, error);
 
-      if (reflection.issue) {
-        logger.warn(`[Reflection] Error pattern detected: ${reflection.issue}`);
+      if (reflection.issue && this.config.createIssueOnPattern) {
+        await this.createIssue(context, reflection.issue, reflection.severity ?? 'medium', {
+          errorMessage: error.message,
+          stack: error.stack,
+        });
       }
     },
   };
@@ -93,18 +106,80 @@ export class ReflectionPlugin implements Plugin {
   private async reflectOnError(context: TaskContext, error: Error): Promise<ReflectionResult> {
     const result: ReflectionResult = { success: false };
 
-    if (error.message.includes('ECONNREFUSED') || error.message.includes('connection')) {
+    if (error.message.includes('ECONNREFUSED') || error.message.includes('connection refused')) {
       result.issue = `Connection error in ${context.title} - may need retry logic or service check`;
-    }
-
-    if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+      result.severity = 'high';
+    } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
       result.issue = `Timeout error in ${context.title} - may need increased timeout or optimization`;
-    }
-
-    if (error.message.includes('ENOENT') || error.message.includes('not found')) {
+      result.severity = 'medium';
+    } else if (error.message.includes('ENOENT') || error.message.includes('not found')) {
       result.issue = `Resource not found in ${context.title} - check paths and dependencies`;
+      result.severity = 'medium';
+    } else if (error.message.includes('permission') || error.message.includes('access denied')) {
+      result.issue = `Permission error in ${context.title} - check access rights`;
+      result.severity = 'high';
+    } else if (error.message.includes('memory') || error.message.includes('heap')) {
+      result.issue = `Memory error in ${context.title} - may need resource optimization`;
+      result.severity = 'critical';
+    } else {
+      result.issue = `Error in ${context.title}: ${error.message.substring(0, 100)}`;
+      result.severity = 'medium';
     }
 
     return result;
+  }
+
+  private async createIssue(
+    context: TaskContext,
+    title: string,
+    severity: string,
+    extra?: { errorMessage?: string; stack?: string }
+  ): Promise<void> {
+    if (!this.db) {
+      logger.warn('[Reflection] No database client - cannot create issue');
+      return;
+    }
+
+    try {
+      const agentId = Config.getInstance().getAgentId();
+      const id = crypto.randomUUID();
+
+      const duplicateCheck = await this.db.query(
+        `SELECT id FROM issues 
+         WHERE title = $1 AND status = 'open' 
+         AND created_at > NOW() - INTERVAL '1 hour'`,
+        [title]
+      );
+
+      if (duplicateCheck.rows.length > 0) {
+        logger.info(`[Reflection] Duplicate issue skipped: ${title.substring(0, 50)}`);
+        return;
+      }
+
+      await this.db.query(
+        `INSERT INTO issues (id, title, description, issue_type, severity, status, discovered_by, tags, metadata)
+         VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8)`,
+        [
+          id,
+          title,
+          extra?.errorMessage
+            ? `Error: ${extra.errorMessage}\n\nContext:\nTask: ${context.title}\nID: ${context.taskId}`
+            : `Task: ${context.title}\nID: ${context.taskId}`,
+          'bug',
+          severity,
+          agentId,
+          ['auto-discovered', 'reflection-plugin'],
+          JSON.stringify({
+            source: 'reflection-plugin',
+            taskId: context.taskId,
+            stack: extra?.stack?.substring(0, 500),
+          }),
+        ]
+      );
+
+      logger.info(`[Reflection] Created issue: ${title.substring(0, 50)}`);
+    } catch (error) {
+      logger.error('[Reflection] Failed to create issue:', error);
+    }
   }
 }
