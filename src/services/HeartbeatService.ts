@@ -4,6 +4,7 @@ import { UnifiedAgent, CliAgent, type UnifiedAgentConfig } from '../core/Unified
 import { type StreamingCallback } from '../core/transports/index.js';
 import { MemoryService } from '../core/Memory.js';
 import { LearningAnalysisService } from '../core/LearningAnalysis.js';
+import { ImprovementIdentifier } from '../core/ImprovementIdentifier.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
@@ -353,10 +354,48 @@ export class HeartbeatService {
         if (insights.length > 0) {
           logger.info(`Generated ${insights.length} new insights`);
         }
+
+        await this.checkDocConsistency();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
     }, this.insightIntervalMs);
+  }
+
+  private async checkDocConsistency(): Promise<void> {
+    try {
+      const identifier = new ImprovementIdentifier();
+      const improvements = await identifier.identify();
+
+      const agentId = Config.getInstance().getAgentId();
+      let issuesCreated = 0;
+
+      for (const imp of improvements) {
+        if (imp.priority >= 7 && imp.type !== 'optimization') {
+          await this.db.query(
+            `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, metadata)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT DO NOTHING`,
+            [
+              imp.title,
+              imp.description,
+              imp.category === 'documentation' ? 'inconsistency' : 'improvement',
+              imp.type === 'critical' ? 'high' : 'medium',
+              agentId,
+              [imp.category],
+              JSON.stringify({ source: 'auto-check', priority: imp.priority }),
+            ]
+          );
+          issuesCreated++;
+        }
+      }
+
+      if (issuesCreated > 0) {
+        logger.info(`[AutoCheck] Created ${issuesCreated} issues from doc consistency check`);
+      }
+    } catch (error) {
+      logger.error('[AutoCheck] Doc consistency check failed:', error);
+    }
   }
 
   private setupWatchdogListeners(): void {
@@ -826,6 +865,8 @@ After completing this task:
     const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
     const promptPattern =
       /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
+    const issuePattern =
+      /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
 
     let match;
     let count = 0;
@@ -856,6 +897,37 @@ After completing this task:
           [currentPrompt, suggestedPrompt, reason]
         );
         count++;
+      }
+    }
+
+    while ((match = issuePattern.exec(output)) !== null) {
+      const title = match[1]?.trim();
+      const description = match[2]?.trim() || null;
+      const issueType = match[3]?.trim() || 'bug';
+      const severity = match[4]?.trim() || 'medium';
+      const tagsStr = match[5]?.trim();
+      const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
+
+      if (title) {
+        const agentId = Config.getInstance().getAgentId();
+        await this.db.query(
+          `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, task_id, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6, (
+             SELECT id FROM tasks WHERE title = $7 ORDER BY created_at DESC LIMIT 1
+           ), $8)`,
+          [
+            title,
+            description,
+            issueType,
+            severity,
+            agentId,
+            tags,
+            taskTitle,
+            JSON.stringify({ source: 'reflection', reflectionOutput: output.substring(0, 1000) }),
+          ]
+        );
+        count++;
+        logger.info(`[Reflection] Created issue from reflection: ${title}`);
       }
     }
 
