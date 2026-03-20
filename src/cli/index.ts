@@ -717,6 +717,15 @@ export class Cli {
     await this.addTask('Continuous Improvement Cycle', description, 10);
   }
 
+  async saveLearn(insight: string, context?: string, importance: number = 7): Promise<void> {
+    const { SelfImprovementService } = await import('../services/SelfImprovementService.js');
+    const db = await this.getDb();
+    const service = new SelfImprovementService(db);
+
+    const result = await service.learn({ insight, context, importance });
+    cli.success(`Learning saved: ${result}`);
+  }
+
   async listTasks(
     tag?: string,
     status?: string,
@@ -1257,6 +1266,36 @@ async function main(): Promise<void> {
       case 'continuous-improvement':
       case 'improve': {
         await cliInstance.addContinuousImprovementTask();
+        break;
+      }
+
+      case 'learn': {
+        const insight = args.slice(1).find(a => !a.startsWith('--')) || '';
+        const contextIndex = args.indexOf('--context');
+        const importanceIndex = args.indexOf('--importance');
+        const context =
+          contextIndex !== -1 && args[contextIndex + 1]
+            ? String(args[contextIndex + 1])
+            : undefined;
+        const importance =
+          importanceIndex !== -1 && args[importanceIndex + 1]
+            ? parseInt(String(args[importanceIndex + 1]), 10) || 7
+            : 7;
+
+        if (!insight) {
+          cli.error('Insight text is required');
+          console.log(
+            '\nUsage: nezha learn "Your insight here" [--context "When this applies"] [--importance 1-10]'
+          );
+          console.log('\nExamples:');
+          console.log('  nezha learn "Always run typecheck after edits"');
+          console.log(
+            '  nezha learn "Cron expressions need croner library" --context "Scheduler enhancement"'
+          );
+          process.exit(1);
+        }
+
+        await cliInstance.saveLearn(insight, context, importance);
         break;
       }
 
@@ -2440,6 +2479,7 @@ function showHelp(): void {
     schedule <name> <desc> <cron> Create a scheduled task
     continuous-improvement       Add a continuous improvement cycle task
     improve                      (alias for continuous-improvement)
+    learn <insight>              Save learning to memory [--context] [--importance 1-10]
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
