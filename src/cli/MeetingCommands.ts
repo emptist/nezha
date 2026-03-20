@@ -1,6 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { colors, cli } from '../utils/cli.js';
+import { Config } from '../config/Config.js';
 
 export interface MeetingConfig {
   db: DatabaseClient;
@@ -79,9 +80,10 @@ Please follow the meeting-protocol skill:
 4. **Reach Consensus** - Document agreement when reached`;
 
     const discussionId = crypto.randomUUID();
+    const createdBy = Config.getInstance().getAgentName();
     await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, type, category) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         discussionId,
         `Discussion: ${title}`,
@@ -90,6 +92,7 @@ Please follow the meeting-protocol skill:
         priority,
         'discussion',
         'collaboration',
+        createdBy,
       ]
     );
 
@@ -272,9 +275,10 @@ _Reached at: ${new Date().toISOString()}_`;
       [consensusContent, null, JSON.stringify({ type: 'consensus', topic, participants }), 9]
     );
 
+    const createdBy = Config.getInstance().getAgentName();
     await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, type, category)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         consensusId,
         `Consensus: ${topic}`,
@@ -283,6 +287,7 @@ _Reached at: ${new Date().toISOString()}_`;
         10,
         'decision',
         'collaboration',
+        createdBy,
       ]
     );
 

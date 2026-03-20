@@ -52,6 +52,7 @@ export class Config implements IConfig {
     const embeddingConfig = this.loadEmbeddingConfig(yamlConfig);
     const transportConfig = this.loadTransportConfig(yamlConfig);
     const env = this.loadEnv();
+    const agentName = this.loadAgentName();
 
     return {
       db: dbConfig,
@@ -60,6 +61,7 @@ export class Config implements IConfig {
       embedding: embeddingConfig,
       env,
       transport: transportConfig,
+      agentName,
     };
   }
 
@@ -169,6 +171,10 @@ export class Config implements IConfig {
     };
   }
 
+  private loadAgentName(): string {
+    return process.env[ENV_KEYS.AGENT_NAME] || 'nezha-daemon';
+  }
+
   getDbConfig(): DbConfig {
     return { ...this.config.db };
   }
@@ -191,6 +197,10 @@ export class Config implements IConfig {
 
   getTransportConfig(): TransportConfig {
     return { ...this.config.transport };
+  }
+
+  getAgentName(): string {
+    return this.config.agentName;
   }
 
   validate(): boolean {

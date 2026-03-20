@@ -140,16 +140,18 @@ export class MonitoringCommands {
       return;
     }
     const newTaskId = crypto.randomUUID();
+    const createdBy = process.env.NEZHA_AGENT_NAME || 'human';
 
     await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, error)
-       VALUES ($1, $2, $3, $4, 10, $5)`,
+      `INSERT INTO tasks (id, title, description, status, priority, error, created_by)
+       VALUES ($1, $2, $3, $4, 10, $5, $6)`,
       [
         newTaskId,
         `[RETRY] ${item.title}`,
         item.description,
         TASK_STATUS.PENDING,
         `Retry of failed task: ${item.error_message}`,
+        createdBy,
       ]
     );
 

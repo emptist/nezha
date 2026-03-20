@@ -52,6 +52,7 @@ const createMockConfig = (): IConfig => ({
   getEmbeddingConfig: vi.fn().mockReturnValue(undefined),
   getEnv: vi.fn().mockReturnValue('test'),
   getTransportConfig: vi.fn().mockReturnValue(mockTransportConfig),
+  getAgentName: vi.fn().mockReturnValue('nezha-daemon'),
   validate: vi.fn().mockReturnValue(true),
 });
 

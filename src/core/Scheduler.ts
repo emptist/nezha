@@ -433,10 +433,10 @@ export class Scheduler {
     const projectId = task.projectId ?? null;
 
     await this.db.query(
-      `INSERT INTO ${tableName} (id, project_id, status, data, max_retries, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO ${tableName} (id, project_id, status, data, max_retries, created_at, updated_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id) DO UPDATE SET data = $4, max_retries = $5, project_id = $2, updated_at = $7`,
-      [id, projectId, TASK_STATUS.PENDING, data, retries, now, now]
+      [id, projectId, TASK_STATUS.PENDING, data, retries, now, now, 'scheduler']
     );
 
     if (task.intervalMs) {
