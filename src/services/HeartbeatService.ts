@@ -382,6 +382,7 @@ export class HeartbeatService {
         await this.checkFailurePatterns();
         await this.checkBroadcasts();
         await this.checkCommunications();
+        await this.checkDLQToIssues();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -1024,6 +1025,52 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[FailureAnalysis] Pattern check failed (non-fatal):', error);
+    }
+  }
+
+  private async checkDLQToIssues(): Promise<void> {
+    try {
+      const dlqItems = await this.db.query<{
+        id: string;
+        task_title: string;
+        error_message: string;
+        failure_count: number;
+        created_at: Date;
+      }>(
+        `SELECT id, task_title, error_message, failure_count, created_at
+         FROM dead_letter_queue
+         WHERE status = 'pending'
+           AND failure_count >= 3
+           AND issue_id IS NULL
+         ORDER BY failure_count DESC
+         LIMIT 10`
+      );
+
+      for (const item of dlqItems.rows) {
+        const existingIssue = await this.db.query<{ id: string }>(
+          `SELECT id FROM issues WHERE dlq_id = $1`,
+          [item.id]
+        );
+
+        if (existingIssue.rows.length === 0) {
+          const agentId = Config.getInstance().getAgentId();
+          await this.db.query(
+            `INSERT INTO issues (title, description, issue_type, severity, discovered_by, dlq_id, tags, task_id, metadata)
+             VALUES ($1, $2, 'bug', 'high', $3, $4, $5, NULL, $6)`,
+            [
+              `DLQ: ${item.task_title || 'Unknown task'}`,
+              `Failed ${item.failure_count} times.\n\nLast error:\n${item.error_message}`,
+              agentId,
+              item.id,
+              ['dlq', 'auto-created'],
+              JSON.stringify({ dlqId: item.id, firstFailed: item.created_at }),
+            ]
+          );
+          logger.info(`[DLQ] Created issue from DLQ item: ${item.id}`);
+        }
+      }
+    } catch (error) {
+      logger.warn('[DLQ] DLQ to issues check failed (non-fatal):', error);
     }
   }
 
