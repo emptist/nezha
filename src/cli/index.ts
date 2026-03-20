@@ -1582,8 +1582,8 @@ async function main(): Promise<void> {
           const actionsIndex = args.indexOf('--action-items');
           const actionsJson = actionsIndex !== -1 ? args[actionsIndex + 1] || '[]' : '[]';
 
-          let findings: any[] = [];
-          let actionItems: any[] = [];
+          let findings: import('../services/ReviewService.js').ReviewFinding[] = [];
+          let actionItems: { description: string }[] = [];
           try {
             findings = JSON.parse(findingsJson);
             actionItems = JSON.parse(actionsJson);

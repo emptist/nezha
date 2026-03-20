@@ -21,8 +21,32 @@ const OPENCODE_CONFIG_PATH = path.join(
   '.config/opencode/opencode.json'
 );
 
-async function getMcpConfigs(db: DatabaseClient) {
-  const result = await db.query(
+interface McpConfigRow {
+  name: string;
+  server_type: 'local' | 'remote';
+  command?: string;
+  command_args?: string[];
+  url?: string;
+  headers?: Record<string, string>;
+  enabled: boolean;
+  timeout_ms?: number;
+  environment?: string;
+}
+
+interface OpenCodeMcpServerConfig {
+  type: 'local' | 'remote';
+  command?: string[];
+  url?: string;
+  headers?: Record<string, string>;
+}
+
+interface OpenCodeConfig {
+  mcp?: Record<string, OpenCodeMcpServerConfig>;
+  [key: string]: unknown;
+}
+
+async function getMcpConfigs(db: DatabaseClient): Promise<McpConfigRow[]> {
+  const result = await db.query<McpConfigRow>(
     `SELECT name, server_type, command, command_args, url, headers, enabled, timeout_ms, environment
      FROM mcp_configs 
      WHERE enabled = true 
@@ -31,16 +55,18 @@ async function getMcpConfigs(db: DatabaseClient) {
   return result.rows;
 }
 
-function buildOpenCodeMcpConfig(configs: any[]): Record<string, any> {
-  const mcp: Record<string, any> = {};
+function buildOpenCodeMcpConfig(configs: McpConfigRow[]): Record<string, OpenCodeMcpServerConfig> {
+  const mcp: Record<string, OpenCodeMcpServerConfig> = {};
 
   for (const cfg of configs) {
-    const serverConfig: any = {
+    const serverConfig: OpenCodeMcpServerConfig = {
       type: cfg.server_type,
     };
 
     if (cfg.server_type === 'local') {
-      serverConfig.command = [cfg.command, ...(cfg.command_args || [])];
+      serverConfig.command = [cfg.command, ...(cfg.command_args || [])].filter(
+        (c): c is string => c !== undefined
+      );
     } else if (cfg.server_type === 'remote') {
       serverConfig.url = cfg.url;
       if (cfg.headers && Object.keys(cfg.headers).length > 0) {
@@ -84,10 +110,10 @@ async function main() {
     }
 
     // Read existing opencode.json
-    let existingConfig: any = {};
+    let existingConfig: OpenCodeConfig = {};
     if (fs.existsSync(OPENCODE_CONFIG_PATH)) {
       const content = fs.readFileSync(OPENCODE_CONFIG_PATH, 'utf-8');
-      existingConfig = JSON.parse(content);
+      existingConfig = JSON.parse(content) as OpenCodeConfig;
     }
 
     // Update with MCP configs (preserve other settings)

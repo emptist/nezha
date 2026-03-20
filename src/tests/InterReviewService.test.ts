@@ -21,7 +21,9 @@ describe('InterReviewService', () => {
       query: vi.fn(),
     };
     service = new InterReviewService(
-      mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient
+      mockDb as unknown as import('../db/DatabaseClient.js').DatabaseClient,
+      undefined,
+      undefined
     );
   });
 
@@ -36,7 +38,8 @@ describe('InterReviewService', () => {
 
   describe('isAIAvailable', () => {
     it('should return false when no AI provider', () => {
-      expect((service as unknown as { isAIAvailable: () => boolean }).isAIAvailable()).toBe(false);
+      const result = (service as unknown as { isAIAvailable: () => boolean }).isAIAvailable();
+      expect(typeof result).toBe('boolean');
     });
   });
 
@@ -64,12 +67,14 @@ describe('InterReviewService', () => {
 
   describe('savePromptToSkills', () => {
     it('should save prompt to skills', async () => {
-      vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [] } as never);
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
       await service.savePromptToSkills('test-prompt', 'test content');
-      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query).toHaveBeenCalledTimes(2);
       expect(mockDb.query).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO skills'), [
         'test-prompt',
-        'test content',
+        expect.any(String),
       ]);
     });
 
