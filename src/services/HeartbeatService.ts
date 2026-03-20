@@ -1536,6 +1536,91 @@ After completing this task:
     await this.clusterReflections();
   }
 
+  private async checkDailyReflectionSummary(): Promise<void> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const alreadySent = await this.db.query<{ id: string }>(
+        `SELECT id FROM memory 
+         WHERE tags @> ARRAY['daily-summary'] 
+           AND created_at > NOW() - INTERVAL '1 day'
+           AND metadata->>'date' = $1
+         LIMIT 1`,
+        [today]
+      );
+
+      if (alreadySent.rows.length > 0) {
+        return;
+      }
+
+      const stats = await this.db.query<{
+        total: string;
+        positive: string;
+        negative: string;
+        neutral: string;
+      }>(
+        `SELECT 
+           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as total,
+           COUNT(*) FILTER (WHERE metadata->>'sentiment' = 'positive' AND created_at > NOW() - INTERVAL '24 hours') as positive,
+           COUNT(*) FILTER (WHERE metadata->>'sentiment' = 'negative' AND created_at > NOW() - INTERVAL '24 hours') as negative,
+           COUNT(*) FILTER (WHERE metadata->>'sentiment' = 'neutral' AND created_at > NOW() - INTERVAL '24 hours') as neutral
+         FROM memory 
+         WHERE source = 'reflection-parser'`
+      );
+
+      const taskStats = await this.db.query<{
+        completed: string;
+        failed: string;
+        total: string;
+      }>(
+        `SELECT 
+           COUNT(*) FILTER (WHERE status = 'COMPLETED' AND completed_at > NOW() - INTERVAL '24 hours') as completed,
+           COUNT(*) FILTER (WHERE status = 'FAILED' AND updated_at > NOW() - INTERVAL '24 hours') as failed,
+           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as total
+         FROM tasks`
+      );
+
+      const recentHighlights = await this.db.query<{ content: string; tags: string[] }>(
+        `SELECT content, tags FROM memory 
+         WHERE source = 'reflection-parser' 
+           AND created_at > NOW() - INTERVAL '24 hours'
+           AND importance >= 6
+         ORDER BY importance DESC, created_at DESC
+         LIMIT 5`
+      );
+
+      const row = stats.rows[0];
+      const taskRow = taskStats.rows[0];
+      const total = parseInt(row?.total || '0', 10);
+
+      if (total === 0) {
+        return;
+      }
+
+      const summary = `## Daily Reflection Summary (${today})
+
+**Task Stats:** ${taskRow?.completed || 0} completed, ${taskRow?.failed || 0} failed (${taskRow?.total || 0} total)
+
+**Reflections:** ${total} captured
+- Positive: ${row?.positive || 0}
+- Negative: ${row?.negative || 0}  
+- Neutral: ${row?.neutral || 0}
+
+**Key Learnings:**
+${recentHighlights.rows.map((h, i) => `${i + 1}. ${h.content.substring(0, 150)}${h.content.length > 150 ? '...' : ''}`).join('\n') || 'None today'}`;
+
+      await this.db.query(
+        `INSERT INTO memory (content, tags, source, importance, metadata) 
+         VALUES ($1, ARRAY['daily-summary', 'reflection'], 'heartbeat', $2, $3)`,
+        [summary, 8, JSON.stringify({ date: today, type: 'daily-reflection-summary' })]
+      );
+
+      await this.broadcastService.sendBroadcast(summary, { priority: 'normal' });
+      logger.info(`[Reflection] Daily summary broadcast for ${today}`);
+    } catch (error) {
+      logger.warn('[Reflection] Daily summary check failed:', error);
+    }
+  }
+
   private async clusterReflections(): Promise<void> {
     try {
       const recentReflections = await this.db.query<{
