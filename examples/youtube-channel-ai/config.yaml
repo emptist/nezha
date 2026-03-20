@@ -1,0 +1,70 @@
+# YouTube Channel AI - Project Configuration
+
+project:
+  name: "youtube-channel-ai"
+  description: "AI-managed YouTube channel example"
+  version: "1.0.0"
+
+nezha:
+  database:
+    host: "localhost"
+    port: 5432
+    name: "nezha"
+    user: "postgres"
+
+youtube:
+  channel_id: "YOUR_CHANNEL_ID"
+  api_key: "${YOUTUBE_API_KEY}"
+  oauth:
+    client_id: "${YOUTUBE_CLIENT_ID}"
+    client_secret: "${YOUTUBE_CLIENT_SECRET}"
+
+content:
+  schedule:
+    - day: "monday"
+      type: "tutorial"
+      time: "09:00"
+    - day: "wednesday"
+      type: "news"
+      time: "18:00"
+    - day: "friday"
+      type: "entertainment"
+      time: "12:00"
+
+  categories:
+    - "Education"
+    - "Technology"
+    - "Entertainment"
+
+ai:
+  video_generation:
+    provider: "runway"
+    model: "gen-2"
+  
+  voice:
+    provider: "elevenlabs"
+    voice_id: "default"
+
+  thumbnail:
+    provider: "dalle"
+    style: "youtube-thumbnail"
+
+monitoring:
+  analytics_check: "daily"
+  performance_threshold:
+    min_views: 100
+    min_ctr: 2.0
+    min_retention: 50
+
+skills:
+  - name: "video-creation"
+    path: "./skills/video-creation.md"
+    enabled: true
+  
+  - name: "video-upload"
+    path: "./skills/video-upload.md"
+    enabled: true
+  
+  - name: "analytics-review"
+    path: "./skills/analytics-review.md"
+    enabled: true
