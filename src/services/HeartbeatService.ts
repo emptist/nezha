@@ -1466,6 +1466,63 @@ After completing this task:
     if (count > 0) {
       logger.info(`[Reflection] Parsed ${count} items from reflection for task: ${taskTitle}`);
     }
+
+    const positiveWords = [
+      'good',
+      'great',
+      'excellent',
+      'working',
+      'success',
+      'better',
+      'improved',
+      'effective',
+      'efficient',
+      'amazing',
+    ];
+    const negativeWords = [
+      'bad',
+      'poor',
+      'failed',
+      'broken',
+      'bug',
+      'issue',
+      'problem',
+      'wrong',
+      'slow',
+      'difficult',
+      'confusing',
+    ];
+
+    const lowerOutput = output.toLowerCase();
+    let positiveCount = 0;
+    let negativeCount = 0;
+
+    for (const word of positiveWords) {
+      if (lowerOutput.includes(word)) positiveCount++;
+    }
+    for (const word of negativeWords) {
+      if (lowerOutput.includes(word)) negativeCount++;
+    }
+
+    const sentiment =
+      positiveCount > negativeCount
+        ? 'positive'
+        : negativeCount > positiveCount
+          ? 'negative'
+          : 'neutral';
+
+    if (positiveCount > 0 || negativeCount > 0) {
+      await this.db.query(
+        `INSERT INTO memory (content, tags, source, importance, metadata) 
+         VALUES ($1, ARRAY['reflection', 'sentiment'], 'reflection-parser', $2, $3)`,
+        [
+          `Reflection sentiment: ${sentiment} (positive: ${positiveCount}, negative: ${negativeCount})`,
+          4,
+          JSON.stringify({ taskTitle, positiveCount, negativeCount, sentiment }),
+        ]
+      );
+      logger.info(`[Reflection] Sentiment: ${sentiment} for task: ${taskTitle}`);
+    }
   }
 
   isRunning(): boolean {
