@@ -15,6 +15,7 @@ import {
   encryptSensitiveFields,
   decryptSensitiveFields,
 } from '../services/EncryptionService.js';
+import { Config } from '../config/Config.js';
 
 const standardMetrics = createStandardMetrics();
 
@@ -291,10 +292,14 @@ export class Scheduler {
         FOR UPDATE SKIP LOCKED
       )
       UPDATE ${tableName} 
-      SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked)
+      SET status = $3, updated_at = NOW(), started_at = NOW(), 
+          priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked),
+          agent_id = $4, agent_name = $5, git_hash = $6, git_branch = $7, environment = $8
       WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, type, depends_on, retry_count, max_retries, timeout_seconds`,
-        [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
+        [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING, 
+         Config.getInstance().getAgentId(), Config.getInstance().getAgentName(),
+         this.getGitInfo().hash, this.getGitInfo().branch, this.getEnvironment()]
       );
 
       if (result.rows.length > 0) {
@@ -601,5 +606,23 @@ export class Scheduler {
     }
 
     return row.result ? JSON.parse(row.result) : null;
+  }
+
+  private getGitInfo(): { hash: string | null; branch: string | null } {
+    try {
+      const hash = require('child_process')
+        .execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' })
+        .trim();
+      const branch = require('child_process')
+        .execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8' })
+        .trim();
+      return { hash: hash || null, branch: branch || null };
+    } catch {
+      return { hash: null, branch: null };
+    }
+  }
+
+  private getEnvironment(): string {
+    return process.env.NODE_ENV || 'development';
   }
 }
