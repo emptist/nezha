@@ -503,4 +503,27 @@ export class IssueCommands {
     }
     console.log();
   }
+
+  async assignIssue(issueId: string, assignee: string): Promise<void> {
+    await this.db.query(`UPDATE issues SET assignee = $2 WHERE id = $1`, [issueId, assignee]);
+    console.log(`${C.green}Assigned issue #${issueId.slice(0, 8)} to ${assignee}${C.reset}`);
+  }
+
+  async setMilestone(issueId: string, milestoneId: string): Promise<void> {
+    await this.db.query(`UPDATE issues SET milestone_id = $2 WHERE id = $1`, [
+      issueId,
+      milestoneId,
+    ]);
+    console.log(`${C.green}Set milestone on issue #${issueId.slice(0, 8)}${C.reset}`);
+  }
+
+  async addReaction(issueId: string, reaction: string): Promise<void> {
+    await this.db.query(
+      `INSERT INTO issue_events (issue_id, event_type, actor, metadata) VALUES ($1, 'reaction', 'system', $2)`,
+      [issueId, JSON.stringify({ reaction })]
+    );
+    console.log(
+      `${C.green}Added reaction '${reaction}' to issue #${issueId.slice(0, 8)}${C.reset}`
+    );
+  }
 }
