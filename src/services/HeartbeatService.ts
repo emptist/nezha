@@ -261,8 +261,8 @@ export class HeartbeatService {
 
     pluginManager.registerPlugin(
       new GitAutoCommitPlugin({
-        autoPush: config?.gitAutoCommit?.autoPush ?? true,
-        commitMessagePrefix: config?.gitAutoCommit?.commitMessagePrefix ?? 'Task completed:',
+        remindOnUncommitted: true,
+        logGitStatus: true,
       })
     );
 

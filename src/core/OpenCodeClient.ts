@@ -138,6 +138,13 @@ You have access to the Nezha system which provides:
 
 When you need to find relevant past experiences or similar solutions, use the semantic_search function to search through your memory.
 
+## Git Commit Guidelines
+
+After completing your work, commit your changes with a meaningful message:
+- Use conventional commit format: \`feat:\`, \`fix:\`, \`docs:\`, \`refactor:\`, \`test:\`, \`chore:\`
+- Describe WHAT you changed and WHY
+- Example: \`feat: Add user authentication endpoint\`
+
 ## ⚠️ CRITICAL SAFETY RULES - GIT OPERATIONS
 
 **NEVER run these dangerous git commands:**
@@ -151,11 +158,6 @@ When you need to find relevant past experiences or similar solutions, use the se
 1. Fix the underlying bug in the code
 2. Make a new commit with a proper message
 3. DO NOT try to rewrite history
-
-**If you need to clean up commits:**
-1. Create a backup branch first
-2. Ask for user approval before any history modification
-3. Document the reason for the change
 
 Current task: ${task.title}
 Description: ${task.description}
