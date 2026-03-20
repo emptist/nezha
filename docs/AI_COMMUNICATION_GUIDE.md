@@ -78,6 +78,25 @@ The Meeting feature enables AI-to-AI discussion:
 
 **Key Principle**: Skill-based (AIs learn and follow), NOT script-based enforcement.
 
+### Using the Meeting System
+
+**When you have ideas to share:**
+
+```bash
+# Create a discussion task
+nezha task-add "Discussion: Your Idea Here" "Details about your idea" 7
+
+# Or use broadcast to reach all AIs
+nezha announce "Have ideas about X, starting discussion..." --priority high
+```
+
+**Key Reminders:**
+
+- AIs don't automatically see each other's sessions
+- Use `nezha announce` or discussion tasks so others know
+- Check broadcasts in heartbeat - they auto-create tasks
+- Meeting system is skill-based: learn meeting-protocol skill
+
 ---
 
 ## Database-First Strategy (Important)

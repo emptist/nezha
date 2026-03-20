@@ -20,6 +20,7 @@ import {
 import { MonitoringCommands } from './MonitoringCommands.js';
 import { MeetingCommands, parseKeyPoints } from './MeetingCommands.js';
 import { ReviewManagementCommands } from './ReviewCommands.js';
+import { IssueCommands } from './IssueCommands.js';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -1498,6 +1499,77 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'issues': {
+        const subcommand = args[1];
+        const db = await cliInstance.getDb();
+        const issueCmd = new IssueCommands(db);
+
+        if (subcommand === 'list' || subcommand === 'ls') {
+          const statusIndex = args.indexOf('--status');
+          const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+          const severityIndex = args.indexOf('--severity');
+          const severity = severityIndex !== -1 ? args[severityIndex + 1] : undefined;
+          await issueCmd.list({ status, severity });
+        } else if (subcommand === 'show') {
+          const id = args[2];
+          if (!id) {
+            cli.error('Issue ID is required');
+            console.log('\nUsage: nezha issues show <id>');
+            process.exit(1);
+          }
+          await issueCmd.show(id);
+        } else if (subcommand === 'create' || subcommand === 'new') {
+          const titleIndex = args.indexOf('--title');
+          const descIndex = args.indexOf('--description');
+          const typeIndex = args.indexOf('--type');
+          const severityIndex = args.indexOf('--severity');
+          const title =
+            titleIndex !== -1
+              ? args[titleIndex + 1]
+              : args
+                  .slice(2)
+                  .join(' ')
+                  .replace(/^[^"]*"|"[^"]*$/g, '')
+                  .trim();
+          const description = descIndex !== -1 ? args[descIndex + 1] : '';
+          if (!title) {
+            cli.error('Title is required');
+            console.log(
+              '\nUsage: nezha issues create <title> [--description <desc>] [--type <type>] [--severity <sev>]'
+            );
+            process.exit(1);
+          }
+          await issueCmd.create(title, description || '', {
+            type: typeIndex !== -1 ? args[typeIndex + 1] : undefined,
+            severity: severityIndex !== -1 ? args[severityIndex + 1] : undefined,
+          });
+        } else if (subcommand === 'resolve') {
+          const id = args[2];
+          const notesIndex = args.indexOf('--notes');
+          const notes = notesIndex !== -1 ? args[notesIndex + 1] : undefined;
+          if (!id) {
+            cli.error('Issue ID is required');
+            console.log('\nUsage: nezha issues resolve <id> [--notes <notes>]');
+            process.exit(1);
+          }
+          await issueCmd.resolve(id, notes);
+        } else if (subcommand === 'stats') {
+          await issueCmd.stats();
+        } else {
+          console.log(`\n${colors.bright}Issue Management Commands:${colors.reset}\n`);
+          console.log('  nezha issues list [--status <status>] [--severity <severity>]');
+          console.log('  nezha issues show <id>');
+          console.log(
+            '  nezha issues create <title> [--description <desc>] [--type <type>] [--severity <sev>]'
+          );
+          console.log('  nezha issues resolve <id> [--notes <notes>]');
+          console.log('  nezha issues stats');
+          console.log('\nStatuses: open, resolved, all');
+          console.log('Severities: critical, high, medium, low\n');
+        }
+        break;
+      }
+
       case 'dlq': {
         const subcommand = args[1];
         const monitor = await cliInstance.getMonitoringCommands();
@@ -1551,7 +1623,8 @@ async function main(): Promise<void> {
       case 'reset-failed': {
         const monitor = await cliInstance.getMonitoringCommands();
         const olderThanIndex = args.indexOf('--older-than');
-        const olderThanHours = olderThanIndex !== -1 ? parseInt(args[olderThanIndex + 1] || '0', 10) : 0;
+        const olderThanHours =
+          olderThanIndex !== -1 ? parseInt(args[olderThanIndex + 1] || '0', 10) : 0;
         await monitor.resetFailedTasks(olderThanHours);
         break;
       }
@@ -1871,7 +1944,8 @@ async function main(): Promise<void> {
         } else {
           console.log('\n' + colors.bright + '  🔄 RUNNING TASKS:' + colors.reset);
           for (const task of runningTasks.rows) {
-            const agentDisplay = task.agent_name || task.agent_id?.substring(0, 8) || task.assigned_to || 'unassigned';
+            const agentDisplay =
+              task.agent_name || task.agent_id?.substring(0, 8) || task.assigned_to || 'unassigned';
             const started = task.started_at
               ? new Date(task.started_at).toLocaleTimeString()
               : 'N/A';
