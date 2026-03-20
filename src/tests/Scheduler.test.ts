@@ -136,6 +136,7 @@ describe('Scheduler', () => {
       'task-1',
       'Test Task',
       'Test description',
+      expect.anything(),
       expect.any(Number),
       expect.any(Number),
       expect.any(Number)
