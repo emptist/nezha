@@ -1,82 +1,45 @@
-import 'dotenv/config';
-import { Config } from './src/config/Config.js';
-import { DatabaseClient } from './src/db/DatabaseClient.js';
+import { Database } from './src/database/Database.js';
 import { MemoryService } from './src/core/Memory.js';
-import { OllamaEmbedding } from './src/services/embedding/OllamaEmbedding.js';
+import { OllamaEmbedding } from './src/services/OllamaEmbedding.js';
 import { v4 as uuidv4 } from 'uuid';
 
-const content = `YouTube Channel AI Capability Research
-
-## Executive Summary
-
-**Current Status: NO YouTube-specific skills or tools exist in Nezha.**
-
-Video-related capabilities exist only as placeholders in TOOLIZATION_ROADMAP.md. YouTube integration would require building 6 new skills over an estimated 8-15 weeks.
-
-## Current State Analysis
-
-### What Already Exists
-- Video Project Type - Placeholder only
-- Task types (video, video.edit) - Defined but not implemented
-- upload_to_youtube automation - Placeholder only
-- Meeting/Collaboration System - Fully implemented
-- Skill Registry - Database schema ready
-- 3 Built-in Skills - meeting-protocol, continuous-improvement, nezha-workflow
-
-### What's Missing for YouTube
-- YouTube Data API v3 integration - NONE
-- Video upload automation - NONE
-- Thumbnail generation - Placeholder only
-- Script writing for videos - PARTIAL
-- SEO/keyword research - NONE
-- Analytics tracking - NONE
-- Scheduling/publishing - NONE
-
-## Skills to Create for YouTube Channel
-
-### Priority 1: Foundation Skills
-1. youtube-api-skill - 2-3 weeks (OAuth + API wrapper)
-2. video-script-skill - 1 week (script writing)
-
-### Priority 2: Content Skills
-3. thumbnail-generator-skill - 2-3 weeks
-4. youtube-seo-skill - 1-2 weeks
-
-### Priority 3: Automation Skills
-5. youtube-scheduler-skill - 1 week
-6. youtube-analytics-skill - 1-2 weeks
-
-**Total Estimate**: 8-15 weeks for full YouTube channel automation
-
-## Technical Recommendations
-1. YouTube Data API v3 (Official) - Full access, complex OAuth
-2. MCP YouTube Server (Open Source) - 16 tools, no OAuth
-3. openclaw-skills-youtube-api-skill - Gateway-backed with managed OAuth
-4. Zernio API (Third-party) - Multi-platform, simple API key
-
-## Conclusion
-Nezha is well-suited for YouTube automation but requires significant new development (8-15 weeks). The meeting system proves the architecture supports complex AI-driven workflows. YouTube is a new domain requiring domain-specific integrations.`;
-
 async function main() {
-  const config = Config.getInstance();
-  const db = new DatabaseClient(config);
+  const db = new Database();
+  await db.connect();
 
-  const embeddingConfig = config.getEmbeddingConfig();
-  let embedding;
-  if (embeddingConfig) {
-    embedding = new OllamaEmbedding(embeddingConfig);
-  }
-  
-  const memory = new MemoryService(db, undefined, embedding);
+  const embeddingConfig = {
+    baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+    model: 'nomic-embed-text',
+  };
+
+  const memory = new MemoryService(db, undefined, new OllamaEmbedding(embeddingConfig));
 
   const id = uuidv4();
   await memory.save({
     id,
-    content,
-    tags: ['youtube-ai-research', 'research', 'automation'],
-    importance: 7,
-    source: 'reviews/youtube_channel_ai_capability.md',
-    generateEmbedding: true
+    content: `## Bug Fix: GitAutoCommitPlugin Commit Message Pollution
+
+### Problem
+Git history had 20+ commits with identical message "docs: Add database-first principle for AI communication in PHILOSOPHY.md"
+
+### Root Cause
+The getCommittedMessage() method extracted messages from staged diff comments. When the same file was modified repeatedly with the same comment format, identical messages were generated.
+
+### Solution
+Added timestamp and short hash to commit messages when using actual commit message to ensure uniqueness.
+
+### Historical Pollution
+Already-pushed identical commits require force push to fix. Options:
+1. Interactive rebase to squash identical commits
+2. Accept as known issue (risky for shared repos)
+3. git-filter-repo to rewrite with uniqueness
+
+### Prevention
+New commits now automatically include timestamp and parent commit hash for uniqueness.`,
+    tags: ['git-hygiene-fix', 'bug-fix', 'git'],
+    importance: 6,
+    source: 'src/plugins/GitAutoCommitPlugin.ts',
+    generateEmbedding: true,
   });
 
   console.log('Memory saved with ID:', id);

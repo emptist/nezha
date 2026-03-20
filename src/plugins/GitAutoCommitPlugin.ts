@@ -59,27 +59,64 @@ export class GitAutoCommitPlugin implements Plugin {
     }
   }
 
-  private getLatestCommitMessage(): string | null {
+  private getCommittedFiles(): string {
     try {
-      const msg = execSync('git log -1 --format=%B', { encoding: 'utf-8' }).trim();
-      const lines = msg.split('\n');
-      const firstLine = lines[0] || '';
-      if (
-        firstLine.startsWith('Task completed:') ||
-        firstLine.startsWith('feat:') ||
-        firstLine.startsWith('fix:') ||
-        firstLine.startsWith('docs:') ||
-        firstLine.startsWith('test:') ||
-        firstLine.startsWith('refactor:')
-      ) {
-        return firstLine;
+      const diff = execSync('git diff --cached --name-only', { encoding: 'utf-8' }).trim();
+      return (
+        diff
+          .split('\n')
+          .filter(f => f)
+          .join(', ') || 'no files'
+      );
+    } catch {
+      return 'no files';
+    }
+  }
+
+  private getCommittedMessage(): string | null {
+    try {
+      const stagedDiff = execSync('git diff --cached', { encoding: 'utf-8' });
+      if (stagedDiff.trim().length === 0) {
+        return null;
+      }
+      const conventionalPrefixes = [
+        'feat:',
+        'fix:',
+        'docs:',
+        'test:',
+        'refactor:',
+        'chore:',
+        'perf:',
+        'ci:',
+        'build:',
+      ];
+
+      const diffLines = stagedDiff.split('\n');
+      for (const line of diffLines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+          continue;
+        }
+        for (const prefix of conventionalPrefixes) {
+          if (trimmed.startsWith(prefix)) {
+            return (
+              trimmed.replace(/^['"]/, '').replace(/['"]$/, '').split('\n')[0]?.trim() ?? trimmed
+            );
+          }
+        }
       }
       return null;
-    } catch (err) {
-      logger.debug(
-        `[GitAutoCommit] Failed to get latest commit message: ${err instanceof Error ? err.message : 'Unknown'}`
-      );
+    } catch {
       return null;
+    }
+  }
+
+  private hasStagedChanges(): boolean {
+    try {
+      const staged = execSync('git diff --cached --name-only', { encoding: 'utf-8' });
+      return staged.trim().length > 0;
+    } catch {
+      return false;
     }
   }
 
@@ -103,10 +140,17 @@ export class GitAutoCommitPlugin implements Plugin {
 
       let commitMsg: string;
 
-      if (this.useActualCommitMessage) {
-        const actualMsg = this.getLatestCommitMessage();
+      if (this.useActualCommitMessage && this.hasStagedChanges()) {
+        const actualMsg = this.getCommittedMessage();
+        const committedFiles = this.getCommittedFiles();
         if (actualMsg) {
-          commitMsg = actualMsg;
+          const timestamp = new Date()
+            .toISOString()
+            .slice(0, 16)
+            .replace(/[:-]/g, '')
+            .replace('T', '-');
+          const shortHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim();
+          commitMsg = `${actualMsg}\n\nFiles: ${committedFiles}\n\nGenerated: ${timestamp}@${shortHash}`;
           logger.debug('[GitAutoCommit] Using actual commit message:', actualMsg);
         } else {
           commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
