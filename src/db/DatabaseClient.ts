@@ -297,7 +297,7 @@ export class DatabaseClient {
       values.push(params.conversationType);
     }
 
-    sql += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx}`;
+    sql += ` ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx}`;
     values.push(params.limit || 50, params.offset || 0);
 
     const result = await this.pool.query(sql, values);
