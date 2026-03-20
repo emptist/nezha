@@ -26,7 +26,7 @@ import {
 } from './EncryptionService.js';
 import { createStandardMetrics } from './MetricsService.js';
 import { getPluginManager, type TaskContext } from '../core/PluginManager.js';
-import { NotificationPlugin, LoggingPlugin } from '../plugins/index.js';
+import { NotificationPlugin, LoggingPlugin, ReflectionPlugin } from '../plugins/index.js';
 import { WebhookService, createWebhookConfigFromEnv } from './WebhookService.js';
 import { ContextBuilder } from './ContextBuilder.js';
 import { EnhancedCircuitBreaker } from '../utils/EnhancedCircuitBreaker.js';
@@ -250,6 +250,14 @@ export class HeartbeatService {
     if (config?.logging !== false) {
       pluginManager.registerPlugin(new LoggingPlugin());
     }
+
+    pluginManager.registerPlugin(
+      new ReflectionPlugin({
+        reflectOnComplete: true,
+        reflectOnFail: true,
+        createIssueOnPattern: true,
+      })
+    );
 
     if (config?.notification?.enabled) {
       pluginManager.registerPlugin(
