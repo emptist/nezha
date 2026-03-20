@@ -161,8 +161,22 @@ Please reflect on the following:
 3. **Did you discover any novel solutions or patterns?**
 4. **Is there anything worth remembering for future tasks?**
 
-If you discovered something valuable, use the learn() function to save it.
-If you found a pattern that suggests a system prompt improvement, use suggest_prompt_update() to propose changes.
+If you discovered something valuable, save it using this format:
+
+\`\`\`
+[LEARN]
+insight: <your key learning in one sentence>
+context: <optional context about when this applies>
+\`\`\`
+
+If you found a pattern that suggests a system prompt improvement:
+
+\`\`\`
+[PROMPT_UPDATE]
+current: <what the current prompt says>
+suggested: <what it should say instead>
+reason: <why this change would help>
+\`\`\`
 `;
   }
 }

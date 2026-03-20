@@ -1,6 +1,19 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
+import { DatabaseClient } from '../db/DatabaseClient.js';
+import { Config } from '../config/Config.js';
+
+interface LearnInput {
+  insight: string;
+  context?: string;
+}
+
+interface SuggestPromptUpdateInput {
+  current_prompt: string;
+  suggested_prompt: string;
+  reason: string;
+}
 
 const DEFAULT_MEMORY_DIR = '.tmp/nezha-memory';
 const DEFAULT_MEMORY_FILE = 'MEMORY.md';
@@ -311,10 +324,35 @@ export class DailyMemoryService {
 }
 
 const dailyMemory = new DailyMemoryService();
+const db = new DatabaseClient(Config.getInstance());
 
 export async function memory_save(input: MemorySaveInput): Promise<string> {
   await dailyMemory.save(input);
   return `Memory saved: Task "${input.task}" - Result: ${input.result}`;
+}
+
+export async function learn(input: LearnInput): Promise<string> {
+  await dailyMemory.addLearning(input.insight);
+
+  await db.query(
+    `INSERT INTO memory (content, tags, source, importance, metadata) 
+     VALUES ($1, ARRAY['learning', 'reflection'], 'learn-function', $2, $3)`,
+    [input.insight, input.context ? 5 : 3, JSON.stringify({ context: input.context })]
+  );
+
+  logger.info(`Learning saved via learn(): ${input.insight.substring(0, 50)}...`);
+  return `Learning saved: "${input.insight.substring(0, 100)}..."`;
+}
+
+export async function suggest_prompt_update(input: SuggestPromptUpdateInput): Promise<string> {
+  await db.query(
+    `INSERT INTO prompt_suggestions (current_prompt, suggested_prompt, reason, status)
+     VALUES ($1, $2, $3, 'pending')`,
+    [input.current_prompt, input.suggested_prompt, input.reason]
+  );
+
+  logger.info(`Prompt update suggested: ${input.reason.substring(0, 50)}...`);
+  return `Prompt update suggested and saved for review: ${input.reason.substring(0, 100)}...`;
 }
 
 export { dailyMemory };

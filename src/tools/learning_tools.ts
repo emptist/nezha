@@ -1,6 +1,9 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { LearningAnalysisService } from '../core/LearningAnalysis.js';
 import { logger } from '../utils/logger.js';
+import { Config } from '../config/Config.js';
+import type { VectorSearchResult } from '../core/Memory.js';
+import type { EmbeddingProvider } from '../services/embedding/index.js';
 
 export interface RecordOutcomeInput {
   taskId: string;
@@ -396,4 +399,87 @@ export async function list_skills(
     .join('\n\n');
 
   return `## Installed Skills (${skills.length})\n\n${formatted}`;
+}
+
+// ============================================================
+// REFLECTION TOOLS
+// ============================================================
+
+export interface LearnInput {
+  insight: string;
+  context?: string;
+}
+
+export async function learn(db: DatabaseClient, input: LearnInput): Promise<string> {
+  await db.query(
+    `INSERT INTO memory (content, tags, source, importance, metadata) 
+     VALUES ($1, ARRAY['learning', 'reflection'], 'learn-function', $2, $3)`,
+    [input.insight, input.context ? 5 : 3, JSON.stringify({ context: input.context })]
+  );
+
+  logger.info(`[LearningTools] learn() saved: ${input.insight.substring(0, 50)}...`);
+  return `Learning saved successfully: "${input.insight.substring(0, 100)}..."`;
+}
+
+export interface MemorySearchInput {
+  query: string;
+  projectId?: string;
+  limit?: number;
+  threshold?: number;
+}
+
+export async function memory_search(db: DatabaseClient, input: MemorySearchInput): Promise<string> {
+  const { MemoryService } = await import('../core/Memory.js');
+  const config = Config.getInstance();
+  const embeddingConfig = config.getEmbeddingConfig();
+
+  let embeddingProvider: EmbeddingProvider | undefined;
+  if (embeddingConfig) {
+    const { createEmbeddingProvider } = await import('../services/embedding/index.js');
+    embeddingProvider = createEmbeddingProvider(embeddingConfig);
+  }
+
+  const memory = new MemoryService(db, undefined, embeddingProvider);
+
+  const results = await memory.vectorSearch(
+    input.query,
+    input.projectId,
+    input.limit ?? 10,
+    input.threshold ?? 0.7
+  );
+
+  if (results.length === 0) {
+    return `No memories found for query: "${input.query}"`;
+  }
+
+  const formatted = results
+    .map(
+      (r, i) =>
+        `${i + 1}. **[${Math.round((r.similarity ?? 0) * 100)}% match]**\n` +
+        `   ${r.content?.substring(0, 200) || 'N/A'}...\n` +
+        `   ID: ${r.id}`
+    )
+    .join('\n\n');
+
+  return `## Memory Search Results (${results.length})\n\n${formatted}`;
+}
+
+export interface SuggestPromptUpdateInput {
+  current_prompt: string;
+  suggested_prompt: string;
+  reason: string;
+}
+
+export async function suggest_prompt_update(
+  db: DatabaseClient,
+  input: SuggestPromptUpdateInput
+): Promise<string> {
+  await db.query(
+    `INSERT INTO prompt_suggestions (current_prompt, suggested_prompt, reason, status)
+     VALUES ($1, $2, $3, 'pending')`,
+    [input.current_prompt, input.suggested_prompt, input.reason]
+  );
+
+  logger.info(`[LearningTools] suggest_prompt_update() saved: ${input.reason.substring(0, 50)}...`);
+  return `Prompt update suggested and saved for review: ${input.reason.substring(0, 100)}...`;
 }

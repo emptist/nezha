@@ -360,7 +360,7 @@ export class HeartbeatService {
   }
 
   private setupWatchdogListeners(): void {
-    this.watchdogService.on(WatchdogEvent.TASK_STUCK, async (task) => {
+    this.watchdogService.on(WatchdogEvent.TASK_STUCK, async task => {
       logger.warn(`Watchdog detected stuck task: ${task.title} (${task.taskId})`);
       await this.alertService.createAlert(AlertType.STUCK_TASK, `Stuck task: ${task.title}`, {
         taskId: task.taskId,
@@ -368,37 +368,48 @@ export class HeartbeatService {
       });
     });
 
-    this.watchdogService.on(WatchdogEvent.TASK_KILLED, async (result) => {
+    this.watchdogService.on(WatchdogEvent.TASK_KILLED, async result => {
       logger.warn(`Watchdog killed task: ${result.taskId} (reason: ${result.reason})`);
-      await this.alertService.createAlert(AlertType.WATCHDOG_KILL, `Watchdog kill: ${result.taskId}`, {
-        taskId: result.taskId,
-        metadata: { reason: result.reason, processId: result.processId },
-      });
+      await this.alertService.createAlert(
+        AlertType.WATCHDOG_KILL,
+        `Watchdog kill: ${result.taskId}`,
+        {
+          taskId: result.taskId,
+          metadata: { reason: result.reason, processId: result.processId },
+        }
+      );
     });
 
-    this.watchdogService.on(WatchdogEvent.HEARTBEAT_MISSED, async (data) => {
+    this.watchdogService.on(WatchdogEvent.HEARTBEAT_MISSED, async data => {
       logger.debug(`Task approaching timeout: ${data.task.title}`);
     });
   }
 
   private setupLongTaskListeners(): void {
-    this.longTaskManager.on('maxRuntimeExceeded', async (task) => {
+    this.longTaskManager.on('maxRuntimeExceeded', async task => {
       logger.warn(`Long task exceeded max runtime: ${task.title} (${task.taskId})`);
-      await this.alertService.createAlert(AlertType.REPEATED_FAILURE, `Long task timeout: ${task.title}`, {
-        taskId: task.taskId,
-        metadata: { elapsedSeconds: task.elapsedSeconds, maxRuntimeSeconds: task.maxRuntimeSeconds },
-      });
+      await this.alertService.createAlert(
+        AlertType.REPEATED_FAILURE,
+        `Long task timeout: ${task.title}`,
+        {
+          taskId: task.taskId,
+          metadata: {
+            elapsedSeconds: task.elapsedSeconds,
+            maxRuntimeSeconds: task.maxRuntimeSeconds,
+          },
+        }
+      );
     });
 
-    this.longTaskManager.on('progressStalled', async (data) => {
+    this.longTaskManager.on('progressStalled', async data => {
       logger.warn(`Task progress stalled: ${data.task.title} (${data.task.taskId})`);
     });
 
-    this.longTaskManager.on('paused', async (data) => {
+    this.longTaskManager.on('paused', async data => {
       logger.info(`Long task paused: ${data.taskId} (reason: ${data.reason})`);
     });
 
-    this.longTaskManager.on('resumed', async (data) => {
+    this.longTaskManager.on('resumed', async data => {
       logger.info(`Long task resumed: ${data.taskId}`);
     });
   }
@@ -537,7 +548,9 @@ export class HeartbeatService {
         });
         taskPrompt = context.combinedPrompt;
 
-        logger.debug(`Task context built with ${context.relevantMemories.length} relevant memories`);
+        logger.debug(
+          `Task context built with ${context.relevantMemories.length} relevant memories`
+        );
       } catch (error) {
         logger.warn('Failed to build task context, using original prompt:', error);
       }
@@ -732,12 +745,23 @@ After completing this task:
   ): Promise<void> {
     logger.error(`Task failed after ${maxRetries} attempts, moving to dead letter queue`);
 
-    const categorized = await this.alertService.categorizeAndRecordFailure(taskId, title, error, retryCount);
+    const categorized = await this.alertService.categorizeAndRecordFailure(
+      taskId,
+      title,
+      error,
+      retryCount
+    );
 
     const tableName = DATABASE_TABLES.TASKS;
     await this.db.query(
       `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, error_category = $4 WHERE id = $5`,
-      [TASK_STATUS.FAILED, `Max retries (${maxRetries}) exceeded: ${error}`, retryCount, categorized, taskId]
+      [
+        TASK_STATUS.FAILED,
+        `Max retries (${maxRetries}) exceeded: ${error}`,
+        retryCount,
+        categorized,
+        taskId,
+      ]
     );
 
     await this.db.query(
@@ -784,11 +808,59 @@ After completing this task:
 
       if (reflectionResult.success) {
         logger.debug('Reflection completed for task:', taskTitle);
+        await this.parseReflectionOutput(reflectionResult.output, taskTitle);
       } else {
         logger.warn('Reflection failed:', reflectionResult.message);
       }
     } catch (error) {
       logger.warn('Reflection error (non-fatal):', error);
+    }
+  }
+
+  private async parseReflectionOutput(
+    output: string | undefined,
+    taskTitle: string
+  ): Promise<void> {
+    if (!output) return;
+
+    const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
+    const promptPattern =
+      /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
+
+    let match;
+    let count = 0;
+
+    while ((match = learnPattern.exec(output)) !== null) {
+      const insight = match[1]?.trim();
+      const context = match[2]?.trim() || null;
+
+      if (insight) {
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['learning', 'reflection'], 'reflection-parser', $2, $3)`,
+          [insight, 5, JSON.stringify({ taskTitle, context })]
+        );
+        count++;
+      }
+    }
+
+    while ((match = promptPattern.exec(output)) !== null) {
+      const currentPrompt = match[1]?.trim();
+      const suggestedPrompt = match[2]?.trim();
+      const reason = match[3]?.trim();
+
+      if (currentPrompt && suggestedPrompt) {
+        await this.db.query(
+          `INSERT INTO prompt_suggestions (current_prompt, suggested_prompt, reason, status)
+           VALUES ($1, $2, $3, 'pending')`,
+          [currentPrompt, suggestedPrompt, reason]
+        );
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      logger.info(`[Reflection] Parsed ${count} items from reflection for task: ${taskTitle}`);
     }
   }
 
@@ -823,12 +895,24 @@ After completing this task:
     branch?: string
   ): Promise<string> {
     const { execSync } = await import('child_process');
-    const currentCommit = commitHash || (() => {
-      try { return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim(); } catch { return undefined; }
-    })();
-    const currentBranch = branch || (() => {
-      try { return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main'; } catch { return 'main'; }
-    })();
+    const currentCommit =
+      commitHash ||
+      (() => {
+        try {
+          return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+        } catch {
+          return undefined;
+        }
+      })();
+    const currentBranch =
+      branch ||
+      (() => {
+        try {
+          return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main';
+        } catch {
+          return 'main';
+        }
+      })();
 
     const request = {
       taskId,

@@ -9,6 +9,9 @@ export {
   apply_insight,
   auto_generate_insights,
   get_learning_stats,
+  learn,
+  memory_search,
+  suggest_prompt_update,
   type RecordOutcomeInput,
   type SuggestImprovementsInput,
   type FindSimilarSolutionsInput,
@@ -17,6 +20,9 @@ export {
   type CreateInsightInput,
   type GetInsightsInput,
   type ApplyInsightInput,
+  type LearnInput,
+  type MemorySearchInput,
+  type SuggestPromptUpdateInput,
 } from './learning_tools.js';
 
 export {

@@ -19,8 +19,10 @@
 6. **[LEARNING_SYSTEM.md](./LEARNING_SYSTEM.md)** → How AI learns autonomously
 7. **[docs/SKILL_SYSTEM.md](./docs/SKILL_SYSTEM.md)** → PostgreSQL-first skill loading
 8. **[docs/AI_COLLABORATION_GUIDE.md](./docs/AI_COLLABORATION_GUIDE.md)** → Multi-agent patterns
+9. **[docs/ISSUE_TRACKING.md](./docs/ISSUE_TRACKING.md)** → Issue tracking for bugs/inconsistencies
+10. **[docs/CASE_STUDY_system_discovery.md](./docs/CASE_STUDY_system_discovery.md)** → How to discover and resolve system issues
 
-**Total AI onboarding: ~22 minutes**
+**Total AI onboarding: ~26 minutes**
 
 ## ROM Analogy
 
@@ -28,7 +30,7 @@
 These MD files = ROM (essential boot instructions)
         │
         ├── Read_First.md → Emergency recovery
-        ├── PHILOSOPHY.md → Why it works this way  
+        ├── PHILOSOPHY.md → Why it works this way
         ├── AGENTS.md     → AI behavior rules
         ├── README.md     → How to start/boot
         ├── docs/OPENCODE_INTEGRATION.md → OpenCode integration approaches (CLI vs REST API)
@@ -48,6 +50,7 @@ Apps = Tasks (AI doing work)
 ## Quick Start (For New AI Session)
 
 > **Note**: Commands use the default PostgreSQL path. Set `PSQL_PATH` environment variable if different:
+>
 > ```bash
 > export PSQL_PATH=/usr/local/bin/psql  # Linux/Homebrew
 > export PSQL_PATH="/Applications/Postgres.app/Contents/Versions/18/bin/psql"  # macOS Postgres.app
@@ -148,54 +151,55 @@ The system uses 27 tables for comprehensive task management, memory, and agent c
 
 ### Core Tables
 
-| Table | Purpose |
-|-------|---------|
-| `tasks` | Main task queue with status tracking |
-| `scheduled_tasks` | Cron-based task scheduling |
-| `memory` | Long-term memory storage |
-| `skills` | Skill definitions and configurations |
-| `task_results` | Task execution results |
-| `task_templates` | Reusable task templates |
-| `task_audit_log` | Task history and audit trail |
+| Table             | Purpose                              |
+| ----------------- | ------------------------------------ |
+| `tasks`           | Main task queue with status tracking |
+| `scheduled_tasks` | Cron-based task scheduling           |
+| `memory`          | Long-term memory storage             |
+| `skills`          | Skill definitions and configurations |
+| `task_results`    | Task execution results               |
+| `task_templates`  | Reusable task templates              |
+| `task_audit_log`  | Task history and audit trail         |
 
 ### Agent & Project Tables
 
-| Table | Purpose |
-|-------|---------|
-| `agent_configs` | Agent configuration settings |
-| `agent_identity` | Agent identity and personality |
-| `agent_soul` | Agent core behavior definitions |
-| `projects` | Multi-project support |
-| `project_skills` | Project-specific skills |
-| `project_metrics` | Project performance metrics |
-| `project_communications` | Inter-project messaging |
-| `project_config_history` | Configuration version history |
+| Table                    | Purpose                         |
+| ------------------------ | ------------------------------- |
+| `agent_configs`          | Agent configuration settings    |
+| `agent_identity`         | Agent identity and personality  |
+| `agent_soul`             | Agent core behavior definitions |
+| `projects`               | Multi-project support           |
+| `project_skills`         | Project-specific skills         |
+| `project_metrics`        | Project performance metrics     |
+| `project_communications` | Inter-project messaging         |
+| `project_config_history` | Configuration version history   |
 
 ### Security & Monitoring Tables
 
-| Table | Purpose |
-|-------|---------|
-| `api_keys` | API key management |
-| `provider_api_keys` | LLM provider API keys |
-| `rate_limits` | Rate limiting configuration |
-| `user_profiles` | User settings and preferences |
-| `event_log` | System event logging |
-| `heartbeat_configs` | Health monitoring configuration |
-| `process_pids` | Track spawned process PIDs for cleanup |
-| `inter_reviews` | AI peer review system for code quality |
-| `stuck_tasks_tracking` | Watchdog tracking for stuck tasks |
-| `failure_alerts` | Failure alert management |
+| Table                  | Purpose                                |
+| ---------------------- | -------------------------------------- |
+| `api_keys`             | API key management                     |
+| `provider_api_keys`    | LLM provider API keys                  |
+| `rate_limits`          | Rate limiting configuration            |
+| `user_profiles`        | User settings and preferences          |
+| `event_log`            | System event logging                   |
+| `heartbeat_configs`    | Health monitoring configuration        |
+| `process_pids`         | Track spawned process PIDs for cleanup |
+| `inter_reviews`        | AI peer review system for code quality |
+| `stuck_tasks_tracking` | Watchdog tracking for stuck tasks      |
+| `failure_alerts`       | Failure alert management               |
 
 ### Utility Tables
 
-| Table | Purpose |
-|-------|---------|
-| `dead_letter_queue` | Failed message handling |
-| `archived_memory` | Compressed old memories |
-| `auto_category_rules` | Automatic task categorization |
-| `auto_tag_rules` | Automatic task tagging |
-| `prompt_suggestions` | Prompt template library |
-| `tool_definitions` | Custom tool definitions |
+| Table                 | Purpose                                 |
+| --------------------- | --------------------------------------- |
+| `dead_letter_queue`   | Failed message handling                 |
+| `archived_memory`     | Compressed old memories                 |
+| `auto_category_rules` | Automatic task categorization           |
+| `auto_tag_rules`      | Automatic task tagging                  |
+| `prompt_suggestions`  | Prompt template library                 |
+| `tool_definitions`    | Custom tool definitions                 |
+| `issues`              | Issue tracking for bugs/inconsistencies |
 
 ### tasks table (Core Schema)
 
@@ -228,12 +232,14 @@ CREATE TABLE tasks (
 ```
 
 **Status Values:**
+
 - `PENDING` - Waiting to be executed
 - `RUNNING` - Currently being executed
 - `COMPLETED` - Successfully completed
 - `FAILED` - Failed (check error column)
 
 **Key Queries:**
+
 ```sql
 -- All tasks
 SELECT * FROM tasks ORDER BY created_at DESC;
@@ -262,17 +268,20 @@ SELECT id, title, completed_at FROM tasks WHERE status = 'COMPLETED' ORDER BY co
 ## Common Issues & Solutions
 
 ### Problem: Tasks stuck in RUNNING
+
 ```sql
 UPDATE tasks SET status = 'PENDING' WHERE status = 'RUNNING';
 ```
 
 ### Problem: opencode serve not responding
+
 ```bash
 pkill -f "opencode serve"
 nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &
 ```
 
 ### Problem: Build errors
+
 ```bash
 cd /Users/jk/gits/hub/nezha
 rm -rf dist
@@ -280,6 +289,7 @@ npm run build
 ```
 
 ### Problem: Database connection issues
+
 ```bash
 # Check PostgreSQL is running
 ${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
@@ -287,6 +297,7 @@ ${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
 ```
 
 ### Problem: Scheduler fails with "column does not exist"
+
 ```sql
 -- If you see errors like "column started_at does not exist" or "column age_boost does not exist"
 -- The schema may be outdated. Add missing columns:
@@ -297,10 +308,12 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ;
 ```
 
 ### Problem: Task fails with "fetch failed"
+
 - Check if opencode server is running: `ps aux | grep "opencode serve"`
 - Restart if needed: `pkill -f "opencode serve" && nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &`
 
 ### Problem: OpenCodeClient API mismatch (FIXED)
+
 - Was: OpenCodeClient tried to use `/chat/completions` REST API which doesn't exist
 - Fix: Changed to use `opencode run --attach` CLI command via child_process
 - Code: src/core/OpenCodeClient.ts - uses spawn() to run opencode commands
@@ -398,11 +411,11 @@ Run this command to check current system status:
 # Quick status check
 ${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql} \
   -h 127.0.0.1 -U postgres -d nezha -c "
-SELECT 
-  status, 
-  COUNT(*) as count 
-FROM tasks 
-GROUP BY status 
+SELECT
+  status,
+  COUNT(*) as count
+FROM tasks
+GROUP BY status
 ORDER BY count DESC;
 "
 
