@@ -1351,6 +1351,31 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'reflect': {
+        const text = args.slice(1).join(' ');
+        if (!text) {
+          console.log('Usage: nezha reflect <reflection text>');
+          console.log('Example: nezha reflect "What worked well: Using natural format"');
+          break;
+        }
+
+        const db = new DatabaseClient(Config.getInstance());
+        const { BroadcastService } = await import('../services/BroadcastService.js');
+        const broadcastService = new BroadcastService(db);
+
+        await broadcastService.sendBroadcast(text, { priority: 'normal' });
+        console.log('✓ Reflection broadcast to all AIs');
+
+        await db.query(
+          `INSERT INTO memory (content, tags, source, importance) VALUES ($1, ARRAY['reflection', 'broadcast'], 'reflection-cli', 6)`,
+          [text]
+        );
+        console.log('✓ Saved to memory');
+
+        await db.close();
+        break;
+      }
+
       case 'learn': {
         const insight = args.slice(1).find(a => !a.startsWith('--')) || '';
         const contextIndex = args.indexOf('--context');
@@ -1984,6 +2009,24 @@ async function main(): Promise<void> {
         const olderThanHours =
           olderThanIndex !== -1 ? parseInt(args[olderThanIndex + 1] || '0', 10) : 0;
         await monitor.resetFailedTasks(olderThanHours);
+        break;
+      }
+
+      case 'recovery': {
+        const subcommand = args[1];
+        const monitor = await cliInstance.getMonitoringCommands();
+
+        if (!subcommand || subcommand === 'stats') {
+          await monitor.showRecoveryStats();
+        } else if (subcommand === 'run') {
+          await monitor.runManualRecovery();
+        } else {
+          cli.error(`Unknown subcommand: ${subcommand}`);
+          console.log('\nUsage: nezha recovery <stats|run>');
+          console.log('\nExamples:');
+          console.log('  nezha recovery stats    Show recovery statistics');
+          console.log('  nezha recovery run      Run manual recovery');
+        }
         break;
       }
 
@@ -2648,6 +2691,7 @@ function showHelp(): void {
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
     reflection-stats              Show reflection system statistics
     reflection-summary            Generate daily reflection summary
+    reflect <text>               Broadcast a reflection to all AIs
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
