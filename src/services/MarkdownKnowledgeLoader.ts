@@ -342,20 +342,24 @@ export class MarkdownKnowledgeLoader {
 
     try {
       const result = await client.query(
-        `INSERT INTO memory (id, content, source, tags, importance, metadata, project_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        `INSERT INTO memory (id, project_id, content, metadata, tags, importance, source, embedding, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, NOW(), NOW())
          ON CONFLICT (id) DO UPDATE SET
-           content = $2,
+           content = $3,
+           metadata = $4,
+           tags = $5,
+           importance = $6,
+           source = $7,
            updated_at = NOW()
          RETURNING id`,
         [
           input.id,
+          input.projectId || null,
           input.content,
-          input.source || 'markdown',
+          JSON.stringify(input.metadata || {}),
           input.tags || [],
           input.importance || 5,
-          JSON.stringify(input.metadata || {}),
-          input.projectId || null,
+          input.source || 'markdown',
         ]
       );
 
