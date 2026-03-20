@@ -80,7 +80,7 @@ Please follow the meeting-protocol skill:
 4. **Reach Consensus** - Document agreement when reached`;
 
     const discussionId = crypto.randomUUID();
-    const createdBy = Config.getInstance().getAgentName();
+    const createdBy = Config.getInstance().getAgentId();
     await this.db.query(
       `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -275,7 +275,7 @@ _Reached at: ${new Date().toISOString()}_`;
       [consensusContent, null, JSON.stringify({ type: 'consensus', topic, participants }), 9]
     );
 
-    const createdBy = Config.getInstance().getAgentName();
+    const createdBy = Config.getInstance().getAgentId();
     await this.db.query(
       `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,

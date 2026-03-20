@@ -9,6 +9,9 @@ import {
 } from './types.js';
 import { DATABASE_CONFIG, TASK_CONFIG, MEMORY_CONFIG, ENV_KEYS, ENV_DEFAULT } from './constants.js';
 import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
 
 function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
   if (!value) return defaultValue;
@@ -17,6 +20,30 @@ function parseIntEnv(value: string | undefined, defaultValue: number, key: strin
     throw new Error(`Invalid value for ${key}: "${value}" is not a valid integer`);
   }
   return parsed;
+}
+
+const AGENT_ID_FILE = '.nezha/agent-id.json';
+
+function loadOrCreateAgentId(): { id: string; displayName?: string } {
+  const configDir = path.join(process.cwd(), '.nezha');
+  const idFilePath = path.join(configDir, 'agent-id.json');
+
+  try {
+    if (fs.existsSync(idFilePath)) {
+      const content = fs.readFileSync(idFilePath, 'utf-8');
+      return JSON.parse(content);
+    }
+  } catch {
+    // Ignore errors, create new
+  }
+
+  fs.mkdirSync(configDir, { recursive: true });
+  const agentId = crypto.randomUUID();
+  const displayName = process.env[ENV_KEYS.AGENT_NAME];
+  const data = { id: agentId, displayName: displayName || undefined };
+  fs.writeFileSync(idFilePath, JSON.stringify(data, null, 2));
+  console.log(`Generated new agent ID: ${agentId}`);
+  return data;
 }
 
 export class Config implements IConfig {
@@ -52,7 +79,7 @@ export class Config implements IConfig {
     const embeddingConfig = this.loadEmbeddingConfig(yamlConfig);
     const transportConfig = this.loadTransportConfig(yamlConfig);
     const env = this.loadEnv();
-    const agentName = this.loadAgentName();
+    const agent = loadOrCreateAgentId();
 
     return {
       db: dbConfig,
@@ -61,7 +88,8 @@ export class Config implements IConfig {
       embedding: embeddingConfig,
       env,
       transport: transportConfig,
-      agentName,
+      agentId: agent.id,
+      agentDisplayName: agent.displayName,
     };
   }
 
@@ -171,10 +199,6 @@ export class Config implements IConfig {
     };
   }
 
-  private loadAgentName(): string {
-    return process.env[ENV_KEYS.AGENT_NAME] || 'nezha-daemon';
-  }
-
   getDbConfig(): DbConfig {
     return { ...this.config.db };
   }
@@ -199,8 +223,16 @@ export class Config implements IConfig {
     return { ...this.config.transport };
   }
 
+  getAgentId(): string {
+    return this.config.agentId;
+  }
+
+  getAgentDisplayName(): string | undefined {
+    return this.config.agentDisplayName;
+  }
+
   getAgentName(): string {
-    return this.config.agentName;
+    return this.config.agentId;
   }
 
   validate(): boolean {

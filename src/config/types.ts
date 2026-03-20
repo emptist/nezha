@@ -35,7 +35,8 @@ export interface NezhaConfig {
   embedding?: EmbeddingConfig;
   env: 'development' | 'production' | 'test';
   transport: TransportConfig;
-  agentName: string;
+  agentId: string;
+  agentDisplayName?: string;
 }
 
 export interface TransportConfig {
@@ -243,6 +244,7 @@ export interface IConfig {
   getEmbeddingConfig(): EmbeddingConfig | undefined;
   getEnv(): string;
   getTransportConfig(): TransportConfig;
-  getAgentName(): string;
+  getAgentId(): string;
+  getAgentDisplayName(): string | undefined;
   validate(): boolean;
 }
