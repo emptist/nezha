@@ -1767,7 +1767,8 @@ async function main(): Promise<void> {
         const monitor = await cliInstance.getMonitoringCommands();
 
         if (subcommand === 'list' || !subcommand) {
-          const limit = parseInt(args[args.indexOf('--limit') + 1] || '50', 10);
+          const limitIndex = args.indexOf('--limit');
+          const limit = limitIndex !== -1 ? parseInt(args[limitIndex + 1] || '50', 10) : 50;
           const showResolved = args.includes('--all');
           await monitor.listDLQ(limit, showResolved);
         } else if (subcommand === 'resolve') {
