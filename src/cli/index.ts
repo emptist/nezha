@@ -18,7 +18,7 @@ import {
   respondToReview,
 } from './InterReviewCommands.js';
 import { MonitoringCommands } from './MonitoringCommands.js';
-import { MeetingCommands, parseKeyPoints } from './MeetingCommands.js';
+import { MeetingCommands, parseKeyPoints, MeetingDbCommands } from './MeetingCommands.js';
 import { ReviewManagementCommands } from './ReviewCommands.js';
 import { IssueCommands } from './IssueCommands.js';
 
@@ -1876,6 +1876,76 @@ async function main(): Promise<void> {
         } else if (subcommand === 'history') {
           const limit = parseInt(args[args.indexOf('--limit') + 1] || '20', 10);
           await meeting.listConsensus(limit);
+        } else if (subcommand === 'db') {
+          const dbSubcommand = args[2];
+          const db = await cliInstance.getDb();
+          const dbMeeting = new MeetingDbCommands(db);
+
+          if (dbSubcommand === 'list' || dbSubcommand === 'ls') {
+            const statusIndex = args.indexOf('--status');
+            const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+            await dbMeeting.list({ status });
+          } else if (dbSubcommand === 'show') {
+            const id = args[3];
+            if (!id) {
+              cli.error('Meeting ID is required');
+              console.log('\nUsage: nezha meeting db show <id>');
+              process.exit(1);
+            }
+            await dbMeeting.show(id);
+          } else if (dbSubcommand === 'create') {
+            const topic = args.slice(3).join(' ');
+            if (!topic) {
+              cli.error('Meeting topic is required');
+              console.log('\nUsage: nezha meeting db create <topic>');
+              process.exit(1);
+            }
+            await dbMeeting.create(topic);
+          } else if (dbSubcommand === 'opinion') {
+            const meetingId = args[3];
+            const perspective = args.slice(4).join(' ');
+            if (!meetingId || !perspective) {
+              cli.error('Meeting ID and perspective are required');
+              console.log('\nUsage: nezha meeting db opinion <meeting-id> <perspective>');
+              process.exit(1);
+            }
+            const posIndex = args.indexOf('--position');
+            const position =
+              posIndex !== -1
+                ? (args[posIndex + 1] as 'support' | 'oppose' | 'neutral')
+                : undefined;
+            await dbMeeting.addOpinion(meetingId, perspective, { position });
+          } else if (dbSubcommand === 'consensus') {
+            const meetingId = args[3];
+            const consensusText = args.slice(4).join(' ');
+            if (!meetingId || !consensusText) {
+              cli.error('Meeting ID and consensus text are required');
+              console.log('\nUsage: nezha meeting db consensus <meeting-id> <text>');
+              process.exit(1);
+            }
+            await dbMeeting.consensus(meetingId, consensusText);
+          } else if (dbSubcommand === 'cancel') {
+            const meetingId = args[3];
+            if (!meetingId) {
+              cli.error('Meeting ID is required');
+              console.log('\nUsage: nezha meeting db cancel <meeting-id>');
+              process.exit(1);
+            }
+            await dbMeeting.cancel(meetingId);
+          } else if (dbSubcommand === 'stats') {
+            await dbMeeting.stats();
+          } else {
+            console.log('\nMeeting DB Commands:');
+            console.log('  nezha meeting db list [--status <status>]');
+            console.log('  nezha meeting db show <id>');
+            console.log('  nezha meeting db create <topic>');
+            console.log(
+              '  nezha meeting db opinion <id> <perspective> [--position <support|oppose|neutral>]'
+            );
+            console.log('  nezha meeting db consensus <id> <text>');
+            console.log('  nezha meeting db cancel <id>');
+            console.log('  nezha meeting db stats');
+          }
         } else if (!subcommand || subcommand === 'help') {
           console.log('\nUsage: nezha meeting <subcommand> [options]');
           console.log('\nSubcommands:');
