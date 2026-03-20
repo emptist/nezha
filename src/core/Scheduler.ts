@@ -293,12 +293,12 @@ export class Scheduler {
       UPDATE ${tableName} 
       SET status = $3, updated_at = NOW(), started_at = NOW(), priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked)
       WHERE id = (SELECT id FROM ranked)
-      RETURNING id, title, description, depends_on, retry_count, max_retries, timeout_seconds`,
+      RETURNING id, title, description, type, depends_on, retry_count, max_retries, timeout_seconds`,
         [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING]
       );
 
       if (result.rows.length > 0) {
-        const task = result.rows[0];
+        const task = result.rows[0] as (typeof result.rows)[0] & { type?: string };
         if (task) {
           const retryCount = task.retry_count ?? 0;
           const maxRetries = task.max_retries ?? 3;
@@ -333,6 +333,7 @@ export class Scheduler {
               task.id,
               task.title,
               task.description,
+              task.type,
               retryCount,
               maxRetries,
               timeoutSec
@@ -419,6 +420,7 @@ export class Scheduler {
     taskId: string,
     title: string,
     description?: string,
+    taskType?: string,
     retryCount?: number,
     maxRetries?: number,
     timeoutSeconds?: number

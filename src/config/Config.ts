@@ -22,7 +22,7 @@ function parseIntEnv(value: string | undefined, defaultValue: number, key: strin
   return parsed;
 }
 
-const AGENT_ID_FILE = '.nezha/agent-id.json';
+// const AGENT_ID_FILE = '.nezha/agent-id.json'; // Reserved for future use
 
 function loadOrCreateAgentId(): { id: string; displayName?: string } {
   const configDir = path.join(process.cwd(), '.nezha');

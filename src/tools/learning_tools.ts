@@ -2,7 +2,6 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { LearningAnalysisService } from '../core/LearningAnalysis.js';
 import { logger } from '../utils/logger.js';
 import { Config } from '../config/Config.js';
-import type { VectorSearchResult } from '../core/Memory.js';
 import type { EmbeddingProvider } from '../services/embedding/index.js';
 
 export interface RecordOutcomeInput {

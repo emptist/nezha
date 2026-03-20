@@ -201,4 +201,20 @@ COPY (SELECT * FROM issues WHERE ...) TO '/tmp/issues_backup.csv';
 
 ---
 
+## 已知问题
+
+| ID      | 问题                                                       | 类型        | 严重度 | 状态 |
+| ------- | ---------------------------------------------------------- | ----------- | ------ | ---- |
+| ISS-001 | learn() 函数已实现但未注册为 AI 可调用工具                 | bug         | high   | open |
+| ISS-002 | suggest_prompt_update() 函数已实现但未注册为 AI 可调用工具 | bug         | medium | open |
+| ISS-003 | AI 无法通过 learn() 保存反思 - 系统设计问题                | improvement | high   | open |
+
+**修复建议**:
+
+1. 研究 opencode 的工具注册机制 (MCP 或其他)
+2. 将 `learn()` 和 `suggest_prompt_update()` 暴露给 AI
+3. 或使用数据库直接记录反思（作为临时方案）
+
+---
+
 **Last Updated**: 2026-03-20

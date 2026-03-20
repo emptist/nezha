@@ -35,6 +35,7 @@ import { FailureAlertService, AlertType, type FailureAlert } from './FailureAler
 import { LongTaskManager } from './LongTaskManager.js';
 import { InterReviewService, type ReviewResult } from './InterReviewService.js';
 import { AutoReviewService } from './AutoReviewService.js';
+import { MeetingHandler } from './MeetingHandler.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -552,10 +553,22 @@ export class HeartbeatService {
     taskId: string,
     title: string,
     description?: string,
+    taskType?: string,
     retryCount: number = 0,
     maxRetries: number = this.defaultMaxRetries,
     timeoutSeconds: number = 300
   ): Promise<void> {
+    if (taskType === 'discussion') {
+      return this.executeDiscussionTask(
+        taskId,
+        title,
+        description,
+        retryCount,
+        maxRetries,
+        timeoutSeconds
+      );
+    }
+
     this.stats.tasksExecuted++;
     standardMetrics.activeTasks.inc(1);
 
@@ -834,6 +847,31 @@ After completing this task:
     await this.longTaskManager.unregisterTask(taskId);
 
     this.stats.tasksFailed++;
+  }
+
+  private async executeDiscussionTask(
+    taskId: string,
+    title: string,
+    description?: string,
+    retryCount: number = 0,
+    maxRetries: number = this.defaultMaxRetries,
+    timeoutSeconds: number = 300
+  ): Promise<void> {
+    logger.info(`[MeetingHandler] Processing discussion task: ${title}`);
+
+    try {
+      const meetingHandler = new MeetingHandler(this.db, this.agent);
+      await meetingHandler.handleDiscussionTask({
+        id: taskId,
+        title,
+        description: description || title,
+        status: 'RUNNING',
+        priority: 5,
+      });
+    } catch (error) {
+      logger.error('[MeetingHandler] Discussion task failed:', error);
+      this.stats.tasksFailed++;
+    }
   }
 
   private async runReflection(taskTitle: string, taskResult: string): Promise<void> {
