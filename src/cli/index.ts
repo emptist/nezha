@@ -1555,6 +1555,54 @@ async function main(): Promise<void> {
           await issueCmd.resolve(id, notes);
         } else if (subcommand === 'stats') {
           await issueCmd.stats();
+        } else if (subcommand === 'comment') {
+          const id = args[2];
+          const commentIndex = args.indexOf('--comment');
+          const comment = commentIndex !== -1 ? args[commentIndex + 1] : args.slice(3).join(' ');
+          if (!id || !comment) {
+            cli.error('Issue ID and comment are required');
+            console.log('\nUsage: nezha issues comment <id> [--comment <text>]');
+            process.exit(1);
+          }
+          await issueCmd.comment(id, comment);
+        } else if (subcommand === 'comments') {
+          const id = args[2];
+          if (!id) {
+            cli.error('Issue ID is required');
+            console.log('\nUsage: nezha issues comments <id>');
+            process.exit(1);
+          }
+          await issueCmd.comments(id);
+        } else if (subcommand === 'events') {
+          const id = args[2];
+          if (!id) {
+            cli.error('Issue ID is required');
+            console.log('\nUsage: nezha issues events <id>');
+            process.exit(1);
+          }
+          await issueCmd.events(id);
+        } else if (subcommand === 'assign') {
+          const id = args[2];
+          const assignee = args[3];
+          if (!id || !assignee) {
+            cli.error('Issue ID and assignee are required');
+            console.log('\nUsage: nezha issues assign <id> <assignee>');
+            process.exit(1);
+          }
+          await issueCmd.assign(id, assignee);
+        } else if (subcommand === 'labels') {
+          await issueCmd.labels({ list: true });
+        } else if (subcommand === 'milestone') {
+          const titleIndex = args.indexOf('--title');
+          const title = titleIndex !== -1 ? args[titleIndex + 1] : args.slice(2).join(' ');
+          const descIndex = args.indexOf('--description');
+          const description = descIndex !== -1 ? args[descIndex + 1] : undefined;
+          if (!title) {
+            cli.error('Milestone title is required');
+            console.log('\nUsage: nezha issues milestone <title> [--description <desc>]');
+            process.exit(1);
+          }
+          await issueCmd.milestone(title, description);
         } else {
           console.log(`\n${colors.bright}Issue Management Commands:${colors.reset}\n`);
           console.log('  nezha issues list [--status <status>] [--severity <severity>]');
@@ -1564,6 +1612,12 @@ async function main(): Promise<void> {
           );
           console.log('  nezha issues resolve <id> [--notes <notes>]');
           console.log('  nezha issues stats');
+          console.log('  nezha issues comment <id> [--comment <text>]');
+          console.log('  nezha issues comments <id>');
+          console.log('  nezha issues events <id>');
+          console.log('  nezha issues assign <id> <assignee>');
+          console.log('  nezha issues labels [--list]');
+          console.log('  nezha issues milestone <title> [--description <desc>]');
           console.log('\nStatuses: open, resolved, all');
           console.log('Severities: critical, high, medium, low\n');
         }

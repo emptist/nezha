@@ -197,4 +197,160 @@ export class IssueCommands {
 
     console.log();
   }
+
+  async comment(id: string, content: string, options?: { internal?: boolean }): Promise<void> {
+    const agentId = Config.getInstance().getAgentId();
+
+    const issueExists = await this.db.query<{ id: string }>(`SELECT id FROM issues WHERE id = $1`, [
+      id,
+    ]);
+
+    if (issueExists.rows.length === 0) {
+      console.log(`${C.red}Issue not found: ${id}${C.reset}`);
+      return;
+    }
+
+    await this.db.query(
+      `INSERT INTO issue_comments (issue_id, author, content, is_internal)
+       VALUES ($1, $2, $3, $4)`,
+      [id, agentId, content, options?.internal || false]
+    );
+
+    console.log(`${C.green}Added comment to issue #${id.slice(0, 8)}${C.reset}`);
+  }
+
+  async comments(id: string): Promise<void> {
+    const result = await this.db.query<{
+      id: string;
+      author: string;
+      content: string;
+      is_internal: boolean;
+      created_at: Date;
+    }>(
+      `SELECT id, author, content, is_internal, created_at 
+       FROM issue_comments 
+       WHERE issue_id = $1 
+       ORDER BY created_at ASC`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`${C.yellow}No comments on this issue${C.reset}`);
+      return;
+    }
+
+    console.log(`\n${C.bright}Comments (${result.rows.length}):${C.reset}\n`);
+
+    for (const comment of result.rows) {
+      const internalTag = comment.is_internal ? ` ${C.yellow}[internal]${C.reset}` : '';
+      console.log(`${C.gray}---${C.reset}`);
+      console.log(`${C.cyan}${comment.author}${C.reset}${internalTag} at ${comment.created_at}`);
+      console.log(`  ${comment.content}`);
+    }
+    console.log();
+  }
+
+  async events(id: string): Promise<void> {
+    const result = await this.db.query<{
+      event_type: string;
+      actor: string;
+      old_value: string | null;
+      new_value: string | null;
+      created_at: Date;
+    }>(
+      `SELECT event_type, actor, old_value, new_value, created_at 
+       FROM issue_events 
+       WHERE issue_id = $1 
+       ORDER BY created_at ASC`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`${C.yellow}No events on this issue${C.reset}`);
+      return;
+    }
+
+    console.log(`\n${C.bright}Activity (${result.rows.length} events):${C.reset}\n`);
+
+    for (const event of result.rows) {
+      const icon = this.eventIcon(event.event_type);
+      console.log(
+        `${icon} ${C.gray}${event.created_at}${C.reset} ${C.cyan}${event.actor}${C.reset}`
+      );
+      console.log(`   ${this.eventDescription(event)}`);
+    }
+    console.log();
+  }
+
+  private eventIcon(type: string): string {
+    const icons: Record<string, string> = {
+      created: '🆕',
+      status_changed: '📋',
+      closed: '✅',
+      reopened: '↩️',
+      assigned: '👤',
+      unassigned: '👤',
+      labeled: '🏷️',
+      unlabeled: '🏷️',
+      commented: '💬',
+    };
+    return icons[type] || '•';
+  }
+
+  private eventDescription(event: {
+    event_type: string;
+    old_value: string | null;
+    new_value: string | null;
+  }): string {
+    switch (event.event_type) {
+      case 'created':
+        return 'created this issue';
+      case 'status_changed':
+        return `changed status from ${event.old_value} to ${event.new_value}`;
+      case 'closed':
+        return 'resolved this issue';
+      case 'reopened':
+        return 'reopened this issue';
+      case 'assigned':
+        return `assigned to ${event.new_value}`;
+      case 'unassigned':
+        return `unassigned ${event.old_value}`;
+      default:
+        return `${event.event_type}: ${event.old_value || ''} → ${event.new_value || ''}`;
+    }
+  }
+
+  async assign(id: string, assignee: string): Promise<void> {
+    const agentId = Config.getInstance().getAgentId();
+
+    await this.db.query(`UPDATE issues SET assignee = $2 WHERE id = $1`, [id, assignee]);
+
+    console.log(`${C.green}Assigned issue #${id.slice(0, 8)} to ${assignee}${C.reset}`);
+  }
+
+  async labels(options?: { list?: boolean }): Promise<void> {
+    if (options?.list) {
+      const result = await this.db.query<{ name: string; color: string; description: string }>(
+        `SELECT name, color, description FROM labels ORDER BY name`
+      );
+
+      console.log(`\n${C.bright}Available Labels:${C.reset}\n`);
+      for (const label of result.rows) {
+        console.log(`  ${C.cyan}${label.name.padEnd(15)}${C.reset} ${label.description || ''}`);
+      }
+      console.log();
+    }
+  }
+
+  async milestone(title: string, description?: string): Promise<void> {
+    const id = crypto.randomUUID();
+
+    await this.db.query(`INSERT INTO milestones (id, title, description) VALUES ($1, $2, $3)`, [
+      id,
+      title,
+      description || '',
+    ]);
+
+    console.log(`${C.green}Created milestone: ${title}${C.reset}`);
+  }
 }
