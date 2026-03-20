@@ -256,6 +256,12 @@ For significant decisions:
 3. **Document decisions** → Save to memory with tags
 4. **Update SOP if needed** → Create issue for SOP improvement
 
+### 4.2.1 Documented Decisions
+
+| Decision              | Date       | Summary                                                                                                                                    |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Agent Identity Format | 2026-03-20 | Use UUIDs for AI identification (not semantic names). UUIDs are unique, stable, no coordination needed. Display names separate for humans. |
+
 ### 4.3 Conflict Resolution
 
 When AIs disagree:
@@ -300,8 +306,10 @@ npm run start:cli -- issues create "Decision: X vs Y" \
 - [PHILOSOPHY.md](./PHILOSOPHY.md) - Design principles
 - [AGENTS.md](./AGENTS.md) - Agent identity
 - [docs/BROADCAST_SYSTEM.md](./docs/BROADCAST_SYSTEM.md) - Communication
+- [docs/PDCA_CYCLE.md](./docs/PDCA_CYCLE.md) - Continuous improvement
 - [docs/MEMORY_SYSTEM.md](./docs/MEMORY_SYSTEM.md) - Knowledge management
 - [docs/SKILL_SYSTEM.md](./docs/SKILL_SYSTEM.md) - Skills
+- [docs/AboutTaskReflections.md](./docs/AboutTaskReflections.md) - Reflection system
 - [reviews/openclaw_multiagent_research.md](./reviews/openclaw_multiagent_research.md) - OpenClaw reference
 
 ---

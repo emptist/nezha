@@ -38,7 +38,12 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
   }
 
   fs.mkdirSync(configDir, { recursive: true });
-  const agentId = crypto.randomUUID();
+  const now = new Date();
+  const timestamp =
+    now.toISOString().replace(/[-:T]/g, '').substring(0, 8) +
+    '-' +
+    now.toISOString().substring(11, 16).replace(':', '');
+  const agentId = `${timestamp}-${crypto.randomUUID()}`;
   const displayName = process.env[ENV_KEYS.AGENT_NAME];
   const data = { id: agentId, displayName: displayName || undefined };
   fs.writeFileSync(idFilePath, JSON.stringify(data, null, 2));
