@@ -1,5 +1,4 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { logger } from '../utils/logger.js';
 
 export interface FailurePattern {
   id: string;
@@ -196,7 +195,7 @@ export class FailureAnalysisService {
     return causes;
   }
 
-  generateFixes(errorCategory: string, patterns: FailurePattern[], rootCauses: string[]): string[] {
+  generateFixes(errorCategory: string, patterns: FailurePattern[], _rootCauses: string[]): string[] {
     const fixes: string[] = [];
 
     const categoryFixes: Record<string, string[]> = {

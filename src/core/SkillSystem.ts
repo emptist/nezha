@@ -2,7 +2,6 @@ import {
   databaseSkillLoader,
   type StoredSkill,
   type SkillExecutionContext,
-  type SkillMatch,
 } from '../services/DatabaseSkillLoader.js';
 import { logger } from '../utils/logger.js';
 

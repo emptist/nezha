@@ -33,7 +33,6 @@ export class MeetingHandler {
   }
 
   async handleDiscussionTask(task: DiscussionTask): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
     logger.info(`[MeetingHandler] Processing discussion: ${task.title}`);
 
     const existingOpinions = await this.getExistingOpinions(task.id);
@@ -153,7 +152,7 @@ ${opinionsSection}
     const keyPointsPattern = /\*\*Key Points\*\*:([\s\S]+?)(?=\*\*Reasoning\*\*)/g;
     const reasoningPattern = /\*\*Reasoning\*\*:([\s\S]+?)(?=\*\*Concerns\*\*)/g;
     const concernsPattern = /\*\*Concerns\*\*:([\s\S]+?)(?=\*\*Suggestions\*\*)/g;
-    const suggestionsPattern = /\*\*Suggestions\*\*:([\s\S]+?)(?=\`\`\`|$)/g;
+    const suggestionsPattern = /\*\*Suggestions\*\*:([\s\S]+?)(?=`{3}|$)/g;
 
     let match;
     while ((match = opinionPattern.exec(output)) !== null) {
@@ -175,7 +174,7 @@ ${opinionsSection}
     return opinions;
   }
 
-  private extractFirstMatch(output: string, pattern: RegExp, fromIndex: number): string {
+  private extractFirstMatch(output: string, pattern: RegExp, _fromIndex: number): string {
     const matches = [...output.matchAll(pattern)];
     return matches[0]?.[1]?.trim() || '';
   }

@@ -321,8 +321,6 @@ export class IssueCommands {
   }
 
   async assign(id: string, assignee: string): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
-
     await this.db.query(`UPDATE issues SET assignee = $2 WHERE id = $1`, [id, assignee]);
 
     console.log(`${C.green}Assigned issue #${id.slice(0, 8)} to ${assignee}${C.reset}`);

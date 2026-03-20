@@ -2,7 +2,6 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
-import { UnifiedAgent } from '../core/UnifiedAgent.js';
 
 export interface QCFinding {
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -131,8 +130,6 @@ export class QCService {
   }
 
   async completeReview(result: QCReviewResult): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
-
     await this.db.query(
       `UPDATE qc_reviews 
        SET status = 'completed', 

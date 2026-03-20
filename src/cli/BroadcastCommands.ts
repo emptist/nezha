@@ -2,7 +2,6 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { BroadcastService, BroadcastPriority } from '../services/BroadcastService.js';
 import { ActivityLogService } from '../services/ActivityLogService.js';
 import { colors } from '../utils/cli.js';
-import { Config } from '../config/Config.js';
 
 export class BroadcastCommands {
   private readonly broadcastService: BroadcastService;

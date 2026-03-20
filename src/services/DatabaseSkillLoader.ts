@@ -1,6 +1,5 @@
 import { logger } from '../utils/logger.js';
 import { type ClawHubSkill, type SkillReviewResult } from './SkillReviewer.js';
-import type { EmbeddingProvider } from './embedding/index.js';
 
 export interface StoredSkill {
   id: string;

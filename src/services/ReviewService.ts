@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
+import { DATABASE_TABLES } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
 
@@ -107,9 +107,7 @@ export class ReviewService {
     findings: ReviewFinding[],
     actionItems: { description: string }[] = []
   ): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
-
-    const actionItemsWithId = actionItems.map((item, i) => ({
+    const actionItemsWithId = actionItems.map((item) => ({
       id: crypto.randomUUID(),
       description: item.description,
       status: 'pending' as const,
