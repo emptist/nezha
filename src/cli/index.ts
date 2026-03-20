@@ -1299,6 +1299,87 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'trae-reflect': {
+        const text = args.slice(1).join(' ');
+        if (!text) {
+          cli.error('Reflection text is required');
+          console.log('\nUsage: nezha trae-reflect "Your reflection with [LEARN] markers"');
+          console.log('\nThis command is designed for Trae AI (editor-based) to use reflection markers.');
+          console.log('\nMarkers supported:');
+          console.log('  [LEARN] insight: <learning> context: <optional context>');
+          console.log(
+            '  [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>'
+          );
+          console.log('  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <critical|high|medium|low>');
+          process.exit(1);
+        }
+
+        const db = await cliInstance.getDb();
+        let count = 0;
+
+        const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
+        const promptPattern =
+          /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
+        const issuePattern =
+          /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+
+        let match;
+
+        while ((match = learnPattern.exec(text)) !== null) {
+          const insight = match[1]?.trim();
+          const context = match[2]?.trim() || null;
+          if (insight) {
+            await db.query(
+              `INSERT INTO memory (content, tags, source, importance, metadata) 
+               VALUES ($1, ARRAY['learning', 'reflection'], 'reflection-cli', $2, $3)`,
+              [insight, 7, JSON.stringify({ context, source: 'cli-reflect' })]
+            );
+            console.log(`✓ Saved learning: ${insight.substring(0, 60)}...`);
+            count++;
+          }
+        }
+
+        while ((match = promptPattern.exec(text)) !== null) {
+          const currentPrompt = match[1]?.trim();
+          const suggestedPrompt = match[2]?.trim();
+          const reason = match[3]?.trim();
+          if (currentPrompt && suggestedPrompt) {
+            await db.query(
+              `INSERT INTO prompt_suggestions (id, current_prompt, suggested_prompt, reason, status)
+               VALUES (gen_random_uuid(), $1, $2, $3, 'pending')`,
+              [currentPrompt, suggestedPrompt, reason]
+            );
+            console.log(`✓ Saved prompt suggestion: ${suggestedPrompt.substring(0, 40)}...`);
+            count++;
+          }
+        }
+
+        while ((match = issuePattern.exec(text)) !== null) {
+          const title = match[1]?.trim();
+          const description = match[2]?.trim() || null;
+          const issueType = match[3]?.trim() || 'bug';
+          const severity = match[4]?.trim() || 'medium';
+          const tagsStr = match[5]?.trim();
+          const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
+          if (title) {
+            await db.query(
+              `INSERT INTO issues (title, description, issue_type, severity, tags)
+               VALUES ($1, $2, $3, $4, $5)`,
+              [title, description, issueType, severity, tags]
+            );
+            console.log(`✓ Created issue: ${title.substring(0, 50)}...`);
+            count++;
+          }
+        }
+
+        if (count === 0) {
+          console.log('No reflection markers found in text.');
+        } else {
+          console.log(`\n✓ Parsed ${count} reflection item(s)`);
+        }
+        break;
+      }
+
       case 'tasks': {
         const tagIndex = args.indexOf('--tag');
         const statusIndex = args.indexOf('--status');
