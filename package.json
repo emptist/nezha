@@ -5,6 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "workspaces": [
+    "trae_alone"
+  ],
   "bin": {
     "nezha": "./dist/cli/index.js",
     "nezha-mcp": "./dist/mcp/learning-server.js"
@@ -46,6 +49,9 @@
     "review:show": "tsx src/cli/index.ts review-show",
     "review:stats": "tsx src/cli/index.ts review-stats",
     "review:respond": "tsx src/cli/index.ts review-respond",
+    "trae:reflect": "node trae_alone/dist/cli.js",
+    "trae:check": "node trae_alone/dist/cli.js --check",
+    "trae:learnings": "node trae_alone/dist/cli.js --learnings",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },
