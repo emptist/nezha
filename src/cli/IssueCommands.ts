@@ -405,4 +405,102 @@ export class IssueCommands {
       `${C.green}Linked issue #${id.slice(0, 8)} to review #${reviewId.slice(0, 8)}${C.reset}`
     );
   }
+
+  async listLabels(): Promise<void> {
+    const result = await this.db.query(`SELECT * FROM labels ORDER BY name`);
+    if (result.rows.length === 0) {
+      console.log(`${C.yellow}No labels found${C.reset}`);
+      return;
+    }
+    console.log(`\n${C.bright}Labels:${C.reset}`);
+    for (const label of result.rows) {
+      console.log(`  ${C.cyan}${label.name}${C.reset} - ${label.description || 'no description'}`);
+    }
+    console.log();
+  }
+
+  async addLabel(issueId: string, labelName: string): Promise<void> {
+    const labelResult = await this.db.query<{ id: string }>(
+      `SELECT id FROM labels WHERE name = $1`,
+      [labelName]
+    );
+    if (labelResult.rows.length === 0) {
+      console.log(`${C.red}Label not found: ${labelName}${C.reset}`);
+      return;
+    }
+    const labelId = labelResult.rows[0]!.id;
+    await this.db.query(
+      `INSERT INTO issue_labels (issue_id, label_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+      [issueId, labelId]
+    );
+    console.log(`${C.green}Added label '${labelName}' to issue #${issueId.slice(0, 8)}${C.reset}`);
+  }
+
+  async removeLabel(issueId: string, labelName: string): Promise<void> {
+    const labelResult = await this.db.query<{ id: string }>(
+      `SELECT id FROM labels WHERE name = $1`,
+      [labelName]
+    );
+    if (labelResult.rows.length === 0) return;
+    const labelId = labelResult.rows[0]!.id;
+    await this.db.query(`DELETE FROM issue_labels WHERE issue_id = $1 AND label_id = $2`, [
+      issueId,
+      labelId,
+    ]);
+    console.log(
+      `${C.green}Removed label '${labelName}' from issue #${issueId.slice(0, 8)}${C.reset}`
+    );
+  }
+
+  async listMilestones(): Promise<void> {
+    const result = await this.db.query(`SELECT * FROM milestones ORDER BY created_at DESC`);
+    if (result.rows.length === 0) {
+      console.log(`${C.yellow}No milestones found${C.reset}`);
+      return;
+    }
+    console.log(`\n${C.bright}Milestones:${C.reset}`);
+    for (const ms of result.rows) {
+      const icon = ms.status === 'open' ? '○' : '●';
+      const due = ms.due_date ? ` (due: ${new Date(ms.due_date).toLocaleDateString()})` : '';
+      console.log(`  ${icon} ${ms.title}${due}`);
+      if (ms.description) console.log(`    ${ms.description}`);
+    }
+    console.log();
+  }
+
+  async createMilestone(title: string, description?: string, dueDate?: string): Promise<void> {
+    const id = crypto.randomUUID();
+    await this.db.query(
+      `INSERT INTO milestones (id, title, description, due_date) VALUES ($1, $2, $3, $4)`,
+      [id, title, description || null, dueDate || null]
+    );
+    console.log(`${C.green}Created milestone: ${title}${C.reset}`);
+  }
+
+  async addComment(issueId: string, content: string, author: string): Promise<void> {
+    const id = crypto.randomUUID();
+    await this.db.query(
+      `INSERT INTO issue_comments (id, issue_id, author, content) VALUES ($1, $2, $3, $4)`,
+      [id, issueId, author, content]
+    );
+    console.log(`${C.green}Added comment to issue #${issueId.slice(0, 8)}${C.reset}`);
+  }
+
+  async listComments(issueId: string): Promise<void> {
+    const result = await this.db.query(
+      `SELECT * FROM issue_comments WHERE issue_id = $1 ORDER BY created_at`,
+      [issueId]
+    );
+    if (result.rows.length === 0) {
+      console.log(`${C.yellow}No comments on this issue${C.reset}`);
+      return;
+    }
+    console.log(`\n${C.bright}Comments:${C.reset}`);
+    for (const comment of result.rows) {
+      const time = new Date(comment.created_at).toLocaleString();
+      console.log(`  ${C.cyan}${comment.author}${C.reset} at ${time}:`);
+      console.log(`    ${comment.content}`);
+    }
+    console.log();
+  }
 }
