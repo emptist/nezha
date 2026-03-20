@@ -12,7 +12,10 @@ const HEALTH_CACHE_TTL_MS = 30000; // 30 seconds
 const METRICS_CACHE_TTL_MS = 60000; // 60 seconds
 
 const healthCache = getCache<HealthResponse>('health', { ttlMs: HEALTH_CACHE_TTL_MS, maxSize: 10 });
-const metricsCache = getCache<any>('metrics', { ttlMs: METRICS_CACHE_TTL_MS, maxSize: 10 });
+const metricsCache = getCache<MetricsResponse>('metrics', {
+  ttlMs: METRICS_CACHE_TTL_MS,
+  maxSize: 10,
+});
 
 export interface HealthResponse {
   status: 'healthy' | 'unhealthy';
