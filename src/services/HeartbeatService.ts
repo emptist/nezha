@@ -1186,6 +1186,14 @@ After completing this task:
     const issuePattern =
       /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
 
+    const whatWorkedPattern = /(?:\d+\.\s*)?\*\*What worked well:\*\*(.+?)(?=\n\d+\.|\n\*\*|$)/gis;
+    const whatCouldImprovePattern =
+      /(?:\d+\.\s*)?\*\*What could be improved:\*\*(.+?)(?=\n\d+\.|\n\*\*|$)/gis;
+    const novelSolutionsPattern =
+      /(?:\d+\.\s*)?\*\*Novel solutions:\*\*(.+?)(?=\n\d+\.|\n\*\*|$)/gis;
+    const worthRememberingPattern =
+      /(?:\d+\.\s*)?\*\*Worth remembering:\*\*(.+?)(?=\n\d+\.|\n\*\*|$)/gis;
+
     let match;
     let count = 0;
 
@@ -1251,6 +1259,54 @@ After completing this task:
         );
         count++;
         logger.info(`[Reflection] Created issue from reflection: ${title}`);
+      }
+    }
+
+    while ((match = whatWorkedPattern.exec(output)) !== null) {
+      const content = match[1]?.trim();
+      if (content && content !== 'None.' && content !== 'None') {
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['reflection', 'what-worked'], 'reflection-parser', $2, $3)`,
+          [content, 5, JSON.stringify({ taskTitle, reflectionType: 'what-worked' })]
+        );
+        count++;
+      }
+    }
+
+    while ((match = whatCouldImprovePattern.exec(output)) !== null) {
+      const content = match[1]?.trim();
+      if (content && content !== 'None.' && content !== 'None') {
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['reflection', 'improvement'], 'reflection-parser', $2, $3)`,
+          [content, 6, JSON.stringify({ taskTitle, reflectionType: 'improvement' })]
+        );
+        count++;
+      }
+    }
+
+    while ((match = novelSolutionsPattern.exec(output)) !== null) {
+      const content = match[1]?.trim();
+      if (content && content !== 'None.' && content !== 'None') {
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['reflection', 'novel-solution'], 'reflection-parser', $2, $3)`,
+          [content, 7, JSON.stringify({ taskTitle, reflectionType: 'novel-solution' })]
+        );
+        count++;
+      }
+    }
+
+    while ((match = worthRememberingPattern.exec(output)) !== null) {
+      const content = match[1]?.trim();
+      if (content && content !== 'None.' && content !== 'None') {
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['reflection', 'worth-remembering'], 'reflection-parser', $2, $3)`,
+          [content, 7, JSON.stringify({ taskTitle, reflectionType: 'worth-remembering' })]
+        );
+        count++;
       }
     }
 
