@@ -371,6 +371,7 @@ export class HeartbeatService {
         await this.checkMeetingInvites();
         await this.checkFailurePatterns();
         await this.checkBroadcasts();
+        await this.checkCommunications();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -1057,6 +1058,66 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[Broadcast] Check failed (non-fatal):', error);
+    }
+  }
+
+  private async checkCommunications(): Promise<void> {
+    try {
+      const agentId = Config.getInstance().getAgentId();
+
+      const result = await this.db.query<{
+        id: string;
+        from_ai: string;
+        message_type: string;
+        content: string;
+        priority: string;
+        created_at: Date;
+      }>(
+        `SELECT id, from_ai, message_type, content, priority, created_at
+         FROM project_communications
+         WHERE to_ai = $1
+           AND read_at IS NULL
+           AND created_at > NOW() - INTERVAL '24 hours'
+         ORDER BY 
+           CASE WHEN priority = 'critical' THEN 1 
+                WHEN priority = 'high' THEN 2 
+                WHEN priority = 'normal' THEN 3 
+                ELSE 4 END,
+           created_at DESC
+         LIMIT 10`,
+        [agentId]
+      );
+
+      if (result.rows.length === 0) {
+        return;
+      }
+
+      logger.info(`[Communications] ${result.rows.length} unread message(s)`);
+
+      for (const comm of result.rows) {
+        const taskId = crypto.randomUUID();
+        const priority = comm.priority === 'critical' ? 9 : comm.priority === 'high' ? 7 : 5;
+
+        await this.db.query(
+          `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
+           VALUES ($1, $2, $3, 'PENDING', $4, 'communication', 'inter-ai-communication', $5)`,
+          [
+            taskId,
+            `[Comm ${comm.from_ai}] ${comm.content.substring(0, 60)}...`,
+            `From: ${comm.from_ai}\nType: ${comm.message_type}\n\n${comm.content}`,
+            priority,
+            ['communication', comm.message_type],
+          ]
+        );
+
+        await this.db.query(`UPDATE project_communications SET read_at = NOW() WHERE id = $1`, [
+          comm.id,
+        ]);
+
+        logger.info(`[Communications] Created task for message from ${comm.from_ai}`);
+      }
+    } catch (error) {
+      logger.warn('[Communications] Check failed (non-fatal):', error);
     }
   }
 
