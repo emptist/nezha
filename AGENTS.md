@@ -84,3 +84,13 @@ AI: "将此任务添加到高优先级队列，等待指定的 AI 处理"
 - 任务完成后，使用 `learn()` 函数保存重要经验
 - 如果发现系统设计问题，使用 `suggest_prompt_update()` 建议改进
 - **工具已注册**: `learn()`, `memory_search()`, `suggest_prompt_update()` 通过 MCP server (`nezha-mcp`) 暴露给 AI
+
+### MCP 工具使用 (nezha-learning)
+
+当需要保存学习或搜索记忆时，使用 MCP 工具 "nezha-learning":
+
+```
+use the nezha-learning tool to learn: insight here
+```
+
+或使用 trigger phrases: "use learn", "save learning", "memory search"
