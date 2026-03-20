@@ -10,24 +10,33 @@ export class AIProviderFactory {
       return this.instance;
     }
 
-    const apiKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || '';
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const anthropicKey = process.env.ANTHROPIC_API_KEY;
+    const zhipuKey = process.env.ZHIPU_API_KEY;
 
     let config: AIProviderConfig;
 
-    if (apiKey.startsWith('sk-')) {
+    if (zhipuKey && !openaiKey && !anthropicKey) {
+      config = {
+        provider: 'openai',
+        model: process.env.ZHIPU_MODEL || 'glm-4-flash',
+        apiKey: zhipuKey,
+        baseUrl: process.env.ZHIPU_API_URL || 'https://open.bigmodel.cn/api/paas/v4',
+      };
+    } else if (openaiKey?.startsWith('sk-')) {
       config = {
         provider: 'openai',
         model: process.env.OPENAI_MODEL || 'gpt-4',
-        apiKey,
+        apiKey: openaiKey,
       };
-    } else if (apiKey.startsWith('sk-ant-')) {
+    } else if (anthropicKey?.startsWith('sk-ant-')) {
       config = {
         provider: 'anthropic',
         model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-        apiKey,
+        apiKey: anthropicKey,
       };
     } else {
-      throw new Error('No valid AI API key found in environment');
+      throw new Error('No valid AI API key found in environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, or ZHIPU_API_KEY)');
     }
 
     this.instance = this.create(config);

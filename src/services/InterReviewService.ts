@@ -4,6 +4,8 @@ import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
+import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
+import { Config } from '../config/Config.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -57,11 +59,28 @@ export enum InterReviewEvent {
 export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
   private readonly aiProvider: AIProvider | null;
+  private readonly agent: UnifiedAgent | null;
 
-  constructor(db: DatabaseClient, aiProvider?: AIProvider) {
+  constructor(db: DatabaseClient, aiProvider?: AIProvider, agent?: UnifiedAgent) {
     super();
     this.db = db;
-    this.aiProvider = aiProvider || this.createOptionalAIProvider();
+    this.agent = agent || this.createOptionalAgent();
+    this.aiProvider = aiProvider || (!this.agent ? this.createOptionalAIProvider() : null);
+  }
+
+  private createOptionalAgent(): UnifiedAgent | null {
+    try {
+      const config = Config.getInstance();
+      const transportConfig = config.getTransportConfig();
+      const agentConfig: UnifiedAgentConfig = {
+        mode: transportConfig.mode,
+        serverUrl: transportConfig.opencodeApiUrl,
+      };
+      return new UnifiedAgent(agentConfig);
+    } catch {
+      logger.debug('[InterReview] No UnifiedAgent available');
+      return null;
+    }
   }
 
   private createOptionalAIProvider(): AIProvider | null {
@@ -74,7 +93,7 @@ export class InterReviewService extends EventEmitter {
   }
 
   private isAIAvailable(): boolean {
-    return this.aiProvider !== null;
+    return this.agent !== null || this.aiProvider !== null;
   }
 
   async loadPromptFromSkills(promptName: string): Promise<string | null> {
@@ -94,12 +113,23 @@ export class InterReviewService extends EventEmitter {
 
   async savePromptToSkills(promptName: string, content: string): Promise<void> {
     try {
-      await this.db.query(
-        `INSERT INTO skills (id, name, content, status, version, created_at, updated_at)
-         VALUES (uuid_generate_v4(), $1, $2, 'approved', '1.0', NOW(), NOW())
-         ON CONFLICT (name) DO UPDATE SET content = $2, updated_at = NOW()`,
-        [promptName, content]
+      const existing = await this.db.query<{ id: string }>(
+        `SELECT id FROM skills WHERE name = $1`,
+        [promptName]
       );
+      
+      if (existing.rows.length > 0) {
+        await this.db.query(
+          `UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`,
+          [promptName, JSON.stringify({ markdown: content })]
+        );
+      } else {
+        await this.db.query(
+          `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
+           VALUES (uuid_generate_v4(), $1, $2, '1.0', 'ai-built', NOW(), NOW())`,
+          [promptName, JSON.stringify({ markdown: content })]
+        );
+      }
       logger.info(`[InterReview] Saved prompt to skills: ${promptName}`);
     } catch (error) {
       logger.error(`[InterReview] Failed to save prompt to skills:`, error);
@@ -107,6 +137,14 @@ export class InterReviewService extends EventEmitter {
   }
 
   private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    if (this.agent) {
+      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      const response = await this.agent.executeTask(fullPrompt);
+      if (response.success && response.message) {
+        return response.message;
+      }
+      throw new Error(`Agent execution failed: ${response.message || 'Unknown error'}`);
+    }
     if (!this.aiProvider) {
       throw new Error('AI provider not available');
     }
@@ -484,7 +522,7 @@ This is a reminder extracted from code review. Future AI should remember this wh
             taskId,
             score: result.overallScore,
           }),
-          JSON.stringify(['learning', 'review', learning.topic, 'ai-generated']),
+          ['learning', 'review', learning.topic, 'ai-generated'],
           7,
           'inter-review',
         ]
@@ -501,12 +539,24 @@ Apply this when working on tasks related to: ${learning.topic}
 ### Source
 Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScore}/100)`;
 
-      await this.db.query(
-        `INSERT INTO skills (id, name, content, status, version, created_at, updated_at)
-         VALUES (uuid_generate_v4(), $1, $2, 'approved', '1.0', NOW(), NOW())
-         ON CONFLICT (name) DO UPDATE SET content = $2, updated_at = NOW()`,
-        [`review-learning-${learning.topic.toLowerCase().replace(/\s+/g, '-')}`, skillContent]
+      const skillName = `review-learning-${learning.topic.toLowerCase().replace(/\s+/g, '-')}`;
+      const existing = await this.db.query<{ id: string }>(
+        `SELECT id FROM skills WHERE name = $1`,
+        [skillName]
       );
+      
+      if (existing.rows.length > 0) {
+        await this.db.query(
+          `UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`,
+          [skillName, JSON.stringify({ markdown: skillContent })]
+        );
+      } else {
+        await this.db.query(
+          `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
+           VALUES (uuid_generate_v4(), $1, $2, '1.0', 'ai-built', NOW(), NOW())`,
+          [skillName, JSON.stringify({ markdown: skillContent })]
+        );
+      }
 
       logger.info(`[InterReview] Saved learning to memory and skill: ${learning.topic}`);
     }
