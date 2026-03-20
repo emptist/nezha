@@ -443,7 +443,6 @@ export class HeartbeatService {
 
       const pendingFollowUps = await this.reviewService.getPendingFollowUps();
       for (const review of pendingFollowUps.slice(0, 5)) {
-        const agentId = Config.getInstance().getAgentId();
         await this.db.query(
           `INSERT INTO ${DATABASE_TABLES.TASKS}
            (id, title, description, status, priority, type, category)
@@ -1035,9 +1034,7 @@ After completing this task:
         return;
       }
 
-      const agentId = Config.getInstance().getAgentId();
       const criticalCount = broadcasts.filter(b => b.priority === 'critical').length;
-      const highCount = broadcasts.filter(b => b.priority === 'high').length;
 
       if (criticalCount > 0) {
         logger.warn(`[Broadcast] ${criticalCount} critical broadcast(s) unread`);
@@ -1079,23 +1076,27 @@ After completing this task:
       const result = await this.db.query<{
         id: string;
         from_ai: string;
+        from_agent: string;
         message_type: string;
         content: string;
         priority: string;
         created_at: Date;
       }>(
-        `SELECT id, from_ai, message_type, content, priority, created_at
+        `SELECT id, from_ai, from_agent, message_type, content, priority, created_at
          FROM project_communications
-         WHERE to_ai IN ($1, 'all-ais', 'all')
-           AND read_at IS NULL
-           AND created_at > NOW() - INTERVAL '24 hours'
+         WHERE read_at IS NULL
+           AND created_at > NOW() - INTERVAL '7 days'
+           AND (
+             to_ai IN ($1, 'all-ais', 'all')
+             OR message_type IN ('broadcast', 'meeting', 'discussion')
+           )
          ORDER BY 
            CASE WHEN priority = 'critical' THEN 1 
                 WHEN priority = 'high' THEN 2 
                 WHEN priority = 'normal' THEN 3 
                 ELSE 4 END,
            created_at DESC
-         LIMIT 10`,
+         LIMIT 20`,
         [agentId]
       );
 
@@ -1114,8 +1115,8 @@ After completing this task:
            VALUES ($1, $2, $3, 'PENDING', $4, 'communication', 'inter-ai-communication', $5)`,
           [
             taskId,
-            `[Comm ${comm.from_ai}] ${comm.content.substring(0, 60)}...`,
-            `From: ${comm.from_ai}\nType: ${comm.message_type}\n\n${comm.content}`,
+            `[${comm.message_type} ${comm.from_ai || comm.from_agent || 'system'}] ${comm.content.substring(0, 60)}...`,
+            `From: ${comm.from_ai || comm.from_agent || 'system'}\nType: ${comm.message_type}\n\n${comm.content}`,
             priority,
             ['communication', comm.message_type],
           ]
