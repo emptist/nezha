@@ -1351,6 +1351,54 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'reflection-trends': {
+        const db = new DatabaseClient(Config.getInstance());
+
+        const dailyStats = await db.query<{
+          date: Date;
+          reflections: string;
+          tasks_completed: string;
+          positive: string;
+          negative: string;
+        }>(
+          `SELECT 
+             DATE(created_at) as date,
+             COUNT(*) FILTER (WHERE source = 'reflection-parser') as reflections,
+             COUNT(*) FILTER (WHERE source = 'reflection-parser' AND metadata->>'sentiment' = 'positive') as positive,
+             COUNT(*) FILTER (WHERE source = 'reflection-parser' AND metadata->>'sentiment' = 'negative') as negative
+           FROM memory 
+           WHERE created_at > NOW() - INTERVAL '7 days'
+           GROUP BY DATE(created_at)
+           ORDER BY date DESC`
+        );
+
+        const taskStats = await db.query<{ date: Date; completed: string }>(
+          `SELECT DATE(completed_at) as date, COUNT(*) as completed
+           FROM tasks 
+           WHERE completed_at > NOW() - INTERVAL '7 days' AND status = 'COMPLETED'
+           GROUP BY DATE(completed_at)
+           ORDER BY date DESC`
+        );
+
+        console.log('\n  Reflection Trends (Last 7 Days)\n');
+        console.log('  Date        | Reflections | Positive | Negative | Tasks Done');
+        console.log('  ------------|------------|----------|----------|----------');
+
+        for (const day of dailyStats.rows) {
+          const dateStr = new Date(day.date).toISOString().split('T')[0];
+          const taskCount = taskStats.rows.find(
+            t => new Date(t.date).toISOString().split('T')[0] === dateStr
+          );
+          console.log(
+            `  ${dateStr}  | ${(day.reflections || '0').padStart(10)} | ${(day.positive || '0').padStart(8)} | ${(day.negative || '0').padStart(8)} | ${(taskCount?.completed || '0').padStart(9)}`
+          );
+        }
+        console.log();
+
+        await db.close();
+        break;
+      }
+
       case 'import-docs': {
         const heartbeat = new HeartbeatService(new DatabaseClient(Config.getInstance()));
         console.log('\n  Importing docs to memory...\n');
@@ -2701,6 +2749,7 @@ function showHelp(): void {
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
     reflection-stats              Show reflection system statistics
     reflection-summary            Generate daily reflection summary
+    reflection-trends             Show 7-day reflection trends
     import-docs                   Import docs/ folder to memory
     reflect <text>               Broadcast a reflection to all AIs
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
