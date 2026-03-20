@@ -1523,6 +1523,119 @@ After completing this task:
       );
       logger.info(`[Reflection] Sentiment: ${sentiment} for task: ${taskTitle}`);
     }
+
+    await this.clusterReflections();
+  }
+
+  private async clusterReflections(): Promise<void> {
+    try {
+      const recentReflections = await this.db.query<{
+        id: string;
+        content: string;
+        tags: string[];
+      }>(
+        `SELECT id, content, tags FROM memory 
+         WHERE source = 'reflection-parser' 
+           AND created_at > NOW() - INTERVAL '1 hour'
+           AND 'clustered' != ALL(tags)
+         ORDER BY created_at DESC
+         LIMIT 20`
+      );
+
+      if (recentReflections.rows.length < 3) return;
+
+      const stopWords = new Set([
+        'the',
+        'a',
+        'an',
+        'is',
+        'are',
+        'was',
+        'were',
+        'be',
+        'been',
+        'to',
+        'of',
+        'in',
+        'for',
+        'on',
+        'with',
+        'and',
+        'or',
+        'but',
+        'it',
+        'this',
+        'that',
+        'from',
+        'by',
+        'as',
+        'at',
+      ]);
+
+      function extractKeywords(text: string): Set<string> {
+        const words = text
+          .toLowerCase()
+          .split(/\s+/)
+          .filter(w => w.length > 3 && !stopWords.has(w));
+        return new Set(words);
+      }
+
+      const recent = recentReflections.rows;
+      const clusters: Map<string, string[]> = new Map();
+
+      for (let i = 0; i < recent.length; i++) {
+        const current = recent[i];
+        if (!current) continue;
+
+        let bestCluster: string | null = null;
+        let bestOverlap = 0;
+
+        const keywords1 = extractKeywords(current.content);
+
+        for (const [clusterKey, clusterReflections] of clusters) {
+          for (const refId of clusterReflections) {
+            const ref = recent.find(r => r.id === refId);
+            if (ref) {
+              const keywords2 = extractKeywords(ref.content);
+              let overlap = 0;
+              for (const kw of keywords1) {
+                if (keywords2.has(kw)) overlap++;
+              }
+              if (overlap > bestOverlap && overlap >= 2) {
+                bestOverlap = overlap;
+                bestCluster = clusterKey;
+              }
+            }
+          }
+        }
+
+        if (bestCluster) {
+          clusters.get(bestCluster)!.push(current.id);
+        } else {
+          clusters.set(current.id, [current.id]);
+        }
+      }
+
+      for (const [seedId, clusterIds] of clusters) {
+        if (clusterIds.length >= 3) {
+          const seed = recent.find(r => r.id === seedId);
+          if (seed) {
+            const clusterTag = `cluster:${seedId.substring(0, 8)}`;
+            for (const id of clusterIds) {
+              await this.db.query(`UPDATE memory SET tags = array_append(tags, $1) WHERE id = $2`, [
+                clusterTag,
+                id,
+              ]);
+            }
+            logger.info(
+              `[Reflection] Created cluster ${clusterTag} with ${clusterIds.length} reflections`
+            );
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn('[Reflection] Clustering failed:', error);
+    }
   }
 
   isRunning(): boolean {
