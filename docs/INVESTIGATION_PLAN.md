@@ -1,10 +1,49 @@
 # Git Incident Investigation Plan
 
+## Related Documents
+
+- [GIT_INCIDENT_2026-03-20.md](./GIT_INCIDENT_2026-03-20.md) - Main incident report
+
 ## Current State
 
 **Branch:** `git-incident`
-**Status:** ✅ Commit exists - `1dcee3a` with the incident report
-**File:** `docs/GIT_INCIDENT_2026-03-20.md` is committed
+**Status:** ✅ Committed - pushed to remote
+**File:** `docs/GIT_INCIDENT_2026-03-20.md` - Main incident documentation
+
+---
+
+## Phase 1 Findings (Investigation - Read Only)
+
+### Git Operations Found in Codebase
+
+| File | Operations | Risk Level |
+|------|------------|------------|
+| `GitAutoCommitPlugin.ts` | `git add`, `git commit`, `git push` | Medium (commit message bug found & fixed) |
+| `HeartbeatService.ts` | `git rev-parse` | Low (read-only) |
+| `InterReviewService.ts` | `git diff` | Low (read-only) |
+| `BroadcastService.ts` | `git rev-parse` | Low (read-only) |
+| `ActivityLogService.ts` | `git rev-parse` | Low (read-only) |
+| `Scheduler.ts` | `git rev-parse` | Low (read-only) |
+| `InterReviewCommands.ts` | `git log`, `git diff` | Low (read-only) |
+| `AutoReviewService.ts` | `git rev-parse`, `git diff` | Low (read-only) |
+| `ClawHubClient.ts` | `git clone` | Low (read-only) |
+
+### Dangerous Operations NOT in Code
+
+| Operation | Status |
+|-----------|--------|
+| `git filter-branch` | ❌ NOT in code - run by AI externally |
+| `git rebase` | ❌ NOT in code |
+| `git push --force` | ❌ NOT in code |
+| `git reset --hard` | ❌ NOT in code |
+
+### Key Findings
+
+1. **GitAutoCommitPlugin Bug (FIXED)**: The `getCommittedMessage()` method was extracting commit messages from file content instead of actual commit messages. This caused commit message pollution.
+
+2. **Filter-Branch (EXTERNAL)**: The AI ran `git filter-branch` externally - NOT from Nezha code. This was a manual intervention by the AI that went wrong.
+
+3. **All files are SAFE**: The files reported as "deleted" actually exist and are tracked in git. System reminders were misleading.
 
 ---
 
@@ -55,8 +94,52 @@
 | Date | Phase | Task | Status |
 |------|-------|------|--------|
 | 2026-03-20 | 1 | Initial investigation | ✅ Done |
-| 2026-03-20 | 1 | Document all git operations | ⏳ Pending |
+| 2026-03-20 | 1 | Document all git operations | ✅ Done |
 | 2026-03-20 | 1 | Identify AI agents with git access | ⏳ Pending |
+| 2026-03-20 | 1 | Map commit pollution timeline | ⏳ Pending |
+| 2026-03-20 | 1 | Analyze real vs polluted commits | ⏳ Pending |
 | 2026-03-20 | 2 | Risk assessment | ⏳ Pending |
+| 2026-03-20 | 2 | Find filter-branch trigger | ⏳ Pending |
 | 2026-03-20 | 3 | Implement safeguards | ⏳ Pending |
 | 2026-03-20 | 4 | Cleanup (when ready) | ⏳ Pending |
+
+---
+
+## Next Session - Continue From Here
+
+### Immediate Next Steps (Phase 1.3 - 1.4)
+
+1. **Identify AI agents with git access**:
+   - Search for OpenCode client integration
+   - Check task execution flow
+   - Find where AI can run shell commands
+
+2. **Map commit pollution timeline**:
+   - Find first polluted commit
+   - Track the pattern of pollution
+   - Identify the fix commit (7df03c1)
+
+3. **Analyze real vs polluted commits**:
+   - Find commits with actual work (not "Task completed:")
+   - Document real feature commits
+   - Count pollution severity
+
+### Key Files to Investigate
+
+- `src/core/OpenCodeClient.ts` - How AI executes tasks
+- `src/core/UnifiedAgent.ts` - Agent communication
+- `src/core/Scheduler.ts` - Task scheduling
+- `src/services/HeartbeatService.ts` - Task execution
+
+### Git Commands for Investigation (Safe - Read Only)
+
+```bash
+# Find first polluted commit
+git log --oneline --all | grep "Task completed:" | tail -1
+
+# Count pollution
+git log --oneline --all | grep -c "Task completed:"
+
+# Show timeline
+git log --oneline --all --reverse --date-order | head -50
+```
