@@ -2,6 +2,7 @@ import {
   databaseSkillLoader,
   type StoredSkill,
   type SkillExecutionContext,
+  type SkillMatch,
 } from '../services/DatabaseSkillLoader.js';
 import { logger } from '../utils/logger.js';
 
@@ -19,6 +20,15 @@ export interface SkillExecutionResult {
   skillId: string;
   skillName: string;
   durationMs: number;
+}
+
+export interface SkillSuggestion {
+  skill: StoredSkill;
+  matchScore: number;
+  why: string;
+  quickStart?: string;
+  examples?: string[];
+  antiPatternWarning?: string;
 }
 
 export class SkillSystem {
@@ -67,6 +77,61 @@ export class SkillSystem {
 
   async searchSkills(query: string, context?: SkillExecutionContext): Promise<StoredSkill[]> {
     return databaseSkillLoader.searchSkills(query, context);
+  }
+
+  async suggestSkills(taskContext: string, limit: number = 5): Promise<SkillSuggestion[]> {
+    const matches = await databaseSkillLoader.findSkillsByTrigger(taskContext);
+    const suggestions: SkillSuggestion[] = [];
+
+    for (const match of matches.slice(0, limit)) {
+      const why =
+        match.matchedPhrases.length > 0
+          ? `Matches: ${match.matchedPhrases.join(', ')}`
+          : `Score: ${match.matchScore}`;
+
+      suggestions.push({
+        skill: match.skill,
+        matchScore: match.matchScore,
+        why,
+        quickStart: match.skill.quick_start || undefined,
+        examples: match.skill.examples.length > 0 ? match.skill.examples : undefined,
+        antiPatternWarning: match.antiPatternMatch
+          ? `Warning: This skill may not be suitable for "${match.antiPatternMatch}"`
+          : undefined,
+      });
+    }
+
+    return suggestions;
+  }
+
+  async checkSkillSuitability(
+    skillName: string,
+    taskContext: string
+  ): Promise<{
+    suitable: boolean;
+    matchScore: number;
+    matchedPhrases: string[];
+    antiPatternWarning?: string;
+  }> {
+    const matchDetails = await databaseSkillLoader.getSkillMatchDetails(skillName, taskContext);
+
+    if (!matchDetails) {
+      return {
+        suitable: false,
+        matchScore: 0,
+        matchedPhrases: [],
+        antiPatternWarning: 'Skill not found or not available',
+      };
+    }
+
+    return {
+      suitable: !matchDetails.antiPatternMatch,
+      matchScore: matchDetails.matchScore,
+      matchedPhrases: matchDetails.matchedPhrases,
+      antiPatternWarning: matchDetails.antiPatternMatch
+        ? `Anti-pattern detected: "${matchDetails.antiPatternMatch}"`
+        : undefined,
+    };
   }
 
   async executeSkill(

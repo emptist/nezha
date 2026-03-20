@@ -362,10 +362,56 @@ export class HeartbeatService {
 
         await this.checkDocConsistency();
         await this.checkReviewFollowUps();
+        await this.checkMeetingInvites();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
     }, this.insightIntervalMs);
+  }
+
+  private async checkMeetingInvites(): Promise<void> {
+    try {
+      const result = await this.db.query<{
+        id: string;
+        content: string;
+        metadata: Record<string, unknown>;
+      }>(
+        `SELECT id, content, metadata FROM project_communications
+         WHERE message_type = 'notification'
+           AND content LIKE '%Discussion:%'
+           AND read_at IS NULL
+         ORDER BY created_at DESC
+         LIMIT 5`
+      );
+
+      for (const invite of result.rows) {
+        const taskId = (invite.metadata as Record<string, string>)?.taskId;
+        if (taskId) {
+          const existingTask = await this.db.query<{ id: string }>(
+            `SELECT id FROM tasks WHERE id = $1`,
+            [taskId]
+          );
+
+          if (existingTask.rows.length === 0) {
+            const titleMatch = invite.content.match(/Discussion:\s*(.+)/);
+            if (titleMatch?.[1]) {
+              await this.db.query(
+                `INSERT INTO tasks (id, title, description, status, priority, type, category)
+                 VALUES ($1, $2, $3, 'PENDING', 6, 'discussion', 'collaboration')`,
+                [taskId, `Discussion: ${titleMatch[1]}`, `Join the discussion: ${invite.content}`]
+              );
+              logger.info(`[Meeting] Created discussion task from invite: ${taskId}`);
+            }
+          }
+        }
+
+        await this.db.query(`UPDATE project_communications SET read_at = NOW() WHERE id = $1`, [
+          invite.id,
+        ]);
+      }
+    } catch (error) {
+      logger.warn('[Meeting] Failed to check meeting invites:', error);
+    }
   }
 
   private async checkReviewFollowUps(): Promise<void> {

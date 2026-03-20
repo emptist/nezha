@@ -13,6 +13,11 @@ export interface StoredSkill {
   version: string;
   author: string | null;
   tags: string[];
+  trigger_phrases: string[];
+  anti_patterns: string[];
+  quick_start: string | null;
+  examples: string[];
+  emoji: string | null;
   safety_score: number;
   scan_status: 'pending' | 'clean' | 'suspicious' | 'malicious' | 'reviewed';
   verified: boolean;
@@ -26,6 +31,13 @@ export interface StoredSkill {
   installed_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface SkillMatch {
+  skill: StoredSkill;
+  matchScore: number;
+  matchedPhrases: string[];
+  antiPatternMatch: string | null;
 }
 
 export interface SkillExecutionContext {
@@ -83,6 +95,7 @@ export class DatabaseSkillLoader {
       `SELECT 
         id, project_id, name, description, instructions, manifest,
         source, external_id, version, author, tags,
+        trigger_phrases, anti_patterns, quick_start, examples, emoji,
         safety_score, scan_status, verified,
         status, permissions, is_enabled,
         use_count, last_used_at, installed_at,
@@ -97,6 +110,9 @@ export class DatabaseSkillLoader {
     return result.rows.map(row => ({
       ...row,
       tags: Array.isArray(row.tags) ? row.tags : [],
+      trigger_phrases: Array.isArray(row.trigger_phrases) ? row.trigger_phrases : [],
+      anti_patterns: Array.isArray(row.anti_patterns) ? row.anti_patterns : [],
+      examples: Array.isArray(row.examples) ? row.examples : [],
       permissions: Array.isArray(row.permissions) ? row.permissions : [],
     }));
   }
@@ -207,6 +223,78 @@ export class DatabaseSkillLoader {
     );
 
     return result.rows;
+  }
+
+  async findSkillsByTrigger(taskContext: string): Promise<SkillMatch[]> {
+    const lowerContext = taskContext.toLowerCase();
+    const words = lowerContext.split(/\s+/);
+
+    const skills = await this.getAllSkills();
+    const matches: SkillMatch[] = [];
+
+    for (const skill of skills) {
+      const matchedPhrases: string[] = [];
+      let matchScore = 0;
+
+      for (const phrase of skill.trigger_phrases || []) {
+        const lowerPhrase = phrase.toLowerCase();
+        if (lowerContext.includes(lowerPhrase)) {
+          matchedPhrases.push(phrase);
+          matchScore += 10;
+        } else if (words.some(word => word.length > 3 && lowerPhrase.includes(word))) {
+          matchedPhrases.push(phrase);
+          matchScore += 5;
+        }
+      }
+
+      if (skill.description && lowerContext.includes(skill.description.toLowerCase())) {
+        matchScore += 3;
+      }
+
+      if (skill.tags.some(tag => lowerContext.includes(tag.toLowerCase()))) {
+        matchScore += 2;
+      }
+
+      if (matchScore > 0) {
+        matches.push({
+          skill,
+          matchScore,
+          matchedPhrases,
+          antiPatternMatch: this.checkAntiPatterns(skill, taskContext),
+        });
+      }
+    }
+
+    return matches.sort((a, b) => b.matchScore - a.matchScore);
+  }
+
+  checkAntiPatterns(skill: StoredSkill, taskContext: string): string | null {
+    const lowerContext = taskContext.toLowerCase();
+
+    for (const pattern of skill.anti_patterns || []) {
+      const lowerPattern = pattern.toLowerCase();
+      if (lowerContext.includes(lowerPattern)) {
+        return pattern;
+      }
+    }
+
+    return null;
+  }
+
+  async getSuggestedSkills(taskContext: string, limit: number = 5): Promise<StoredSkill[]> {
+    const matches = await this.findSkillsByTrigger(taskContext);
+
+    const validMatches = matches.filter(m => !m.antiPatternMatch);
+
+    return validMatches.slice(0, limit).map(m => m.skill);
+  }
+
+  async getSkillMatchDetails(skillName: string, taskContext: string): Promise<SkillMatch | null> {
+    const skill = await this.getSkillByName(skillName);
+    if (!skill) return null;
+
+    const matches = await this.findSkillsByTrigger(taskContext);
+    return matches.find(m => m.skill.name === skillName) || null;
   }
 
   private async loadSkillById(skillId: string): Promise<StoredSkill | null> {
