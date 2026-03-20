@@ -1083,7 +1083,7 @@ After completing this task:
       }>(
         `SELECT id, from_ai, message_type, content, priority, created_at
          FROM project_communications
-         WHERE to_ai = $1
+         WHERE to_ai IN ($1, 'all-ais', 'all')
            AND read_at IS NULL
            AND created_at > NOW() - INTERVAL '24 hours'
          ORDER BY 
