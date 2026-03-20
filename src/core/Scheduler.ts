@@ -1,3 +1,4 @@
+import { Cron } from 'croner';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import {
   DATABASE_TABLES,
@@ -184,6 +185,12 @@ export class Scheduler {
       this.lastHeartbeat = new Date();
       this.lastRun = new Date();
       this.eventBus.publish(SCHEDULER_EVENTS.HEARTBEAT, { timestamp: this.lastHeartbeat });
+
+      const scheduledProcessed = await this.processScheduledTasks();
+      if (scheduledProcessed > 0) {
+        logger.info(`Scheduler heartbeat: Triggered ${scheduledProcessed} scheduled task(s)`);
+      }
+
       const tableName = DATABASE_TABLES.TASKS;
 
       // Check for timed-out RUNNING tasks - fail them and schedule retry
@@ -297,9 +304,16 @@ export class Scheduler {
           agent_id = $4, agent_name = $5, git_hash = $6, git_branch = $7, environment = $8
       WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, type, depends_on, retry_count, max_retries, timeout_seconds`,
-        [TASK_STATUS.PENDING, TASK_STATUS.COMPLETED, TASK_STATUS.RUNNING, 
-         Config.getInstance().getAgentId(), Config.getInstance().getAgentName(),
-         this.getGitInfo().hash, this.getGitInfo().branch, this.getEnvironment()]
+        [
+          TASK_STATUS.PENDING,
+          TASK_STATUS.COMPLETED,
+          TASK_STATUS.RUNNING,
+          Config.getInstance().getAgentId(),
+          Config.getInstance().getAgentName(),
+          this.getGitInfo().hash,
+          this.getGitInfo().branch,
+          this.getEnvironment(),
+        ]
       );
 
       if (result.rows.length > 0) {
@@ -509,6 +523,133 @@ export class Scheduler {
       isPaused: this.isPaused,
       pauseUntil: this.pauseUntil,
     };
+  }
+
+  static calculateNextRun(cronExpression: string, fromDate: Date = new Date()): Date {
+    try {
+      const cron = new Cron(cronExpression, { timezone: 'UTC' });
+      return cron.nextRun(fromDate) || new Date(fromDate.getTime() + 3600000);
+    } catch {
+      logger.warn(`Invalid cron expression: ${cronExpression}, defaulting to 1 hour`);
+      return new Date(fromDate.getTime() + 3600000);
+    }
+  }
+
+  async processScheduledTasks(): Promise<number> {
+    const scheduledTasks = await this.db.query<{
+      id: string;
+      name: string;
+      description: string;
+      cron_expression: string;
+      priority: number;
+      next_run: Date;
+    }>(`
+      SELECT id, name, description, cron_expression, priority, next_run
+      FROM scheduled_tasks
+      WHERE enabled = true AND next_run <= NOW()
+      ORDER BY priority DESC, next_run ASC
+      LIMIT 10
+    `);
+
+    let processed = 0;
+
+    for (const task of scheduledTasks.rows) {
+      try {
+        const nextRun = Scheduler.calculateNextRun(task.cron_expression, new Date());
+
+        await this.db.query(
+          `
+          UPDATE scheduled_tasks
+          SET last_run = NOW(), next_run = $1, updated_at = NOW()
+          WHERE id = $2
+        `,
+          [nextRun, task.id]
+        );
+
+        await this.db.query(
+          `
+          INSERT INTO ${DATABASE_TABLES.TASKS} (title, description, priority, status, next_retry_at)
+          VALUES ($1, $2, $3, $4, NOW())
+        `,
+          [task.name, task.description || '', task.priority, TASK_STATUS.PENDING]
+        );
+
+        logger.info(`Scheduled task "${task.name}" triggered, next run: ${nextRun.toISOString()}`);
+        processed++;
+      } catch (error) {
+        logger.error(`Failed to process scheduled task "${task.name}" (${task.id}):`, error);
+      }
+    }
+
+    return processed;
+  }
+
+  async listScheduledTasks(enabledOnly: boolean = false): Promise<
+    Array<{
+      id: string;
+      name: string;
+      description: string;
+      cronExpression: string;
+      priority: number;
+      enabled: boolean;
+      lastRun: Date | null;
+      nextRun: Date;
+    }>
+  > {
+    const result = await this.db.query(`
+      SELECT id, name, description, cron_expression, priority, enabled, last_run, next_run
+      FROM scheduled_tasks
+      ${enabledOnly ? 'WHERE enabled = true' : ''}
+      ORDER BY priority DESC, next_run ASC
+    `);
+
+    return result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      cronExpression: row.cron_expression,
+      priority: row.priority,
+      enabled: row.enabled,
+      lastRun: row.last_run,
+      nextRun: row.next_run,
+    }));
+  }
+
+  async toggleScheduledTask(id: string, enabled: boolean): Promise<boolean> {
+    try {
+      await this.db.query(
+        'UPDATE scheduled_tasks SET enabled = $1, updated_at = NOW() WHERE id = $2',
+        [enabled, id]
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async deleteScheduledTask(id: string): Promise<boolean> {
+    try {
+      await this.db.query('DELETE FROM scheduled_tasks WHERE id = $1', [id]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  static validateCronExpression(expression: string): {
+    valid: boolean;
+    error?: string;
+    nextRun?: Date;
+  } {
+    try {
+      const nextRun = Scheduler.calculateNextRun(expression);
+      return { valid: true, nextRun };
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Invalid cron expression',
+      };
+    }
   }
 
   private async logTaskStateChange(

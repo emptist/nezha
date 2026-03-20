@@ -556,19 +556,19 @@ export class Cli {
       process.exit(1);
     }
 
-    const cronParts = cronExpression.trim().split(/\s+/);
-    if (cronParts.length !== 5) {
-      cli.error(
-        `Invalid cron expression: expected 5 parts (minute hour day month weekday), got ${cronParts.length}`
-      );
+    const { Scheduler } = await import('../core/Scheduler.js');
+    const validation = Scheduler.validateCronExpression(cronExpression.trim());
+    if (!validation.valid) {
+      cli.error(`Invalid cron expression: ${validation.error}`);
       process.exit(1);
     }
 
     const taskData = {
       name: name.trim(),
       description: description.trim(),
-      cronExpression,
+      cronExpression: cronExpression.trim(),
       priority,
+      nextRun: validation.nextRun,
     };
 
     if (dryRun) {
@@ -581,10 +581,87 @@ export class Cli {
 
     await db.query(
       `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, next_run) 
-       VALUES ($1, $2, $3, $4, NOW())`,
-      [taskData.name, taskData.description, taskData.cronExpression, taskData.priority]
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        taskData.name,
+        taskData.description,
+        taskData.cronExpression,
+        taskData.priority,
+        taskData.nextRun,
+      ]
     );
     cli.success(`Scheduled task created: "${name}" (cron: ${cronExpression})`);
+    if (taskData.nextRun) {
+      cli.info(`First run: ${taskData.nextRun.toISOString()}`);
+    }
+  }
+
+  async listScheduledTasks(enabledOnly: boolean = false): Promise<void> {
+    const db = await this.getDb();
+
+    const result = await db.query(`
+      SELECT id, name, description, cron_expression, priority, enabled, last_run, next_run
+      FROM scheduled_tasks
+      ${enabledOnly ? 'WHERE enabled = true' : ''}
+      ORDER BY priority DESC, next_run ASC
+    `);
+
+    if (result.rows.length === 0) {
+      cli.info('No scheduled tasks found');
+      return;
+    }
+
+    cli.header(`Scheduled Tasks (${result.rows.length})`);
+
+    for (const row of result.rows) {
+      const statusColor = row.enabled ? colors.green : colors.red;
+      const status = `${statusColor}${row.enabled ? 'enabled' : 'disabled'}${colors.reset}`;
+      const nextRun = row.next_run ? new Date(row.next_run).toLocaleString() : 'N/A';
+      const lastRun = row.last_run ? new Date(row.last_run).toLocaleString() : 'Never';
+
+      cli.info(`[${String(row.id).slice(0, 8)}...] ${String(row.name)}`);
+      cli.dim(
+        `  Cron: ${String(row.cron_expression)} | Priority: ${String(row.priority)} | ${status}`
+      );
+      cli.dim(`  Next: ${nextRun} | Last: ${lastRun}`);
+      if (row.description) {
+        const desc = String(row.description);
+        cli.dim(`  ${desc.slice(0, 80)}${desc.length > 80 ? '...' : ''}`);
+      }
+      console.log();
+    }
+  }
+
+  async toggleScheduledTask(id: string, enable: boolean): Promise<void> {
+    const db = await this.getDb();
+
+    const result = await db.query(
+      'UPDATE scheduled_tasks SET enabled = $1, updated_at = NOW() WHERE id = $2 RETURNING name',
+      [enable, id]
+    );
+
+    if (result.rows.length === 0) {
+      cli.error(`Scheduled task not found: ${id}`);
+      process.exit(1);
+    }
+
+    const action = enable ? 'enabled' : 'disabled';
+    const taskName = result.rows[0]?.name ?? 'unknown';
+    cli.success(`Scheduled task "${String(taskName)}" ${action}`);
+  }
+
+  async deleteScheduledTask(id: string): Promise<void> {
+    const db = await this.getDb();
+
+    const result = await db.query('DELETE FROM scheduled_tasks WHERE id = $1 RETURNING name', [id]);
+
+    if (result.rows.length === 0) {
+      cli.error(`Scheduled task not found: ${id}`);
+      process.exit(1);
+    }
+
+    const taskName = result.rows[0]?.name ?? 'unknown';
+    cli.success(`Scheduled task "${String(taskName)}" deleted`);
   }
 
   async addContinuousImprovementTask(): Promise<void> {

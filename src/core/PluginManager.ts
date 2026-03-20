@@ -14,6 +14,14 @@ export interface TaskContext {
   metadata?: Record<string, unknown>;
 }
 
+export interface WebhookContext {
+  path: string;
+  payload: unknown;
+  headers: Record<string, string | string[] | undefined>;
+  timestamp: Date;
+  source: string;
+}
+
 export interface PluginHooks {
   beforeTask?: (context: TaskContext) => Promise<void> | void;
   afterTask?: (context: TaskContext) => Promise<void> | void;
@@ -21,6 +29,9 @@ export interface PluginHooks {
   onStartup?: () => Promise<void> | void;
   onShutdown?: () => Promise<void> | void;
   onHeartbeat?: () => Promise<void> | void;
+  onWebhook?: (context: WebhookContext) => Promise<void> | void;
+  onWake?: (context: WebhookContext & { message?: string }) => Promise<void> | void;
+  onWebhookTask?: (context: WebhookContext, task: { id: string }) => Promise<void> | void;
 }
 
 export interface Plugin {
@@ -133,6 +144,36 @@ export class PluginManager {
         await plugin.hooks.onHeartbeat?.();
       } catch (error) {
         logger.error(`Plugin ${plugin.name} onHeartbeat error:`, error);
+      }
+    }
+  }
+
+  async executeOnWebhook(context: WebhookContext): Promise<void> {
+    for (const plugin of this.plugins.values()) {
+      try {
+        await plugin.hooks.onWebhook?.(context);
+      } catch (error) {
+        logger.error(`Plugin ${plugin.name} onWebhook error:`, error);
+      }
+    }
+  }
+
+  async executeOnWake(context: WebhookContext & { message?: string }): Promise<void> {
+    for (const plugin of this.plugins.values()) {
+      try {
+        await plugin.hooks.onWake?.(context);
+      } catch (error) {
+        logger.error(`Plugin ${plugin.name} onWake error:`, error);
+      }
+    }
+  }
+
+  async executeOnWebhookTask(context: WebhookContext, task: { id: string }): Promise<void> {
+    for (const plugin of this.plugins.values()) {
+      try {
+        await plugin.hooks.onWebhookTask?.(context, task);
+      } catch (error) {
+        logger.error(`Plugin ${plugin.name} onWebhookTask error:`, error);
       }
     }
   }
