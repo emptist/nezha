@@ -1431,6 +1431,38 @@ After completing this task:
       }
     }
 
+    const actionPatterns = [
+      /(?:should|must|need to|next step|action):?\s*(.+?)(?:\n|$)/gi,
+      /(?:TODO|FIXME|NEXT):\s*(.+?)(?:\n|$)/gi,
+    ];
+
+    for (const pattern of actionPatterns) {
+      while ((match = pattern.exec(output)) !== null) {
+        const action = match[1]?.trim();
+        if (action && action.length > 10 && action.length < 200) {
+          const existingTask = await this.db.query<{ id: string }>(
+            `SELECT id FROM tasks WHERE title ILIKE $1 AND status IN ('PENDING', 'RUNNING') LIMIT 1`,
+            [`%${action.substring(0, 50)}%`]
+          );
+
+          if (existingTask.rows.length === 0) {
+            const taskId = crypto.randomUUID();
+            await this.db.query(
+              `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
+               VALUES ($1, $2, $3, 'PENDING', 5, 'improvement', 'reflection', $4)`,
+              [
+                taskId,
+                `REFLECTION: ${action.substring(0, 80)}`,
+                `From reflection on task: ${taskTitle}\n\nAction: ${action}`,
+                ['reflection', 'action-item'],
+              ]
+            );
+            logger.info(`[Reflection] Created task from action: ${action.substring(0, 50)}`);
+          }
+        }
+      }
+    }
+
     if (count > 0) {
       logger.info(`[Reflection] Parsed ${count} items from reflection for task: ${taskTitle}`);
     }
