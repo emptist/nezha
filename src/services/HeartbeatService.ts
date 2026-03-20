@@ -37,6 +37,8 @@ import { LongTaskManager } from './LongTaskManager.js';
 import { InterReviewService, type ReviewResult } from './InterReviewService.js';
 import { AutoReviewService } from './AutoReviewService.js';
 import { MeetingHandler } from './MeetingHandler.js';
+import { MarkdownKnowledgeLoader } from './MarkdownKnowledgeLoader.js';
+import * as path from 'path';
 import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
 import { BroadcastService } from './BroadcastService.js';
@@ -384,6 +386,7 @@ export class HeartbeatService {
         await this.checkCommunications();
         await this.checkDLQToIssues();
         await this.checkIssueTaskLinks();
+        await this.checkDocsImport();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -1107,6 +1110,36 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[Issues] Issue-task link check failed:', error);
+    }
+  }
+
+  private async checkDocsImport(): Promise<void> {
+    try {
+      const loader = new MarkdownKnowledgeLoader();
+      loader.setDatabaseClient(this.db);
+      const docsDir = path.join(process.cwd(), 'docs');
+
+      const files = await loader.scanDirectory(docsDir);
+      let imported = 0;
+
+      for (const file of files.slice(0, 5)) {
+        const existing = await this.db.query<{ id: string }>(
+          `SELECT id FROM memory WHERE metadata->>'file' = $1`,
+          [file.path]
+        );
+
+        if (existing.rows.length === 0) {
+          await loader.importFile(file, 'markdown-import');
+          imported++;
+          logger.info(`[Docs] Imported: ${file.path}`);
+        }
+      }
+
+      if (imported > 0) {
+        logger.info(`[Docs] Imported ${imported} new doc(s) to memory`);
+      }
+    } catch (error) {
+      logger.warn('[Docs] Docs import check failed:', error);
     }
   }
 
