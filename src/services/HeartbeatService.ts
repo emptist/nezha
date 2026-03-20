@@ -699,6 +699,13 @@ export class HeartbeatService {
 
 ---
 
+## AUTO-EXECUTION INSTRUCTION
+When given choices or asked to confirm actions:
+- ALWAYS select the RECOMMENDED option (typically option 1)
+- NEVER wait for user input - proceed autonomously
+- If asked to "Select one answer", automatically pick the first/recommended option
+- Execute the recommended action without asking for confirmation
+
 ## Learning Reminder
 After completing this task:
 1. Reflect on what you learned

@@ -1,18 +1,19 @@
-import { Database } from './src/database/Database.js';
+import { DatabaseClient } from './src/db/DatabaseClient.js';
 import { MemoryService } from './src/core/Memory.js';
-import { OllamaEmbedding } from './src/services/OllamaEmbedding.js';
+import { OllamaEmbedding } from './src/services/embedding/OllamaEmbedding.js';
 import { v4 as uuidv4 } from 'uuid';
 
 async function main() {
-  const db = new Database();
+  const db = new DatabaseClient();
   await db.connect();
 
-  const embeddingConfig = {
+  const embedding = new OllamaEmbedding({
     baseURL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
     model: 'nomic-embed-text',
-  };
+    provider: 'ollama',
+  });
 
-  const memory = new MemoryService(db, undefined, new OllamaEmbedding(embeddingConfig));
+  const memory = new MemoryService(db, undefined, embedding);
 
   const id = uuidv4();
   await memory.save({
@@ -20,30 +21,30 @@ async function main() {
     content: `## Bug Fix: GitAutoCommitPlugin Commit Message Pollution
 
 ### Problem
-Git history had 20+ commits with identical message "docs: Add database-first principle for AI communication in PHILOSOPHY.md"
+Git history had 19 commits with the same message "docs: Add database-first principle for AI communication in PHILOSOPHY.md"
 
 ### Root Cause
-The getCommittedMessage() method extracted messages from staged diff comments. When the same file was modified repeatedly with the same comment format, identical messages were generated.
+getCommittedMessage() scanned ALL diff lines including file headers (e.g., "# PHILOSOPHY.md"), picking up 'docs:' from modified file content instead of actual commit messages.
 
-### Solution
-Added timestamp and short hash to commit messages when using actual commit message to ensure uniqueness.
+### Fix Applied
+Only scan lines AFTER @@ hunk markers:
+- Track firstCodeLineFound and inHunkHeader state
+- Skip diff metadata lines (diff, index, ---, +++)
+- Skip comment lines (#, //, *, /*, <!--)
 
-### Historical Pollution
-Already-pushed identical commits require force push to fix. Options:
-1. Interactive rebase to squash identical commits
-2. Accept as known issue (risky for shared repos)
-3. git-filter-repo to rewrite with uniqueness
+### Status
+- Fix committed: 7df03c1
+- 19 polluted commits left as known issue
 
-### Prevention
-New commits now automatically include timestamp and parent commit hash for uniqueness.`,
-    tags: ['git-hygiene-fix', 'bug-fix', 'git'],
-    importance: 6,
+source: src/plugins/GitAutoCommitPlugin.ts
+tags: git-hygiene-fix, auto-commit, bug-fix
+`,
+    importance: 5,
     source: 'src/plugins/GitAutoCommitPlugin.ts',
-    generateEmbedding: true,
   });
 
-  console.log('Memory saved with ID:', id);
-  await db.close();
+  console.log('Saved to memory:', id);
+  await db.disconnect();
 }
 
 main().catch(console.error);
