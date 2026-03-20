@@ -1131,7 +1131,7 @@ After completing this task:
         );
 
         if (existing.rows.length === 0) {
-          await loader.importFile(file, 'markdown-import');
+          await loader.importFile(file);
           imported++;
           logger.info(`[Docs] Imported: ${file.path}`);
         } else {
@@ -1165,7 +1165,7 @@ After completing this task:
       );
 
       if (existing.rows.length === 0) {
-        await loader.importFile(file, 'markdown-import');
+        await loader.importFile(file);
         imported++;
       } else {
         skipped++;

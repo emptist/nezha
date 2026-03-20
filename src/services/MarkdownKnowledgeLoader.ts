@@ -368,14 +368,14 @@ export class MarkdownKnowledgeLoader {
     }
   }
 
-  async importDirectory(dirPath: string, projectId?: string): Promise<ImportResult[]> {
+  async importDirectory(dirPath: string): Promise<ImportResult[]> {
     logger.info(`[KnowledgeLoader] Importing knowledge from ${dirPath}`);
 
     const files = await this.scanDirectory(dirPath);
     const results: ImportResult[] = [];
 
     for (const file of files) {
-      const result = await this.importFile(file, projectId);
+      const result = await this.importFile(file);
       results.push(result);
 
       if (result.success) {
@@ -386,12 +386,12 @@ export class MarkdownKnowledgeLoader {
     return results;
   }
 
-  async importStandardLocations(projectId?: string): Promise<ImportResult[]> {
+  async importStandardLocations(): Promise<ImportResult[]> {
     const allResults: ImportResult[] = [];
 
     for (const dir of DEFAULT_KNOWLEDGE_DIRS) {
       if (fs.existsSync(dir)) {
-        const results = await this.importDirectory(dir, projectId);
+        const results = await this.importDirectory(dir);
         allResults.push(...results);
       }
     }
