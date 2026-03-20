@@ -6,6 +6,7 @@ import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
 import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
 import { Config } from '../config/Config.js';
+import { BroadcastService } from './BroadcastService.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -60,12 +61,14 @@ export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
   private readonly aiProvider: AIProvider | null;
   private readonly agent: UnifiedAgent | null;
+  private readonly broadcastService: BroadcastService;
 
   constructor(db: DatabaseClient, aiProvider?: AIProvider, agent?: UnifiedAgent) {
     super();
     this.db = db;
     this.agent = agent || this.createOptionalAgent();
     this.aiProvider = aiProvider || (!this.agent ? this.createOptionalAIProvider() : null);
+    this.broadcastService = new BroadcastService(db);
   }
 
   private createOptionalAgent(): UnifiedAgent | null {
@@ -209,6 +212,30 @@ export class InterReviewService extends EventEmitter {
         logger.info(`[InterReview] Saved ${reviewResult.learnings.length} learnings to memory`);
 
         await this.suggestPromptUpdatesFromLearnings(reviewResult, review?.taskId || undefined);
+      }
+
+      if (
+        reviewResult.overallScore < 80 ||
+        reviewResult.findings.filter(f => f.type === 'issue').length > 0
+      ) {
+        const issueCount = reviewResult.findings.filter(f => f.type === 'issue').length;
+        const msg = `## Inter-Review Completed\n\n**Score**: ${reviewResult.overallScore}/100\n**Issues Found**: ${issueCount}\n**Summary**: ${reviewResult.summary.substring(0, 200)}...\n\n${
+          issueCount > 0
+            ? '**Key Issues**:\n' +
+              reviewResult.findings
+                .filter(f => f.type === 'issue')
+                .slice(0, 3)
+                .map(f => `- ${f.message}`)
+                .join('\n')
+            : ''
+        }`;
+
+        await this.broadcastService.sendBroadcast(msg, {
+          priority: reviewResult.overallScore < 60 ? 'high' : 'normal',
+        });
+        logger.info(
+          `[InterReview] Broadcasted review findings (score: ${reviewResult.overallScore})`
+        );
       }
 
       return reviewResult;
