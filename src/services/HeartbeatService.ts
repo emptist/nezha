@@ -38,6 +38,7 @@ import { AutoReviewService } from './AutoReviewService.js';
 import { MeetingHandler } from './MeetingHandler.js';
 import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
+import { BroadcastService } from './BroadcastService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -134,6 +135,7 @@ export class HeartbeatService {
   private readonly autoReviewService: AutoReviewService;
   private readonly reviewService: ReviewService;
   private readonly failureAnalysisService: FailureAnalysisService;
+  private readonly broadcastService: BroadcastService;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -215,6 +217,7 @@ export class HeartbeatService {
     this.interReviewService = new InterReviewService(db);
     this.reviewService = new ReviewService(db);
     this.failureAnalysisService = new FailureAnalysisService(db);
+    this.broadcastService = new BroadcastService(db);
 
     if (typeof this.scheduler.getEventBus === 'function') {
       this.autoReviewService = new AutoReviewService(this.scheduler.getEventBus(), db, {
@@ -367,6 +370,7 @@ export class HeartbeatService {
         await this.checkReviewFollowUps();
         await this.checkMeetingInvites();
         await this.checkFailurePatterns();
+        await this.checkBroadcasts();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -1008,6 +1012,51 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[FailureAnalysis] Pattern check failed (non-fatal):', error);
+    }
+  }
+
+  private async checkBroadcasts(): Promise<void> {
+    try {
+      const broadcasts = await this.broadcastService.getUnreadBroadcasts();
+
+      if (broadcasts.length === 0) {
+        return;
+      }
+
+      const agentId = Config.getInstance().getAgentId();
+      const criticalCount = broadcasts.filter(b => b.priority === 'critical').length;
+      const highCount = broadcasts.filter(b => b.priority === 'high').length;
+
+      if (criticalCount > 0) {
+        logger.warn(`[Broadcast] ${criticalCount} critical broadcast(s) unread`);
+      }
+
+      for (const broadcast of broadcasts.slice(0, 10)) {
+        if (broadcast.priority === 'critical' || broadcast.priority === 'high') {
+          const taskId = crypto.randomUUID();
+          await this.db.query(
+            `INSERT INTO tasks (id, title, description, status, priority, type, category)
+             VALUES ($1, $2, $3, 'PENDING', $4, 'broadcast', 'communication')`,
+            [
+              taskId,
+              `[Broadcast ${broadcast.priority}] ${broadcast.message.substring(0, 80)}...`,
+              broadcast.message,
+              broadcast.priority === 'critical' ? 9 : 7,
+            ]
+          );
+          logger.info(
+            `[Broadcast] Created task from ${broadcast.priority} broadcast: ${broadcast.id}`
+          );
+        }
+
+        await this.broadcastService.markAsRead(broadcast.id);
+      }
+
+      if (broadcasts.length > 0) {
+        logger.info(`[Broadcast] Processed ${Math.min(broadcasts.length, 10)} unread broadcasts`);
+      }
+    } catch (error) {
+      logger.warn('[Broadcast] Check failed (non-fatal):', error);
     }
   }
 
