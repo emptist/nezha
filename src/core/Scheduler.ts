@@ -400,14 +400,23 @@ export class Scheduler {
               });
             }
 
-            // Reset to PENDING for retry (with delay handled by failure count)
-            // Also boost priority to prevent starvation
+            // Reset to PENDING for retry with exponential backoff
             const errorMessage = err instanceof Error ? err.message : String(err);
             const retryCountForLog = (task.retry_count ?? 0) + 1;
-            const priorityBoost = retryCountForLog * 2; // +2 per retry
+            const maxRetries = task.max_retries ?? 3;
+            const priorityBoost = retryCountForLog * 2;
+            const backoffMs = Math.min(1000 * Math.pow(2, retryCountForLog), 300000); // 1s, 2s, 4s, 8s... max 5min
+            const nextRetryAt = new Date(Date.now() + backoffMs);
             await this.db.query(
-              `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4 WHERE id = $5`,
-              [TASK_STATUS.PENDING, errorMessage, retryCountForLog, priorityBoost, task.id]
+              `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4, next_retry_at = $5 WHERE id = $6`,
+              [
+                TASK_STATUS.PENDING,
+                errorMessage,
+                retryCountForLog,
+                priorityBoost,
+                nextRetryAt,
+                task.id,
+              ]
             );
 
             await this.logTaskStateChange(
