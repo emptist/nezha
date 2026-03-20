@@ -98,9 +98,13 @@
 | 2026-03-20 | 1 | Identify AI agents with git access | ✅ Done |
 | 2026-03-20 | 1 | Map commit pollution timeline | ✅ Done |
 | 2026-03-20 | 1 | Analyze real vs polluted commits | ✅ Done |
-| 2026-03-20 | 2 | Risk assessment | ⏳ Pending |
-| 2026-03-20 | 2 | Find filter-branch trigger | ⏳ Pending |
-| 2026-03-20 | 3 | Implement safeguards | ⏳ Pending |
+| 2026-03-20 | 2 | Risk assessment | ✅ Done |
+| 2026-03-20 | 2 | Find filter-branch trigger | ✅ Done |
+| 2026-03-20 | 2 | Document decision chain | ✅ Done |
+| 2026-03-20 | 2 | Document safeguards needed | ✅ Done |
+| 2026-03-20 | 3 | Implement GitSafetyService | ⏳ Pending |
+| 2026-03-20 | 3 | Update OpenCodeClient with safety | ⏳ Pending |
+| 2026-03-20 | 3 | Update GitAutoCommitPlugin validation | ⏳ Pending |
 | 2026-03-20 | 4 | Cleanup (when ready) | ⏳ Pending |
 
 ---
@@ -157,47 +161,117 @@ This means OpenCode AI can run **ANY** shell command, including:
 
 ---
 
+## Phase 2 Complete Findings
+
+### Decision Chain Reconstruction (from reflog)
+
+| Time | Event | Commit | Details |
+|------|-------|--------|---------|
+| 13:39:30 | First fix attempt | `6010ed6` | "fix: Improve GitAutoCommitPlugin message detection" - didn't fully work |
+| 13:40:21 | Filter-branch attempt | `b15f45b` | AI tried to rewrite history with bash script |
+| ~13:40:30 | Abort | - | AI realized filter-branch made things worse |
+| ~13:40:30 | Reset | `57fe705` | AI reset to last good commit |
+| 14:45:30 | Real fix | `7df03c1` | "fix: GitAutoCommitPlugin - only parse code after hunk markers" |
+
+### Filter-Branch Script Analysis
+
+The AI created a bash script to rewrite commit messages:
+```bash
+#!/bin/bash
+# Filter script for git filter-branch to fix commit messages
+# Had a case statement mapping commit hashes to correct messages
+```
+
+**Why it failed**: The script was incomplete and the filter-branch operation corrupted history instead of fixing it.
+
+### Root Cause Chain
+
+```
+GitAutoCommitPlugin Bug
+        ↓
+180 polluted commits created
+        ↓
+AI detected pollution
+        ↓
+AI attempted first fix (incomplete)
+        ↓
+AI decided filter-branch was needed
+        ↓
+Filter-branch made things worse
+        ↓
+AI aborted and reset
+        ↓
+AI committed correct fix
+```
+
+### Safeguards Recommended
+
+| Safeguard | Priority | Implementation |
+|-----------|----------|----------------|
+| **Dangerous operations blacklist** | HIGH | Block `filter-branch`, `rebase`, `push --force` in OpenCode context |
+| **Pre-operation backup** | HIGH | Auto-backup before any git write operation |
+| **Human approval for history rewrite** | HIGH | Require explicit user consent for `filter-branch`, `rebase` |
+| **Commit message validation** | MEDIUM | Validate commit messages before accepting |
+| **Git operation logging** | MEDIUM | Log all git operations for audit trail |
+
+### Implementation Plan (Phase 3)
+
+1. **Create GitSafetyService.ts**
+   - Whitelist safe operations: `add`, `commit`, `push` (normal), `status`, `diff`, `log`
+   - Blacklist dangerous operations: `filter-branch`, `rebase`, `push --force`, `reset --hard`
+   - Require backup before dangerous operations
+
+2. **Update OpenCodeClient.ts**
+   - Add safety check before spawning OpenCode
+   - Pass safety context to OpenCode
+   - Log all operations
+
+3. **Update GitAutoCommitPlugin.ts**
+   - Add pre-commit validation
+   - Ensure commit message is meaningful
+   - Add fallback for edge cases
+
+---
+
 ## Next Session - Continue From Here
 
-### Phase 1 Complete ✅
+### Phase 1 & 2 Complete ✅
 
-All Phase 1 tasks are done. The investigation has revealed:
-1. **Root cause identified**: GitAutoCommitPlugin bug + OpenCode AI's bad decision
-2. **Timeline mapped**: March 18-20, 2026
-3. **Pollution quantified**: 180 generic commits, 36 legitimate
+All investigation tasks are done. The root cause chain is fully documented:
+1. **Root cause**: GitAutoCommitPlugin bug + OpenCode AI's bad decision to use filter-branch
+2. **Decision chain**: Reconstructed from reflog
+3. **Safeguards**: Documented and prioritized
 
-### Immediate Next Steps (Phase 2 - Risk Assessment)
+### Immediate Next Steps (Phase 3 - Implement Safeguards)
 
-1. **Find what triggered the AI to run filter-branch**:
-   - Check conversation logs in `.tmp/conversations/`
-   - Look for the task that led to filter-branch decision
-   - Document the decision chain
+1. **Create GitSafetyService.ts**:
+   - Implement operation whitelist/blacklist
+   - Add backup functionality
+   - Add logging
 
-2. **Understand the decision chain**:
-   - What prompt was given to OpenCode?
-   - What context did it have?
-   - Why did it think filter-branch was the solution?
+2. **Update OpenCodeClient.ts**:
+   - Add safety context
+   - Log operations
 
-3. **Document safeguards needed**:
-   - How to prevent AI from running dangerous git commands?
-   - Should we add a "dangerous operations" blacklist?
-   - Should we require human approval for certain operations?
+3. **Update GitAutoCommitPlugin.ts**:
+   - Add commit message validation
+   - Add fallback mechanisms
 
-### Key Files to Investigate (Phase 2)
+### Key Files to Create/Modify (Phase 3)
 
-- `.tmp/conversations/` - Conversation logs with OpenCode
-- `.tmp/nezha-memory/` - Nezha's memory of the incident
-- `src/plugins/GitAutoCommitPlugin.ts` - The fixed code
+- `src/services/GitSafetyService.ts` - NEW: Safety service
+- `src/core/OpenCodeClient.ts` - MODIFY: Add safety checks
+- `src/plugins/GitAutoCommitPlugin.ts` - MODIFY: Add validation
 
-### Git Commands for Investigation (Safe - Read Only)
+### Git Commands for Phase 3 (Safe - Implementation)
 
 ```bash
-# View conversation logs
-ls -la .tmp/conversations/
+# Create backup before any changes
+mkdir -p .tmp/backup-$(date +%Y%m%d-%H%M%S)
+cp src/core/OpenCodeClient.ts .tmp/backup-$(date +%Y%m%d-%H%M%S)/
+cp src/plugins/GitAutoCommitPlugin.ts .tmp/backup-$(date +%Y%m%d-%H%M%S)/
 
-# View Nezha memory
-cat .tmp/nezha-memory/MEMORY.md
-
-# Check reflog for filter-branch evidence
-git reflog | grep filter-branch
+# After changes, verify build
+npm run build
+npm test
 ```
