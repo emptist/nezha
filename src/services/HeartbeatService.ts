@@ -383,6 +383,7 @@ export class HeartbeatService {
         await this.checkBroadcasts();
         await this.checkCommunications();
         await this.checkDLQToIssues();
+        await this.checkIssueTaskLinks();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -1071,6 +1072,41 @@ After completing this task:
       }
     } catch (error) {
       logger.warn('[DLQ] DLQ to issues check failed (non-fatal):', error);
+    }
+  }
+
+  private async checkIssueTaskLinks(): Promise<void> {
+    try {
+      const result = await this.db.query<{ id: string; title: string }>(
+        `SELECT id, title FROM issues 
+         WHERE task_id IS NULL 
+           AND status IN ('open', 'in_progress')
+         LIMIT 10`
+      );
+
+      for (const issue of result.rows) {
+        const matchingTask = await this.db.query<{ id: string }>(
+          `SELECT id FROM tasks 
+           WHERE status = 'COMPLETED' 
+             AND (
+               title ILIKE '%' || $1 || '%'
+               OR description ILIKE '%' || $1 || '%'
+             )
+           ORDER BY completed_at DESC
+           LIMIT 1`,
+          [issue.title.substring(0, 50)]
+        );
+
+        if (matchingTask.rows.length > 0 && matchingTask.rows[0]) {
+          await this.db.query(`UPDATE issues SET task_id = $2 WHERE id = $1`, [
+            issue.id,
+            matchingTask.rows[0].id,
+          ]);
+          logger.info(`[Issues] Linked issue ${issue.id} to task ${matchingTask.rows[0].id}`);
+        }
+      }
+    } catch (error) {
+      logger.warn('[Issues] Issue-task link check failed:', error);
     }
   }
 
