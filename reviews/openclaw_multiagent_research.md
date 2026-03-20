@@ -2,7 +2,8 @@
 
 > Research conducted by Trae AI on 2026-03-20
 
-> **⚠️ Important Clarification**: 
+> **⚠️ Important Clarification**:
+>
 > - **OpenClaw** is a **separate project** at `/Users/jk/gits/hub/openclaw`
 > - **OpenCode** is the AI that **Nezha spawns** for task execution
 > - This report researches OpenClaw for reference and learning purposes
@@ -27,36 +28,38 @@
 ### How to Spawn Agents
 
 **Slash Command**:
+
 ```bash
 /subagents spawn <agentId> <task> [--model <model>] [--thinking <level>]
 ```
 
 **Tool**:
+
 ```typescript
 sessions_spawn({
-  task: "string",           // required
-  label: "string",          // optional
-  agentId: "string",        // optional
-  model: "string",          // optional
-  thinking: "level",        // optional
-  runTimeoutSeconds: 0,     // optional
-  thread: false,            // optional - for thread-bound sessions
-  mode: "run|session",      // optional
-  cleanup: "delete|keep",   // optional
-  sandbox: "inherit|require" // optional
-})
+  task: 'string', // required
+  label: 'string', // optional
+  agentId: 'string', // optional
+  model: 'string', // optional
+  thinking: 'level', // optional
+  runTimeoutSeconds: 0, // optional
+  thread: false, // optional - for thread-bound sessions
+  mode: 'run|session', // optional
+  cleanup: 'delete|keep', // optional
+  sandbox: 'inherit|require', // optional
+});
 ```
 
 ### Sub-Agent Features
 
-| Feature | Description |
-|---------|-------------|
-| **Isolation** | Each sub-agent runs in its own session |
-| **Announce** | Results are announced back to requester |
-| **Nested** | Supports up to 5 levels of nesting (maxSpawnDepth) |
-| **Concurrency** | Default 8 concurrent sub-agents |
-| **Auto-archive** | Sessions archived after 60 minutes |
-| **Thread binding** | Discord supports persistent thread-bound sessions |
+| Feature            | Description                                        |
+| ------------------ | -------------------------------------------------- |
+| **Isolation**      | Each sub-agent runs in its own session             |
+| **Announce**       | Results are announced back to requester            |
+| **Nested**         | Supports up to 5 levels of nesting (maxSpawnDepth) |
+| **Concurrency**    | Default 8 concurrent sub-agents                    |
+| **Auto-archive**   | Sessions archived after 60 minutes                 |
+| **Thread binding** | Discord supports persistent thread-bound sessions  |
 
 ### Nested Sub-Agents (Orchestrator Pattern)
 
@@ -65,10 +68,10 @@ sessions_spawn({
   agents: {
     defaults: {
       subagents: {
-        maxSpawnDepth: 2,        // allow sub-agents to spawn children
-        maxChildrenPerAgent: 5,  // max active children per session
-        maxConcurrent: 8,        // global concurrency cap
-        runTimeoutSeconds: 900,  // default timeout
+        maxSpawnDepth: 2, // allow sub-agents to spawn children
+        maxChildrenPerAgent: 5, // max active children per session
+        maxConcurrent: 8, // global concurrency cap
+        runTimeoutSeconds: 900, // default timeout
       },
     },
   },
@@ -77,11 +80,11 @@ sessions_spawn({
 
 ### Depth Levels
 
-| Depth | Session Key | Role | Can Spawn? |
-|-------|-------------|------|------------|
-| 0 | `agent:<id>:main` | Main agent | Always |
-| 1 | `agent:<id>:subagent:<uuid>` | Sub-agent/orchestrator | If maxSpawnDepth >= 2 |
-| 2 | `agent:<id>:subagent:<uuid>:subagent:<uuid>` | Sub-sub-agent (worker) | Never |
+| Depth | Session Key                                  | Role                   | Can Spawn?            |
+| ----- | -------------------------------------------- | ---------------------- | --------------------- |
+| 0     | `agent:<id>:main`                            | Main agent             | Always                |
+| 1     | `agent:<id>:subagent:<uuid>`                 | Sub-agent/orchestrator | If maxSpawnDepth >= 2 |
+| 2     | `agent:<id>:subagent:<uuid>:subagent:<uuid>` | Sub-sub-agent (worker) | Never                 |
 
 ### Control Commands
 
@@ -102,35 +105,37 @@ sessions_spawn({
 
 Gas Town is built on the **MEOW stack** (Molecular Expression of Work):
 
-| Component | Description |
-|-----------|-------------|
-| **BEADS** | Atomic work units (issues) stored in Git-backed JSON |
-| **EPICS** | Beads with children, for top-down planning |
-| **MOLECULES** | Workflows encoded as chains of beads |
-| **PROTOMOLECULES** | Templates/classes for molecules |
-| **FORMULAS** | Source form for workflows (TOML) |
-| **WISPS** | Ephemeral beads (vapor phase, not in Git) |
+| Component          | Description                                          |
+| ------------------ | ---------------------------------------------------- |
+| **BEADS**          | Atomic work units (issues) stored in Git-backed JSON |
+| **EPICS**          | Beads with children, for top-down planning           |
+| **MOLECULES**      | Workflows encoded as chains of beads                 |
+| **PROTOMOLECULES** | Templates/classes for molecules                      |
+| **FORMULAS**       | Source form for workflows (TOML)                     |
+| **WISPS**          | Ephemeral beads (vapor phase, not in Git)            |
 
 ## The 7 Worker Roles
 
-| Role | Model | Purpose |
-|------|-------|---------|
-| **Mayor** | sonnet | Concierge and chief-of-staff, receives user requests |
-| **Polecats** | sonnet | Ephemeral workers that swarm on work, produce MRs |
-| **Refinery** | sonnet | Merge queue processor |
-| **Witness** | sonnet | Swarm health monitor |
-| **Deacon** | sonnet | Daemon beacon, propagates heartbeat |
-| **Dogs** | sonnet | Deacon's personal crew for maintenance |
-| **Crew** | opus | Long-lived coding agents for design work |
+| Role         | Model  | Purpose                                              |
+| ------------ | ------ | ---------------------------------------------------- |
+| **Mayor**    | sonnet | Concierge and chief-of-staff, receives user requests |
+| **Polecats** | sonnet | Ephemeral workers that swarm on work, produce MRs    |
+| **Refinery** | sonnet | Merge queue processor                                |
+| **Witness**  | sonnet | Swarm health monitor                                 |
+| **Deacon**   | sonnet | Daemon beacon, propagates heartbeat                  |
+| **Dogs**     | sonnet | Deacon's personal crew for maintenance               |
+| **Crew**     | opus   | Long-lived coding agents for design work             |
 
 ## Key Concepts
 
 ### GUPP (Gas Town Universal Propulsion Principle)
+
 > "If there is work on your hook, YOU MUST RUN IT"
 
 Physics over politeness. No waiting for permission.
 
 ### NDI (Nondeterministic Idempotence)
+
 - Agent is persistent (Bead in Git)
 - Hook is persistent (Bead in Git)
 - Molecule is persistent (chain of Beads in Git)
@@ -139,24 +144,24 @@ Physics over politeness. No waiting for permission.
 
 ### Communication Mechanisms
 
-| Mechanism | Description |
-|-----------|-------------|
-| **Hooks** | Work queue for each worker |
-| **Mail** | Message inbox for workers |
-| **Convoys** | Work-order units tracking delivery |
-| **Patrols** | Ephemeral workflows run in loops |
-| **Activity Feed** | Live status dashboard |
+| Mechanism         | Description                        |
+| ----------------- | ---------------------------------- |
+| **Hooks**         | Work queue for each worker         |
+| **Mail**          | Message inbox for workers          |
+| **Convoys**       | Work-order units tracking delivery |
+| **Patrols**       | Ephemeral workflows run in loops   |
+| **Activity Feed** | Live status dashboard              |
 
 ## Comparison: OpenClaw vs Nezha
 
-| Feature | OpenClaw Gas Town | Nezha (Current) |
-|---------|-------------------|-----------------|
-| Multi-agent | ✅ 7 predefined roles | ⚠️ Flexible roles |
-| Work units | BEADS (Git-backed) | Tasks (PostgreSQL) |
-| Orchestration | GUPP principle | PDCA cycle |
-| Communication | Hooks + Mail + Convoys | Tasks with Discussion: prefix |
-| Persistence | Git + JSON files | PostgreSQL |
-| Meeting system | ❌ Not explicit | 🔄 Under development |
+| Feature        | OpenClaw Gas Town      | Nezha (Current)               |
+| -------------- | ---------------------- | ----------------------------- |
+| Multi-agent    | ✅ 7 predefined roles  | ⚠️ Flexible roles             |
+| Work units     | BEADS (Git-backed)     | Tasks (PostgreSQL)            |
+| Orchestration  | GUPP principle         | PDCA cycle                    |
+| Communication  | Hooks + Mail + Convoys | Tasks with Discussion: prefix |
+| Persistence    | Git + JSON files       | PostgreSQL                    |
+| Meeting system | ❌ Not explicit        | 🔄 Under development          |
 
 ## What Nezha Can Learn
 
@@ -177,10 +182,8 @@ Physics over politeness. No waiting for permission.
 
 1. **Should Nezha adopt BEADS/Molecules concept?**
    - Git-backed work units vs PostgreSQL tasks
-   
 2. **Should we implement GUPP principle?**
    - Self-propelling work without external triggers
-   
 3. **How to integrate with OpenClaw?**
    - Could Nezha tasks be BEADS?
    - Could Nezha agents participate in Gas Town?
@@ -201,6 +204,7 @@ Physics over politeness. No waiting for permission.
 ### Option 1: Nezha Calls OpenClaw's sessions_spawn
 
 If Nezha runs alongside OpenClaw, it could:
+
 1. Use OpenClaw's `sessions_spawn` tool to spawn child agents
 2. Receive announce messages when tasks complete
 3. Leverage OpenClaw's concurrency management
@@ -208,6 +212,7 @@ If Nezha runs alongside OpenClaw, it could:
 ### Option 2: Nezha Implements Similar Mechanism
 
 Nezha could implement its own spawn mechanism:
+
 1. Add `task_spawn` CLI command
 2. Create child tasks that report back to parent
 3. Track nested task depth
@@ -237,3 +242,69 @@ Nezha could implement its own spawn mechanism:
 ---
 
 > **Note**: For OpenCode AI spawning methods (how Nezha spawns AI instances), see [docs/OPENCODE_INTEGRATION.md](../docs/OPENCODE_INTEGRATION.md)
+
+---
+
+## Additional Research: Hooks and Cron (2026-03-20)
+
+### Hooks System (OpenClaw)
+
+**Location**: `/Users/jk/gits/hub/openclaw/src/hooks/`
+
+| File                | Purpose                         |
+| ------------------- | ------------------------------- |
+| `hooks.ts`          | Public API exports              |
+| `internal-hooks.ts` | Core event-driven hook registry |
+| `install.ts`        | Hook installation               |
+| `loader.ts`         | Dynamic loading of handlers     |
+| `workspace.ts`      | Discovery from directories      |
+| `config.ts`         | Runtime configuration           |
+| `gmail.ts`          | Gmail Pub/Sub integration       |
+| `gateway/hooks.ts`  | HTTP webhook handler            |
+
+**Hook Discovery**: Filesystem-based with `HOOK.md` frontmatter metadata
+
+**Webhook Endpoints**:
+
+- `POST /hooks/wake` - Wake main agent
+- `POST /hooks/agent` - Run isolated agent
+- `POST /hooks/<name>` - Custom mapped endpoints
+
+### Cron System (OpenClaw)
+
+Uses **croner** library for parsing cron expressions. Supports:
+
+- 5-field and 6-field cron expressions
+- Timezone support
+- `every` interval syntax
+- Top-of-hour stagger for load spreading
+
+**Configuration**:
+
+```json
+{
+  "cron": {
+    "enabled": true,
+    "store": "~/.openclaw/cron/jobs.json",
+    "maxConcurrentRuns": 1,
+    "retry": { "maxAttempts": 3 }
+  }
+}
+```
+
+### Nezha Parity Summary
+
+| Feature        | OpenClaw                | Nezha              | Status             |
+| -------------- | ----------------------- | ------------------ | ------------------ |
+| Internal hooks | Yes (internal-hooks.ts) | PluginManager      | ✓ Partial          |
+| Webhooks       | /hooks/\*               | WebhookServer      | ✓ Implemented      |
+| Cron           | croner + Gateway        | Scheduler + croner | ✓ Implemented      |
+| Gmail Pub/Sub  | Yes                     | Not yet            | ✗                  |
+| Hook discovery | Filesystem              | Plugin registry    | Different approach |
+
+### Key Insights
+
+1. **Nezha uses PostgreSQL** for persistence vs OpenClaw's JSON files
+2. **PluginManager** is Nezha's equivalent of internal-hooks registry
+3. **WebhookServer** provides OpenClaw-style HTTP webhooks
+4. **croner** library added to both systems (independently)
