@@ -1,23 +1,26 @@
 import { execSync } from 'child_process';
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
+import { gitSafetyService } from '../services/GitSafetyService.js';
 
 export interface GitAutoCommitConfig {
   autoPush?: boolean;
   commitMessagePrefix?: string;
   autoAdd?: boolean;
   useActualCommitMessage?: boolean;
+  enableSafetyChecks?: boolean;
 }
 
 export class GitAutoCommitPlugin implements Plugin {
   name = 'git-auto-commit';
-  version = '1.0.0';
-  description = 'Auto commits and pushes changes after task completion';
+  version = '1.1.0';
+  description = 'Auto commits and pushes changes after task completion with safety checks';
   config: Record<string, unknown>;
   private readonly autoPush: boolean;
   private readonly commitMessagePrefix: string;
   private readonly autoAdd: boolean;
   private readonly useActualCommitMessage: boolean;
+  private readonly enableSafetyChecks: boolean;
 
   constructor(config: GitAutoCommitConfig = {}) {
     this.config = {
@@ -25,11 +28,13 @@ export class GitAutoCommitPlugin implements Plugin {
       commitMessagePrefix: config.commitMessagePrefix ?? 'Task completed:',
       autoAdd: config.autoAdd ?? true,
       useActualCommitMessage: config.useActualCommitMessage ?? true,
+      enableSafetyChecks: config.enableSafetyChecks ?? true,
     };
     this.autoPush = config.autoPush ?? true;
     this.commitMessagePrefix = config.commitMessagePrefix ?? 'Task completed:';
     this.autoAdd = config.autoAdd ?? true;
     this.useActualCommitMessage = config.useActualCommitMessage ?? true;
+    this.enableSafetyChecks = config.enableSafetyChecks ?? true;
   }
 
   private hasGitChanges(): boolean {
@@ -162,6 +167,11 @@ export class GitAutoCommitPlugin implements Plugin {
       return;
     }
 
+    if (this.enableSafetyChecks && !gitSafetyService.isGitRepository()) {
+      logger.warn('[GitAutoCommit] Not a git repository, skipping commit');
+      return;
+    }
+
     const changedFiles = this.getChangedFiles();
     const filesStr =
       changedFiles.length > 5
@@ -170,6 +180,10 @@ export class GitAutoCommitPlugin implements Plugin {
 
     try {
       if (this.autoAdd) {
+        if (this.enableSafetyChecks) {
+          const check = gitSafetyService.checkOperation('git add -A');
+          gitSafetyService.logOperation('git add -A', check.risk);
+        }
         execSync('git add -A', { encoding: 'utf-8' });
         logger.debug('[GitAutoCommit] Added files to staging');
       }
@@ -195,10 +209,31 @@ export class GitAutoCommitPlugin implements Plugin {
         commitMsg = `${this.commitMessagePrefix} ${taskTitle}\n\nFiles: ${filesStr}`;
       }
 
+      if (this.enableSafetyChecks) {
+        const validation = gitSafetyService.validateCommitMessage(commitMsg.split('\n')[0] || '');
+        if (!validation.valid) {
+          logger.warn(`[GitSafety] Invalid commit message: ${validation.reason}`);
+          const betterMsg = this.generateBetterCommitMessage(taskTitle, changedFiles);
+          if (betterMsg) {
+            commitMsg = betterMsg;
+            logger.info(`[GitSafety] Using generated message: ${commitMsg.split('\n')[0]}`);
+          }
+        }
+      }
+
+      if (this.enableSafetyChecks) {
+        const check = gitSafetyService.checkOperation('git commit');
+        gitSafetyService.logOperation('git commit', check.risk);
+      }
+
       execSync(`git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, { encoding: 'utf-8' });
       logger.info(`[GitAutoCommit] Committed: ${commitMsg.split('\n')[0]}`);
 
       if (this.autoPush) {
+        if (this.enableSafetyChecks) {
+          const check = gitSafetyService.checkOperation('git push');
+          gitSafetyService.logOperation('git push', check.risk);
+        }
         try {
           execSync('git push', { encoding: 'utf-8' });
           logger.info('[GitAutoCommit] Pushed to remote');
@@ -217,6 +252,34 @@ export class GitAutoCommitPlugin implements Plugin {
     }
   }
 
+  private generateBetterCommitMessage(taskTitle: string, changedFiles: string[]): string | null {
+    const fileTypes = new Set(
+      changedFiles.map(f => {
+        const ext = f.split('.').pop()?.toLowerCase();
+        return ext || 'unknown';
+      })
+    );
+
+    const prefixes: string[] = [];
+    if (fileTypes.has('ts') || fileTypes.has('js')) {
+      prefixes.push('feat');
+    }
+    if (fileTypes.has('md')) {
+      prefixes.push('docs');
+    }
+    if (fileTypes.has('sql')) {
+      prefixes.push('feat');
+    }
+    if (fileTypes.has('json') && changedFiles.some(f => f.includes('package'))) {
+      prefixes.push('chore');
+    }
+
+    const prefix = prefixes[0] || 'chore';
+    const cleanTitle = taskTitle.replace(/^(feat|fix|docs|chore|test|refactor):\s*/i, '');
+
+    return `${prefix}: ${cleanTitle}\n\nFiles: ${changedFiles.slice(0, 5).join(', ')}${changedFiles.length > 5 ? '...' : ''}`;
+  }
+
   hooks = {
     afterTask: async (context: TaskContext) => {
       if (context.status !== 'COMPLETED') {
@@ -228,13 +291,23 @@ export class GitAutoCommitPlugin implements Plugin {
     },
 
     onStartup: async () => {
-      logger.info('[GitAutoCommit] Git auto-commit plugin initialized');
+      logger.info('[GitAutoCommit] Git auto-commit plugin initialized (v1.1.0 with safety checks)');
+      if (this.enableSafetyChecks) {
+        const report = gitSafetyService.getSafetyReport();
+        logger.info(`[GitSafety] Previous session: ${report.totalOperations} operations logged`);
+      }
     },
 
     onShutdown: async () => {
       if (this.hasGitChanges()) {
         logger.warn('[GitAutoCommit] 有未提交的更改，关闭前尝试提交...');
         await this.commitAndPush('Shutdown checkpoint');
+      }
+      if (this.enableSafetyChecks) {
+        const report = gitSafetyService.getSafetyReport();
+        logger.info(
+          `[GitSafety] Session summary: ${report.totalOperations} ops, ${report.warningCount} warnings, ${report.dangerousCount} dangerous`
+        );
       }
       logger.info('[GitAutoCommit] Git auto-commit plugin shutting down');
     },
