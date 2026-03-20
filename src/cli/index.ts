@@ -1420,11 +1420,21 @@ async function main(): Promise<void> {
 
         if (subcommand === 'create' || subcommand === 'new') {
           const typeIndex = args.indexOf('--type');
-          const type = (typeIndex !== -1 ? (args[typeIndex + 1] || 'qc') : 'qc') as 'code' | 'design' | 'qc' | 'peer' | 'task' | 'security' | 'other';
+          const type = (typeIndex !== -1 ? args[typeIndex + 1] || 'qc' : 'qc') as
+            | 'code'
+            | 'design'
+            | 'qc'
+            | 'peer'
+            | 'task'
+            | 'security'
+            | 'other';
           const targetIndex = args.indexOf('--target');
           const target = targetIndex !== -1 ? args[targetIndex + 1] : undefined;
           const titleIndex = args.indexOf('--title');
-          const title = titleIndex !== -1 ? (args[titleIndex + 1] || 'Untitled Review') : args.slice(2).join(' ') || 'Untitled Review';
+          const title =
+            titleIndex !== -1
+              ? args[titleIndex + 1] || 'Untitled Review'
+              : args.slice(2).join(' ') || 'Untitled Review';
           const descIndex = args.indexOf('--description');
           const description = descIndex !== -1 ? args[descIndex + 1] : undefined;
 
@@ -1445,56 +1455,15 @@ async function main(): Promise<void> {
           const reviewId = args[2];
           if (!reviewId) {
             cli.error('Review ID is required');
-            console.log('\nUsage: nezha reviews complete <review-id> --findings <json> --action-items <json>');
-            process.exit(1);
-          }
-          const findingsIndex = args.indexOf('--findings');
-          const findingsJson = findingsIndex !== -1 ? (args[findingsIndex + 1] || '[]') : '[]';
-          const actionsIndex = args.indexOf('--action-items');
-          const actionsJson = actionsIndex !== -1 ? (args[actionsIndex + 1] || '[]') : '[]';
-
-          let findings: any[] = [];
-          let actionItems: any[] = [];
-          try {
-            findings = JSON.parse(findingsJson);
-            actionItems = JSON.parse(actionsJson);
-          } catch {
-            cli.error('Invalid JSON for findings or action-items');
-            process.exit(1);
-          }
-
-          await reviewCmd.complete(reviewId, findings, actionItems);
-        } else if (subcommand === 'follow-ups' || subcommand === 'followups') {
-          await reviewCmd.followUps();
-        } else if (subcommand === 'stats') {
-          await reviewCmd.stats();
-        } else {
-          console.log(`\n${colors.bright}Review Management Commands:${colors.reset}\n`);
-          console.log('  nezha reviews create --type <type> --title <title> [--target <id>] [--description <desc>]');
-          console.log('  nezha reviews list [--status <status>]');
-          console.log('  nezha reviews start <review-id>');
-          console.log('  nezha reviews complete <review-id> --findings <json> --action-items <json>');
-          console.log('  nezha reviews follow-ups');
-          console.log('  nezha reviews stats');
-          console.log('\nTypes: code, design, qc, peer, task, security, other');
-          console.log('Statuses: pending, in_progress, completed, follow_up, closed\n');
-        }
-        break;
-      }
-          await reviewCmd.start(reviewId);
-        } else if (subcommand === 'complete' || subcommand === 'done') {
-          const reviewId = args[2];
-          if (!reviewId) {
-            cli.error('Review ID is required');
             console.log(
               '\nUsage: nezha reviews complete <review-id> --findings <json> --action-items <json>'
             );
             process.exit(1);
           }
           const findingsIndex = args.indexOf('--findings');
-          const findingsJson = findingsIndex !== -1 ? args[findingsIndex + 1] : '[]';
+          const findingsJson = findingsIndex !== -1 ? args[findingsIndex + 1] || '[]' : '[]';
           const actionsIndex = args.indexOf('--action-items');
-          const actionsJson = actionsIndex !== -1 ? args[actionsIndex + 1] : '[]';
+          const actionsJson = actionsIndex !== -1 ? args[actionsIndex + 1] || '[]' : '[]';
 
           let findings: any[] = [];
           let actionItems: any[] = [];
