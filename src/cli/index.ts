@@ -1305,6 +1305,52 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'reflection-summary': {
+        const db = new DatabaseClient(Config.getInstance());
+
+        const today = new Date().toISOString().split('T')[0];
+
+        const todayReflections = await db.query<{
+          content: string;
+          tags: string[];
+          created_at: Date;
+        }>(
+          `SELECT content, tags, created_at FROM memory 
+           WHERE source = 'reflection-parser' 
+             AND DATE(created_at) = CURRENT_DATE
+           ORDER BY created_at DESC LIMIT 20`
+        );
+
+        const tasksCompleted = await db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM tasks 
+           WHERE status = 'COMPLETED' AND DATE(completed_at) = CURRENT_DATE`
+        );
+
+        console.log(`\n  Daily Reflection Summary - ${today}\n`);
+        console.log(`  Tasks Completed Today: ${tasksCompleted.rows[0]?.count || 0}`);
+        console.log(`  Reflections Today: ${todayReflections.rows.length}`);
+        console.log('\n  Recent Learnings:');
+
+        for (const row of todayReflections.rows.slice(0, 5)) {
+          const preview = row.content.substring(0, 80).replace(/\n/g, ' ');
+          console.log(`    - ${preview}...`);
+        }
+
+        console.log('\n  Top Categories:');
+        const categories = await db.query<{ tag: string; count: string }>(
+          `SELECT UNNEST(tags) as tag, COUNT(*) as count 
+           FROM memory WHERE source = 'reflection-parser' AND DATE(created_at) = CURRENT_DATE
+           GROUP BY tag ORDER BY count DESC LIMIT 5`
+        );
+        for (const row of categories.rows) {
+          console.log(`    ${row.tag}: ${row.count}`);
+        }
+        console.log();
+
+        await db.close();
+        break;
+      }
+
       case 'learn': {
         const insight = args.slice(1).find(a => !a.startsWith('--')) || '';
         const contextIndex = args.indexOf('--context');
@@ -2601,6 +2647,7 @@ function showHelp(): void {
     improve                      (alias for continuous-improvement)
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
     reflection-stats              Show reflection system statistics
+    reflection-summary            Generate daily reflection summary
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
