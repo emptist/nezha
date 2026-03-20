@@ -8,6 +8,7 @@ import {
 } from '../config/constants.js';
 import { type TaskStatus } from '../config/types.js';
 import { logger } from '../utils/logger.js';
+import { execSync } from 'child_process';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
 import {
@@ -405,33 +406,57 @@ export class Scheduler {
             const retryCountForLog = (task.retry_count ?? 0) + 1;
             const maxRetries = task.max_retries ?? 3;
             const priorityBoost = retryCountForLog * 2;
-            const backoffMs = Math.min(1000 * Math.pow(2, retryCountForLog), 300000); // 1s, 2s, 4s, 8s... max 5min
-            const nextRetryAt = new Date(Date.now() + backoffMs);
-            await this.db.query(
-              `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4, next_retry_at = $5 WHERE id = $6`,
-              [
-                TASK_STATUS.PENDING,
-                errorMessage,
-                retryCountForLog,
-                priorityBoost,
-                nextRetryAt,
-                task.id,
-              ]
-            );
 
-            await this.logTaskStateChange(
-              task.id,
-              task.title,
-              TASK_STATUS.RUNNING,
-              TASK_STATUS.PENDING,
-              `Retry needed: ${errorMessage}`,
-              {
-                retryCount: retryCountForLog,
-                maxRetries: task.max_retries ?? 3,
-                error: errorMessage,
-                priorityBoost,
-              }
-            );
+            if (retryCountForLog >= maxRetries) {
+              await this.db.query(
+                `INSERT INTO dead_letter_queue (original_task_id, title, description, error_message, retry_count, max_retries)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [
+                  task.id,
+                  task.title,
+                  task.description || '',
+                  errorMessage,
+                  retryCountForLog,
+                  maxRetries,
+                ]
+              );
+              await this.db.query(`UPDATE ${tableName} SET status = 'FAILED' WHERE id = $1`, [
+                task.id,
+              ]);
+              logger.warn(
+                `Task "${task.title}" (${task.id}) moved to DLQ after ${maxRetries} retries`
+              );
+              await this.logTaskStateChange(
+                task.id,
+                task.title,
+                TASK_STATUS.RUNNING,
+                TASK_STATUS.FAILED,
+                `Moved to DLQ after ${maxRetries} retries: ${errorMessage}`,
+                { retryCount: retryCountForLog, maxRetries, dlq: true }
+              );
+            } else {
+              const backoffMs = Math.min(1000 * Math.pow(2, retryCountForLog), 300000);
+              const nextRetryAt = new Date(Date.now() + backoffMs);
+              await this.db.query(
+                `UPDATE ${tableName} SET status = $1, error = $2, retry_count = $3, priority = priority + $4, next_retry_at = $5 WHERE id = $6`,
+                [
+                  TASK_STATUS.PENDING,
+                  errorMessage,
+                  retryCountForLog,
+                  priorityBoost,
+                  nextRetryAt,
+                  task.id,
+                ]
+              );
+              await this.logTaskStateChange(
+                task.id,
+                task.title,
+                TASK_STATUS.RUNNING,
+                TASK_STATUS.PENDING,
+                `Retry needed: ${errorMessage}`,
+                { retryCount: retryCountForLog, maxRetries, error: errorMessage, priorityBoost }
+              );
+            }
           } finally {
             this.isExecuting = false;
           }
@@ -760,12 +785,10 @@ export class Scheduler {
 
   private getGitInfo(): { hash: string | null; branch: string | null } {
     try {
-      const hash = require('child_process')
-        .execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' })
-        .trim();
-      const branch = require('child_process')
-        .execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8' })
-        .trim();
+      const hash = execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
+      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+        encoding: 'utf-8',
+      }).trim();
       return { hash: hash || null, branch: branch || null };
     } catch {
       return { hash: null, branch: null };
