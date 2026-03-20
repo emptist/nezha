@@ -308,3 +308,64 @@ Uses **croner** library for parsing cron expressions. Supports:
 2. **PluginManager** is Nezha's equivalent of internal-hooks registry
 3. **WebhookServer** provides OpenClaw-style HTTP webhooks
 4. **croner** library added to both systems (independently)
+
+---
+
+## Detailed Comparison: Heartbeat, Memory, Scheduling, Transport
+
+### Heartbeat Mechanism
+
+| Aspect              | OpenClaw                            | Nezha                         |
+| ------------------- | ----------------------------------- | ----------------------------- |
+| **Implementation**  | Gateway/transport handles keepalive | Scheduler.ts with setInterval |
+| **Interval**        | Configurable (default 30s)          | Configurable (default 30s)    |
+| **Task polling**    | Session-based, event-driven         | Database query every interval |
+| **Transport**       | WebSocket + HTTP                    | HTTP (UnifiedAgent) / CLI     |
+| **Dead connection** | Automatic reconnection              | Circuit breaker pattern       |
+
+**Key Difference**: OpenClaw uses event-driven sessions; Nezha uses polling.
+
+### Memory System
+
+| Aspect            | OpenClaw                        | Nezha                                   |
+| ----------------- | ------------------------------- | --------------------------------------- |
+| **Storage**       | SQLite JSON files               | PostgreSQL with pgvector                |
+| **Embeddings**    | Built-in OpenAI-compatible      | Ollama or Zhipu                         |
+| **Vector search** | Via OpenAI API                  | pgvector with cosine distance           |
+| **Memory types**  | Conversations, files, artifacts | memory, daily_memory, learning_insights |
+| **Retrieval**     | Semantic + keyword hybrid       | hybridSearch() method                   |
+
+**Key Difference**: Nezha has richer structure (tags, importance, metadata); OpenClaw more flexible.
+
+### Task Scheduling
+
+| Aspect           | OpenClaw             | Nezha                     |
+| ---------------- | -------------------- | ------------------------- |
+| **Task format**  | BEADS (Git-backed)   | Database rows             |
+| **Scheduling**   | Cron + immediate     | Database query + cron     |
+| **Dependencies** | Via session/thread   | depends_on column         |
+| **Retry**        | Via subagent restart | Exponential backoff + DLQ |
+| **Priority**     | Via session queue    | Priority + age boost      |
+
+**Key Difference**: OpenClaw tasks are Git artifacts; Nezha is pure database.
+
+### Agent Transport
+
+| Aspect            | OpenClaw              | Nezha                       |
+| ----------------- | --------------------- | --------------------------- |
+| **Spawn**         | sessions_spawn tool   | AgentSystem.registerAgent() |
+| **Modes**         | CLI, HTTP, WebSocket  | HTTP (UnifiedAgent), CLI    |
+| **Communication** | Tool calls, announces | Database broadcasts         |
+| **Session mgmt**  | Built-in              | Via opencode serve          |
+| **Concurrency**   | Via subagents         | Via multiple agents         |
+
+**Key Difference**: OpenClaw has native multi-agent; Nezha relies on opencode.
+
+### Gaps Identified
+
+| Gap                  | OpenClaw   | Nezha        | Priority |
+| -------------------- | ---------- | ------------ | -------- |
+| Multi-agent spawning | Native     | Via opencode | Low      |
+| Git-backed tasks     | BEADS      | Not yet      | Medium   |
+| Webhook discovery    | Filesystem | Manual       | Low      |
+| Session persistence  | Yes        | Via opencode | Medium   |
