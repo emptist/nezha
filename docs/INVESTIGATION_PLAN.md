@@ -95,9 +95,9 @@
 |------|-------|------|--------|
 | 2026-03-20 | 1 | Initial investigation | ✅ Done |
 | 2026-03-20 | 1 | Document all git operations | ✅ Done |
-| 2026-03-20 | 1 | Identify AI agents with git access | ⏳ Pending |
-| 2026-03-20 | 1 | Map commit pollution timeline | ⏳ Pending |
-| 2026-03-20 | 1 | Analyze real vs polluted commits | ⏳ Pending |
+| 2026-03-20 | 1 | Identify AI agents with git access | ✅ Done |
+| 2026-03-20 | 1 | Map commit pollution timeline | ✅ Done |
+| 2026-03-20 | 1 | Analyze real vs polluted commits | ✅ Done |
 | 2026-03-20 | 2 | Risk assessment | ⏳ Pending |
 | 2026-03-20 | 2 | Find filter-branch trigger | ⏳ Pending |
 | 2026-03-20 | 3 | Implement safeguards | ⏳ Pending |
@@ -105,41 +105,99 @@
 
 ---
 
+## Phase 1 Complete Findings
+
+### AI Agents with Git Access
+
+| Agent | Access Method | Capabilities | Risk |
+|-------|---------------|--------------|------|
+| **OpenCode AI** | `spawn('opencode', ...)` | Full shell access, can run ANY command | **HIGH** |
+| **GitAutoCommitPlugin** | `execSync('git ...')` | add, commit, push only | Medium |
+| **HeartbeatService** | `execSync('git rev-parse')` | Read-only | Low |
+| **InterReviewService** | `execSync('git diff')` | Read-only | Low |
+
+### Key Insight: OpenCode AI Has Unrestricted Shell Access
+
+The `OpenCodeClient.ts` spawns OpenCode with full shell access:
+```typescript
+const proc = spawn('opencode', ['run', '--attach', serverUrl, '--format', 'json', prompt], {
+  stdio: ['pipe', 'pipe', 'pipe'],
+  env: { ...process.env },
+});
+```
+
+This means OpenCode AI can run **ANY** shell command, including:
+- `git filter-branch` (what caused the incident)
+- `git rebase`
+- `git push --force`
+- `rm -rf /` (theoretical)
+
+**This is by design** - OpenCode needs shell access to do useful work. The issue is that it made a bad decision to run `git filter-branch`.
+
+### Pollution Timeline
+
+| Event | Commit | Date | Details |
+|-------|--------|------|---------|
+| First polluted commit | `2f8bb8b` | 2026-03-18 15:44:44 | "Task completed: Test Task" |
+| Pollution duration | - | ~2 days | March 18-20 |
+| Fix commit | `7df03c1` | 2026-03-20 14:45:30 | "fix: GitAutoCommitPlugin - only parse code after hunk markers" |
+
+### Pollution Statistics
+
+| Metric | Count |
+|--------|-------|
+| "Task completed: Test Task" commits | 180 |
+| Total "Task completed:" commits | 216 |
+| Legitimate task commits | ~36 (with actual task names) |
+
+### Real vs Polluted Commits Analysis
+
+**Polluted commits** (180): Generic "Task completed: Test Task" - no useful information
+**Legitimate commits** (36): "Task completed: Update docs...", "Task completed: Add structured logging..." - useful context
+
+---
+
 ## Next Session - Continue From Here
 
-### Immediate Next Steps (Phase 1.3 - 1.4)
+### Phase 1 Complete ✅
 
-1. **Identify AI agents with git access**:
-   - Search for OpenCode client integration
-   - Check task execution flow
-   - Find where AI can run shell commands
+All Phase 1 tasks are done. The investigation has revealed:
+1. **Root cause identified**: GitAutoCommitPlugin bug + OpenCode AI's bad decision
+2. **Timeline mapped**: March 18-20, 2026
+3. **Pollution quantified**: 180 generic commits, 36 legitimate
 
-2. **Map commit pollution timeline**:
-   - Find first polluted commit
-   - Track the pattern of pollution
-   - Identify the fix commit (7df03c1)
+### Immediate Next Steps (Phase 2 - Risk Assessment)
 
-3. **Analyze real vs polluted commits**:
-   - Find commits with actual work (not "Task completed:")
-   - Document real feature commits
-   - Count pollution severity
+1. **Find what triggered the AI to run filter-branch**:
+   - Check conversation logs in `.tmp/conversations/`
+   - Look for the task that led to filter-branch decision
+   - Document the decision chain
 
-### Key Files to Investigate
+2. **Understand the decision chain**:
+   - What prompt was given to OpenCode?
+   - What context did it have?
+   - Why did it think filter-branch was the solution?
 
-- `src/core/OpenCodeClient.ts` - How AI executes tasks
-- `src/core/UnifiedAgent.ts` - Agent communication
-- `src/core/Scheduler.ts` - Task scheduling
-- `src/services/HeartbeatService.ts` - Task execution
+3. **Document safeguards needed**:
+   - How to prevent AI from running dangerous git commands?
+   - Should we add a "dangerous operations" blacklist?
+   - Should we require human approval for certain operations?
+
+### Key Files to Investigate (Phase 2)
+
+- `.tmp/conversations/` - Conversation logs with OpenCode
+- `.tmp/nezha-memory/` - Nezha's memory of the incident
+- `src/plugins/GitAutoCommitPlugin.ts` - The fixed code
 
 ### Git Commands for Investigation (Safe - Read Only)
 
 ```bash
-# Find first polluted commit
-git log --oneline --all | grep "Task completed:" | tail -1
+# View conversation logs
+ls -la .tmp/conversations/
 
-# Count pollution
-git log --oneline --all | grep -c "Task completed:"
+# View Nezha memory
+cat .tmp/nezha-memory/MEMORY.md
 
-# Show timeline
-git log --oneline --all --reverse --date-order | head -50
+# Check reflog for filter-branch evidence
+git reflog | grep filter-branch
 ```
