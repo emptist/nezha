@@ -18,6 +18,7 @@ import { logger } from '../utils/logger.js';
 import { DailyMemoryService } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
 import { GitAutoCommitPlugin } from '../plugins/index.js';
+import { execSync } from 'child_process';
 import { CheckpointService } from './CheckpointService.js';
 import {
   getEncryptionService,
@@ -1088,7 +1089,7 @@ After completing this task:
            AND created_at > NOW() - INTERVAL '7 days'
            AND (
              to_ai IN ($1, 'all-ais', 'all')
-             OR message_type IN ('broadcast', 'meeting', 'discussion')
+             OR message_type IN ('broadcast', 'meeting', 'discussion', 'notification')
            )
          ORDER BY 
            CASE WHEN priority = 'critical' THEN 1 
@@ -1137,9 +1138,9 @@ After completing this task:
     taskId: string,
     title: string,
     description?: string,
-    retryCount: number = 0,
-    maxRetries: number = this.defaultMaxRetries,
-    timeoutSeconds: number = 300
+    _retryCount: number = 0,
+    _maxRetries: number = this.defaultMaxRetries,
+    _timeoutSeconds: number = 300
   ): Promise<void> {
     logger.info(`[MeetingHandler] Processing discussion task: ${title}`);
 
@@ -1661,12 +1662,10 @@ After completing this task:
 
   private getGitInfo(): { hash: string | null; branch: string | null } {
     try {
-      const hash = require('child_process')
-        .execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' })
-        .trim();
-      const branch = require('child_process')
-        .execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', { encoding: 'utf-8' })
-        .trim();
+      const hash = execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
+      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
+        encoding: 'utf-8',
+      }).trim();
       return { hash: hash || null, branch: branch || null };
     } catch {
       return { hash: null, branch: null };
