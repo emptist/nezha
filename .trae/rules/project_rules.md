@@ -88,6 +88,25 @@ node dist/cli/index.js continuous-improvement
 | Ignore task queue | Always check pending tasks |
 | Skip ACT phase | Always save learnings to memory |
 
+## NEVER DECLARE DONE (Critical for Trae Editor)
+
+**IMPORTANT**: Trae Editor may interrupt your session if you use conclusion phrases!
+
+### Forbidden Phrases
+- "Done", "Completed", "Finished", "All done"
+- "That's all", "Nothing more to do"
+- "In conclusion", "To summarize"
+
+### Safe Continuation Patterns
+- **Questions**: "What should I work on next?", "Should I continue with X?"
+- **Actions**: "Continuing with...", "Let me check...", "Working on..."
+- **Status**: "Current progress: X of Y complete", "Next up: ..."
+
+### The Secret
+**Always end with a question or continuation phrase.** This keeps your session alive.
+
+See [NEVER_DECLARE_DONE.md](../docs/NEVER_DECLARE_DONE.md) for full documentation.
+
 ## Key Commands
 
 ### Task Management
