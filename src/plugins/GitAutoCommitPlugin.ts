@@ -79,6 +79,7 @@ export class GitAutoCommitPlugin implements Plugin {
       if (stagedDiff.trim().length === 0) {
         return null;
       }
+
       const conventionalPrefixes = [
         'feat:',
         'fix:',
@@ -92,16 +93,51 @@ export class GitAutoCommitPlugin implements Plugin {
       ];
 
       const diffLines = stagedDiff.split('\n');
+      let firstCodeLineFound = false;
+      let inHunkHeader = false;
+
       for (const line of diffLines) {
         const trimmed = line.trim();
-        if (trimmed.startsWith('#') || trimmed.startsWith('//')) {
+
+        if (trimmed.startsWith('@@')) {
+          inHunkHeader = true;
           continue;
         }
-        for (const prefix of conventionalPrefixes) {
-          if (trimmed.startsWith(prefix)) {
-            return (
-              trimmed.replace(/^['"]/, '').replace(/['"]$/, '').split('\n')[0]?.trim() ?? trimmed
-            );
+
+        if (
+          trimmed.startsWith('diff ') ||
+          trimmed.startsWith('index ') ||
+          trimmed.startsWith('---') ||
+          trimmed.startsWith('+++')
+        ) {
+          firstCodeLineFound = false;
+          inHunkHeader = false;
+          continue;
+        }
+
+        if (trimmed.startsWith('+') || trimmed.startsWith('-')) {
+          firstCodeLineFound = true;
+        }
+
+        if (firstCodeLineFound && !inHunkHeader) {
+          const content = trimmed.replace(/^[+-]/, '');
+
+          if (
+            content.startsWith('#') ||
+            content.startsWith('//') ||
+            content.startsWith('*') ||
+            content.startsWith('/*') ||
+            content.startsWith('<!--')
+          ) {
+            continue;
+          }
+
+          for (const prefix of conventionalPrefixes) {
+            if (content.startsWith(prefix)) {
+              return (
+                content.replace(/^['"]/, '').replace(/['"]$/, '').split('\n')[0]?.trim() ?? content
+              );
+            }
           }
         }
       }
