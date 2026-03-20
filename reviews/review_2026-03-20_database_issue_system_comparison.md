@@ -243,6 +243,38 @@ Both systems are well-designed for their intended purposes. Nezha's reviews tabl
 
 ---
 
+## Appendix: Design Issue Found and Fixed (2026-03-20)
+
+### Issue: InterReviewService Required External API Key
+
+**Problem**: The `InterReviewService` was designed to require an external AI API key (OpenAI/Anthropic), even though Nezha already has OpenCode integration via `UnifiedAgent`. This was inconsistent with `HeartbeatService` which uses OpenCode's built-in models.
+
+**Root Cause**: `InterReviewService` created its own `AIProvider` instance instead of using the existing `UnifiedAgent` transport mechanism.
+
+**Fix Applied**:
+1. Modified `InterReviewService` to accept optional `UnifiedAgent` parameter
+2. Updated `InterReviewCommands` to create `UnifiedAgent` using same config as `HeartbeatService`
+3. Added GLM-4-Flash support to `AIProviderFactory` for users who prefer direct API access
+4. Fixed PostgreSQL array format issue (tags field was using JSON.stringify instead of native array)
+5. Fixed skills table INSERT to match actual schema (removed non-existent `status` column)
+
+**Result**: Inter-review system now works with OpenCode's built-in models - no external API key required!
+
+### Additional Issue: Skills Table Schema Mismatch
+
+**Problem**: The code expected a `status` column in the `skills` table, but it doesn't exist.
+
+**Recommendation**: Add a `status` column if skill approval workflow is needed:
+```sql
+ALTER TABLE skills ADD COLUMN status TEXT DEFAULT 'approved' 
+CHECK (status IN ('draft', 'pending', 'approved', 'rejected'));
+```
+
+**Task Created**: "Add status column to skills table" (priority 5)
+
+---
+
 **Review Type**: System Comparison
 **Confidence**: High
 **Next Steps**: Consider implementing recommendations for improved UX
+**Updated**: 2026-03-20 with design issue findings

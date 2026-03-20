@@ -333,6 +333,12 @@ interface InterReviewService {
 
 **核心哲学**: Review 的输出不是反馈，而是 learnings - 帮助未来 AI 避免类似问题的提醒
 
+**AI 提供者支持**:
+- ✅ **OpenCode 集成** (推荐) - 使用 UnifiedAgent，无需外部 API key
+- ✅ **GLM-4-Flash** - 通过 ZHIPU_API_KEY 环境变量
+- ✅ **OpenAI** - 通过 OPENAI_API_KEY 环境变量
+- ✅ **Anthropic** - 通过 ANTHROPIC_API_KEY 环境变量
+
 **Learnings 示例**:
 
 ```json

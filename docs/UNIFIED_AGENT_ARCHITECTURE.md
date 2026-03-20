@@ -220,3 +220,79 @@ import { UnifiedAgent, Agent, CliAgent } from './core/UnifiedAgent';
 3. **Flexibility**: Switch between HTTP and CLI modes without changing business logic
 4. **Streaming**: CLI mode supports real-time streaming of responses
 5. **Consistent API**: All transports provide the same interface contract
+
+## Using UnifiedAgent in Services
+
+### Pattern: Service-Level Agent Integration
+
+Services that need AI capabilities should use UnifiedAgent instead of creating their own AIProvider instances. This ensures consistency with the rest of the system.
+
+```typescript
+import { UnifiedAgent, UnifiedAgentConfig } from '../core/UnifiedAgent.js';
+import { Config } from '../config/Config.js';
+
+class MyAIService {
+  private agent: UnifiedAgent;
+
+  constructor() {
+    const config = Config.getInstance();
+    const transportConfig = config.getTransportConfig();
+    
+    const agentConfig: UnifiedAgentConfig = {
+      mode: transportConfig.mode,
+      serverUrl: transportConfig.opencodeApiUrl,
+      timeout: 600000,
+    };
+    
+    this.agent = new UnifiedAgent(agentConfig);
+  }
+
+  async performAITask(prompt: string): Promise<string> {
+    const response = await this.agent.executeTask(prompt);
+    if (response.success && response.message) {
+      return response.message;
+    }
+    throw new Error(`Agent execution failed: ${response.message || 'Unknown error'}`);
+  }
+}
+```
+
+### Example: InterReviewService
+
+The InterReviewService uses UnifiedAgent for AI-powered code reviews:
+
+```typescript
+class InterReviewService {
+  constructor(
+    private db: DatabaseClient,
+    private aiProvider?: AIProvider,
+    private agent?: UnifiedAgent  // Optional, for OpenCode integration
+  ) {}
+
+  private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
+    // Prefer UnifiedAgent (OpenCode) over AIProvider (external API)
+    if (this.agent) {
+      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      const response = await this.agent.executeTask(fullPrompt);
+      if (response.success && response.message) {
+        return response.message;
+      }
+      throw new Error(`Agent execution failed`);
+    }
+    
+    // Fallback to AIProvider if no agent configured
+    if (!this.aiProvider) {
+      throw new Error('AI provider not available');
+    }
+    const response = await this.aiProvider.complete(userPrompt, systemPrompt);
+    return response.content;
+  }
+}
+```
+
+### Benefits of This Pattern
+
+1. **No External API Key Required**: Uses OpenCode's built-in models
+2. **Consistent Transport**: Same mechanism as HeartbeatService
+3. **Configurable**: Can still use external APIs via AIProvider if needed
+4. **Testable**: Easy to mock UnifiedAgent in tests
