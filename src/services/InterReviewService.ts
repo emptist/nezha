@@ -487,6 +487,61 @@ Format:
     this.emit(InterReviewEvent.REVIEW_RESPONSE, { reviewId, response });
   }
 
+  async submitReviewResponse(
+    reviewId: string,
+    summary: string,
+    findings: ReviewFinding[],
+    scores: {
+      overall?: number;
+      codeQuality?: number;
+      testCoverage?: number;
+      documentation?: number;
+    },
+    response?: string,
+    acceptedSuggestions?: string[],
+    options?: {
+      reviewedBy?: string;
+      status?: 'accepted' | 'rejected' | 'partial' | 'superseded';
+      leverageRatio?: number;
+      reworkCount?: number;
+      effortMinutes?: number;
+    }
+  ): Promise<void> {
+    await this.db.query(
+      `SELECT update_inter_review(
+        $1, 'completed', $2, $3, $4, $5, $6, $7, $8, $9, $10
+      )`,
+      [
+        reviewId,
+        summary,
+        JSON.stringify(findings.filter(f => f.type === 'issue')),
+        JSON.stringify(findings.filter(f => f.type === 'suggestion')),
+        JSON.stringify(findings.filter(f => f.type === 'question')),
+        JSON.stringify(findings.filter(f => f.type === 'praise')),
+        scores.overall ?? null,
+        scores.codeQuality ?? null,
+        scores.testCoverage ?? null,
+        scores.documentation ?? null,
+      ]
+    );
+
+    if (response || acceptedSuggestions) {
+      await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
+        reviewId,
+        response || null,
+        JSON.stringify(acceptedSuggestions || []),
+        options?.reviewedBy || null,
+        options?.status || 'accepted',
+        options?.leverageRatio || null,
+        options?.reworkCount || 0,
+        options?.effortMinutes || null,
+      ]);
+    }
+
+    logger.info(`[InterReview] Review response submitted for review: ${reviewId}`);
+    this.emit(InterReviewEvent.REVIEW_COMPLETED, { reviewId });
+  }
+
   async getReview(reviewId: string): Promise<{
     id: string;
     taskId: string | null;

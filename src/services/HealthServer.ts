@@ -96,9 +96,29 @@ export interface MetricsResponse {
   memory_recall_rate: number;
 }
 
+export interface InterReviewScores {
+  overall?: number;
+  codeQuality?: number;
+  testCoverage?: number;
+  documentation?: number;
+}
+
+export interface InterReviewFinding {
+  type: 'issue' | 'suggestion' | 'praise' | 'question';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+  file?: string;
+  line?: number;
+  message: string;
+  code?: string;
+  suggestion?: string;
+}
+
 export interface InterReviewResponseRequest {
   reviewId: string;
-  response: string;
+  summary: string;
+  findings: InterReviewFinding[];
+  scores: InterReviewScores;
+  response?: string;
   acceptedSuggestions?: string[];
   options?: {
     reviewedBy?: string;
@@ -561,13 +581,36 @@ export class HealthServer {
       return { statusCode: 400, body: { error: 'Missing required field: reviewId' } };
     }
 
-    if (!parsed.response || typeof parsed.response !== 'string') {
-      return { statusCode: 400, body: { error: 'Missing required field: response' } };
+    if (!parsed.summary || typeof parsed.summary !== 'string') {
+      return { statusCode: 400, body: { error: 'Missing required field: summary' } };
+    }
+
+    if (!Array.isArray(parsed.findings)) {
+      return { statusCode: 400, body: { error: 'Missing required field: findings (array)' } };
+    }
+
+    if (!parsed.scores || typeof parsed.scores !== 'object') {
+      return { statusCode: 400, body: { error: 'Missing required field: scores' } };
+    }
+
+    const review = await this.interReviewService.getReview(parsed.reviewId);
+    if (!review) {
+      return { statusCode: 404, body: { error: 'Review not found' } };
+    }
+
+    if (review.status !== 'pending' && review.status !== 'in_progress') {
+      return {
+        statusCode: 409,
+        body: { error: `Review is already ${review.status}, cannot submit response` },
+      };
     }
 
     try {
-      await this.interReviewService.respondToReview(
+      await this.interReviewService.submitReviewResponse(
         parsed.reviewId,
+        parsed.summary,
+        parsed.findings,
+        parsed.scores,
         parsed.response,
         parsed.acceptedSuggestions,
         parsed.options
@@ -578,7 +621,7 @@ export class HealthServer {
         body: {
           success: true,
           reviewId: parsed.reviewId,
-          message: 'Response recorded successfully',
+          message: 'Review response recorded successfully',
         },
       };
     } catch (error) {
