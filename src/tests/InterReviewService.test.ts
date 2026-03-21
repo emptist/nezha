@@ -394,7 +394,7 @@ describe('InterReviewService', () => {
       );
       expect(updateCall).toBeDefined();
       const params = updateCall![1] as unknown[];
-      expect(JSON.parse(params[3] as string)).toHaveLength(1);
+      expect(JSON.parse(params[3] as string)).toHaveLength(4);
       expect(JSON.parse(params[4] as string)).toHaveLength(1);
       expect(JSON.parse(params[5] as string)).toHaveLength(1);
       expect(JSON.parse(params[6] as string)).toHaveLength(1);
