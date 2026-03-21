@@ -1,8 +1,8 @@
-import { TraeReflect } from '../TraeReflect.js';
+import { AutoReflect } from '../AutoReflect.js';
 import { describe, it, expect } from 'vitest';
 
-describe('TraeReflect Parser', () => {
-  const reflect = new TraeReflect();
+describe('AutoReflect Parser', () => {
+  const reflect = new AutoReflect();
 
   describe('parseLearnMarkers', () => {
     it('should parse a single LEARN marker', () => {
@@ -175,6 +175,27 @@ describe('TraeReflect Parser', () => {
 
       expect(markers).toHaveLength(1);
       expect(markers[0].acceptedSuggestions).toEqual([]);
+    });
+
+    it('should handle commas in response text before accepted field', () => {
+      const text =
+        '[REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Looks good, I fixed the issues, thanks for the review accepted: suggestion1, suggestion2';
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(1);
+      expect(markers[0].reviewId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(markers[0].response).toBe('Looks good, I fixed the issues, thanks for the review');
+      expect(markers[0].acceptedSuggestions).toEqual(['suggestion1', 'suggestion2']);
+    });
+
+    it('should handle multiline response with commas', () => {
+      const text = `[REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Line 1, line 2, line 3
+accepted: fix1, fix2`;
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(1);
+      expect(markers[0].response).toBe('Line 1, line 2, line 3');
+      expect(markers[0].acceptedSuggestions).toEqual(['fix1', 'fix2']);
     });
   });
 

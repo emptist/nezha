@@ -1,5 +1,5 @@
 {
-  "name": "trae-reflect",
+  "name": "auto-reflect",
   "version": "1.0.0",
   "description": "Standalone reflection tool for Trae Editor AI - persists knowledge across sessions",
   "type": "module",
@@ -10,13 +10,13 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./TraeReflect": {
-      "import": "./dist/TraeReflect.js",
-      "types": "./dist/TraeReflect.d.ts"
+    "./AutoReflect": {
+      "import": "./dist/AutoReflect.js",
+      "types": "./dist/AutoReflect.d.ts"
     }
   },
   "bin": {
-    "trae-reflect": "./dist/cli.js",
+    "auto-reflect": "./dist/cli.js",
     "privacy-check": "./dist/privacy-check.js"
   },
   "scripts": {
@@ -53,10 +53,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/emptist/nezha.git",
-    "directory": "trae_alone"
+    "directory": "auto-reflect"
   },
   "bugs": {
     "url": "https://github.com/emptist/nezha/issues"
   },
-  "homepage": "https://github.com/emptist/nezha/tree/main/trae_alone#readme"
+  "homepage": "https://github.com/emptist/nezha/tree/main/auto-reflect#readme"
 }

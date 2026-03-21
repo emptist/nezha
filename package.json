@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "workspaces": [
-    "trae_alone"
+    "auto-reflect"
   ],
   "bin": {
     "nezha": "./dist/cli/index.js",
@@ -49,9 +49,9 @@
     "review:show": "tsx src/cli/index.ts review-show",
     "review:stats": "tsx src/cli/index.ts review-stats",
     "review:respond": "tsx src/cli/index.ts review-respond",
-    "trae:reflect": "node trae_alone/dist/cli.js",
-    "trae:check": "node trae_alone/dist/cli.js --check",
-    "trae:learnings": "node trae_alone/dist/cli.js --learnings",
+    "auto:reflect": "node auto-reflect/dist/cli.js",
+    "trae:check": "node auto-reflect/dist/cli.js --check",
+    "trae:learnings": "node auto-reflect/dist/cli.js --learnings",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },

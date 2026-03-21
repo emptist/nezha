@@ -222,10 +222,19 @@ describe('InterReviewService', () => {
   describe('respondToReview', () => {
     it('should save review response', async () => {
       vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [] } as never);
-      await service.respondToReview('r1', 'Looks good!', ['s1']);
+      await service.respondToReview('550e8400-e29b-41d4-a716-446655440000', 'Looks good!', ['s1']);
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('respond_to_inter_review'),
-        ['r1', 'Looks good!', '["s1"]', null, 'accepted', null, 0, null]
+        [
+          '550e8400-e29b-41d4-a716-446655440000',
+          'Looks good!',
+          '["s1"]',
+          null,
+          'accepted',
+          null,
+          0,
+          null,
+        ]
       );
     });
 
@@ -234,8 +243,161 @@ describe('InterReviewService', () => {
       service.on(InterReviewEvent.REVIEW_RESPONSE, eventHandler);
       vi.mocked(mockDb.query).mockResolvedValueOnce({ rows: [] } as never);
 
-      await service.respondToReview('r1', 'Response text');
-      expect(eventHandler).toHaveBeenCalledWith(expect.objectContaining({ reviewId: 'r1' }));
+      await service.respondToReview('550e8400-e29b-41d4-a716-446655440000', 'Response text');
+      expect(eventHandler).toHaveBeenCalledWith(
+        expect.objectContaining({ reviewId: '550e8400-e29b-41d4-a716-446655440000' })
+      );
+    });
+  });
+
+  describe('submitReviewResponse', () => {
+    const reviewId = '550e8400-e29b-41d4-a716-446655440000';
+    const validFindings = [
+      {
+        type: 'issue' as const,
+        location: 'src/test.ts',
+        description: 'Bug found',
+        severity: 'high',
+      },
+      {
+        type: 'suggestion' as const,
+        location: 'src/test.ts',
+        description: 'Improve this',
+        severity: 'medium',
+      },
+      { type: 'question' as const, location: 'src/test.ts', description: 'Why?', severity: 'low' },
+      {
+        type: 'praise' as const,
+        location: 'src/test.ts',
+        description: 'Good job',
+        severity: 'low',
+      },
+    ];
+    const validScores = { overall: 85, codeQuality: 80, testCoverage: 75, documentation: 90 };
+
+    it('should persist review response with transaction', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(reviewId, 'Good review', validFindings, validScores);
+
+      expect(mockDb.query).toHaveBeenCalledWith('BEGIN');
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('update_inter_review'),
+        expect.arrayContaining([reviewId, 'completed'])
+      );
+      expect(mockDb.query).toHaveBeenCalledWith('COMMIT');
+    });
+
+    it('should include response and accepted suggestions in second query', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(
+        reviewId,
+        'Summary',
+        validFindings,
+        validScores,
+        'Accepted the review',
+        ['suggestion-1']
+      );
+
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('respond_to_inter_review'),
+        expect.arrayContaining([reviewId, 'Accepted the review', '["suggestion-1"]'])
+      );
+    });
+
+    it('should skip respond_to_inter_review when no response or suggestions', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(reviewId, 'Summary', validFindings, validScores);
+
+      const respondCalls = mockDb.query.mock.calls.filter(
+        call => typeof call[0] === 'string' && call[0].includes('respond_to_inter_review')
+      );
+      expect(respondCalls).toHaveLength(0);
+    });
+
+    it('should emit REVIEW_COMPLETED event on success', async () => {
+      const eventHandler = vi.fn();
+      service.on(InterReviewEvent.REVIEW_COMPLETED, eventHandler);
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(reviewId, 'Summary', validFindings, validScores);
+      expect(eventHandler).toHaveBeenCalledWith({ reviewId });
+    });
+
+    it('should rollback transaction on database error', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockRejectedValueOnce(new Error('DB error'))
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await expect(
+        service.submitReviewResponse(reviewId, 'Summary', validFindings, validScores)
+      ).rejects.toThrow('DB error');
+
+      expect(mockDb.query).toHaveBeenCalledWith('ROLLBACK');
+    });
+
+    it('should include all optional parameters', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(
+        reviewId,
+        'Summary',
+        validFindings,
+        validScores,
+        'Response',
+        ['s1'],
+        {
+          reviewedBy: 'agent-2',
+          status: 'partial',
+          leverageRatio: 50.5,
+          reworkCount: 2,
+          effortMinutes: 120,
+        }
+      );
+
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('respond_to_inter_review'),
+        expect.arrayContaining([reviewId, 'Response', '["s1"]', 'agent-2', 'partial', 50.5, 2, 120])
+      );
+    });
+
+    it('should filter findings by type correctly', async () => {
+      vi.mocked(mockDb.query)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never)
+        .mockResolvedValueOnce({ rows: [] } as never);
+
+      await service.submitReviewResponse(reviewId, 'Summary', validFindings, validScores);
+
+      const updateCall = mockDb.query.mock.calls.find(
+        call => typeof call[0] === 'string' && call[0].includes('update_inter_review')
+      );
+      expect(updateCall).toBeDefined();
+      const params = updateCall![1] as unknown[];
+      expect(JSON.parse(params[3] as string)).toHaveLength(1);
+      expect(JSON.parse(params[4] as string)).toHaveLength(1);
+      expect(JSON.parse(params[5] as string)).toHaveLength(1);
+      expect(JSON.parse(params[6] as string)).toHaveLength(1);
     });
   });
 

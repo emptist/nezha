@@ -225,7 +225,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
 
       const formatted = result.rows
         .map(
-          (row, i) =>
+          row =>
             `[${row.message_type.toUpperCase()}] From: ${row.from_ai}\n` +
             `ID: ${row.id}\n` +
             `Content: ${row.content.substring(0, 300)}${row.content.length > 300 ? '...' : ''}\n` +

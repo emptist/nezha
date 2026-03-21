@@ -19,6 +19,7 @@ import {
 } from '../services/EncryptionService.js';
 import { Config } from '../config/Config.js';
 import { TraeAutoRecoveryService } from '../services/TraeAutoRecoveryService.js';
+import { getCurrentSessionId } from '../services/AgentSessionService.js';
 
 const standardMetrics = createStandardMetrics();
 
@@ -316,7 +317,8 @@ export class Scheduler {
       UPDATE ${tableName} 
       SET status = $3, updated_at = NOW(), started_at = NOW(), 
           priority = (SELECT priority + retry_boost + age_boost + type_weight + category_weight FROM ranked),
-          agent_id = $4, agent_name = $5, git_hash = $6, git_branch = $7, environment = $8
+          agent_id = $4, agent_name = $5, git_hash = $6, git_branch = $7, environment = $8,
+          session_id = $9
       WHERE id = (SELECT id FROM ranked)
       RETURNING id, title, description, type, depends_on, retry_count, max_retries, timeout_seconds`,
         [
@@ -328,6 +330,7 @@ export class Scheduler {
           this.getGitInfo().hash,
           this.getGitInfo().branch,
           this.getEnvironment(),
+          getCurrentSessionId(),
         ]
       );
 

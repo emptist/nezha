@@ -42,7 +42,7 @@ import * as path from 'path';
 import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
 import { BroadcastService } from './BroadcastService.js';
-import { AgentSessionService, getAgentSessionService } from './AgentSessionService.js';
+import { getAgentSessionService, getCurrentSessionId } from './AgentSessionService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -417,7 +417,8 @@ export class HeartbeatService {
         await this.checkDLQToIssues();
         await this.checkIssueTaskLinks();
         await this.checkDocsImport();
-        await this.checkDailyReflectionSummary();
+        await this.checkReflectionSummaryScheduledTask();
+        await this.generateDailyReflectionSummary();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       }
@@ -440,6 +441,47 @@ export class HeartbeatService {
     };
     processScheduledTasks().catch(err => logger.error('Initial scheduled task check failed:', err));
     this.scheduledTaskTimer = setInterval(processScheduledTasks, this.scheduledTaskIntervalMs);
+  }
+
+  private async checkReflectionSummaryScheduledTask(): Promise<void> {
+    try {
+      const dueTask = await this.db.query<{
+        id: string;
+        name: string;
+        cron_expression: string;
+      }>(
+        `SELECT id, name, cron_expression 
+         FROM scheduled_tasks 
+         WHERE enabled = true 
+           AND next_run <= NOW() 
+           AND (description LIKE '%reflection%' OR name LIKE '%reflection%')
+         LIMIT 1`
+      );
+
+      if (dueTask.rows.length === 0) {
+        return;
+      }
+
+      const task = dueTask.rows[0];
+      if (!task) {
+        return;
+      }
+
+      logger.info(`[Reflection] Triggering scheduled task: ${task.name}`);
+
+      await this.generateDailyReflectionSummary();
+
+      const { Scheduler } = await import('../core/Scheduler.js');
+      const nextRun = Scheduler.calculateNextRun(task.cron_expression, new Date());
+      await this.db.query(
+        `UPDATE scheduled_tasks SET last_run = NOW(), next_run = $1, updated_at = NOW() WHERE id = $2`,
+        [nextRun, task.id]
+      );
+
+      logger.info(`[Reflection] Next run scheduled for: ${nextRun.toISOString()}`);
+    } catch (error) {
+      logger.warn('[Reflection] Scheduled task check failed:', error);
+    }
   }
 
   private async checkMeetingInvites(): Promise<void> {
@@ -768,9 +810,14 @@ export class HeartbeatService {
       }
     }
 
+    const sessionId = getCurrentSessionId();
     const learningPrompt = `${taskPrompt}
 
 ---
+
+## AGENT CONTEXT
+Agent ID: nezha-daemon
+Agent Session: ${sessionId || 'unknown'}
 
 ## AUTO-EXECUTION INSTRUCTION
 When given choices or asked to confirm actions:
@@ -780,10 +827,12 @@ When given choices or asked to confirm actions:
 - Execute the recommended action without asking for confirmation
 
 ## Learning Reminder
-After completing this task:
-1. Reflect on what you learned
-2. If you discovered something valuable, save it to memory using memory_save
-3. Consider how this knowledge could help in future tasks`;
+After completing this task, use reflection markers:
+- [LEARN] insight: <what you learned> context: <optional context>
+- [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
+- [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
+
+Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available, skipping task execution');
@@ -1031,8 +1080,50 @@ After completing this task:
       } else {
         logger.debug('[Bootstrap] Bootstrap already completed, skipping');
       }
+
+      await this.initializeDefaultScheduledTasks();
     } catch (error) {
       logger.warn('[Bootstrap] Bootstrap failed (non-fatal):', error);
+    }
+  }
+
+  private async initializeDefaultScheduledTasks(): Promise<void> {
+    try {
+      const existingTask = await this.db.query<{ id: string }>(
+        `SELECT id FROM scheduled_tasks WHERE name = 'Daily Reflection Summary' LIMIT 1`
+      );
+
+      if (existingTask.rows.length > 0) {
+        logger.debug('[Bootstrap] Reflection summary scheduled task already exists');
+        return;
+      }
+
+      const { Scheduler } = await import('../core/Scheduler.js');
+      const cronExpression = '0 9 * * *';
+      const validation = Scheduler.validateCronExpression(cronExpression);
+
+      if (!validation.valid || !validation.nextRun) {
+        logger.warn('[Bootstrap] Invalid cron expression for reflection summary task');
+        return;
+      }
+
+      await this.db.query(
+        `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, next_run) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [
+          'Daily Reflection Summary',
+          'Generate and broadcast daily reflection summary',
+          cronExpression,
+          8,
+          validation.nextRun,
+        ]
+      );
+
+      logger.info(
+        '[Bootstrap] Created daily reflection summary scheduled task (runs at 9:00 AM UTC)'
+      );
+    } catch (error) {
+      logger.warn('[Bootstrap] Failed to initialize scheduled tasks:', error);
     }
   }
 
@@ -1622,7 +1713,7 @@ After completing this task:
     await this.clusterReflections();
   }
 
-  private async checkDailyReflectionSummary(): Promise<void> {
+  async generateDailyReflectionSummary(): Promise<void> {
     try {
       const today = new Date().toISOString().split('T')[0];
       const alreadySent = await this.db.query<{ id: string }>(
@@ -1930,15 +2021,22 @@ ${recentHighlights.rows.map((h, i) => `${i + 1}. ${h.content.substring(0, 150)}$
       }
     }
 
+    const sessionId = getCurrentSessionId();
     const learningPrompt = `${taskPrompt}
 
 ---
 
+## AGENT CONTEXT
+Agent ID: nezha-daemon
+Agent Session: ${sessionId || 'unknown'}
+
 ## Learning Reminder
-After completing this task:
-1. Reflect on what you learned
-2. If you discovered something valuable, save it to memory using memory_save
-3. Consider how this knowledge could help in future tasks`;
+After completing this task, use reflection markers:
+- [LEARN] insight: <what you learned> context: <optional context>
+- [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
+- [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
+
+Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available (streaming), skipping task execution');

@@ -4,10 +4,10 @@
 
 ## Usage
 
-Use these templates with the `trae-reflect` CLI command:
+Use these templates with the `auto-reflect` CLI command:
 
 ```bash
-node dist/cli/index.js trae-reflect "[LEARN] insight: Your insight context: Context"
+node dist/cli/index.js auto-reflect "[LEARN] insight: Your insight context: Context"
 ```
 
 ## Template Categories
@@ -128,20 +128,20 @@ reason: <why this is better>
 1. **Be Specific**: Include file names, line numbers, and concrete details
 2. **Include Context**: Explain why something was done
 3. **Use Multiple Markers**: Combine learnings, prompt updates, and issues as needed
-4. **Save Immediately**: Run trae-reflect right after completing work
+4. **Save Immediately**: Run auto-reflect right after completing work
 5. **Review Trends**: Use `get_reflection_trends()` to see patterns
 
 ## Example Session
 
 ```bash
 # After fixing a bug
-node dist/cli/index.js trae-reflect "[LEARN] insight: Fixed null pointer in UserService - added null check before accessing user.profile context: src/services/UserService.ts:142"
+node dist/cli/index.js auto-reflect "[LEARN] insight: Fixed null pointer in UserService - added null check before accessing user.profile context: src/services/UserService.ts:142"
 
 # After implementing a feature
-node dist/cli/index.js trae-reflect "[LEARN] insight: Implemented caching using Redis with 5min TTL context: src/services/CacheService.ts [PROMPT_UPDATE] current: No caching suggested: Add Redis caching for frequently accessed data reason: Reduces database load by 80%"
+node dist/cli/index.js auto-reflect "[LEARN] insight: Implemented caching using Redis with 5min TTL context: src/services/CacheService.ts [PROMPT_UPDATE] current: No caching suggested: Add Redis caching for frequently accessed data reason: Reduces database load by 80%"
 
 # After finding an issue
-node dist/cli/index.js trae-reflect "[ISSUE] title: Missing input validation in API endpoints type: bug severity: high description: Need to add validation for all user inputs"
+node dist/cli/index.js auto-reflect "[ISSUE] title: Missing input validation in API endpoints type: bug severity: high description: Need to add validation for all user inputs"
 ```
 
 ---

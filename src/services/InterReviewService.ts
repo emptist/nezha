@@ -479,19 +479,24 @@ Format:
       effortMinutes?: number;
     }
   ): Promise<void> {
-    await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
-      reviewId,
-      response,
-      JSON.stringify(acceptedSuggestions),
-      options?.reviewedBy || null,
-      options?.status || 'accepted',
-      options?.leverageRatio || null,
-      options?.reworkCount || 0,
-      options?.effortMinutes || null,
-    ]);
+    try {
+      await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
+        reviewId,
+        response,
+        JSON.stringify(acceptedSuggestions),
+        options?.reviewedBy || null,
+        options?.status || 'accepted',
+        options?.leverageRatio || null,
+        options?.reworkCount || 0,
+        options?.effortMinutes || null,
+      ]);
 
-    logger.info(`[InterReview] Response recorded for review: ${reviewId}`);
-    this.emit(InterReviewEvent.REVIEW_RESPONSE, { reviewId, response });
+      logger.info(`[InterReview] Response recorded for review: ${reviewId}`);
+      this.emit(InterReviewEvent.REVIEW_RESPONSE, { reviewId, response });
+    } catch (err) {
+      logger.error(`Failed to save review response for ${reviewId}:`, err);
+      throw err;
+    }
   }
 
   async submitReviewResponse(
@@ -514,39 +519,69 @@ Format:
       effortMinutes?: number;
     }
   ): Promise<void> {
-    await this.db.query(
-      `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [
-        reviewId,
-        'completed',
-        summary,
-        JSON.stringify(findings.filter(f => f.type === 'issue')),
-        JSON.stringify(findings.filter(f => f.type === 'suggestion')),
-        JSON.stringify(findings.filter(f => f.type === 'question')),
-        JSON.stringify(findings.filter(f => f.type === 'praise')),
-        scores.overall ?? null,
-        scores.codeQuality ?? null,
-        scores.testCoverage ?? null,
-        scores.documentation ?? null,
-        null,
-      ]
-    );
+    const logContext = {
+      reviewId,
+      hasResponse: !!response,
+      acceptedCount: acceptedSuggestions?.length ?? 0,
+    };
+    logger.debug(`[InterReview] submitReviewResponse started:`, logContext);
 
-    if (response || acceptedSuggestions) {
-      await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
-        reviewId,
-        response || null,
-        JSON.stringify(acceptedSuggestions || []),
-        options?.reviewedBy || null,
-        options?.status || 'accepted',
-        options?.leverageRatio || null,
-        options?.reworkCount || 0,
-        options?.effortMinutes || null,
-      ]);
+    try {
+      await this.db.query('BEGIN');
+      logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
+
+      await this.db.query(
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          reviewId,
+          'completed',
+          summary,
+          JSON.stringify(findings.filter(f => f.type === 'issue')),
+          JSON.stringify(findings.filter(f => f.type === 'suggestion')),
+          JSON.stringify(findings.filter(f => f.type === 'question')),
+          JSON.stringify(findings.filter(f => f.type === 'praise')),
+          scores.overall ?? null,
+          scores.codeQuality ?? null,
+          scores.testCoverage ?? null,
+          scores.documentation ?? null,
+          null,
+        ]
+      );
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+
+      if (response || acceptedSuggestions) {
+        await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
+          reviewId,
+          response || null,
+          JSON.stringify(acceptedSuggestions || []),
+          options?.reviewedBy || null,
+          options?.status || 'accepted',
+          options?.leverageRatio || null,
+          options?.reworkCount || 0,
+          options?.effortMinutes || null,
+        ]);
+        logger.debug(`[InterReview] respond_to_inter_review completed for: ${reviewId}`);
+      }
+
+      await this.db.query('COMMIT');
+      logger.info(
+        `[InterReview] Review response submitted successfully for review: ${reviewId}`,
+        logContext
+      );
+      this.emit(InterReviewEvent.REVIEW_COMPLETED, { reviewId });
+    } catch (err) {
+      logger.error(
+        `[InterReview] Failed to submit review response for ${reviewId}, rolling back:`,
+        err
+      );
+      try {
+        await this.db.query('ROLLBACK');
+        logger.debug(`[InterReview] Transaction rolled back for review: ${reviewId}`);
+      } catch (rollbackErr) {
+        logger.error(`[InterReview] Rollback failed for review ${reviewId}:`, rollbackErr);
+      }
+      throw err;
     }
-
-    logger.info(`[InterReview] Review response submitted for review: ${reviewId}`);
-    this.emit(InterReviewEvent.REVIEW_COMPLETED, { reviewId });
   }
 
   async getReview(reviewId: string): Promise<{

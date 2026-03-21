@@ -51,16 +51,18 @@ describe('AgentSessionService', () => {
 
   describe('registerSession', () => {
     it('should return existing sessionId if already registered', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({
-        rows: [{ generate_bot_id: 'bot_123' }],
-      } as QueryResult<unknown>);
+      mockDb.query = vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_123' }] } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
 
       const sessionId1 = await service.registerSession();
       const sessionId2 = await service.registerSession();
 
       expect(sessionId1).toBe('bot_123');
       expect(sessionId2).toBe('bot_123');
-      expect(mockDb.query).toHaveBeenCalledTimes(1);
+      expect(mockDb.query).toHaveBeenCalledTimes(3);
     });
 
     it('should register new session with default agent type', async () => {
@@ -74,7 +76,7 @@ describe('AgentSessionService', () => {
 
       expect(sessionId).toBe('bot_new');
       expect(mockDb.query).toHaveBeenCalledTimes(3);
-      expect(mockDb.query).toHaveBeenNthCalledCalledWith(
+      expect(mockDb.query).toHaveBeenNthCalledWith(
         3,
         expect.stringContaining('INSERT INTO agent_sessions'),
         ['bot_new', 'main', 'opencode']
@@ -104,14 +106,15 @@ describe('AgentSessionService', () => {
       mockDb.query = vi
         .fn()
         .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_new' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>);
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
 
       const sessionId = await service.registerSession();
 
       expect(sessionId).toBe('bot_new');
-      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      expect(mockDb.query).toHaveBeenCalledTimes(3);
       expect(mockDb.query).toHaveBeenNthCalledWith(
-        2,
+        3,
         expect.stringContaining('INSERT INTO agent_sessions'),
         ['bot_new', 'main', 'opencode']
       );
@@ -123,13 +126,14 @@ describe('AgentSessionService', () => {
         .mockResolvedValueOnce({
           rows: [{ generate_bot_id: 'bot_custom' }],
         } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'feature' }] } as QueryResult<unknown>);
+        .mockResolvedValueOnce({ rows: [{ branch: 'feature' }] } as QueryResult<unknown>)
+        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
 
       const sessionId = await service.registerSession('custom-agent');
 
       expect(sessionId).toBe('bot_custom');
       expect(mockDb.query).toHaveBeenNthCalledWith(
-        2,
+        3,
         expect.stringContaining('INSERT INTO agent_sessions'),
         ['bot_custom', 'feature', 'custom-agent']
       );

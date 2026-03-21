@@ -83,7 +83,28 @@ export class ContextBuilder {
     this.interReviewService = new InterReviewService(db);
     this.skillSystem = new SkillSystem();
     this.skillSystem.setDatabaseClient(db);
+    if (embeddingProvider) {
+      this.skillSystem.setEmbeddingConfig({
+        provider: 'ollama',
+        model: 'nomic-embed-text',
+      });
+    }
     this.embedding = embeddingProvider;
+    this.initializeSkillSystem();
+  }
+
+  private async initializeSkillSystem(): Promise<void> {
+    try {
+      if (this.skillSystem.initialize) {
+        await this.skillSystem.initialize();
+      }
+    } catch (err) {
+      logger.warn('SkillSystem initialization failed:', err);
+    }
+  }
+
+  async ensureSkillsLoaded(): Promise<void> {
+    await this.initializeSkillSystem();
   }
 
   async buildContext(input: TaskContextInput): Promise<BuiltContext> {

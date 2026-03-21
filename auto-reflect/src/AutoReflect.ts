@@ -1,6 +1,6 @@
 import pg, { Pool, PoolClient } from 'pg';
 
-export interface TraeReflectConfig {
+export interface AutoReflectConfig {
   databaseUrl?: string;
   host?: string;
   port?: number;
@@ -9,18 +9,18 @@ export interface TraeReflectConfig {
   password?: string;
 }
 
-export interface TraeLearnMarker {
+export interface AutoLearnMarker {
   insight: string;
   context?: string;
 }
 
-export interface TraePromptUpdateMarker {
+export interface AutoPromptUpdateMarker {
   current: string;
   suggested: string;
   reason: string;
 }
 
-export interface TraeIssueMarker {
+export interface AutoIssueMarker {
   title: string;
   description?: string;
   type?: string;
@@ -28,13 +28,13 @@ export interface TraeIssueMarker {
   tags?: string[];
 }
 
-export interface TraeReviewResponseMarker {
+export interface AutoReviewResponseMarker {
   reviewId: string;
   response: string;
   acceptedSuggestions?: string[];
 }
 
-export interface TraeReflectResult {
+export interface AutoReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
@@ -42,10 +42,10 @@ export interface TraeReflectResult {
   total: number;
 }
 
-export class TraeReflect {
+export class AutoReflect {
   private pool: Pool | null = null;
   private externalClient: PoolClient | null = null;
-  private config: TraeReflectConfig;
+  private config: AutoReflectConfig;
 
   private static readonly LEARN_PATTERN =
     /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
@@ -54,9 +54,9 @@ export class TraeReflect {
   private static readonly ISSUE_PATTERN =
     /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
   private static readonly REVIEW_RESPONSE_PATTERN =
-    /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
+    /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
 
-  constructor(config: TraeReflectConfig = {}) {
+  constructor(config: AutoReflectConfig = {}) {
     this.config = config;
   }
 
@@ -90,11 +90,11 @@ export class TraeReflect {
     }
   }
 
-  parseLearnMarkers(text: string): TraeLearnMarker[] {
-    const markers: TraeLearnMarker[] = [];
+  parseLearnMarkers(text: string): AutoLearnMarker[] {
+    const markers: AutoLearnMarker[] = [];
     let match;
 
-    while ((match = TraeReflect.LEARN_PATTERN.exec(text)) !== null) {
+    while ((match = AutoReflect.LEARN_PATTERN.exec(text)) !== null) {
       const insight = match[1]?.trim();
       const context = match[2]?.trim();
 
@@ -106,11 +106,11 @@ export class TraeReflect {
     return markers;
   }
 
-  parsePromptUpdateMarkers(text: string): TraePromptUpdateMarker[] {
-    const markers: TraePromptUpdateMarker[] = [];
+  parsePromptUpdateMarkers(text: string): AutoPromptUpdateMarker[] {
+    const markers: AutoPromptUpdateMarker[] = [];
     let match;
 
-    while ((match = TraeReflect.PROMPT_PATTERN.exec(text)) !== null) {
+    while ((match = AutoReflect.PROMPT_PATTERN.exec(text)) !== null) {
       const current = match[1]?.trim();
       const suggested = match[2]?.trim();
       const reason = match[3]?.trim();
@@ -123,11 +123,11 @@ export class TraeReflect {
     return markers;
   }
 
-  parseIssueMarkers(text: string): TraeIssueMarker[] {
-    const markers: TraeIssueMarker[] = [];
+  parseIssueMarkers(text: string): AutoIssueMarker[] {
+    const markers: AutoIssueMarker[] = [];
     let match;
 
-    while ((match = TraeReflect.ISSUE_PATTERN.exec(text)) !== null) {
+    while ((match = AutoReflect.ISSUE_PATTERN.exec(text)) !== null) {
       const title = match[1]?.trim();
       const description = match[2]?.trim();
       const type = match[3]?.trim();
@@ -148,11 +148,11 @@ export class TraeReflect {
     return markers;
   }
 
-  parseReviewResponseMarkers(text: string): TraeReviewResponseMarker[] {
-    const markers: TraeReviewResponseMarker[] = [];
+  parseReviewResponseMarkers(text: string): AutoReviewResponseMarker[] {
+    const markers: AutoReviewResponseMarker[] = [];
     let match;
 
-    while ((match = TraeReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
+    while ((match = AutoReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
       const reviewId = match[1]?.trim();
       const response = match[2]?.trim();
       const acceptedStr = match[3]?.trim();
@@ -161,7 +161,12 @@ export class TraeReflect {
         markers.push({
           reviewId,
           response,
-          acceptedSuggestions: acceptedStr ? acceptedStr.split(',').map(s => s.trim()) : [],
+          acceptedSuggestions: acceptedStr
+            ? acceptedStr
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean)
+            : [],
         });
       }
     }
@@ -169,17 +174,17 @@ export class TraeReflect {
     return markers;
   }
 
-  async saveLearning(marker: TraeLearnMarker): Promise<void> {
+  async saveLearning(marker: AutoLearnMarker): Promise<void> {
     const client = this.getClient();
 
     await client.query(
       `INSERT INTO memory (content, tags, source, importance, metadata) 
-       VALUES ($1, ARRAY['learning', 'reflection'], 'trae-reflect', $2, $3)`,
-      [marker.insight, 7, JSON.stringify({ context: marker.context || null, source: 'trae-alone' })]
+       VALUES ($1, ARRAY['learning', 'reflection'], 'auto-reflect', $2, $3)`,
+      [marker.insight, 7, JSON.stringify({ context: marker.context || null, source: 'auto-reflect' })]
     );
   }
 
-  async savePromptUpdate(marker: TraePromptUpdateMarker): Promise<void> {
+  async savePromptUpdate(marker: AutoPromptUpdateMarker): Promise<void> {
     const client = this.getClient();
 
     await client.query(
@@ -189,7 +194,7 @@ export class TraeReflect {
     );
   }
 
-  async saveIssue(marker: TraeIssueMarker): Promise<void> {
+  async saveIssue(marker: AutoIssueMarker): Promise<void> {
     const client = this.getClient();
 
     await client.query(
@@ -205,15 +210,7 @@ export class TraeReflect {
     );
   }
 
-  private isValidUuid(id: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-  }
-
-  async saveReviewResponse(marker: TraeReviewResponseMarker): Promise<void> {
-    if (!this.isValidUuid(marker.reviewId)) {
-      throw new Error(`Invalid reviewId format: ${marker.reviewId}`);
-    }
-
+  async saveReviewResponse(marker: AutoReviewResponseMarker): Promise<void> {
     try {
       const client = this.getClient();
       await client.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
@@ -227,8 +224,8 @@ export class TraeReflect {
     }
   }
 
-  async reflect(text: string): Promise<TraeReflectResult> {
-    const result: TraeReflectResult = {
+  async reflect(text: string): Promise<AutoReflectResult> {
+    const result: AutoReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,

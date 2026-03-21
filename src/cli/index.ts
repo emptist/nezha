@@ -1464,11 +1464,11 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'trae-reflect': {
+      case 'auto-reflect': {
         const text = args.slice(1).join(' ');
         if (!text) {
           cli.error('Reflection text is required');
-          console.log('\nUsage: nezha trae-reflect "Your reflection with [LEARN] markers"');
+          console.log('\nUsage: nezha auto-reflect "Your reflection with [LEARN] markers"');
           console.log(
             '\nThis command is designed for Trae AI (editor-based) to use reflection markers.'
           );
@@ -1493,7 +1493,7 @@ async function main(): Promise<void> {
         const issuePattern =
           /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
         const reviewResponsePattern =
-          /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
+          /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
 
         let match;
 
@@ -1550,13 +1550,22 @@ async function main(): Promise<void> {
           const acceptedStr = match[3]?.trim();
           const acceptedSuggestions = acceptedStr ? acceptedStr.split(',').map(s => s.trim()) : [];
           if (reviewId && response) {
-            await db.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
-              reviewId,
-              response,
-              JSON.stringify(acceptedSuggestions),
-            ]);
-            console.log(`✓ Saved review response for: ${reviewId}`);
-            count++;
+            try {
+              await db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
+                reviewId,
+                response,
+                JSON.stringify(acceptedSuggestions),
+                null,
+                'accepted',
+                null,
+                0,
+                null,
+              ]);
+              console.log(`✓ Saved review response for: ${reviewId}`);
+              count++;
+            } catch (err) {
+              console.error(`✗ Failed to save review response for ${reviewId}:`, err);
+            }
           }
         }
 
@@ -2454,11 +2463,15 @@ async function main(): Promise<void> {
           git_hash: string | null;
           started_at: Date | null;
           created_by: string | null;
+          session_id: string | null;
+          agent_type: string | null;
         }>(
-          `SELECT id, title, status, priority, assigned_to, agent_id, agent_name, git_hash, started_at, created_by
-           FROM tasks
-           WHERE status = 'RUNNING'
-           ORDER BY priority DESC, started_at DESC`
+          `SELECT t.id, t.title, t.status, t.priority, t.assigned_to, t.agent_id, t.agent_name, 
+                  t.git_hash, t.started_at, t.created_by, t.session_id, s.agent_type
+           FROM tasks t
+           LEFT JOIN agent_sessions s ON t.session_id = s.id
+           WHERE t.status = 'RUNNING'
+           ORDER BY t.priority DESC, t.started_at DESC`
         );
 
         const pendingTasks = await db.query<{
@@ -2494,8 +2507,12 @@ async function main(): Promise<void> {
         } else {
           console.log('\n' + colors.bright + '  🔄 RUNNING TASKS:' + colors.reset);
           for (const task of runningTasks.rows) {
-            const agentDisplay =
-              task.agent_name || task.agent_id?.substring(0, 8) || task.assigned_to || 'unassigned';
+            const agentDisplay = task.agent_type
+              ? `${task.agent_type} (${task.session_id?.substring(0, 12)}...)`
+              : task.agent_name ||
+                task.agent_id?.substring(0, 8) ||
+                task.assigned_to ||
+                'unassigned';
             const started = task.started_at
               ? new Date(task.started_at).toLocaleTimeString()
               : 'N/A';

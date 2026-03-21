@@ -2,7 +2,7 @@
 import { config } from 'dotenv';
 config();
 
-import { TraeReflect } from './TraeReflect.js';
+import { AutoReflect } from './AutoReflect.js';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     console.log(`
 Trae Reflect - Standalone reflection tool for Trae Editor AI
 
-Usage: trae-reflect <text with markers>
+Usage: auto-reflect <text with markers>
 
 Markers:
   [LEARN] insight: <learning> context: <optional context>
@@ -19,19 +19,19 @@ Markers:
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
 
 Commands:
-  trae-reflect "<text>"           Parse and save reflection markers
-  trae-reflect --check            Check for pending work
-  trae-reflect --learnings        Show recent learnings
+  auto-reflect "<text>"           Parse and save reflection markers
+  auto-reflect --check            Check for pending work
+  auto-reflect --learnings        Show recent learnings
 
 Examples:
-  trae-reflect "[LEARN] insight: Always check for pending work before stopping"
-  trae-reflect "[ISSUE] title: Bug in parser type: bug severity: high"
-  trae-reflect --check
+  auto-reflect "[LEARN] insight: Always check for pending work before stopping"
+  auto-reflect "[ISSUE] title: Bug in parser type: bug severity: high"
+  auto-reflect --check
 `);
     process.exit(0);
   }
 
-  const reflect = new TraeReflect();
+  const reflect = new AutoReflect();
 
   try {
     await reflect.connect();

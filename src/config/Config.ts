@@ -12,6 +12,7 @@ import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { getCurrentSessionId } from '../services/AgentSessionService.js';
 
 function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
   if (!value) return defaultValue;
@@ -229,6 +230,8 @@ export class Config implements IConfig {
   }
 
   getAgentId(): string {
+    const sessionId = getCurrentSessionId();
+    if (sessionId) return sessionId;
     return this.config.agentId;
   }
 
@@ -237,6 +240,8 @@ export class Config implements IConfig {
   }
 
   getAgentName(): string {
+    const sessionId = getCurrentSessionId();
+    if (sessionId) return sessionId;
     return this.config.agentId;
   }
 

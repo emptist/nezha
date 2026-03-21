@@ -1,6 +1,6 @@
-# trae-reflect
+# auto-reflect
 
-[![npm version](https://badge.fury.io/js/trae-reflect.svg)](https://badge.fury.io/js/trae-reflect)
+[![npm version](https://badge.fury.io/js/auto-reflect.svg)](https://badge.fury.io/js/auto-reflect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
@@ -18,7 +18,7 @@ Editor-based AIs (like Trae AI) get interrupted when they declare "done" or "com
 ## Installation
 
 ```bash
-npm install trae-reflect
+npm install auto-reflect
 ```
 
 ## Quick Start
@@ -27,21 +27,21 @@ npm install trae-reflect
 
 ```bash
 # Save a learning
-npx trae-reflect "[LEARN] insight: Always check for pending work before stopping"
+npx auto-reflect "[LEARN] insight: Always check for pending work before stopping"
 
 # Check for pending work
-npx trae-reflect --check
+npx auto-reflect --check
 
 # View recent learnings
-npx trae-reflect --learnings
+npx auto-reflect --learnings
 ```
 
 ### Programmatic Usage
 
 ```typescript
-import { TraeReflect } from 'trae-reflect';
+import { AutoReflect } from 'auto-reflect';
 
-const reflect = new TraeReflect({
+const reflect = new AutoReflect({
   databaseUrl: 'postgresql://postgres@localhost:5432/nezha'
 });
 
@@ -105,12 +105,12 @@ Example:
 
 ## API Reference
 
-### `TraeReflect`
+### `AutoReflect`
 
 #### Constructor
 
 ```typescript
-const reflect = new TraeReflect(config?: TraeReflectConfig);
+const reflect = new AutoReflect(config?: AutoReflectConfig);
 ```
 
 #### Methods
@@ -130,10 +130,10 @@ const reflect = new TraeReflect(config?: TraeReflectConfig);
 | `saveIssue(marker)` | Save a single issue |
 | `setExternalClient(client)` | Use external pg client for transactions |
 
-### `TraeReflectConfig`
+### `AutoReflectConfig`
 
 ```typescript
-interface TraeReflectConfig {
+interface AutoReflectConfig {
   databaseUrl?: string;  // Full connection string
   host?: string;         // Default: localhost
   port?: number;         // Default: 5432
@@ -182,10 +182,10 @@ See the [Nezha project](https://github.com/nezha-project/nezha) for database sch
 This package is designed to work with the Nezha autonomous development system:
 
 ```typescript
-import { TraeReflect } from 'trae-reflect';
+import { AutoReflect } from 'auto-reflect';
 
 // In your AI agent
-const reflect = new TraeReflect();
+const reflect = new AutoReflect();
 await reflect.connect();
 
 // After completing work, always check for more
