@@ -2,8 +2,14 @@ import {
   databaseSkillLoader,
   type StoredSkill,
   type SkillExecutionContext,
+  type CreateSkillInput,
+  type UpdateSkillInput,
+  type VectorSearchResult,
+  type SkillVersion,
 } from '../services/DatabaseSkillLoader.js';
 import { logger } from '../utils/logger.js';
+import { createEmbeddingProvider } from '../services/embedding/index.js';
+import type { EmbeddingConfig } from '../services/embedding/index.js';
 
 export interface Skill {
   name: string;
@@ -39,6 +45,11 @@ export class SkillSystem {
     databaseSkillLoader.setDatabaseClient(client);
   }
 
+  setEmbeddingConfig(config: EmbeddingConfig): void {
+    const provider = createEmbeddingProvider(config);
+    databaseSkillLoader.setEmbeddingProvider(provider);
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -54,6 +65,56 @@ export class SkillSystem {
     databaseSkillLoader.invalidateCache();
     await databaseSkillLoader.refreshCache();
     logger.info('[SkillSystem] Skills cache refreshed');
+  }
+
+  async vectorSearch(
+    query: string,
+    limit?: number,
+    threshold?: number
+  ): Promise<VectorSearchResult[]> {
+    return databaseSkillLoader.vectorSearch(query, limit, threshold);
+  }
+
+  async hybridSearch(query: string, limit?: number): Promise<VectorSearchResult[]> {
+    return databaseSkillLoader.hybridSearch(query, limit);
+  }
+
+  async createSkill(input: CreateSkillInput): Promise<string | null> {
+    return databaseSkillLoader.saveSkill(input);
+  }
+
+  async updateSkill(id: string, input: UpdateSkillInput): Promise<boolean> {
+    return databaseSkillLoader.updateSkill(id, input);
+  }
+
+  async saveSkillVersion(
+    skillId: string,
+    version: string,
+    instructions?: string,
+    manifest?: Record<string, unknown>,
+    changeSummary?: string,
+    improvedBy?: string
+  ): Promise<string | null> {
+    return databaseSkillLoader.saveSkillVersion(
+      skillId,
+      version,
+      instructions,
+      manifest,
+      changeSummary,
+      improvedBy
+    );
+  }
+
+  async getSkillVersionHistory(skillId: string): Promise<SkillVersion[]> {
+    return databaseSkillLoader.getSkillVersionHistory(skillId);
+  }
+
+  async getSkillsByProject(projectId: string): Promise<StoredSkill[]> {
+    return databaseSkillLoader.getSkillsByProject(projectId);
+  }
+
+  async getSkillsByCategory(category: string): Promise<StoredSkill[]> {
+    return databaseSkillLoader.getSkillsByCategory(category);
   }
 
   async getSkill(name: string, context?: SkillExecutionContext): Promise<Skill | null> {

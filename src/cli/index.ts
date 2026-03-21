@@ -2506,6 +2506,35 @@ async function main(): Promise<void> {
           }
         }
 
+        const activeSessions = await db.query<{
+          id: string;
+          started_at: Date;
+          last_heartbeat: Date;
+          git_branch: string | null;
+          working_on: string | null;
+          agent_type: string;
+        }>(
+          `SELECT id, started_at, last_heartbeat, git_branch, working_on, agent_type
+           FROM agent_sessions
+           WHERE status = 'alive'
+           ORDER BY last_heartbeat DESC`
+        );
+
+        if (activeSessions.rows.length > 0) {
+          console.log('\n' + colors.bright + '  🤖 ACTIVE AI SESSIONS:' + colors.reset);
+          for (const session of activeSessions.rows) {
+            const started = new Date(session.started_at).toLocaleTimeString();
+            const heartbeat = new Date(session.last_heartbeat).toLocaleTimeString();
+            const work = session.working_on ? ` - ${session.working_on.substring(0, 50)}` : '';
+            console.log(`\n  🤖 ${session.id}`);
+            console.log(
+              `     Type: ${session.agent_type} | Branch: ${session.git_branch || 'N/A'}`
+            );
+            console.log(`     Started: ${started} | Heartbeat: ${heartbeat}`);
+            if (work) console.log(`     Working:${work}`);
+          }
+        }
+
         if (pendingTasks.rows.length > 0) {
           console.log('\n' + colors.bright + '  ⏳ URGENT PENDING TASKS:' + colors.reset);
           for (const task of pendingTasks.rows) {

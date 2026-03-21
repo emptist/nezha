@@ -85,7 +85,8 @@ CREATE OR REPLACE FUNCTION update_inter_review(
     p_overall_score INTEGER DEFAULT NULL,
     p_code_quality_score INTEGER DEFAULT NULL,
     p_test_coverage_score INTEGER DEFAULT NULL,
-    p_documentation_score INTEGER DEFAULT NULL
+    p_documentation_score INTEGER DEFAULT NULL,
+    p_raw_response TEXT DEFAULT NULL
 )
 RETURNS VOID AS $$
 BEGIN
@@ -100,6 +101,7 @@ BEGIN
         code_quality_score = COALESCE(p_code_quality_score, code_quality_score),
         test_coverage_score = COALESCE(p_test_coverage_score, test_coverage_score),
         documentation_score = COALESCE(p_documentation_score, documentation_score),
+        raw_response = COALESCE(p_raw_response, raw_response),
         completed_at = CASE WHEN p_status = 'completed' THEN NOW() ELSE completed_at END
     WHERE id = p_id;
 END;

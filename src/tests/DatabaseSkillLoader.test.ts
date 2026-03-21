@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DatabaseSkillLoader, type StoredSkill } from '../services/DatabaseSkillLoader.js';
+import {
+  DatabaseSkillLoader,
+  type StoredSkill,
+  type SkillVersion,
+} from '../services/DatabaseSkillLoader.js';
 
 describe('DatabaseSkillLoader', () => {
   let loader: DatabaseSkillLoader;
@@ -640,6 +644,254 @@ describe('DatabaseSkillLoader', () => {
 
       const call = mockDbClient.query.mock.calls[0];
       expect(call?.[1]).toContain('blocked');
+    });
+  });
+
+  describe('saveSkill', () => {
+    it('should save new skill and return ID', async () => {
+      mockDbClient.query.mockResolvedValue({ rows: [{ id: 'new-skill-id' }] });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.saveSkill({
+        name: 'New Skill',
+        description: 'A new skill',
+        tags: ['new', 'testing'],
+      });
+
+      expect(result).toBe('new-skill-id');
+      expect(mockDbClient.query).toHaveBeenCalled();
+    });
+
+    it('should return null when no database client', async () => {
+      loader.setDatabaseClient(null as any);
+
+      const result = await loader.saveSkill({
+        name: 'Test',
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it('should invalidate cache after save', async () => {
+      mockDbClient.query
+        .mockResolvedValueOnce({ rows: [createMockSkill()] })
+        .mockResolvedValueOnce({ rows: [{ id: 'new-id' }] });
+      loader.setDatabaseClient(mockDbClient);
+      await loader.refreshCache();
+      expect(loader.getCacheSize()).toBe(1);
+
+      await loader.saveSkill({ name: 'Test Skill' });
+
+      expect(loader.getCacheSize()).toBe(0);
+    });
+  });
+
+  describe('updateSkill', () => {
+    it('should update skill fields', async () => {
+      mockDbClient.query.mockResolvedValue({ rowCount: 1 });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.updateSkill('skill-1', {
+        description: 'Updated description',
+        tags: ['updated'],
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false when no changes', async () => {
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.updateSkill('skill-1', {});
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when skill not found', async () => {
+      mockDbClient.query.mockResolvedValue({ rowCount: 0 });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.updateSkill('nonexistent', {
+        description: 'test',
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('should invalidate cache after update', async () => {
+      mockDbClient.query
+        .mockResolvedValueOnce({ rows: [createMockSkill()] })
+        .mockResolvedValueOnce({ rowCount: 1 });
+      loader.setDatabaseClient(mockDbClient);
+      await loader.refreshCache();
+      expect(loader.getCacheSize()).toBe(1);
+
+      await loader.updateSkill('skill-1', { description: 'Updated' });
+
+      expect(loader.getCacheSize()).toBe(0);
+    });
+  });
+
+  describe('saveSkillVersion', () => {
+    it('should save skill version', async () => {
+      mockDbClient.query.mockResolvedValue({ rows: [{ id: 'version-id' }] });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.saveSkillVersion(
+        'skill-1',
+        '1.1.0',
+        'New instructions',
+        { feature: 'new' },
+        'Added feature',
+        'AI Agent'
+      );
+
+      expect(result).toBe('version-id');
+    });
+
+    it('should return null when no database client', async () => {
+      loader.setDatabaseClient(null as any);
+
+      const result = await loader.saveSkillVersion('skill-1', '1.0.0');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getSkillVersionHistory', () => {
+    it('should return version history', async () => {
+      const versions: SkillVersion[] = [
+        {
+          id: 'v1',
+          skill_id: 'skill-1',
+          version: '1.1.0',
+          instructions: 'New',
+          manifest: {},
+          change_summary: 'Update',
+          improved_by: 'AI',
+          created_at: new Date(),
+        },
+        {
+          id: 'v2',
+          skill_id: 'skill-1',
+          version: '1.0.0',
+          instructions: 'Old',
+          manifest: {},
+          change_summary: 'Initial',
+          improved_by: 'Human',
+          created_at: new Date(),
+        },
+      ];
+      mockDbClient.query.mockResolvedValue({ rows: versions });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.getSkillVersionHistory('skill-1');
+
+      expect(result).toHaveLength(2);
+      expect(result[0].version).toBe('1.1.0');
+    });
+
+    it('should return empty array when no database client', async () => {
+      loader.setDatabaseClient(null as any);
+
+      const result = await loader.getSkillVersionHistory('skill-1');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('vectorSearch', () => {
+    it('should fall back to keyword search without embedding provider', async () => {
+      const skills = [createMockSkill({ name: 'Test Skill' })];
+      mockDbClient.query.mockResolvedValue({ rows: skills });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.vectorSearch('test');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].similarity).toBe(1);
+    });
+
+    it('should return empty array when no database client', async () => {
+      loader.setDatabaseClient(null as any);
+
+      const result = await loader.vectorSearch('test');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSkillsByProject', () => {
+    it('should query with project_id filter', async () => {
+      mockDbClient.query.mockResolvedValue({ rows: [] });
+      loader.setDatabaseClient(mockDbClient);
+
+      await loader.getSkillsByProject('project-1');
+
+      expect(mockDbClient.query).toHaveBeenCalled();
+      const call = mockDbClient.query.mock.calls[0];
+      expect(call[0]).toContain('project_id');
+      expect(call[1]).toContain('project-1');
+    });
+
+    it('should return skills from database', async () => {
+      const projectSkills = [
+        createMockSkill({ id: 'skill-1', project_id: 'project-1' }),
+        createMockSkill({ id: 'skill-2', project_id: 'project-1' }),
+      ];
+      mockDbClient.query.mockResolvedValue({ rows: projectSkills });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.getSkillsByProject('project-1');
+
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('getSkillsByCategory', () => {
+    it('should query with category filter', async () => {
+      mockDbClient.query.mockResolvedValue({ rows: [] });
+      loader.setDatabaseClient(mockDbClient);
+
+      await loader.getSkillsByCategory('testing');
+
+      expect(mockDbClient.query).toHaveBeenCalled();
+      const call = mockDbClient.query.mock.calls[0];
+      expect(call[0]).toContain('category');
+      expect(call[1]).toContain('testing');
+    });
+
+    it('should return skills from database', async () => {
+      const categorySkills = [
+        createMockSkill({ id: 'skill-1', category: 'testing' }),
+        createMockSkill({ id: 'skill-2', category: 'testing' }),
+      ];
+      mockDbClient.query.mockResolvedValue({ rows: categorySkills });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.getSkillsByCategory('testing');
+
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('hybridSearch', () => {
+    it('should combine vector and keyword results', async () => {
+      const skills = [createMockSkill({ id: 'skill-1', name: 'Test Skill' })];
+      mockDbClient.query.mockResolvedValue({ rows: skills });
+      loader.setDatabaseClient(mockDbClient);
+
+      const result = await loader.hybridSearch('test', 10);
+
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should return empty array when no database client', async () => {
+      loader.setDatabaseClient(null as any);
+
+      const result = await loader.hybridSearch('test');
+
+      expect(result).toEqual([]);
     });
   });
 });

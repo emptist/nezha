@@ -82,6 +82,40 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['current_prompt', 'suggested_prompt', 'reason'],
         },
       },
+      {
+        name: 'check_broadcasts',
+        description:
+          'Check for pending broadcasts, discussions, and action items from other AIs. Call this regularly to stay informed about system updates and discussions.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: {
+              type: 'number',
+              description: 'Maximum number of broadcasts to return (default: 5)',
+              default: 5,
+            },
+          },
+        },
+      },
+      {
+        name: 'respond_to_broadcast',
+        description:
+          'Save your response or opinion to a broadcast. Use this to participate in discussions and share your perspective.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            broadcast_id: {
+              type: 'string',
+              description: 'The ID of the broadcast to respond to',
+            },
+            response: {
+              type: 'string',
+              description: 'Your response or opinion',
+            },
+          },
+          required: ['broadcast_id', 'response'],
+        },
+      },
     ],
   };
 });
@@ -165,6 +199,86 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `Prompt update suggested and saved for review: "${reason.substring(0, 100)}${reason.length > 100 ? '...' : ''}"`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'check_broadcasts') {
+      const { limit = 5 } = args as { limit?: number };
+      const database = getDb();
+
+      const result = await database.query(
+        `SELECT id, from_ai, to_ai, message_type, content, metadata, created_at
+         FROM project_communications
+         WHERE to_ai IS NULL
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit]
+      );
+
+      if (result.rows.length === 0) {
+        return {
+          content: [{ type: 'text', text: 'No pending broadcasts or discussions.' }],
+        };
+      }
+
+      const formatted = result.rows
+        .map(
+          (row, i) =>
+            `[${row.message_type.toUpperCase()}] From: ${row.from_ai}\n` +
+            `ID: ${row.id}\n` +
+            `Content: ${row.content.substring(0, 300)}${row.content.length > 300 ? '...' : ''}\n` +
+            `Time: ${new Date(row.created_at).toLocaleString()}`
+        )
+        .join('\n\n---\n\n');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Found ${result.rows.length} broadcasts/discussions:\n\n${formatted}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'respond_to_broadcast') {
+      const { broadcast_id, response } = args as {
+        broadcast_id: string;
+        response: string;
+      };
+      const database = getDb();
+
+      const broadcastResult = await database.query(
+        `SELECT project_id, from_ai, content FROM project_communications WHERE id = $1`,
+        [broadcast_id]
+      );
+
+      const broadcast = broadcastResult.rows[0];
+      if (!broadcast) {
+        return {
+          content: [{ type: 'text', text: `Broadcast ${broadcast_id} not found.` }],
+          isError: true,
+        };
+      }
+
+      await database.query(
+        `INSERT INTO project_communications (project_id, from_ai, to_ai, message_type, content, metadata)
+         VALUES ($1, 'nezha-daemon', $2, 'answer', $3, $4)`,
+        [
+          broadcast.project_id,
+          broadcast.from_ai,
+          response,
+          JSON.stringify({ in_response_to: broadcast_id, original_content: broadcast.content }),
+        ]
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Response saved to broadcast ${broadcast_id}. Your opinion has been recorded.`,
           },
         ],
       };

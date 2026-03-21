@@ -32,6 +32,25 @@ export class MeetingHandler {
     this.agent = agent;
   }
 
+  async createMeetingFromTask(task: DiscussionTask): Promise<string> {
+    const meetingId = crypto.randomUUID();
+    const agentId = Config.getInstance().getAgentId();
+
+    await this.db.query(
+      `INSERT INTO meetings (id, topic, status, created_by, metadata)
+       VALUES ($1, $2, 'active', $3, $4)`,
+      [
+        meetingId,
+        task.title.replace('Discussion: ', ''),
+        agentId,
+        JSON.stringify({ taskId: task.id, priority: task.priority }),
+      ]
+    );
+
+    logger.info(`[MeetingHandler] Created meeting ${meetingId} for task ${task.id}`);
+    return meetingId;
+  }
+
   async handleDiscussionTask(task: DiscussionTask): Promise<void> {
     logger.info(`[MeetingHandler] Processing discussion: ${task.title}`);
 

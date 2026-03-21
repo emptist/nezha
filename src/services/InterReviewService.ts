@@ -186,9 +186,10 @@ export class InterReviewService extends EventEmitter {
       const { reviewResult, rawResponse } = await this.executeReviewPrompt(reviewId, prompt);
 
       await this.db.query(
-        `SELECT update_inter_review($1, 'completed', $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           reviewId,
+          'completed',
           reviewResult.summary,
           JSON.stringify(reviewResult.findings.filter(f => f.type === 'issue')),
           JSON.stringify(reviewResult.findings.filter(f => f.type === 'suggestion')),
@@ -198,13 +199,9 @@ export class InterReviewService extends EventEmitter {
           reviewResult.codeQualityScore,
           reviewResult.testCoverageScore,
           reviewResult.documentationScore,
+          rawResponse,
         ]
       );
-
-      await this.db.query(`UPDATE inter_reviews SET raw_response = $1 WHERE id = $2`, [
-        rawResponse,
-        reviewId,
-      ]);
 
       logger.info(
         `[InterReview] Review completed: ${reviewId} (score: ${reviewResult.overallScore})`
@@ -255,8 +252,8 @@ export class InterReviewService extends EventEmitter {
       return reviewResult;
     } catch (error) {
       await this.db.query(
-        `SELECT update_inter_review($1, 'failed', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)`,
-        [reviewId]
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null]
       );
 
       logger.error(`[InterReview] Review failed: ${reviewId}`, error);
@@ -518,11 +515,10 @@ Format:
     }
   ): Promise<void> {
     await this.db.query(
-      `SELECT update_inter_review(
-        $1, 'completed', $2, $3, $4, $5, $6, $7, $8, $9, $10
-      )`,
+      `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         reviewId,
+        'completed',
         summary,
         JSON.stringify(findings.filter(f => f.type === 'issue')),
         JSON.stringify(findings.filter(f => f.type === 'suggestion')),
@@ -532,6 +528,7 @@ Format:
         scores.codeQuality ?? null,
         scores.testCoverage ?? null,
         scores.documentation ?? null,
+        null,
       ]
     );
 

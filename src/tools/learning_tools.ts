@@ -158,6 +158,38 @@ export async function get_success_patterns(
   return `## Success Patterns\n\n${formatted}`;
 }
 
+export interface GetPatternsByCategoryInput {
+  category: string;
+  minSuccessRate?: number;
+  limit?: number;
+}
+
+export async function get_patterns_by_category(
+  db: DatabaseClient,
+  input: GetPatternsByCategoryInput
+): Promise<string> {
+  const learningService = new LearningAnalysisService(db);
+  const patterns = await learningService.getPatternsByCategory(
+    input.category,
+    input.minSuccessRate ?? 0.7,
+    input.limit ?? 10
+  );
+
+  if (patterns.length === 0) {
+    return `No success patterns found for category "${input.category}" with >${Math.round((input.minSuccessRate ?? 0.7) * 100)}% success rate.`;
+  }
+
+  const formatted = patterns
+    .map(
+      (p, i) =>
+        `${i + 1}. **${Math.round(p.successRate * 100)}% success** - Used ${p.occurrenceCount}x\n` +
+        `   ${p.patternContent?.substring(0, 200) || 'N/A'}`
+    )
+    .join('\n\n');
+
+  return `## ${input.category} Patterns (>${Math.round((input.minSuccessRate ?? 0.7) * 100)}% success)\n\n${formatted}`;
+}
+
 export interface CreateInsightInput {
   projectId?: string;
   insightType: 'improvement' | 'warning' | 'pattern' | 'recommendation';

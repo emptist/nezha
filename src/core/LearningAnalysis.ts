@@ -362,6 +362,31 @@ export class LearningAnalysisService {
     return result.rows;
   }
 
+  async getPatternsByCategory(
+    category: string,
+    minSuccessRate: number = 0.7,
+    limit: number = 10
+  ): Promise<TaskPattern[]> {
+    const result = await this.db.query<TaskPattern>(
+      `SELECT id, project_id as "projectId", pattern_type as "patternType", 
+              pattern_category as "patternCategory", pattern_content as "patternContent",
+              pattern_context as "patternContext", success_rate as "successRate",
+              occurrence_count as "occurrenceCount", 
+              first_seen_at as "firstSeenAt", last_seen_at as "lastSeenAt",
+              last_confirmed_at as "lastConfirmedAt", metadata, is_active as "isActive"
+       FROM ${DATABASE_TABLES.TASK_PATTERNS}
+       WHERE pattern_type = 'success' 
+         AND is_active = TRUE
+         AND pattern_category = $1
+         AND success_rate >= $2
+       ORDER BY success_rate DESC, occurrence_count DESC
+       LIMIT $3`,
+      [category, minSuccessRate, limit]
+    );
+
+    return result.rows;
+  }
+
   async createInsight(input: {
     projectId?: string;
     insightType: 'improvement' | 'warning' | 'pattern' | 'recommendation';

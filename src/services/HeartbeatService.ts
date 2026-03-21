@@ -42,6 +42,7 @@ import * as path from 'path';
 import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
 import { BroadcastService } from './BroadcastService.js';
+import { AgentSessionService, getAgentSessionService } from './AgentSessionService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -313,6 +314,10 @@ export class HeartbeatService {
     this.setupWatchdogListeners();
     this.setupLongTaskListeners();
 
+    const agentSession = getAgentSessionService(this.db);
+    await agentSession.registerSession('nezha-daemon');
+    this.startSessionHeartbeat();
+
     if (this.checkpointService) {
       const savedState = await this.checkpointService.loadState();
       if (savedState) {
@@ -338,6 +343,24 @@ export class HeartbeatService {
         logger.error('Memory cleanup failed:', error);
       }
     }, this.memoryCleanupIntervalMs);
+  }
+
+  private sessionHeartbeatTimer: NodeJS.Timeout | null = null;
+  private readonly sessionHeartbeatIntervalMs = 60000;
+
+  private startSessionHeartbeat(): void {
+    const sessionService = getAgentSessionService(this.db);
+    const runHeartbeat = async (): Promise<void> => {
+      try {
+        await sessionService.heartbeat();
+        const sessions = await sessionService.getActiveSessions();
+        logger.debug(`Session heartbeat: ${sessions.length} active session(s)`);
+      } catch (error) {
+        logger.error('Session heartbeat failed:', error);
+      }
+    };
+    runHeartbeat().catch(err => logger.error('Initial session heartbeat failed:', err));
+    this.sessionHeartbeatTimer = setInterval(runHeartbeat, this.sessionHeartbeatIntervalMs);
   }
 
   private startMemoryCompaction(): void {
@@ -387,6 +410,9 @@ export class HeartbeatService {
         await this.checkMeetingInvites();
         await this.checkFailurePatterns();
         await this.checkBroadcasts();
+
+        const sessionService = getAgentSessionService(this.db);
+        await sessionService.cleanupStaleSessions(5);
         await this.checkCommunications();
         await this.checkDLQToIssues();
         await this.checkIssueTaskLinks();
@@ -1319,13 +1345,17 @@ After completing this task:
 
     try {
       const meetingHandler = new MeetingHandler(this.db, this.agent);
-      await meetingHandler.handleDiscussionTask({
+
+      const task = {
         id: taskId,
         title,
         description: description || title,
         status: 'RUNNING',
         priority: 5,
-      });
+      };
+
+      await meetingHandler.createMeetingFromTask(task);
+      await meetingHandler.handleDiscussionTask(task);
     } catch (error) {
       logger.error('[MeetingHandler] Discussion task failed:', error);
       this.stats.tasksFailed++;

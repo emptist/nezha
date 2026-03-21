@@ -1,5 +1,31 @@
 import { logger } from '../utils/logger.js';
 import { type ClawHubSkill, type SkillReviewResult } from './SkillReviewer.js';
+import { type EmbeddingProvider } from './embedding/index.js';
+
+export interface CreateSkillInput {
+  name: string;
+  description?: string;
+  instructions?: string;
+  source?: 'local' | 'generated' | 'imported' | 'ai-built';
+  author?: string;
+  tags?: string[];
+  trigger_phrases?: string[];
+  anti_patterns?: string[];
+  quick_start?: string;
+  examples?: string[];
+  emoji?: string;
+  category?: string;
+  project_id?: string;
+  permissions?: string[];
+}
+
+export interface UpdateSkillInput extends Partial<CreateSkillInput> {
+  version?: string;
+  status?: StoredSkill['status'];
+  is_enabled?: boolean;
+  safety_score?: number;
+  scan_status?: StoredSkill['scan_status'];
+}
 
 export interface StoredSkill {
   id: string;
@@ -75,6 +101,11 @@ export class DatabaseSkillLoader {
   private cacheExpiry: number = 60000;
   private lastRefresh: number = 0;
   private dbClient: unknown = null;
+  private embeddingProvider?: EmbeddingProvider;
+
+  setEmbeddingProvider(provider: EmbeddingProvider): void {
+    this.embeddingProvider = provider;
+  }
 
   setDatabaseClient(client: unknown): void {
     this.dbClient = client;
@@ -434,6 +465,386 @@ export class DatabaseSkillLoader {
     );
 
     return result.rows[0]?.id || null;
+  }
+
+  async saveSkill(input: CreateSkillInput): Promise<string | null> {
+    if (!this.dbClient) {
+      logger.warn('[SkillLoader] No database client, cannot save skill');
+      return null;
+    }
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: { id: string }[] }>;
+    };
+
+    const id = crypto.randomUUID();
+    let embeddingStr: string | null = null;
+
+    if (this.embeddingProvider) {
+      const textToEmbed = `${input.name} ${input.description || ''} ${input.tags?.join(' ') || ''}`;
+      try {
+        const embedding = await this.embeddingProvider.embed(textToEmbed);
+        embeddingStr = `[${embedding.join(',')}]`;
+      } catch (error) {
+        logger.warn('[SkillLoader] Failed to generate embedding:', error);
+      }
+    }
+
+    const result = await client.query(
+      `INSERT INTO skills (
+        id, name, description, instructions, source, author,
+        tags, trigger_phrases, anti_patterns, quick_start, examples, emoji,
+        category, project_id, permissions, status, is_enabled,
+        safety_score, scan_status, version, embedding
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'approved', TRUE, 70, 'reviewed', '1.0.0', $16)
+       ON CONFLICT (name) DO UPDATE SET
+        description = EXCLUDED.description,
+        instructions = EXCLUDED.instructions,
+        updated_at = NOW()
+       RETURNING id`,
+      [
+        id,
+        input.name,
+        input.description || null,
+        input.instructions || null,
+        input.source || 'local',
+        input.author || null,
+        input.tags || [],
+        input.trigger_phrases || [],
+        input.anti_patterns || [],
+        input.quick_start || null,
+        input.examples || [],
+        input.emoji || null,
+        input.category || null,
+        input.project_id || null,
+        input.permissions || [],
+        embeddingStr,
+      ]
+    );
+
+    if (result.rows[0]?.id) {
+      this.invalidateCache();
+    }
+
+    return result.rows[0]?.id || null;
+  }
+
+  async updateSkill(id: string, input: UpdateSkillInput): Promise<boolean> {
+    if (!this.dbClient) {
+      logger.warn('[SkillLoader] No database client, cannot update skill');
+      return false;
+    }
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (input.name !== undefined) {
+      updates.push(`name = $${paramIndex++}`);
+      params.push(input.name);
+    }
+    if (input.description !== undefined) {
+      updates.push(`description = $${paramIndex++}`);
+      params.push(input.description);
+    }
+    if (input.instructions !== undefined) {
+      updates.push(`instructions = $${paramIndex++}`);
+      params.push(input.instructions);
+    }
+    if (input.author !== undefined) {
+      updates.push(`author = $${paramIndex++}`);
+      params.push(input.author);
+    }
+    if (input.tags !== undefined) {
+      updates.push(`tags = $${paramIndex++}`);
+      params.push(input.tags);
+    }
+    if (input.trigger_phrases !== undefined) {
+      updates.push(`trigger_phrases = $${paramIndex++}`);
+      params.push(input.trigger_phrases);
+    }
+    if (input.anti_patterns !== undefined) {
+      updates.push(`anti_patterns = $${paramIndex++}`);
+      params.push(input.anti_patterns);
+    }
+    if (input.quick_start !== undefined) {
+      updates.push(`quick_start = $${paramIndex++}`);
+      params.push(input.quick_start);
+    }
+    if (input.examples !== undefined) {
+      updates.push(`examples = $${paramIndex++}`);
+      params.push(input.examples);
+    }
+    if (input.emoji !== undefined) {
+      updates.push(`emoji = $${paramIndex++}`);
+      params.push(input.emoji);
+    }
+    if (input.category !== undefined) {
+      updates.push(`category = $${paramIndex++}`);
+      params.push(input.category);
+    }
+    if (input.project_id !== undefined) {
+      updates.push(`project_id = $${paramIndex++}`);
+      params.push(input.project_id);
+    }
+    if (input.permissions !== undefined) {
+      updates.push(`permissions = $${paramIndex++}`);
+      params.push(input.permissions);
+    }
+    if (input.status !== undefined) {
+      updates.push(`status = $${paramIndex++}`);
+      params.push(input.status);
+    }
+    if (input.is_enabled !== undefined) {
+      updates.push(`is_enabled = $${paramIndex++}`);
+      params.push(input.is_enabled);
+    }
+    if (input.safety_score !== undefined) {
+      updates.push(`safety_score = $${paramIndex++}`);
+      params.push(input.safety_score);
+    }
+    if (input.scan_status !== undefined) {
+      updates.push(`scan_status = $${paramIndex++}`);
+      params.push(input.scan_status);
+    }
+
+    if (input.version !== undefined) {
+      updates.push(`version = $${paramIndex++}`);
+      params.push(input.version);
+    }
+
+    if (this.embeddingProvider && (input.name || input.description || input.tags)) {
+      const skill = await this.loadSkillById(id);
+      const textToEmbed = `${input.name || skill?.name || ''} ${input.description || skill?.description || ''} ${input.tags?.join(' ') || skill?.tags?.join(' ') || ''}`;
+      try {
+        const embedding = await this.embeddingProvider.embed(textToEmbed);
+        updates.push(`embedding = $${paramIndex++}`);
+        params.push(`[${embedding.join(',')}]`);
+      } catch (error) {
+        logger.warn('[SkillLoader] Failed to generate embedding for update:', error);
+      }
+    }
+
+    if (updates.length === 0) return false;
+
+    updates.push('updated_at = NOW()');
+    params.push(id);
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rowCount: number }>;
+    };
+
+    const result = await client.query(
+      `UPDATE skills SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+      params
+    );
+
+    if (result.rowCount > 0) {
+      this.invalidateCache();
+      return true;
+    }
+
+    return false;
+  }
+
+  async saveSkillVersion(
+    skillId: string,
+    version: string,
+    instructions?: string | null,
+    manifest?: Record<string, unknown>,
+    changeSummary?: string,
+    improvedBy?: string
+  ): Promise<string | null> {
+    if (!this.dbClient) {
+      logger.warn('[SkillLoader] No database client, cannot save skill version');
+      return null;
+    }
+
+    let embeddingStr: string | null = null;
+    if (this.embeddingProvider && instructions) {
+      try {
+        const embedding = await this.embeddingProvider.embed(instructions);
+        embeddingStr = `[${embedding.join(',')}]`;
+      } catch (error) {
+        logger.warn('[SkillLoader] Failed to generate embedding for version:', error);
+      }
+    }
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: { id: string }[] }>;
+    };
+
+    const id = crypto.randomUUID();
+    const result = await client.query(
+      `INSERT INTO skill_versions (id, skill_id, version, instructions, manifest, change_summary, improved_by, embedding)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (skill_id, version) DO UPDATE SET
+        instructions = EXCLUDED.instructions,
+        manifest = EXCLUDED.manifest,
+        change_summary = EXCLUDED.change_summary,
+        improved_by = EXCLUDED.improved_by,
+        embedding = COALESCE(EXCLUDED.embedding, skill_versions.embedding)
+       RETURNING id`,
+      [
+        id,
+        skillId,
+        version,
+        instructions,
+        JSON.stringify(manifest || {}),
+        changeSummary,
+        improvedBy,
+        embeddingStr,
+      ]
+    );
+
+    return result.rows[0]?.id || null;
+  }
+
+  async getSkillVersionHistory(skillId: string): Promise<SkillVersion[]> {
+    if (!this.dbClient) return [];
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: SkillVersion[] }>;
+    };
+
+    const result = await client.query(
+      `SELECT id, skill_id, version, instructions, manifest, change_summary, improved_by, created_at
+       FROM skill_versions
+       WHERE skill_id = $1
+       ORDER BY created_at DESC`,
+      [skillId]
+    );
+
+    return result.rows;
+  }
+
+  async vectorSearch(
+    query: string,
+    limit: number = 10,
+    threshold: number = 0.7
+  ): Promise<VectorSearchResult[]> {
+    if (!this.dbClient) {
+      logger.warn('[SkillLoader] No database client, cannot perform vector search');
+      return [];
+    }
+
+    if (!this.embeddingProvider) {
+      logger.warn('[SkillLoader] No embedding provider, falling back to keyword search');
+      return (await this.searchSkills(query)).slice(0, limit).map(skill => ({
+        skill,
+        similarity: 1,
+      }));
+    }
+
+    try {
+      const queryEmbedding = await this.embeddingProvider.embed(query);
+      const embeddingStr = `[${queryEmbedding.join(',')}]`;
+
+      const client = this.dbClient as {
+        query: (
+          sql: string,
+          params?: unknown[]
+        ) => Promise<{ rows: (StoredSkill & { similarity: number })[] }>;
+      };
+
+      const result = await client.query(
+        `SELECT *,
+          (1 - (embedding <=> $1::vector))::FLOAT as similarity
+         FROM skills
+         WHERE embedding IS NOT NULL
+           AND status = 'approved'
+           AND is_enabled = TRUE
+           AND safety_score >= 70
+           AND (1 - (embedding <=> $1::vector)) >= $2
+         ORDER BY embedding <=> $1::vector
+         LIMIT $3`,
+        [embeddingStr, threshold, limit]
+      );
+
+      return result.rows.map(row => ({
+        skill: {
+          ...row,
+          tags: Array.isArray(row.tags) ? row.tags : [],
+          trigger_phrases: Array.isArray(row.trigger_phrases) ? row.trigger_phrases : [],
+          anti_patterns: Array.isArray(row.anti_patterns) ? row.anti_patterns : [],
+          examples: Array.isArray(row.examples) ? row.examples : [],
+          permissions: Array.isArray(row.permissions) ? row.permissions : [],
+        },
+        similarity: row.similarity,
+      }));
+    } catch (error) {
+      logger.error('[SkillLoader] Vector search failed:', error);
+      return [];
+    }
+  }
+
+  async getSkillsByProject(projectId: string): Promise<StoredSkill[]> {
+    if (!this.dbClient) {
+      return Array.from(this.cache.values()).filter(s => s.project_id === projectId);
+    }
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: StoredSkill[] }>;
+    };
+
+    const result = await client.query(
+      `SELECT * FROM skills 
+       WHERE project_id = $1
+         AND status = 'approved'
+         AND is_enabled = TRUE
+       ORDER BY rating DESC, use_count DESC`,
+      [projectId]
+    );
+
+    return result.rows;
+  }
+
+  async getSkillsByCategory(category: string): Promise<StoredSkill[]> {
+    if (!this.dbClient) {
+      return Array.from(this.cache.values()).filter(s => s.category === category);
+    }
+
+    const client = this.dbClient as {
+      query: (sql: string, params?: unknown[]) => Promise<{ rows: StoredSkill[] }>;
+    };
+
+    const result = await client.query(
+      `SELECT * FROM skills 
+       WHERE category = $1
+         AND status = 'approved'
+         AND is_enabled = TRUE
+       ORDER BY rating DESC, use_count DESC`,
+      [category]
+    );
+
+    return result.rows;
+  }
+
+  async hybridSearch(query: string, limit: number = 10): Promise<VectorSearchResult[]> {
+    const vectorResults = await this.vectorSearch(query, limit, 0.5);
+    const keywordResults = await this.searchSkills(query);
+
+    const scoreMap = new Map<string, { skill: StoredSkill; score: number }>();
+
+    for (const result of vectorResults) {
+      scoreMap.set(result.skill.id, { skill: result.skill, score: result.similarity * 0.6 });
+    }
+
+    for (const skill of keywordResults) {
+      const existing = scoreMap.get(skill.id);
+      const idx = keywordResults.indexOf(skill);
+      const keywordScore = 1 - idx / keywordResults.length;
+      if (existing) {
+        existing.score += keywordScore * 0.4;
+      } else {
+        scoreMap.set(skill.id, { skill, score: keywordScore * 0.4 });
+      }
+    }
+
+    return Array.from(scoreMap.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+      .map(item => ({ skill: item.skill, similarity: item.score }));
   }
 
   isCacheValid(): boolean {
