@@ -1,10 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  QCService,
-  type QCFinding,
-  type QCReview,
-  type QCReviewResult,
-} from '../services/QCService.js';
+import { QCService, type QCReviewResult } from '../services/QCService.js';
 
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => ({

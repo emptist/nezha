@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ReviewService, type ReviewFinding, type Review } from '../services/ReviewService.js';
+import { ReviewService, type ReviewFinding } from '../services/ReviewService.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 
 vi.mock('../config/Config.js', () => ({

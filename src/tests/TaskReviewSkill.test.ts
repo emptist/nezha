@@ -3,7 +3,6 @@ import {
   TaskReviewSkill,
   taskReviewSkill,
   type TaskReviewInput,
-  type TaskReviewOutput,
 } from '../services/TaskReviewSkill.js';
 
 vi.mock('../utils/logger.js', () => ({

@@ -6,7 +6,6 @@ import {
   getGitDiff,
   getLastCommitMessage,
   getCommitDiff,
-  isGitDirty,
 } from '../utils/git.js';
 
 vi.mock('child_process', () => ({
