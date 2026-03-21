@@ -341,6 +341,7 @@ export class ReviewManagementCommands {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async getReviewsByStatus(status?: string): Promise<any[]> {
     if (status) {
       const result = await this.reviewService['db'].query(

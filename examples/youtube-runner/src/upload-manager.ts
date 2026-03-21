@@ -1,6 +1,7 @@
 import type { NezhaClient } from './nezha-client.js';
 import type { UploadConfig } from './config.js';
 import type { VideoMetadata } from './video-creator.js';
+import { YouTubeClient, type YouTubeVideoMetadata } from './youtube-client.js';
 
 export interface UploadResult {
   videoId: string;
@@ -11,10 +12,16 @@ export interface UploadResult {
 export class UploadManager {
   private config: UploadConfig;
   private nezha: NezhaClient;
+  private youtubeClient: YouTubeClient | null = null;
 
-  constructor(config: UploadConfig, nezha: NezhaClient) {
+  constructor(config: UploadConfig, nezha: NezhaClient, youtubeClient?: YouTubeClient) {
     this.config = config;
     this.nezha = nezha;
+    this.youtubeClient = youtubeClient || null;
+  }
+
+  setYouTubeClient(client: YouTubeClient): void {
+    this.youtubeClient = client;
   }
 
   async uploadVideo(
@@ -29,8 +36,26 @@ export class UploadManager {
     );
 
     try {
-      const videoId = this.generateVideoId();
-      const url = `https://youtube.com/watch?v=${videoId}`;
+      let videoId: string;
+      let url: string;
+
+      if (this.youtubeClient) {
+        const ytMetadata: YouTubeVideoMetadata = {
+          title: metadata.title,
+          description: metadata.description,
+          tags: [...this.config.tags, ...metadata.tags],
+          categoryId: this.config.defaultCategory,
+          privacy: this.config.defaultPrivacy,
+          scheduledAt: schedule,
+        };
+
+        const result = await this.youtubeClient.uploadVideo(filePath, ytMetadata);
+        videoId = result.videoId;
+        url = result.url;
+      } else {
+        videoId = this.generateVideoId();
+        url = `https://youtube.com/watch?v=${videoId}`;
+      }
 
       const scheduledAt = schedule || (this.config.schedule.enabled 
         ? this.getNextScheduleTime() 
@@ -63,7 +88,6 @@ export class UploadManager {
     const today = now.toISOString().split('T')[0];
     
     for (const time of this.config.schedule.preferredTimes) {
-      const [hours, minutes] = time.split(':').map(Number);
       const scheduleTime = new Date(`${today}T${time}:00`);
       
       if (scheduleTime > now) {

@@ -30,6 +30,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/tests/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
     ignores: ['dist/**', 'node_modules/**', 'coverage/**', '.vitest/**'],
   },
   prettier

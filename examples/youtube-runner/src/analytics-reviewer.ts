@@ -1,5 +1,6 @@
 import type { NezhaClient } from './nezha-client.js';
 import type { AnalyticsConfig } from './config.js';
+import { YouTubeClient } from './youtube-client.js';
 
 export interface VideoAnalytics {
   videoId: string;
@@ -20,10 +21,16 @@ export interface AnalyticsAlert {
 export class AnalyticsReviewer {
   private config: AnalyticsConfig;
   private nezha: NezhaClient;
+  private youtubeClient: YouTubeClient | null = null;
 
-  constructor(config: AnalyticsConfig, nezha: NezhaClient) {
+  constructor(config: AnalyticsConfig, nezha: NezhaClient, youtubeClient?: YouTubeClient) {
     this.config = config;
     this.nezha = nezha;
+    this.youtubeClient = youtubeClient || null;
+  }
+
+  setYouTubeClient(client: YouTubeClient): void {
+    this.youtubeClient = client;
   }
 
   async reviewVideo(videoId: string): Promise<{ analytics: VideoAnalytics; alerts: AnalyticsAlert[] }> {
@@ -77,6 +84,22 @@ export class AnalyticsReviewer {
   }
 
   private async fetchAnalytics(videoId: string): Promise<VideoAnalytics> {
+    if (this.youtubeClient) {
+      try {
+        const ytAnalytics = await this.youtubeClient.getAnalytics(videoId);
+        return {
+          videoId,
+          views: ytAnalytics.views,
+          likes: ytAnalytics.likes,
+          comments: ytAnalytics.comments,
+          watchTime: ytAnalytics.watchTimeMinutes,
+          dislikes: 0,
+        };
+      } catch (error) {
+        console.warn(`Failed to fetch real analytics for ${videoId}, using mock data:`, error);
+      }
+    }
+
     return {
       videoId,
       views: Math.floor(Math.random() * 10000),
