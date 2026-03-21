@@ -27,11 +27,10 @@ export async function requestReviewFromAI(
   const reviewService = createReviewService();
 
   let commit: string | undefined = commitHash;
-  let branch = 'main';
   let commitMessage = '';
   let files: string[] = [];
 
-  branch = getGitBranch() || 'main';
+  const branch = getGitBranch() || 'main';
 
   if (!commit) {
     const hash = getGitHash();

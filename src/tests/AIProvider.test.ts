@@ -72,7 +72,6 @@ describe('AIProvider', () => {
     describe('completeJSON', () => {
       it('should parse JSON from response', async () => {
         const mockProvider = new MockAIProvider({ provider: 'openai' });
-        const originalComplete = mockProvider.complete.bind(mockProvider);
         mockProvider.complete = vi.fn().mockResolvedValue({
           content: 'Here is the JSON: {"name":"test","value":42}',
           model: 'gpt-4',

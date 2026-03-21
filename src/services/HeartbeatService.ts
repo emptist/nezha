@@ -18,7 +18,6 @@ import { logger } from '../utils/logger.js';
 import { DailyMemoryService } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
 import { GitAutoCommitPlugin } from '../plugins/index.js';
-import { execSync } from 'child_process';
 import { getGitInfo } from '../utils/git.js';
 import { CheckpointService } from './CheckpointService.js';
 import {
