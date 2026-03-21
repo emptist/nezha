@@ -4,7 +4,7 @@
 **Reviewer**: Trae AI  
 **Type**: security  
 **Severity**: CRITICAL  
-**Status**: pending  
+**Status**: resolved  
 
 ---
 
@@ -786,6 +786,30 @@ Agent Session: ${sessionId || 'unknown'}
 - Config: [src/config/Config.ts](../src/config/Config.ts) - loads agent ID from `.nezha/agent-id.json`
 - Scheduler: [src/core/Scheduler.ts](../src/core/Scheduler.ts) - assigns agent_id to tasks
 - Bootstrap: [bootstrap/ESSENTIAL.md](../bootstrap/ESSENTIAL.md) - documents expected schema
+
+---
+
+## Resolution
+
+**Status**: RESOLVED  
+**Resolution Date**: 2026-03-22  
+**Resolution Type**: Schema Merged (Option 1)
+
+The schema has been fixed by merging both schemas. The table now contains all columns from both the original migration 030 and the OpenCode AI's additions:
+
+| Column | Source | Status |
+|--------|--------|--------|
+| `agent_name` | Migration 030 | ✅ Added |
+| `capabilities` | Migration 030 | ✅ Added |
+| `last_seen_at` | Migration 030 | ✅ Added |
+| `metadata` | Migration 030 | ✅ Added |
+| `description` | Migration 030 | ✅ Added |
+| `project_id` | OpenCode AI | ✅ Kept |
+| `role` | OpenCode AI | ✅ Kept |
+| `background` | OpenCode AI | ✅ Kept |
+| `expertise` | OpenCode AI | ✅ Kept |
+
+**Agent Registration**: OpenCode Worker is now registered with agent_name `441140fe-8f0f-411a-b31c-c33d3e77d718`.
 
 ---
 
