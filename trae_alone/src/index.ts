@@ -4,5 +4,6 @@ export type {
   TraeLearnMarker,
   TraePromptUpdateMarker,
   TraeIssueMarker,
+  TraeReviewResponseMarker,
   TraeReflectResult,
 } from './TraeReflect.js';

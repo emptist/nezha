@@ -28,10 +28,17 @@ export interface TraeIssueMarker {
   tags?: string[];
 }
 
+export interface TraeReviewResponseMarker {
+  reviewId: string;
+  response: string;
+  acceptedSuggestions?: string[];
+}
+
 export interface TraeReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
+  reviewResponses: number;
   total: number;
 }
 
@@ -43,6 +50,7 @@ export class TraeReflect {
   private static readonly LEARN_PATTERN = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
   private static readonly PROMPT_PATTERN = /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
   private static readonly ISSUE_PATTERN = /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly REVIEW_RESPONSE_PATTERN = /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
 
   constructor(config: TraeReflectConfig = {}) {
     this.config = config;
@@ -136,6 +144,27 @@ export class TraeReflect {
     return markers;
   }
 
+  parseReviewResponseMarkers(text: string): TraeReviewResponseMarker[] {
+    const markers: TraeReviewResponseMarker[] = [];
+    let match;
+
+    while ((match = TraeReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
+      const reviewId = match[1]?.trim();
+      const response = match[2]?.trim();
+      const acceptedStr = match[3]?.trim();
+
+      if (reviewId && response) {
+        markers.push({
+          reviewId,
+          response,
+          acceptedSuggestions: acceptedStr ? acceptedStr.split(',').map(s => s.trim()) : [],
+        });
+      }
+    }
+
+    return markers;
+  }
+
   async saveLearning(marker: TraeLearnMarker): Promise<void> {
     const client = this.getClient();
 
@@ -170,11 +199,21 @@ export class TraeReflect {
     );
   }
 
+  async saveReviewResponse(marker: TraeReviewResponseMarker): Promise<void> {
+    const client = this.getClient();
+
+    await client.query(
+      `SELECT respond_to_inter_review($1, $2, $3)`,
+      [marker.reviewId, marker.response, JSON.stringify(marker.acceptedSuggestions || [])]
+    );
+  }
+
   async reflect(text: string): Promise<TraeReflectResult> {
     const result: TraeReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,
+      reviewResponses: 0,
       total: 0,
     };
 
@@ -199,7 +238,14 @@ export class TraeReflect {
       console.log(`✓ Created issue: ${marker.title.substring(0, 50)}...`);
     }
 
-    result.total = result.learnings + result.promptUpdates + result.issues;
+    const reviewResponseMarkers = this.parseReviewResponseMarkers(text);
+    for (const marker of reviewResponseMarkers) {
+      await this.saveReviewResponse(marker);
+      result.reviewResponses++;
+      console.log(`✓ Saved review response for: ${marker.reviewId}`);
+    }
+
+    result.total = result.learnings + result.promptUpdates + result.issues + result.reviewResponses;
 
     return result;
   }

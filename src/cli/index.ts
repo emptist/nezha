@@ -1478,6 +1478,9 @@ async function main(): Promise<void> {
           console.log(
             '  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <critical|high|medium|low>'
           );
+          console.log(
+            '  [REVIEW_RESPONSE] reviewId: <id> response: <text> accepted: <comma-separated-suggestions>'
+          );
           process.exit(1);
         }
 
@@ -1489,6 +1492,8 @@ async function main(): Promise<void> {
           /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
         const issuePattern =
           /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+        const reviewResponsePattern =
+          /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
 
         let match;
 
@@ -1535,6 +1540,22 @@ async function main(): Promise<void> {
               [title, description, issueType, severity, tags]
             );
             console.log(`✓ Created issue: ${title.substring(0, 50)}...`);
+            count++;
+          }
+        }
+
+        while ((match = reviewResponsePattern.exec(text)) !== null) {
+          const reviewId = match[1]?.trim();
+          const response = match[2]?.trim();
+          const acceptedStr = match[3]?.trim();
+          const acceptedSuggestions = acceptedStr ? acceptedStr.split(',').map(s => s.trim()) : [];
+          if (reviewId && response) {
+            await db.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
+              reviewId,
+              response,
+              JSON.stringify(acceptedSuggestions),
+            ]);
+            console.log(`✓ Saved review response for: ${reviewId}`);
             count++;
           }
         }
