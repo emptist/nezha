@@ -1,0 +1,74 @@
+# Examples - will be moved to standalone repo
+examples/
+bad_examples/
+
+# Conversations (internal data)
+conversations/
+
+# Source files
+src/
+tsconfig*.json
+vitest*.config.ts
+eslint.config.*
+
+# Tests
+src/tests/
+__tests__/
+*.test.ts
+*.spec.ts
+coverage/
+test-output.txt
+malformed_test.json
+
+# Development files
+*.log
+logs/
+.tmp/
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tsbuildinfo
+
+# Benchmarks (not needed in package)
+dist/benchmarks/
+
+# Scripts
+scripts/
+
+# GitHub
+.github/
+
+# Nezha internal
+.nezha/
+
+# Extensions (development only)
+extensions/
+
+# Documentation (keep README)
+docs/
+*.md
+!README.md
+
+# Trae alone workspace (published separately)
+trae_alone/
+
+# Skills folder
+skills/
+
+# Reviews
+reviews/
+
+# Config files (user-specific)
+config.yaml

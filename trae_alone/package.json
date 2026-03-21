@@ -16,7 +16,8 @@
     }
   },
   "bin": {
-    "trae-reflect": "./dist/cli.js"
+    "trae-reflect": "./dist/cli.js",
+    "privacy-check": "./dist/privacy-check.js"
   },
   "scripts": {
     "build": "tsc",
