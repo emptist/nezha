@@ -6,6 +6,7 @@ vi.mock('fs/promises');
 vi.mock('../core/Memory.js');
 vi.mock('../services/DailyMemory.js');
 vi.mock('../services/InterReviewService.js');
+vi.mock('../core/SkillSystem.js');
 
 describe('ContextBuilder', () => {
   let contextBuilder: ContextBuilder;
@@ -14,6 +15,7 @@ describe('ContextBuilder', () => {
   let MemoryService: any;
   let DailyMemoryService: any;
   let InterReviewService: any;
+  let SkillSystem: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -23,10 +25,12 @@ describe('ContextBuilder', () => {
     const Memory = await import('../core/Memory.js');
     const DailyMemory = await import('../services/DailyMemory.js');
     const InterReview = await import('../services/InterReviewService.js');
+    const Skill = await import('../core/SkillSystem.js');
 
     MemoryService = Memory.MemoryService;
     DailyMemoryService = DailyMemory.DailyMemoryService;
     InterReviewService = InterReview.InterReviewService;
+    SkillSystem = Skill.SkillSystem;
 
     mockDb = {
       query: vi.fn(),
@@ -421,6 +425,97 @@ describe('ContextBuilder', () => {
       await expect(contextBuilder.updateCuratedMemory('Content')).rejects.toThrow(
         'Permission denied'
       );
+    });
+  });
+
+  describe('skill suggestions', () => {
+    it('should include skill suggestions in context', async () => {
+      const mockMemory = {
+        search: vi.fn().mockResolvedValue([]),
+        vectorSearch: vi.fn().mockResolvedValue([]),
+      };
+      MemoryService.mockImplementation(() => mockMemory);
+
+      const mockDailyMemory = {
+        readToday: vi.fn().mockResolvedValue(''),
+      };
+      DailyMemoryService.mockImplementation(() => mockDailyMemory);
+
+      const mockInterReview = {
+        getLearningsForAIContext: vi.fn().mockResolvedValue(''),
+      };
+      InterReviewService.mockImplementation(() => mockInterReview);
+
+      const mockSkillSystemInstance = {
+        setDatabaseClient: vi.fn(),
+        suggestSkills: vi.fn().mockResolvedValue([
+          {
+            skill: { name: 'code-review', description: 'Automated code review' },
+            matchScore: 0.9,
+            why: 'Matches: code review',
+            quickStart: 'nezha review',
+          },
+          {
+            skill: { name: 'refactor', description: 'Code refactoring helper' },
+            matchScore: 0.7,
+            why: 'Matches: refactor',
+          },
+        ]),
+      };
+      SkillSystem.mockImplementation(() => mockSkillSystemInstance);
+
+      fs.access = vi.fn().mockRejectedValue(new Error('Not found'));
+      fs.readFile = vi.fn().mockRejectedValue(new Error('Not found'));
+
+      contextBuilder = new ContextBuilder(mockDb as unknown as DatabaseClient);
+
+      const result = await contextBuilder.buildContext({
+        taskId: 'task-1',
+        title: 'Code review task',
+      });
+
+      expect(result.skillSuggestions).toHaveLength(2);
+      expect(result.skillSuggestions[0].name).toBe('code-review');
+      expect(result.skillSuggestions[0].quickStart).toBe('nezha review');
+      expect(result.combinedPrompt).toContain('Relevant Skills');
+      expect(result.combinedPrompt).toContain('code-review');
+      expect(result.combinedPrompt).toContain('refactor');
+    });
+
+    it('should handle skill suggestion errors gracefully', async () => {
+      const mockMemory = {
+        search: vi.fn().mockResolvedValue([]),
+        vectorSearch: vi.fn().mockResolvedValue([]),
+      };
+      MemoryService.mockImplementation(() => mockMemory);
+
+      const mockDailyMemory = {
+        readToday: vi.fn().mockResolvedValue(''),
+      };
+      DailyMemoryService.mockImplementation(() => mockDailyMemory);
+
+      const mockInterReview = {
+        getLearningsForAIContext: vi.fn().mockResolvedValue(''),
+      };
+      InterReviewService.mockImplementation(() => mockInterReview);
+
+      const mockSkillSystemInstance = {
+        setDatabaseClient: vi.fn(),
+        suggestSkills: vi.fn().mockRejectedValue(new Error('DB error')),
+      };
+      SkillSystem.mockImplementation(() => mockSkillSystemInstance);
+
+      fs.access = vi.fn().mockRejectedValue(new Error('Not found'));
+      fs.readFile = vi.fn().mockRejectedValue(new Error('Not found'));
+
+      contextBuilder = new ContextBuilder(mockDb as unknown as DatabaseClient);
+
+      const result = await contextBuilder.buildContext({
+        taskId: 'task-1',
+        title: 'Test task',
+      });
+
+      expect(result.skillSuggestions).toEqual([]);
     });
   });
 });
