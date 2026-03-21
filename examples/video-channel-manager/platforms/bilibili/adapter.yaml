@@ -1,0 +1,67 @@
+# Bilibili Platform Adapter
+
+## Overview
+
+This adapter handles Bilibili-specific video upload and management operations.
+
+## Configuration
+
+```yaml
+platform: bilibili
+api_version: v1
+auth_type: cookies
+
+endpoints:
+  upload: "https://member.bilibili.com/x/vu/web/add"
+  cover: "https://member.bilibili.com/x/vu/web/cover/add"
+  info: "https://member.bilibili.com/x/vu/web/info"
+  analytics: "https://member.bilibili.com/x/web/data/archive"
+```
+
+## Limits
+
+| Property | Limit |
+|----------|-------|
+| Title | 80 characters |
+| Description | 2000 characters |
+| Tags | 12 tags maximum |
+| Thumbnail | 960x600px, max 2MB |
+| Video | 8GB or 4 hours |
+
+## Upload Flow
+
+```
+1. Authenticate with cookies
+2. Pre-upload video file (chunks)
+3. Merge video chunks
+4. Set cover image
+5. Submit video metadata
+6. Verify upload status
+```
+
+## API Requirements
+
+- Bilibili Creative Center access
+- Cookie-based authentication
+- Member account in good standing
+
+## Error Handling
+
+| Error | Action |
+|-------|--------|
+| `-101` | Re-authenticate (cookies expired) |
+| `-509` | Wait and retry (rate limit) |
+| `-400` | Fix metadata and retry |
+| `-403` | Check account permissions |
+
+## Analytics Metrics
+
+- play, danmaku, reply, favorite, coin, share, like
+- avg_play_duration, follower_incr
+
+## Special Features
+
+- Danmaku (bullet comments) support
+- Coin system for monetization
+- Multi-part video support
+- Scheduled publishing

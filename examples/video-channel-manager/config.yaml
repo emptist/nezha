@@ -1,0 +1,101 @@
+# Video Channel Manager - Multi-Platform Configuration
+
+project:
+  name: "video-channel-manager"
+  description: "AI-managed multi-platform video channel example"
+  version: "2.0.0"
+
+nezha:
+  database:
+    host: "localhost"
+    port: 5432
+    name: "nezha"
+    user: "postgres"
+
+platforms:
+  youtube:
+    enabled: true
+    runner: "youtube-runner"
+    channel_id: "${YOUTUBE_CHANNEL_ID}"
+    api_key: "${YOUTUBE_API_KEY}"
+    oauth:
+      client_id: "${YOUTUBE_CLIENT_ID}"
+      client_secret: "${YOUTUBE_CLIENT_SECRET}"
+    limits:
+      title_max: 100
+      description_max: 5000
+      tags_max: 500
+    thumbnail:
+      width: 1280
+      height: 720
+      max_size_mb: 2
+
+  bilibili:
+    enabled: false
+    runner: "bilibili-runner"
+    cookies: "${BILIBILI_COOKIES}"
+    limits:
+      title_max: 80
+      description_max: 2000
+      tags_max: 12
+    thumbnail:
+      width: 960
+      height: 600
+      max_size_mb: 2
+
+content:
+  schedule:
+    - day: "monday"
+      type: "tutorial"
+      time: "09:00"
+      platforms: ["youtube", "bilibili"]
+    - day: "wednesday"
+      type: "news"
+      time: "18:00"
+      platforms: ["youtube"]
+    - day: "friday"
+      type: "entertainment"
+      time: "12:00"
+      platforms: ["youtube", "bilibili"]
+
+  categories:
+    - "Education"
+    - "Technology"
+    - "Entertainment"
+
+ai:
+  video_generation:
+    provider: "runway"
+    model: "gen-2"
+  
+  voice:
+    provider: "elevenlabs"
+    voice_id: "default"
+
+  thumbnail:
+    provider: "dalle"
+    style: "video-thumbnail"
+
+monitoring:
+  analytics_check: "daily"
+  performance_threshold:
+    min_views: 100
+    min_ctr: 2.0
+    min_retention: 50
+
+skills:
+  - name: "video-creation"
+    path: "./skills/video-creation.md"
+    enabled: true
+  
+  - name: "video-upload"
+    path: "./skills/video-upload.md"
+    enabled: true
+  
+  - name: "analytics-review"
+    path: "./skills/analytics-review.md"
+    enabled: true
+
+  - name: "thumbnail-design"
+    path: "./skills/thumbnail-design.md"
+    enabled: true
