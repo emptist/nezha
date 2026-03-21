@@ -122,6 +122,7 @@ export class HeartbeatService {
   private memoryCompactionTimer: ReturnType<typeof setInterval> | null = null;
   private checkpointTimer: ReturnType<typeof setInterval> | null = null;
   private insightTimer: ReturnType<typeof setInterval> | null = null;
+  private scheduledTaskTimer: ReturnType<typeof setInterval> | null = null;
   private readonly memoryCleanupIntervalMs: number;
   private readonly memoryCompactionIntervalMs: number;
   private readonly defaultMaxRetries: number;
@@ -132,6 +133,7 @@ export class HeartbeatService {
   private readonly agentCircuitBreaker: EnhancedCircuitBreaker;
   private isAgentAvailable: boolean = true;
   private readonly insightIntervalMs: number;
+  private readonly scheduledTaskIntervalMs: number;
   private readonly watchdogService: TaskWatchdogService;
   private readonly alertService: FailureAlertService;
   private readonly longTaskManager: LongTaskManager;
@@ -197,6 +199,7 @@ export class HeartbeatService {
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
     this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
     this.insightIntervalMs = config?.insightIntervalMs ?? 300000; // 5 minutes default
+    this.scheduledTaskIntervalMs = 60000; // 1 minute default for scheduled tasks
     this.enableMemoryContext = config?.agent?.enableMemoryContext ?? true;
 
     this.contextBuilder = new ContextBuilder(db, {
@@ -300,6 +303,7 @@ export class HeartbeatService {
     this.startMemoryCompaction();
     this.startCheckpointTimer();
     this.startInsightGeneration();
+    this.startScheduledTaskProcessing();
 
     this.watchdogService.start();
     this.alertService.start();
@@ -394,6 +398,22 @@ export class HeartbeatService {
     };
     runInsightChecks().catch(err => logger.error('Initial insight check failed:', err));
     this.insightTimer = setInterval(runInsightChecks, this.insightIntervalMs);
+  }
+
+  private startScheduledTaskProcessing(): void {
+    logger.info(`Starting scheduled task processing (interval: ${this.scheduledTaskIntervalMs}ms)`);
+    const processScheduledTasks = async (): Promise<void> => {
+      try {
+        const processed = await this.scheduler.processScheduledTasks();
+        if (processed > 0) {
+          logger.info(`Processed ${processed} scheduled task(s)`);
+        }
+      } catch (error) {
+        logger.error('Scheduled task processing failed:', error);
+      }
+    };
+    processScheduledTasks().catch(err => logger.error('Initial scheduled task check failed:', err));
+    this.scheduledTaskTimer = setInterval(processScheduledTasks, this.scheduledTaskIntervalMs);
   }
 
   private async checkMeetingInvites(): Promise<void> {
@@ -636,6 +656,11 @@ export class HeartbeatService {
     if (this.insightTimer) {
       clearInterval(this.insightTimer);
       this.insightTimer = null;
+    }
+
+    if (this.scheduledTaskTimer) {
+      clearInterval(this.scheduledTaskTimer);
+      this.scheduledTaskTimer = null;
     }
 
     this.watchdogService.stop();
