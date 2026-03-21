@@ -44,7 +44,7 @@ psql postgres
 
 # In psql shell:
 CREATE DATABASE nezha;
-CREATE USER postgres WITH PASSWORD 'Podbmima.jigm';
+CREATE USER postgres WITH PASSWORD 'your_secure_password_here';
 GRANT ALL PRIVILEGES ON DATABASE nezha TO postgres;
 \q
 ```

@@ -189,9 +189,9 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=nezha
 DB_USER=postgres
-DB_PASSWORD=Podbmima.jigm
+DB_PASSWORD=your_secure_password_here
 
-ZHIPU_API_KEY=9eb838b8445547c48045594c8f9d9d5b.rbFfDHucXFogUOi2
+ZHIPU_API_KEY=your_zhipu_api_key_here
 
 HEARTBEAT_INTERVAL=30m
 LOG_LEVEL=info
@@ -309,7 +309,7 @@ npm run dev
    
    Or manually:
    ```bash
-   PGPASSWORD=Podbmima.jigm /Applications/Postgres.app/Contents/Versions/18/bin/psql \
+   PGPASSWORD=your_secure_password_here /Applications/Postgres.app/Contents/Versions/18/bin/psql \
      -h localhost \
      -U postgres \
      -d nezha \

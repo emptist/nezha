@@ -38,7 +38,7 @@
 
 The `.env` file currently has:
 ```bash
-NEZHA_DB_PASSWORD=Podbmima.jigm
+NEZHA_DB_PASSWORD=your_password_here
 ```
 
 **This is INCORRECT** for Keychain authentication!
@@ -58,7 +58,7 @@ For Keychain authentication, the password field should be:
 
 ```bash
 # Remove or comment out the password line
-# NEZHA_DB_PASSWORD=Podbmima.jigm
+# NEZHA_DB_PASSWORD=your_password_here
 
 # Or set to empty
 NEZHA_DB_PASSWORD=
