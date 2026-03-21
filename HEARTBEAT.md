@@ -1,7 +1,7 @@
 # HEARTBEAT - Nezha 持续改进任务列表
 
-**最后更新**: 2026-03-21T14:38:00Z
-**版本**: 1.3
+**最后更新**: 2026-03-22T08:15:00Z
+**版本**: 1.4
 
 ---
 
@@ -39,11 +39,11 @@
   - 新增测试: youtube-runner VideoCreator, UploadManager, AnalyticsReviewer (39 tests)
   - 测试总数: 983 tests (+280 tests from yesterday)
 
-### [ ] 完善 Skill System 与 Agent 集成
+### [x] 完善 Skill System 与 Agent 集成
 
 - **描述**: 完善 Skill System 与 Agent 的集成
-- **相关文件**: `docs/SKILL_SYSTEM.md` (只有设计文档，无实现代码)
-- **状态**: 待实现 (SkillService.ts 不存在)
+- **相关文件**: `src/core/SkillSystem.ts`, `src/services/ContextBuilder.ts`
+- **状态**: ✅ 已实现 (SkillSystem 与 ContextBuilder 集成，任务执行时自动推荐相关技能)
 
 ---
 
@@ -63,6 +63,16 @@
 ---
 
 ## 已完成任务
+
+### 2026-03-22
+
+- [x] 修复 InterReviewService.test.ts 测试 (respondToReview 参数不匹配)
+- [x] 测试总数: 1073 tests (1 skipped)
+- [x] Build ✅, Typecheck ✅
+- [x] P1: 完善 Skill System 与 Agent 集成
+  - SkillSystem 与 ContextBuilder 集成
+  - 任务执行时自动推荐相关技能 (基于 trigger phrases)
+  - 新增 ContextBuilder skill suggestions 测试 (2 tests)
 
 ### 2026-03-21
 
@@ -120,23 +130,23 @@
 
 ## OpenClaw vs Nezha 功能对比
 
-| 功能           | OpenClaw            | Nezha                   | 状态         |
-| -------------- | ------------------- | ----------------------- | ------------ |
-| 持续运行       | zen AI 实例         | HeartbeatService        | ✅           |
-| 任务自产生     | AI 循环             | Agent 执行              | ✅           |
-| 记忆系统       | 文件 (HEARTBEAT.md) | PostgreSQL + embeddings | ✅           |
-| 技能系统       | 有                  | 无                      | ❌ P1 待实现 |
-| AI Code Review | 有                  | AutoReviewService       | ✅           |
+| 功能           | OpenClaw            | Nezha                        | 状态 |
+| -------------- | ------------------- | ---------------------------- | ---- |
+| 持续运行       | zen AI 实例         | HeartbeatService             | ✅   |
+| 任务自产生     | AI 循环             | Agent 执行                   | ✅   |
+| 记忆系统       | 文件 (HEARTBEAT.md) | PostgreSQL + embeddings      | ✅   |
+| 技能系统       | 有                  | SkillSystem + ContextBuilder | ✅   |
+| AI Code Review | 有                  | AutoReviewService            | ✅   |
 
 ### Nezha 优势
 
 - PostgreSQL 任务存储 (vs 文件)
 - 完善的监控服务 (TaskWatchdogService, FailureAlertService, LongTaskManager)
 - pgvector 向量搜索支持
+- DB-only skill loading (更安全)
 
 ### 待实现
 
-- P1: Skill System
 - P2: 向量搜索 (pgvector) 完善
 
 ---
