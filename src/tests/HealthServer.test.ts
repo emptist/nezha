@@ -622,12 +622,23 @@ describe('HealthServer', () => {
 
   describe('POST /inter-review/response', () => {
     let mockInterReviewService: {
-      respondToReview: ReturnType<typeof vi.fn>;
+      getReview: ReturnType<typeof vi.fn>;
+      submitReviewResponse: ReturnType<typeof vi.fn>;
     };
 
     beforeEach(() => {
       mockInterReviewService = {
-        respondToReview: vi.fn().mockResolvedValue(undefined),
+        getReview: vi.fn().mockResolvedValue({
+          id: 'review-123',
+          status: 'pending',
+          summary: null,
+          findings: [],
+          overallScore: null,
+          response: null,
+          requestedAt: new Date(),
+          completedAt: null,
+        }),
+        submitReviewResponse: vi.fn().mockResolvedValue(undefined),
       };
     });
 
@@ -667,12 +678,12 @@ describe('HealthServer', () => {
 
       const result = await makePostRequest(4200, {
         reviewId: 'review-123',
+        summary: 'Code review completed',
+        findings: [{ type: 'issue', severity: 'medium', message: 'Fix error handling' }],
+        scores: { overall: 85, codeQuality: 80, testCoverage: 75, documentation: 90 },
         response: 'Accepted all suggestions',
         acceptedSuggestions: ['suggestion-1', 'suggestion-2'],
-        options: {
-          status: 'accepted',
-          leverageRatio: 1.5,
-        },
+        options: { status: 'accepted', leverageRatio: 1.5 },
       });
 
       await server.stop();
@@ -680,8 +691,11 @@ describe('HealthServer', () => {
       const body = JSON.parse(result.body);
       expect(body.success).toBe(true);
       expect(body.reviewId).toBe('review-123');
-      expect(mockInterReviewService.respondToReview).toHaveBeenCalledWith(
+      expect(mockInterReviewService.submitReviewResponse).toHaveBeenCalledWith(
         'review-123',
+        'Code review completed',
+        [{ type: 'issue', severity: 'medium', message: 'Fix error handling' }],
+        { overall: 85, codeQuality: 80, testCoverage: 75, documentation: 90 },
         'Accepted all suggestions',
         ['suggestion-1', 'suggestion-2'],
         { status: 'accepted', leverageRatio: 1.5 }
@@ -694,7 +708,9 @@ describe('HealthServer', () => {
 
       const result = await makePostRequest(4201, {
         reviewId: 'review-123',
-        response: 'Test response',
+        summary: 'Test summary',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
@@ -710,7 +726,9 @@ describe('HealthServer', () => {
 
       const result = await makePostRequest(4202, {
         reviewId: '',
-        response: 'Test response',
+        summary: 'Test summary',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
@@ -725,7 +743,9 @@ describe('HealthServer', () => {
       await server.start();
 
       const result = await makePostRequest(4203, {
-        response: 'Test response',
+        summary: 'Test summary',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
@@ -734,35 +754,39 @@ describe('HealthServer', () => {
       expect(body.error).toBe('Missing required field: reviewId');
     });
 
-    it('should return 400 for missing response field', async () => {
+    it('should return 400 for missing summary field', async () => {
       server = new HealthServer(mockDatabase, 4204);
       server.setInterReviewService(mockInterReviewService as any);
       await server.start();
 
       const result = await makePostRequest(4204, {
         reviewId: 'review-123',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
-      expect(body.error).toBe('Missing required field: response');
+      expect(body.error).toBe('Missing required field: summary');
     });
 
-    it('should return 400 for empty response field', async () => {
+    it('should return 400 for empty summary field', async () => {
       server = new HealthServer(mockDatabase, 4205);
       server.setInterReviewService(mockInterReviewService as any);
       await server.start();
 
       const result = await makePostRequest(4205, {
         reviewId: 'review-123',
-        response: '',
+        summary: '',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
-      expect(body.error).toBe('Missing required field: response');
+      expect(body.error).toBe('Missing required field: summary');
     });
 
     it('should return 400 for invalid JSON', async () => {
@@ -799,14 +823,18 @@ describe('HealthServer', () => {
     });
 
     it('should return 500 when service throws error', async () => {
-      mockInterReviewService.respondToReview = vi.fn().mockRejectedValue(new Error('DB error'));
+      mockInterReviewService.submitReviewResponse = vi
+        .fn()
+        .mockRejectedValue(new Error('DB error'));
       server = new HealthServer(mockDatabase, 4207);
       server.setInterReviewService(mockInterReviewService as any);
       await server.start();
 
       const result = await makePostRequest(4207, {
         reviewId: 'review-123',
-        response: 'Test response',
+        summary: 'Test summary',
+        findings: [],
+        scores: { overall: 80 },
       });
 
       await server.stop();
@@ -822,7 +850,9 @@ describe('HealthServer', () => {
 
       const result = await makePostRequest(4208, {
         reviewId: 'review-456',
-        response: 'Acknowledged',
+        summary: 'Minimal review',
+        findings: [],
+        scores: { overall: 85 },
       });
 
       await server.stop();
@@ -838,9 +868,24 @@ describe('HealthServer', () => {
       await server.start();
 
       const results = await Promise.all([
-        makePostRequest(4209, { reviewId: 'review-1', response: 'Response 1' }),
-        makePostRequest(4209, { reviewId: 'review-2', response: 'Response 2' }),
-        makePostRequest(4209, { reviewId: 'review-3', response: 'Response 3' }),
+        makePostRequest(4209, {
+          reviewId: 'review-1',
+          summary: 'Summary 1',
+          findings: [],
+          scores: { overall: 80 },
+        }),
+        makePostRequest(4209, {
+          reviewId: 'review-2',
+          summary: 'Summary 2',
+          findings: [],
+          scores: { overall: 85 },
+        }),
+        makePostRequest(4209, {
+          reviewId: 'review-3',
+          summary: 'Summary 3',
+          findings: [],
+          scores: { overall: 90 },
+        }),
       ]);
 
       await server.stop();
@@ -849,7 +894,54 @@ describe('HealthServer', () => {
       expect(results[1]!.statusCode).toBe(200);
       expect(results[2]!.statusCode).toBe(200);
 
-      expect(mockInterReviewService.respondToReview).toHaveBeenCalledTimes(3);
+      expect(mockInterReviewService.submitReviewResponse).toHaveBeenCalledTimes(3);
+    });
+
+    it('should return 404 when review not found', async () => {
+      mockInterReviewService.getReview = vi.fn().mockResolvedValue(null);
+      server = new HealthServer(mockDatabase, 4212);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4212, {
+        reviewId: 'non-existent',
+        summary: 'Test summary',
+        findings: [],
+        scores: { overall: 80 },
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(404);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Review not found');
+    });
+
+    it('should return 409 when review is already completed', async () => {
+      mockInterReviewService.getReview = vi.fn().mockResolvedValue({
+        id: 'review-789',
+        status: 'completed',
+        summary: 'Already done',
+        findings: [],
+        overallScore: 90,
+        response: null,
+        requestedAt: new Date(),
+        completedAt: new Date(),
+      });
+      server = new HealthServer(mockDatabase, 4213);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4213, {
+        reviewId: 'review-789',
+        summary: 'New summary',
+        findings: [],
+        scores: { overall: 80 },
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(409);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Review is already completed, cannot submit response');
     });
 
     it('should handle OPTIONS request with CORS headers', async () => {
