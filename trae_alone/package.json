@@ -1,5 +1,5 @@
 {
-  "name": "@nezha/trae-reflect",
+  "name": "trae-reflect",
   "version": "1.0.0",
   "description": "Standalone reflection tool for Trae Editor AI - persists knowledge across sessions",
   "type": "module",
@@ -34,7 +34,7 @@
     "editor-ai",
     "session-continuity"
   ],
-  "author": "Nezha Project",
+  "author": "emptist",
   "license": "MIT",
   "dependencies": {
     "pg": "^8.11.3",
@@ -51,11 +51,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/nezha-project/nezha.git",
+    "url": "git+https://github.com/emptist/nezha.git",
     "directory": "trae_alone"
   },
   "bugs": {
-    "url": "https://github.com/nezha-project/nezha/issues"
+    "url": "https://github.com/emptist/nezha/issues"
   },
-  "homepage": "https://github.com/nezha-project/nezha/tree/main/trae_alone#readme"
+  "homepage": "https://github.com/emptist/nezha/tree/main/trae_alone#readme"
 }

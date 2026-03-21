@@ -1,6 +1,6 @@
-# @nezha/trae-reflect
+# trae-reflect
 
-[![npm version](https://badge.fury.io/js/@nezha%2Ftrae-reflect.svg)](https://badge.fury.io/js/@nezha%2Ftrae-reflect)
+[![npm version](https://badge.fury.io/js/trae-reflect.svg)](https://badge.fury.io/js/trae-reflect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
@@ -18,7 +18,7 @@ Editor-based AIs (like Trae AI) get interrupted when they declare "done" or "com
 ## Installation
 
 ```bash
-npm install @nezha/trae-reflect
+npm install trae-reflect
 ```
 
 ## Quick Start
@@ -39,7 +39,7 @@ npx trae-reflect --learnings
 ### Programmatic Usage
 
 ```typescript
-import { TraeReflect } from '@nezha/trae-reflect';
+import { TraeReflect } from 'trae-reflect';
 
 const reflect = new TraeReflect({
   databaseUrl: 'postgresql://postgres@localhost:5432/nezha'
@@ -182,7 +182,7 @@ See the [Nezha project](https://github.com/nezha-project/nezha) for database sch
 This package is designed to work with the Nezha autonomous development system:
 
 ```typescript
-import { TraeReflect } from '@nezha/trae-reflect';
+import { TraeReflect } from 'trae-reflect';
 
 // In your AI agent
 const reflect = new TraeReflect();
