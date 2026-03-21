@@ -15,16 +15,56 @@
    - P2: 向量搜索 (pgvector)
    - P2: 其他功能
 
-3. **学习系统设计原则**
+3. **学习系统使用指南**
+
+   **如何查看其他 AI 的反射记录 (Reflections)**
+
+   反射记录会自动广播给所有连接的 AI。以下是访问方式：
+   - **MCP 工具** (推荐): 使用 `nezha-learning` MCP 工具：
+     - `memory_search`: 搜索过去的反射和经验
+     - `learn`: 保存新的学习到数据库
+     - `suggest_prompt_update`: 建议改进系统提示词
+
+   - **CLI 命令**:
+     - `nezha reflect <text>` - 保存反射并广播给所有 AI
+     - `nezha reflection-summary` - 查看今日反射总结
+     - `nezha reflection-trends` - 查看 7 天趋势
+
+   - **数据库查询**:
+
+     ```sql
+     SELECT content, source, created_at
+     FROM memory
+     WHERE source = 'reflection-cli'
+     ORDER BY created_at DESC LIMIT 10;
+     ```
+
+   - **广播机制**: 反射通过 BroadcastService 发送，其他 AI 需要：
+     1. 配置 nezha-mcp 或其他 MCP 客户端
+     2. 订阅 MCP 广播消息
+     3. 或直接查询 memory 表
+
+4. **学习系统设计原则**
    - 不通过程序代码实现学习功能
    - 通过 Prompt 指令让 AI 自主学习
    - 参考 LEARNING_SYSTEM.md 中的 System Prompt 设计
    - 提供工具支持：memory_save, memory_search, memory_link
 
-4. **禁止**
+5. **禁止**
    - 不要盲目实现，先问"龙虾怎么做的？"
    - 不要编写复杂的 NLP 规则来提取知识
    - 不要用程序硬编码学习逻辑
+
+## OpenCode 研究成果
+
+从 OpenCode 源码学到：
+
+- Skills 使用 `SKILL.md` + YAML frontmatter
+- 支持远程 skill 发现和下载
+- 权限系统支持 glob 模式和命令白名单
+- 代码风格：单字变量名、避免 try/catch、早返回
+
+详见 `docs/AI_LEARNINGS.md`
 
 ## 已完成功能
 
@@ -36,6 +76,7 @@
 - [x] OpenClaw 记忆系统研究
 - [x] AI Inter-Review 系统 (互相 Review 机制)
 - [x] 测试覆盖率提升：新增 102 个测试 (DatabaseSkillLoader, FailureAnalysisService, ContextBuilder)
+- [x] Inter-Review 集成到改进循环 (自动从 review findings 创建任务)
 
 ## AI 通信方法
 

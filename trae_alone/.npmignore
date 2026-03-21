@@ -1,0 +1,28 @@
+# Source files
+src/
+tsconfig.json
+vitest.config.ts
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+
+# Development files
+*.log
+.env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tsbuildinfo

@@ -4,17 +4,18 @@ import { HeartbeatService } from '../services/HeartbeatService.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
 
-vi.mock('../db/DatabaseClient.js', () => ({
-  DatabaseClient: vi.fn().mockImplementation(() => ({
-    query: vi.fn(),
-    close: vi.fn(),
-  })),
-}));
+const createMockPool = () => ({
+  on: vi.fn(),
+  totalCount: 0,
+  idleCount: 0,
+  waitingCount: 0,
+});
 
 const createMockDb = (): DatabaseClient => {
   const mockDb = {
     query: vi.fn(),
     close: vi.fn(),
+    getPool: vi.fn().mockReturnValue(createMockPool()),
   } as unknown as DatabaseClient;
   return mockDb;
 };
@@ -295,6 +296,7 @@ describe('Scheduler - Additional Edge Cases', () => {
     const mockDb = {
       query: vi.fn(),
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };
@@ -455,6 +457,7 @@ describe('Scheduler - Task Operations', () => {
     const mockDb = {
       query: mockQuery,
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };
@@ -716,6 +719,7 @@ describe('Scheduler - Database Error Handling', () => {
     const mockDb = {
       query: mockQuery,
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };
@@ -754,6 +758,7 @@ describe('Scheduler - Encryption Integration', () => {
     const mockDb = {
       query: mockQuery,
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };
@@ -797,6 +802,7 @@ describe('Scheduler - Task Dependencies', () => {
     const mockDb = {
       query: mockQuery,
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };
@@ -832,6 +838,7 @@ describe('Scheduler - Timeout Task Handling', () => {
     const mockDb = {
       query: mockQuery,
       close: vi.fn(),
+      getPool: vi.fn().mockReturnValue(createMockPool()),
     } as unknown as DatabaseClient;
     return mockDb;
   };

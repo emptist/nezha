@@ -8,7 +8,7 @@ import {
 } from '../config/constants.js';
 import { type TaskStatus } from '../config/types.js';
 import { logger } from '../utils/logger.js';
-import { execSync } from 'child_process';
+import { getGitInfo } from '../utils/git.js';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
 import {
@@ -798,15 +798,7 @@ export class Scheduler {
   }
 
   private getGitInfo(): { hash: string | null; branch: string | null } {
-    try {
-      const hash = execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
-      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
-        encoding: 'utf-8',
-      }).trim();
-      return { hash: hash || null, branch: branch || null };
-    } catch {
-      return { hash: null, branch: null };
-    }
+    return getGitInfo({ shortHash: true });
   }
 
   private getEnvironment(): string {

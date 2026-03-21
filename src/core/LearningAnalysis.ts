@@ -312,13 +312,26 @@ export class LearningAnalysisService {
       by_task_type: Record<string, number>;
       avg_recovery_time: string;
     }>(
-      `SELECT 
-        COUNT(*) FILTER (WHERE status = 'FAILED') as total_failures,
-        jsonb_object_agg(error_category, count) FILTER (WHERE error_category IS NOT NULL) as by_category,
-        jsonb_object_agg(task_type, count) FILTER (WHERE task_type IS NOT NULL) as by_task_type,
-        AVG(execution_time_ms) FILTER (WHERE status = 'FAILED') as avg_recovery_time
-       FROM ${DATABASE_TABLES.TASK_OUTCOMES}
-       WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL`,
+      `WITH stats AS (
+        SELECT 
+          COUNT(*) FILTER (WHERE status = 'FAILED') as total_failures,
+          (SELECT jsonb_object_agg(error_category, cnt) FROM (
+            SELECT error_category, COUNT(*) as cnt 
+            FROM ${DATABASE_TABLES.TASK_OUTCOMES}
+            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL AND error_category IS NOT NULL
+            GROUP BY error_category
+          ) sub) as by_category,
+          (SELECT jsonb_object_agg(task_type, cnt) FROM (
+            SELECT task_type, COUNT(*) as cnt 
+            FROM ${DATABASE_TABLES.TASK_OUTCOMES}
+            WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL AND task_type IS NOT NULL
+            GROUP BY task_type
+          ) sub) as by_task_type,
+          AVG(execution_time_ms) FILTER (WHERE status = 'FAILED') as avg_recovery_time
+        FROM ${DATABASE_TABLES.TASK_OUTCOMES}
+        WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL
+      )
+      SELECT * FROM stats`,
       [days]
     );
 

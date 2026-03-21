@@ -1,7 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { Config } from '../config/Config.js';
-import { execSync } from 'child_process';
+import { getGitInfo } from '../utils/git.js';
 
 export interface ActivityLogEntry {
   id: string;
@@ -44,15 +44,14 @@ export class ActivityLogService {
   }
 
   private getGitInfo(): { hash?: string; branch?: string } {
-    try {
-      const hash = execSync('git rev-parse HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
-      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
-        encoding: 'utf-8',
-      }).trim();
-      return { hash: hash.substring(0, 12), branch };
-    } catch {
+    const info = getGitInfo({ shortHash: true });
+    if (!info.hash && !info.branch) {
       return {};
     }
+    return {
+      hash: info.hash?.substring(0, 12),
+      branch: info.branch || undefined,
+    };
   }
 
   async log(activity: ActivityType, context: Record<string, unknown> = {}): Promise<string> {
@@ -62,7 +61,15 @@ export class ActivityLogService {
     await this.db.query(
       `INSERT INTO activity_log (id, agent_id, activity, context, git_hash, git_branch, environment)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, this.agentId, activity, JSON.stringify(context), gitInfo.hash, gitInfo.branch, this.environment]
+      [
+        id,
+        this.agentId,
+        activity,
+        JSON.stringify(context),
+        gitInfo.hash,
+        gitInfo.branch,
+        this.environment,
+      ]
     );
 
     logger.debug(`[ActivityLog] ${activity}: ${JSON.stringify(context).substring(0, 100)}`);
@@ -82,10 +89,18 @@ export class ActivityLogService {
   }
 
   async logAnnouncement(message: string, priority: string, targetAgent?: string): Promise<string> {
-    return this.log('announcement_sent', { message: message.substring(0, 200), priority, targetAgent });
+    return this.log('announcement_sent', {
+      message: message.substring(0, 200),
+      priority,
+      targetAgent,
+    });
   }
 
-  async logError(errorType: string, errorMessage: string, context?: Record<string, unknown>): Promise<string> {
+  async logError(
+    errorType: string,
+    errorMessage: string,
+    context?: Record<string, unknown>
+  ): Promise<string> {
     return this.log('error_encountered', { errorType, errorMessage, ...context });
   }
 
@@ -186,7 +201,9 @@ export class ActivityLogService {
     activitiesByAgent: Record<string, number>;
     recentErrors: number;
   }> {
-    const totalResult = await this.db.query<{ count: string }>('SELECT COUNT(*) as count FROM activity_log');
+    const totalResult = await this.db.query<{ count: string }>(
+      'SELECT COUNT(*) as count FROM activity_log'
+    );
     const totalActivities = totalResult.rows[0] ? parseInt(totalResult.rows[0].count, 10) : 0;
 
     const typeResult = await this.db.query<{ activity: string; count: string }>(

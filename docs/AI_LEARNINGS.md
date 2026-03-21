@@ -1,5 +1,35 @@
 # AI Learnings Log
 
+## 2026-03-21
+
+### OpenCode Skill System Insights
+
+**Skill file format:**
+
+- Uses `SKILL.md` with YAML frontmatter (name, description)
+- Content is markdown instructions
+- Skills discovered from glob patterns: `**/SKILL.md`
+
+**Remote skill discovery:**
+
+- Can pull skills from remote URLs
+- Downloads `index.json` to list available skills
+- Caches skills locally in `~/.cache/opencode/skills/`
+
+**Permissions are granular:**
+
+- Can restrict specific bash commands
+- Uses glob patterns for matching
+- External directory access is whitelisted
+
+### OpenCode Coding Style
+
+- Single-word variable names preferred
+- Avoid `try/catch` where possible
+- Early returns, no `else`
+- Use Bun APIs when available
+- Test actual implementation, avoid mocks
+
 ## 2026-03-20
 
 ### Reflection on Task Completion Pattern

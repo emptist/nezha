@@ -2,7 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { InterReviewService, type ReviewRequest } from '../services/InterReviewService.js';
 import { Config } from '../config/Config.js';
 import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
-import { execSync } from 'child_process';
+import { getGitHash, getGitBranch, getGitDiff, getLastCommitMessage } from '../utils/git.js';
 import { logger } from '../utils/logger.js';
 
 const REVIWER_ID = `nezha-${Date.now()}`;
@@ -26,25 +26,21 @@ export async function requestReviewFromAI(
 ): Promise<void> {
   const reviewService = createReviewService();
 
-  let commit = commitHash;
+  let commit: string | undefined = commitHash;
   let branch = 'main';
   let commitMessage = '';
   let files: string[] = [];
 
-  try {
-    branch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main';
-  } catch {
-    // Use default
-  }
+  branch = getGitBranch() || 'main';
 
   if (!commit) {
-    try {
-      commit = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
-      commitMessage = execSync('git log -1 --format=%B', { encoding: 'utf-8' }).trim();
-      const diff = execSync('git diff --name-only', { encoding: 'utf-8' }).trim();
-      files = diff ? diff.split('\n') : [];
-    } catch (error) {
-      logger.error('Failed to get git info:', error);
+    const hash = getGitHash();
+    commit = hash || undefined;
+    commitMessage = getLastCommitMessage() || '';
+    const diff = getGitDiff();
+    files = diff ? diff.split('\n') : [];
+    if (!commit || files.length === 0) {
+      logger.warn('Failed to get git info - some information may be unavailable');
     }
   }
 

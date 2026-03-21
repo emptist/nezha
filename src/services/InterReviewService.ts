@@ -1,12 +1,12 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
-import { execSync } from 'child_process';
 import { EventEmitter } from 'events';
 import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
 import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
 import { Config } from '../config/Config.js';
 import { BroadcastService } from './BroadcastService.js';
+import { getCommitDiff } from '../utils/git.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -238,6 +238,15 @@ export class InterReviewService extends EventEmitter {
         );
       }
 
+      const review = await this.getReview(reviewId);
+      const taskCreatedCount = await this.createTasksFromFindings(
+        reviewResult,
+        review?.taskId || undefined
+      );
+      if (taskCreatedCount > 0) {
+        logger.info(`[InterReview] Created ${taskCreatedCount} task(s) from review findings`);
+      }
+
       return reviewResult;
     } catch (error) {
       await this.db.query(
@@ -315,20 +324,11 @@ Format:
     let context = '';
 
     if (row.commit_hash) {
-      try {
-        const diff = execSync(`git diff ${row.commit_hash}^..${row.commit_hash} --stat`, {
-          encoding: 'utf-8',
-          timeout: 10000,
-        });
-        context += `## Commit: ${row.commit_hash}\n\`\`\`\n${diff}\n\`\`\`\n\n`;
-
-        const diffContent = execSync(`git diff ${row.commit_hash}^..${row.commit_hash}`, {
-          encoding: 'utf-8',
-          timeout: 30000,
-          maxBuffer: 10 * 1024 * 1024,
-        });
-        context += `## Full Diff\n\`\`\`diff\n${diffContent}\n\`\`\`\n`;
-      } catch {
+      const diff = getCommitDiff(row.commit_hash);
+      if (diff.stat && diff.content) {
+        context += `## Commit: ${row.commit_hash}\n\`\`\`\n${diff.stat}\n\`\`\`\n\n`;
+        context += `## Full Diff\n\`\`\`diff\n${diff.content}\n\`\`\`\n`;
+      } else {
         context += `## Commit: ${row.commit_hash}\n(Git diff not available)\n`;
       }
     }
@@ -631,6 +631,38 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
 
       logger.info(`[InterReview] Saved learning to memory and skill: ${learning.topic}`);
     }
+  }
+
+  private async createTasksFromFindings(result: ReviewResult, taskId?: string): Promise<number> {
+    const severityPriority = { critical: 90, high: 75, medium: 50, low: 25, info: 10 };
+    let createdCount = 0;
+
+    for (const finding of result.findings) {
+      if (finding.type === 'praise' || finding.type === 'question') continue;
+
+      const priority = severityPriority[finding.severity] || 30;
+      const title = `[${finding.type}] ${finding.message.substring(0, 100)}`;
+      const description = `**Severity**: ${finding.severity}
+**Source**: Inter-Review (Score: ${result.overallScore}/100)
+${finding.file ? `**File**: ${finding.file}${finding.line ? `:${finding.line}` : ''}` : ''}
+${finding.code ? `**Code**:\n\`\`\`\n${finding.code}\n\`\`\`` : ''}
+${finding.suggestion ? `**Suggestion**:\n${finding.suggestion}` : ''}
+${taskId ? `\n**Related Task**: ${taskId}` : ''}`;
+
+      try {
+        await this.db.query(
+          `INSERT INTO tasks (id, title, description, status, priority, category, tags, created_at, updated_at)
+           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', finding.type, finding.severity], NOW(), NOW())`,
+          [title, description, priority]
+        );
+        createdCount++;
+        logger.info(`[InterReview] Created task from finding: ${title.substring(0, 50)}`);
+      } catch (err) {
+        logger.warn(`[InterReview] Failed to create task: ${err}`);
+      }
+    }
+
+    return createdCount;
   }
 
   async getLearningsForAIContext(topic?: string, limit: number = 10): Promise<string> {

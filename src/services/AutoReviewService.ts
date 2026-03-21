@@ -4,7 +4,7 @@ import { InterReviewService, type ReviewRequest } from './InterReviewService.js'
 import { DatabaseClient } from '../db/DatabaseClient.js';
 // Config imported for potential future use
 import { logger } from '../utils/logger.js';
-import { execSync } from 'child_process';
+import { getGitHash, getGitBranch, getGitDiff } from '../utils/git.js';
 
 export interface AutoReviewConfig {
   enabled: boolean;
@@ -56,7 +56,10 @@ export class AutoReviewService {
     }
 
     if (this.config.enabled) {
-      this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_COMPLETED, this.handleTaskCompleted.bind(this));
+      this.eventBus.unsubscribe(
+        SCHEDULER_EVENTS.TASK_COMPLETED,
+        this.handleTaskCompleted.bind(this)
+      );
       this.eventBus.unsubscribe(SCHEDULER_EVENTS.TASK_FAILED, this.handleTaskFailed.bind(this));
     }
     this.isListening = false;
@@ -147,27 +150,15 @@ Be thorough but constructive.`;
   }
 
   private getCurrentCommit(): string | undefined {
-    try {
-      return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
-    } catch {
-      return undefined;
-    }
+    return getGitHash() || undefined;
   }
 
   private getCurrentBranch(): string {
-    try {
-      return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main';
-    } catch {
-      return 'main';
-    }
+    return getGitBranch() || 'main';
   }
 
   private getChangedFiles(): string[] {
-    try {
-      const diff = execSync('git diff --name-only', { encoding: 'utf-8' }).trim();
-      return diff ? diff.split('\n') : [];
-    } catch {
-      return [];
-    }
+    const diff = getGitDiff();
+    return diff ? diff.split('\n') : [];
   }
 }

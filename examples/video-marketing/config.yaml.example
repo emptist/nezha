@@ -1,0 +1,93 @@
+# Video Marketing Configuration
+
+# Channel Settings
+channel:
+  name: "Your Channel Name"
+  niche: "technology"
+  language: "en"
+  upload_schedule: "daily"
+
+# Platform Credentials
+platforms:
+  youtube:
+    enabled: true
+    client_id: "${YOUTUBE_CLIENT_ID}"
+    client_secret: "${YOUTUBE_CLIENT_SECRET}"
+    refresh_token: "${YOUTUBE_REFRESH_TOKEN}"
+  
+  tiktok:
+    enabled: false
+    api_key: "${TIKTOK_API_KEY}"
+  
+  instagram:
+    enabled: false
+    access_token: "${INSTAGRAM_ACCESS_TOKEN}"
+
+# AI Services
+ai_services:
+  voice_synthesis:
+    provider: "elevenlabs"
+    api_key: "${ELEVENLABS_API_KEY}"
+    default_voice: "professional_male"
+  
+  video_generation:
+    provider: "runway"
+    api_key: "${RUNWAY_API_KEY}"
+  
+  image_generation:
+    provider: "openai"
+    api_key: "${OPENAI_API_KEY}"
+    model: "dall-e-3"
+
+# Content Settings
+content:
+  default_duration: 60
+  video_style: "tutorial"
+  thumbnail_style: "bold_text"
+  
+  hooks:
+    - "What if I told you..."
+    - "Here's a secret that..."
+    - "Stop doing this..."
+  
+  ctas:
+    - "Subscribe for more!"
+    - "Like if this helped!"
+    - "Comment your thoughts below!"
+
+# SEO Settings
+seo:
+  auto_optimize: true
+  keyword_sources:
+    - "google_trends"
+    - "youtube_suggestions"
+  max_title_length: 60
+  include_year: true
+
+# Branding
+branding:
+  logo: "./assets/logo.png"
+  colors:
+    primary: "#FF0000"
+    secondary: "#FFFFFF"
+  fonts:
+    title: "Montserrat Bold"
+    body: "Open Sans"
+  intro_duration: 3
+  outro_duration: 5
+
+# Analytics
+analytics:
+  track_retention: true
+  track_ctr: true
+  alert_thresholds:
+    ctr_below: 3
+    retention_below: 40
+  report_schedule: "weekly"
+
+# Nezha Integration
+nezha:
+  database_url: "${DATABASE_URL}"
+  auto_create_tasks: true
+  auto_report_issues: true
+  save_learnings: true

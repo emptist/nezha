@@ -1,7 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { Config } from '../config/Config.js';
-import { execSync } from 'child_process';
+import { getGitInfo } from '../utils/git.js';
 
 export type BroadcastPriority = 'low' | 'normal' | 'high' | 'critical';
 
@@ -34,15 +34,14 @@ export class BroadcastService {
   }
 
   private getGitInfo(): { hash?: string; branch?: string } {
-    try {
-      const hash = execSync('git rev-parse HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
-      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
-        encoding: 'utf-8',
-      }).trim();
-      return { hash: hash.substring(0, 12), branch };
-    } catch {
+    const info = getGitInfo({ shortHash: true });
+    if (!info.hash && !info.branch) {
       return {};
     }
+    return {
+      hash: info.hash?.substring(0, 12),
+      branch: info.branch || undefined,
+    };
   }
 
   async sendBroadcast(
@@ -77,7 +76,9 @@ export class BroadcastService {
     );
 
     const priorityIcon = priority === 'critical' ? '🚨' : priority === 'high' ? '⚠️' : '📢';
-    logger.info(`[Broadcast] ${priorityIcon} Sent ${priority} broadcast: ${message.substring(0, 50)}...`);
+    logger.info(
+      `[Broadcast] ${priorityIcon} Sent ${priority} broadcast: ${message.substring(0, 50)}...`
+    );
     return id;
   }
 
@@ -85,7 +86,11 @@ export class BroadcastService {
     return this.sendBroadcast(message, { targetAgent: 'all-ais', priority });
   }
 
-  async sendToAgent(agentId: string, message: string, priority?: BroadcastPriority): Promise<string> {
+  async sendToAgent(
+    agentId: string,
+    message: string,
+    priority?: BroadcastPriority
+  ): Promise<string> {
     return this.sendBroadcast(message, { targetAgent: agentId, priority });
   }
 

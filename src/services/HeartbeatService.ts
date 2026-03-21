@@ -19,6 +19,7 @@ import { DailyMemoryService } from './DailyMemory.js';
 import { SelfImprovementService, getSelfImprovement } from './SelfImprovementService.js';
 import { GitAutoCommitPlugin } from '../plugins/index.js';
 import { execSync } from 'child_process';
+import { getGitInfo } from '../utils/git.js';
 import { CheckpointService } from './CheckpointService.js';
 import {
   getEncryptionService,
@@ -1062,17 +1063,17 @@ After completing this task:
     try {
       const dlqItems = await this.db.query<{
         id: string;
-        task_title: string;
+        title: string;
         error_message: string;
         failure_count: number;
         created_at: Date;
       }>(
-        `SELECT id, task_title, error_message, failure_count, created_at
+        `SELECT id, title, error_message, retry_count as failure_count, failed_at as created_at
          FROM dead_letter_queue
-         WHERE status = 'pending'
-           AND failure_count >= 3
+         WHERE resolved = false
+           AND retry_count >= 3
            AND issue_id IS NULL
-         ORDER BY failure_count DESC
+         ORDER BY retry_count DESC
          LIMIT 10`
       );
 
@@ -1088,7 +1089,7 @@ After completing this task:
             `INSERT INTO issues (title, description, issue_type, severity, discovered_by, dlq_id, tags, task_id, metadata)
              VALUES ($1, $2, 'bug', 'high', $3, $4, $5, NULL, $6)`,
             [
-              `DLQ: ${item.task_title || 'Unknown task'}`,
+              `DLQ: ${item.title || 'Unknown task'}`,
               `Failed ${item.failure_count} times.\n\nLast error:\n${item.error_message}`,
               agentId,
               item.id,
@@ -1220,7 +1221,7 @@ After completing this task:
           const taskId = crypto.randomUUID();
           await this.db.query(
             `INSERT INTO tasks (id, title, description, status, priority, type, category)
-             VALUES ($1, $2, $3, 'PENDING', $4, 'broadcast', 'communication')`,
+             VALUES ($1, $2, $3, 'PENDING', $4, 'announcement', 'communication')`,
             [
               taskId,
               `[Broadcast ${broadcast.priority}] ${broadcast.message.substring(0, 80)}...`,
@@ -1251,13 +1252,12 @@ After completing this task:
       const result = await this.db.query<{
         id: string;
         from_ai: string;
-        from_agent: string;
         message_type: string;
         content: string;
         priority: string;
         created_at: Date;
       }>(
-        `SELECT id, from_ai, from_agent, message_type, content, priority, created_at
+        `SELECT id, from_ai, message_type, content, priority, created_at
          FROM project_communications
          WHERE read_at IS NULL
            AND created_at > NOW() - INTERVAL '7 days'
@@ -1287,11 +1287,11 @@ After completing this task:
 
         await this.db.query(
           `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
-           VALUES ($1, $2, $3, 'PENDING', $4, 'communication', 'inter-ai-communication', $5)`,
+           VALUES ($1, $2, $3, 'PENDING', $4, 'discussion', 'inter-ai-communication', $5)`,
           [
             taskId,
-            `[${comm.message_type} ${comm.from_ai || comm.from_agent || 'system'}] ${comm.content.substring(0, 60)}...`,
-            `From: ${comm.from_ai || comm.from_agent || 'system'}\nType: ${comm.message_type}\n\n${comm.content}`,
+            `[${comm.message_type} ${comm.from_ai || 'system'}] ${comm.content.substring(0, 60)}...`,
+            `From: ${comm.from_ai || 'system'}\nType: ${comm.message_type}\n\n${comm.content}`,
             priority,
             ['communication', comm.message_type],
           ]
@@ -1515,7 +1515,7 @@ After completing this task:
             const taskId = crypto.randomUUID();
             await this.db.query(
               `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
-               VALUES ($1, $2, $3, 'PENDING', 5, 'improvement', 'reflection', $4)`,
+                VALUES ($1, $2, $3, 'PENDING', 5, 'maintenance', 'reflection', $4)`,
               [
                 taskId,
                 `REFLECTION: ${action.substring(0, 80)}`,
@@ -1819,25 +1819,9 @@ ${recentHighlights.rows.map((h, i) => `${i + 1}. ${h.content.substring(0, 150)}$
     commitHash?: string,
     branch?: string
   ): Promise<string> {
-    const { execSync } = await import('child_process');
-    const currentCommit =
-      commitHash ||
-      (() => {
-        try {
-          return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
-        } catch {
-          return undefined;
-        }
-      })();
-    const currentBranch =
-      branch ||
-      (() => {
-        try {
-          return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main';
-        } catch {
-          return 'main';
-        }
-      })();
+    const gitInfo = getGitInfo();
+    const currentCommit = commitHash || gitInfo.hash || undefined;
+    const currentBranch = branch || gitInfo.branch || 'main';
 
     const request = {
       taskId,
@@ -2130,15 +2114,7 @@ After completing this task:
   }
 
   private getGitInfo(): { hash: string | null; branch: string | null } {
-    try {
-      const hash = execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' }).trim();
-      const branch = execSync('git rev-parse --abbrev-ref HEAD 2>/dev/null', {
-        encoding: 'utf-8',
-      }).trim();
-      return { hash: hash || null, branch: branch || null };
-    } catch {
-      return { hash: null, branch: null };
-    }
+    return getGitInfo({ shortHash: true });
   }
 
   private getEnvironment(): string {

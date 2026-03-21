@@ -1,6 +1,6 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
-import { execSync } from 'child_process';
+import { getGitHash, getGitBranch } from '../utils/git.js';
 
 export interface ActivityLog {
   id: string;
@@ -20,24 +20,8 @@ export class ActivityLoggingService {
 
   constructor(db: DatabaseClient) {
     this.db = db;
-    this.gitHash = this.getGitHash();
-    this.gitBranch = this.getGitBranch();
-  }
-
-  private getGitHash(): string {
-    try {
-      return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim().substring(0, 12);
-    } catch {
-      return 'unknown';
-    }
-  }
-
-  private getGitBranch(): string {
-    try {
-      return execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
-    } catch {
-      return 'unknown';
-    }
+    this.gitHash = getGitHash(true)?.substring(0, 12) || 'unknown';
+    this.gitBranch = getGitBranch() || 'unknown';
   }
 
   async logActivity(
