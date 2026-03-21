@@ -1,0 +1,55 @@
+# Video Channel Manager Configuration Example
+# Copy this file to config.yaml and fill in your values
+
+# Global settings
+settings:
+  default_platform: youtube
+  auto_publish: false
+  notify_on_complete: true
+
+# Platform configurations
+platforms:
+  youtube:
+    enabled: true
+    runner: "youtube-runner"
+    channel_id: "YOUR_YOUTUBE_CHANNEL_ID"
+    api_key: "YOUR_YOUTUBE_API_KEY"
+    oauth:
+      client_id: "YOUR_YOUTUBE_CLIENT_ID"
+      client_secret: "YOUR_YOUTUBE_CLIENT_SECRET"
+    limits:
+      title_max: 100
+      description_max: 5000
+      tags_max: 500
+    thumbnail:
+      width: 1280
+      height: 720
+      max_size_mb: 2
+
+  bilibili:
+    enabled: false
+    runner: "bilibili-runner"
+    cookies: "YOUR_BILIBILI_COOKIES"
+    limits:
+      title_max: 80
+      description_max: 2000
+      tags_max: 12
+    thumbnail:
+      width: 960
+      height: 600
+      max_size_mb: 2
+
+# Content defaults
+content:
+  default_visibility: "private"
+  default_category: "Education"
+  default_language: "en"
+
+# Notification settings
+notifications:
+  email:
+    enabled: false
+    address: "your-email@example.com"
+  webhook:
+    enabled: false
+    url: "https://your-webhook-url.com/notify"

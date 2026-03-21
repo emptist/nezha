@@ -239,6 +239,117 @@ await manager.upload({
 5. Configure platform adapters
 6. Start creating tasks
 
+## Loading Skills into Nezha
+
+Skills in this example project are stored as Markdown files in the `skills/` directory. To make them available to Nezha's AI agents, you need to load them into the database:
+
+### Option 1: Using the CLI
+
+```bash
+# Load a single skill
+node dist/cli/index.js skills import ./skills/video-creation.md
+
+# Load all skills from a directory
+node dist/cli/index.js skills import-dir ./skills/
+```
+
+### Option 2: Direct Database Insert
+
+```bash
+# Using psql
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "
+INSERT INTO skills (name, content, category, tags)
+VALUES (
+  'video-creation',
+  file_content_here,
+  'content',
+  ARRAY['video', 'ai', 'creation']
+);
+"
+```
+
+### Option 3: Using the Skills API
+
+```typescript
+import { SkillsService } from '@nezha/services';
+
+const skillsService = new SkillsService();
+
+await skillsService.create({
+  name: 'video-creation',
+  content: fs.readFileSync('./skills/video-creation.md', 'utf-8'),
+  category: 'content',
+  tags: ['video', 'ai', 'creation'],
+});
+```
+
+### Verifying Skills are Loaded
+
+```bash
+# List all skills
+node dist/cli/index.js skills list
+
+# Check specific skill
+node dist/cli/index.js skills show video-creation
+```
+
+## Issue Reporting System
+
+This example project integrates with Nezha's issue tracking system. Issues can be created, tracked, and resolved through the CLI or database.
+
+### Creating Issues
+
+```bash
+# Create an issue via CLI
+node dist/cli/index.js issues create "Upload failed" "Video processing timeout on YouTube upload" --type bug --severity high --tags upload,youtube
+
+# Create an improvement suggestion
+node dist/cli/index.js issues create "Add TikTok support" "Extend platform support to include TikTok" --type feature --severity medium --tags platform,tiktok
+```
+
+### Querying Issues
+
+```bash
+# List all open issues
+node dist/cli/index.js issues list --status open
+
+# List issues by severity
+node dist/cli/index.js issues list --severity high
+
+# Show issue details
+node dist/cli/index.js issues show <issue-id>
+```
+
+### Issue Types and Severities
+
+| Type | Description |
+|------|-------------|
+| `bug` | Something isn't working correctly |
+| `feature` | New functionality request |
+| `improvement` | Enhancement to existing feature |
+| `documentation` | Documentation needs update |
+| `question` | Needs clarification |
+
+| Severity | Description |
+|----------|-------------|
+| `critical` | System is unusable |
+| `high` | Major functionality broken |
+| `medium` | Feature partially working |
+| `low` | Minor issue or cosmetic |
+
+### Direct Database Access
+
+```bash
+# Query issues directly
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "
+SELECT id, title, type, severity, status 
+FROM issues 
+WHERE source = 'video-channel-manager' 
+AND status = 'open'
+ORDER BY severity DESC, created_at DESC;
+"
+```
+
 ## Benefits
 
 - **Multi-Platform Support**: Manage YouTube, Bilibili, and more from one place
