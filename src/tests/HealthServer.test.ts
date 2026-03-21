@@ -619,4 +619,280 @@ describe('HealthServer', () => {
       await server.stop();
     });
   });
+
+  describe('POST /inter-review/response', () => {
+    let mockInterReviewService: {
+      respondToReview: ReturnType<typeof vi.fn>;
+    };
+
+    beforeEach(() => {
+      mockInterReviewService = {
+        respondToReview: vi.fn().mockResolvedValue(undefined),
+      };
+    });
+
+    const makePostRequest = (
+      port: number,
+      body: object
+    ): Promise<{ statusCode: number; body: string }> => {
+      return new Promise((resolve, reject) => {
+        const data = JSON.stringify(body);
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port,
+            path: '/inter-review/response',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Content-Length': Buffer.byteLength(data),
+            },
+          },
+          res => {
+            let body = '';
+            res.on('data', chunk => (body += chunk));
+            res.on('end', () => resolve({ statusCode: res.statusCode || 0, body }));
+          }
+        );
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+      });
+    };
+
+    it('should handle valid response submission', async () => {
+      server = new HealthServer(mockDatabase, 4200);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4200, {
+        reviewId: 'review-123',
+        response: 'Accepted all suggestions',
+        acceptedSuggestions: ['suggestion-1', 'suggestion-2'],
+        options: {
+          status: 'accepted',
+          leverageRatio: 1.5,
+        },
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body.success).toBe(true);
+      expect(body.reviewId).toBe('review-123');
+      expect(mockInterReviewService.respondToReview).toHaveBeenCalledWith(
+        'review-123',
+        'Accepted all suggestions',
+        ['suggestion-1', 'suggestion-2'],
+        { status: 'accepted', leverageRatio: 1.5 }
+      );
+    });
+
+    it('should return 503 when interReviewService is not set', async () => {
+      server = new HealthServer(mockDatabase, 4201);
+      await server.start();
+
+      const result = await makePostRequest(4201, {
+        reviewId: 'review-123',
+        response: 'Test response',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(503);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('InterReview service not available');
+    });
+
+    it('should return 400 for invalid review ID', async () => {
+      server = new HealthServer(mockDatabase, 4202);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4202, {
+        reviewId: '',
+        response: 'Test response',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Missing required field: reviewId');
+    });
+
+    it('should return 400 for missing review ID', async () => {
+      server = new HealthServer(mockDatabase, 4203);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4203, {
+        response: 'Test response',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Missing required field: reviewId');
+    });
+
+    it('should return 400 for missing response field', async () => {
+      server = new HealthServer(mockDatabase, 4204);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4204, {
+        reviewId: 'review-123',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Missing required field: response');
+    });
+
+    it('should return 400 for empty response field', async () => {
+      server = new HealthServer(mockDatabase, 4205);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4205, {
+        reviewId: 'review-123',
+        response: '',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Missing required field: response');
+    });
+
+    it('should return 400 for invalid JSON', async () => {
+      server = new HealthServer(mockDatabase, 4206);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: 'localhost',
+            port: 4206,
+            path: '/inter-review/response',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+          res => {
+            let body = '';
+            res.on('data', chunk => (body += chunk));
+            res.on('end', () => resolve({ statusCode: res.statusCode || 0, body }));
+          }
+        );
+        req.on('error', reject);
+        req.write('not valid json{');
+        req.end();
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Invalid JSON body');
+    });
+
+    it('should return 500 when service throws error', async () => {
+      mockInterReviewService.respondToReview = vi.fn().mockRejectedValue(new Error('DB error'));
+      server = new HealthServer(mockDatabase, 4207);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4207, {
+        reviewId: 'review-123',
+        response: 'Test response',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(500);
+      const body = JSON.parse(result.body);
+      expect(body.error).toBe('Failed to record response');
+    });
+
+    it('should accept minimal valid request', async () => {
+      server = new HealthServer(mockDatabase, 4208);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await makePostRequest(4208, {
+        reviewId: 'review-456',
+        response: 'Acknowledged',
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body.success).toBe(true);
+      expect(body.reviewId).toBe('review-456');
+    });
+
+    it('should handle concurrent submissions', async () => {
+      server = new HealthServer(mockDatabase, 4209);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const results = await Promise.all([
+        makePostRequest(4209, { reviewId: 'review-1', response: 'Response 1' }),
+        makePostRequest(4209, { reviewId: 'review-2', response: 'Response 2' }),
+        makePostRequest(4209, { reviewId: 'review-3', response: 'Response 3' }),
+      ]);
+
+      await server.stop();
+
+      expect(results[0]!.statusCode).toBe(200);
+      expect(results[1]!.statusCode).toBe(200);
+      expect(results[2]!.statusCode).toBe(200);
+
+      expect(mockInterReviewService.respondToReview).toHaveBeenCalledTimes(3);
+    });
+
+    it('should handle OPTIONS request with CORS headers', async () => {
+      server = new HealthServer(mockDatabase, 4210);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await new Promise<{ statusCode: number; headers: http.IncomingHttpHeaders }>(
+        resolve => {
+          const req = http.request(
+            {
+              hostname: 'localhost',
+              port: 4210,
+              path: '/inter-review/response',
+              method: 'OPTIONS',
+            },
+            res => {
+              resolve({ statusCode: res.statusCode || 0, headers: res.headers });
+            }
+          );
+          req.end();
+        }
+      );
+
+      await server.stop();
+      expect(result.statusCode).toBe(204);
+      expect(result.headers['access-control-allow-origin']).toBe('*');
+      expect(result.headers['access-control-allow-methods']).toContain('POST');
+    });
+
+    it('should return 404 for GET request to inter-review/response', async () => {
+      server = new HealthServer(mockDatabase, 4211);
+      server.setInterReviewService(mockInterReviewService as any);
+      await server.start();
+
+      const result = await new Promise<{ statusCode: number }>(resolve => {
+        http.get('http://localhost:4211/inter-review/response', res => {
+          resolve({ statusCode: res.statusCode || 0 });
+        });
+      });
+
+      await server.stop();
+      expect(result.statusCode).toBe(404);
+    });
+  });
 });

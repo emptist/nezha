@@ -98,10 +98,17 @@ export async function performAIReview(reviewId: string): Promise<void> {
 export async function respondToReview(
   reviewId: string,
   response: string,
-  accepted?: string[]
+  accepted?: string[],
+  options?: {
+    reviewedBy?: string;
+    status?: 'accepted' | 'rejected' | 'partial' | 'superseded';
+    leverageRatio?: number;
+    reworkCount?: number;
+    effortMinutes?: number;
+  }
 ): Promise<void> {
   const reviewService = createReviewService();
-  await reviewService.respondToReview(reviewId, response, accepted || []);
+  await reviewService.respondToReview(reviewId, response, accepted || [], options);
   console.log(`✅ Response recorded for review: ${reviewId}`);
 }
 

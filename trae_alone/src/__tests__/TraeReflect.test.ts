@@ -49,7 +49,8 @@ describe('TraeReflect Parser', () => {
 
   describe('parsePromptUpdateMarkers', () => {
     it('should parse a PROMPT_UPDATE marker', () => {
-      const text = '[PROMPT_UPDATE] current: Old approach suggested: New approach reason: Better performance';
+      const text =
+        '[PROMPT_UPDATE] current: Old approach suggested: New approach reason: Better performance';
       const markers = reflect.parsePromptUpdateMarkers(text);
 
       expect(markers).toHaveLength(1);
@@ -91,7 +92,8 @@ describe('TraeReflect Parser', () => {
     });
 
     it('should parse ISSUE marker with description', () => {
-      const text = '[ISSUE] title: Bug title description: This is a bug description type: bug severity: medium';
+      const text =
+        '[ISSUE] title: Bug title description: This is a bug description type: bug severity: medium';
       const markers = reflect.parseIssueMarkers(text);
 
       expect(markers).toHaveLength(1);
@@ -100,7 +102,8 @@ describe('TraeReflect Parser', () => {
     });
 
     it('should parse ISSUE marker with tags', () => {
-      const text = '[ISSUE] title: Issue with tags type: improvement severity: low tags: ui, ux, frontend';
+      const text =
+        '[ISSUE] title: Issue with tags type: improvement severity: low tags: ui, ux, frontend';
       const markers = reflect.parseIssueMarkers(text);
 
       expect(markers).toHaveLength(1);
@@ -119,21 +122,80 @@ describe('TraeReflect Parser', () => {
     });
   });
 
+  describe('parseReviewResponseMarkers', () => {
+    it('should parse a basic REVIEW_RESPONSE marker', () => {
+      const text =
+        '[REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Looks good';
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(1);
+      expect(markers[0].reviewId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(markers[0].response).toBe('Looks good');
+      expect(markers[0].acceptedSuggestions).toEqual([]);
+    });
+
+    it('should parse REVIEW_RESPONSE marker with accepted suggestions', () => {
+      const text =
+        '[REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Fixed all issues accepted: suggestion1, suggestion2';
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(1);
+      expect(markers[0].reviewId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(markers[0].response).toBe('Fixed all issues');
+      expect(markers[0].acceptedSuggestions).toEqual(['suggestion1', 'suggestion2']);
+    });
+
+    it('should parse multiple REVIEW_RESPONSE markers', () => {
+      const text = `
+        [REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: First response
+        [REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440001 response: Second response
+      `;
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(2);
+      expect(markers[0].reviewId).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(markers[1].reviewId).toBe('550e8400-e29b-41d4-a716-446655440001');
+    });
+
+    it('should handle empty text', () => {
+      const markers = reflect.parseReviewResponseMarkers('');
+      expect(markers).toHaveLength(0);
+    });
+
+    it('should handle text without REVIEW_RESPONSE markers', () => {
+      const text = 'This is just regular text without any markers';
+      const markers = reflect.parseReviewResponseMarkers(text);
+      expect(markers).toHaveLength(0);
+    });
+
+    it('should handle REVIEW_RESPONSE without accepted field', () => {
+      const text =
+        '[REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Accepted';
+      const markers = reflect.parseReviewResponseMarkers(text);
+
+      expect(markers).toHaveLength(1);
+      expect(markers[0].acceptedSuggestions).toEqual([]);
+    });
+  });
+
   describe('Combined markers', () => {
     it('should parse mixed markers in one text', () => {
       const text = `
         [LEARN] insight: Learned something new context: Testing
         [PROMPT_UPDATE] current: Old suggested: New reason: Better
         [ISSUE] title: Found a bug type: bug severity: high
+        [REVIEW_RESPONSE] reviewId: 550e8400-e29b-41d4-a716-446655440000 response: Fixed
       `;
 
       const learnMarkers = reflect.parseLearnMarkers(text);
       const promptMarkers = reflect.parsePromptUpdateMarkers(text);
       const issueMarkers = reflect.parseIssueMarkers(text);
+      const reviewMarkers = reflect.parseReviewResponseMarkers(text);
 
       expect(learnMarkers).toHaveLength(1);
       expect(promptMarkers).toHaveLength(1);
       expect(issueMarkers).toHaveLength(1);
+      expect(reviewMarkers).toHaveLength(1);
     });
 
     it('should handle real-world reflection text', () => {

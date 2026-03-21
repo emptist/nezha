@@ -306,27 +306,44 @@ export class CliTransport implements SessionManager {
         '--format',
         'json',
         ...(streaming ? ['--thinking'] : []),
-        sanitizedPrompt,
       ];
 
       let proc: ChildProcess;
       let procKilled = false;
-      const pid = Date.now(); // Temporary PID for tracking
+      const pid = Date.now();
+      let stdinWritten = false;
 
       try {
         proc = spawn('opencode', args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env },
-          detached: false, // Don't detach - we want to track it
+          detached: false,
         });
 
-        // Record the spawned process
         if (proc.pid) {
-          this.recordSpawnedProcess(proc.pid, 'opencode', args).catch(() => {
-            // Intentionally ignored - process tracking is non-critical
-          });
+          this.recordSpawnedProcess(proc.pid, 'opencode', args).catch(() => {});
         }
-        proc.stdin?.end();
+
+        if (proc.stdin) {
+          const stdin = proc.stdin;
+          stdin.write(sanitizedPrompt + '\n', err => {
+            if (err) {
+              reject(new Error(`Failed to write to stdin: ${err.message}`));
+              return;
+            }
+            stdinWritten = true;
+            stdin.end();
+          });
+
+          setTimeout(() => {
+            if (!stdinWritten) {
+              cleanup();
+              reject(new Error('Failed to write prompt to stdin within timeout'));
+            }
+          }, 5000);
+        } else {
+          stdinWritten = true;
+        }
       } catch (err) {
         reject(
           new Error(`Failed to spawn opencode: ${err instanceof Error ? err.message : String(err)}`)

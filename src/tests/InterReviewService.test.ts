@@ -225,7 +225,7 @@ describe('InterReviewService', () => {
       await service.respondToReview('r1', 'Looks good!', ['s1']);
       expect(mockDb.query).toHaveBeenCalledWith(
         expect.stringContaining('respond_to_inter_review'),
-        ['r1', 'Looks good!', '["s1"]']
+        ['r1', 'Looks good!', '["s1"]', null, 'accepted', null, 0, null]
       );
     });
 

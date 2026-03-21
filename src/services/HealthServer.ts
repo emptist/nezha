@@ -96,6 +96,25 @@ export interface MetricsResponse {
   memory_recall_rate: number;
 }
 
+export interface InterReviewResponseRequest {
+  reviewId: string;
+  response: string;
+  acceptedSuggestions?: string[];
+  options?: {
+    reviewedBy?: string;
+    status?: 'accepted' | 'rejected' | 'partial' | 'superseded';
+    leverageRatio?: number;
+    reworkCount?: number;
+    effortMinutes?: number;
+  };
+}
+
+export interface InterReviewResponseResult {
+  success: boolean;
+  reviewId: string;
+  message?: string;
+}
+
 export interface HealthServerConfig {
   requireAuth?: boolean;
   adminUsername?: string;
@@ -117,6 +136,7 @@ export class HealthServer {
   private memoryDir: string;
   private diskWarningThreshold: number;
   private agentSystem: import('../core/AgentSystem.js').AgentSystem | null = null;
+  private interReviewService: import('./InterReviewService.js').InterReviewService | null = null;
 
   constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
@@ -132,6 +152,10 @@ export class HealthServer {
 
   setAgentSystem(agentSystem: import('../core/AgentSystem.js').AgentSystem): void {
     this.agentSystem = agentSystem;
+  }
+
+  setInterReviewService(service: import('./InterReviewService.js').InterReviewService): void {
+    this.interReviewService = service;
   }
 
   private async checkOpenCodeApi(): Promise<{
@@ -214,7 +238,7 @@ export class HealthServer {
 
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
         if (req.method === 'OPTIONS') {
@@ -237,6 +261,10 @@ export class HealthServer {
             this.updateMetricsFromDb();
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end(registry.export());
+          } else if (url.pathname === '/inter-review/response' && req.method === 'POST') {
+            const result = await this.handleInterReviewResponse(req);
+            res.writeHead(result.statusCode);
+            res.end(JSON.stringify(result.body));
           } else if (url.pathname === '/') {
             res.writeHead(200);
             res.end(
@@ -505,6 +533,60 @@ export class HealthServer {
       standardMetrics.memoryUsageBytes.set(memUsage.heapUsed);
     } catch (error) {
       logger.warn('Failed to update metrics from DB:', error);
+    }
+  }
+
+  private async handleInterReviewResponse(
+    req: http.IncomingMessage
+  ): Promise<{ statusCode: number; body: InterReviewResponseResult | { error: string } }> {
+    if (!this.interReviewService) {
+      return { statusCode: 503, body: { error: 'InterReview service not available' } };
+    }
+
+    const body = await new Promise<string>((resolve, reject) => {
+      let data = '';
+      req.on('data', chunk => (data += chunk));
+      req.on('end', () => resolve(data));
+      req.on('error', reject);
+    });
+
+    let parsed: InterReviewResponseRequest;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return { statusCode: 400, body: { error: 'Invalid JSON body' } };
+    }
+
+    if (!parsed.reviewId || typeof parsed.reviewId !== 'string') {
+      return { statusCode: 400, body: { error: 'Missing required field: reviewId' } };
+    }
+
+    if (!parsed.response || typeof parsed.response !== 'string') {
+      return { statusCode: 400, body: { error: 'Missing required field: response' } };
+    }
+
+    try {
+      await this.interReviewService.respondToReview(
+        parsed.reviewId,
+        parsed.response,
+        parsed.acceptedSuggestions,
+        parsed.options
+      );
+
+      return {
+        statusCode: 200,
+        body: {
+          success: true,
+          reviewId: parsed.reviewId,
+          message: 'Response recorded successfully',
+        },
+      };
+    } catch (error) {
+      logger.error('[InterReview] Failed to record response:', error);
+      return {
+        statusCode: 500,
+        body: { error: 'Failed to record response' },
+      };
     }
   }
 }

@@ -1,0 +1,223 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  SelfImprovementService,
+  type LearnInput,
+  type RememberInput,
+} from '../services/SelfImprovementService.js';
+import { DatabaseClient } from '../db/DatabaseClient.js';
+
+vi.mock('../db/DatabaseClient.js');
+vi.mock('../utils/logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+const mockQuery = vi.fn();
+const mockDb = {
+  query: mockQuery,
+} as unknown as DatabaseClient;
+
+describe('SelfImprovementService', () => {
+  let service: SelfImprovementService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new SelfImprovementService(mockDb);
+  });
+
+  describe('learn', () => {
+    it('should learn and save insight', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const input: LearnInput = {
+        insight: 'Test insight',
+        context: 'Test context',
+        tags: ['test'],
+        importance: 8,
+      };
+
+      const result = await service.learn(input);
+
+      expect(result).toContain('Test insight');
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const callArgs = mockQuery.mock.calls[0];
+      expect(callArgs[0]).toContain('INSERT INTO memory');
+      expect(callArgs[1]).toContain(8); // importance
+    });
+
+    it('should use default importance when not provided', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const input: LearnInput = {
+        insight: 'Simple insight',
+      };
+
+      await service.learn(input);
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([
+          expect.any(String),
+          expect.any(String),
+          expect.arrayContaining(['learning', 'insight']),
+        ])
+      );
+    });
+
+    it('should handle insight without context', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const input: LearnInput = {
+        insight: 'Insight without context',
+      };
+
+      const result = await service.learn(input);
+
+      expect(result).toContain('Insight without context');
+    });
+  });
+
+  describe('remember', () => {
+    it('should remember lesson from task', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const input: RememberInput = {
+        lesson: 'Remember this lesson',
+        fromTask: 'Test Task',
+        tags: ['important'],
+      };
+
+      const result = await service.remember(input);
+
+      expect(result).toContain('Remember this lesson');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.arrayContaining([
+          expect.stringContaining('Remember this lesson'),
+          expect.stringContaining('From task: Test Task'),
+        ])
+      );
+    });
+  });
+
+  describe('suggestPromptUpdate', () => {
+    it('should create prompt suggestion', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await service.suggestPromptUpdate(
+        'Current prompt',
+        'Suggested changes',
+        'Because it helps'
+      );
+
+      expect(result).toContain('Prompt suggestion created');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO prompt_suggestions'),
+        expect.arrayContaining([
+          'Current prompt',
+          'Suggested changes',
+          'Because it helps',
+          'pending',
+        ])
+      );
+    });
+  });
+
+  describe('getPendingSuggestions', () => {
+    it('should return pending suggestions', async () => {
+      const mockSuggestions = [
+        {
+          id: 'suggestion-1',
+          currentPrompt: 'Current 1',
+          suggestedPrompt: 'Suggested 1',
+          reason: 'Reason 1',
+          status: 'pending',
+          createdAt: new Date(),
+        },
+        {
+          id: 'suggestion-2',
+          currentPrompt: 'Current 2',
+          suggestedPrompt: 'Suggested 2',
+          reason: 'Reason 2',
+          status: 'pending',
+          createdAt: new Date(),
+        },
+      ];
+      mockQuery.mockResolvedValueOnce({ rows: mockSuggestions });
+
+      const result = await service.getPendingSuggestions();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('suggestion-1');
+    });
+
+    it('should return empty array when no pending suggestions', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const result = await service.getPendingSuggestions();
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('approveSuggestion', () => {
+    it('should approve suggestion', async () => {
+      mockQuery
+        .mockResolvedValueOnce({ rows: [{ suggested_prompt: 'New prompt' }] })
+        .mockResolvedValueOnce({ rowCount: 1 });
+
+      const result = await service.approveSuggestion('suggestion-123');
+
+      expect(result).toBe('New prompt');
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('rejectSuggestion', () => {
+    it('should reject suggestion', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+
+      await service.rejectSuggestion('suggestion-123');
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE prompt_suggestions'),
+        expect.arrayContaining(['suggestion-123'])
+      );
+    });
+  });
+
+  describe('getReflectionTemplate', () => {
+    it('should return default template', () => {
+      const template = service.getReflectionTemplate();
+
+      expect(template.name).toBe('default');
+      expect(template.scenario).toBeDefined();
+    });
+
+    it('should return template for bug fix', () => {
+      const template = service.getReflectionTemplate('Fix bug', 'bugfix');
+
+      expect(template.name).toBe('bug-fix');
+    });
+
+    it('should return template for feature', () => {
+      const template = service.getReflectionTemplate('New feature', 'implementation');
+
+      expect(template.name).toBe('feature');
+    });
+  });
+
+  describe('getAvailableTemplates', () => {
+    it('should return all templates', () => {
+      const templates = service.getAvailableTemplates();
+
+      expect(templates.length).toBeGreaterThan(0);
+      expect(templates.some(t => t.name === 'default')).toBe(true);
+      expect(templates.some(t => t.name === 'bug-fix')).toBe(true);
+      expect(templates.some(t => t.name === 'feature')).toBe(true);
+    });
+  });
+});

@@ -1,22 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 
-const { mockDb, mockEmbedding } = vi.hoisted(() => ({
-  mockDb: {
-    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
-    close: vi.fn(),
-  },
-  mockEmbedding: {
-    embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]),
-  },
-}));
+const mockDb = {
+  query: vi.fn(),
+  close: vi.fn(),
+};
+
+const mockEmbedding = {
+  embed: vi.fn(),
+  embedBatch: vi.fn(),
+};
 
 vi.mock('../db/DatabaseClient.js', () => ({
-  DatabaseClient: vi.fn().mockImplementation(() => mockDb),
+  DatabaseClient: vi.fn(() => mockDb),
 }));
 
 vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
-  OllamaEmbedding: vi.fn().mockImplementation(() => mockEmbedding),
+  OllamaEmbedding: vi.fn(() => mockEmbedding),
 }));
 
 describe('SemanticSearchService', () => {
@@ -24,11 +24,9 @@ describe('SemanticSearchService', () => {
   let service: any;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    vi.resetModules();
-
     mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
     mockEmbedding.embed.mockResolvedValue([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+    mockEmbedding.embedBatch.mockResolvedValue([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]]);
 
     const module = await import('../services/SemanticSearch.js');
     SemanticSearchService = module.SemanticSearchService;
@@ -114,6 +112,35 @@ describe('SemanticSearchService', () => {
       const results = await service.search('nonexistent');
       expect(results).toHaveLength(0);
     });
+
+    it('should use custom limit when specified', async () => {
+      mockDb.query.mockResolvedValue({ rows: [], rowCount: 0 });
+      await service.search('test', undefined, 5);
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+
+    it('should handle invalid embedding JSON gracefully', async () => {
+      mockDb.query.mockResolvedValue({
+        rows: [
+          {
+            id: 'mem-1',
+            project_id: null,
+            content: 'Memory 1',
+            metadata: null,
+            tags: null,
+            importance: 5,
+            source: null,
+            embedding: 'invalid-json',
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        ],
+        rowCount: 1,
+      });
+
+      const results = await service.search('test query');
+      expect(results.length).toBe(0);
+    });
   });
 });
 
@@ -123,6 +150,7 @@ describe('getSemanticSearch', () => {
     vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
       OllamaEmbedding: vi.fn(() => ({
         embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+        embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
       })),
     }));
     vi.mock('../db/DatabaseClient.js');
@@ -143,6 +171,7 @@ describe('semantic_search', () => {
     vi.mock('../services/embedding/OllamaEmbedding.js', () => ({
       OllamaEmbedding: vi.fn(() => ({
         embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+        embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
       })),
     }));
     vi.mock('../db/DatabaseClient.js');

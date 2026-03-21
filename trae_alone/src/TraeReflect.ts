@@ -47,10 +47,14 @@ export class TraeReflect {
   private externalClient: PoolClient | null = null;
   private config: TraeReflectConfig;
 
-  private static readonly LEARN_PATTERN = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
-  private static readonly PROMPT_PATTERN = /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
-  private static readonly ISSUE_PATTERN = /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
-  private static readonly REVIEW_RESPONSE_PATTERN = /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly LEARN_PATTERN =
+    /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly PROMPT_PATTERN =
+    /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
+  private static readonly ISSUE_PATTERN =
+    /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly REVIEW_RESPONSE_PATTERN =
+    /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*(.+?)(?:\s*accepted:\s*(.+?))?\s*(?=\[|$)/gis;
 
   constructor(config: TraeReflectConfig = {}) {
     this.config = config;
@@ -171,11 +175,7 @@ export class TraeReflect {
     await client.query(
       `INSERT INTO memory (content, tags, source, importance, metadata) 
        VALUES ($1, ARRAY['learning', 'reflection'], 'trae-reflect', $2, $3)`,
-      [
-        marker.insight,
-        7,
-        JSON.stringify({ context: marker.context || null, source: 'trae-alone' }),
-      ]
+      [marker.insight, 7, JSON.stringify({ context: marker.context || null, source: 'trae-alone' })]
     );
   }
 
@@ -195,17 +195,36 @@ export class TraeReflect {
     await client.query(
       `INSERT INTO issues (title, description, issue_type, severity, tags)
        VALUES ($1, $2, $3, $4, $5)`,
-      [marker.title, marker.description || null, marker.type || 'bug', marker.severity || 'medium', marker.tags || []]
+      [
+        marker.title,
+        marker.description || null,
+        marker.type || 'bug',
+        marker.severity || 'medium',
+        marker.tags || [],
+      ]
     );
   }
 
-  async saveReviewResponse(marker: TraeReviewResponseMarker): Promise<void> {
-    const client = this.getClient();
+  private isValidUuid(id: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  }
 
-    await client.query(
-      `SELECT respond_to_inter_review($1, $2, $3)`,
-      [marker.reviewId, marker.response, JSON.stringify(marker.acceptedSuggestions || [])]
-    );
+  async saveReviewResponse(marker: TraeReviewResponseMarker): Promise<void> {
+    if (!this.isValidUuid(marker.reviewId)) {
+      throw new Error(`Invalid reviewId format: ${marker.reviewId}`);
+    }
+
+    try {
+      const client = this.getClient();
+      await client.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
+        marker.reviewId,
+        marker.response,
+        JSON.stringify(marker.acceptedSuggestions || []),
+      ]);
+    } catch (err) {
+      console.error(`Failed to save review response for ${marker.reviewId}:`, err);
+      throw err;
+    }
   }
 
   async reflect(text: string): Promise<TraeReflectResult> {
@@ -250,7 +269,9 @@ export class TraeReflect {
     return result;
   }
 
-  async getRecentLearnings(limit: number = 10): Promise<{ content: string; source: string; created_at: Date }[]> {
+  async getRecentLearnings(
+    limit: number = 10
+  ): Promise<{ content: string; source: string; created_at: Date }[]> {
     const client = this.getClient();
 
     const result = await client.query<{

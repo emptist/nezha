@@ -463,12 +463,24 @@ Format:
   async respondToReview(
     reviewId: string,
     response: string,
-    acceptedSuggestions: string[] = []
+    acceptedSuggestions: string[] = [],
+    options?: {
+      reviewedBy?: string;
+      status?: 'accepted' | 'rejected' | 'partial' | 'superseded';
+      leverageRatio?: number;
+      reworkCount?: number;
+      effortMinutes?: number;
+    }
   ): Promise<void> {
-    await this.db.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
+    await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
       reviewId,
       response,
       JSON.stringify(acceptedSuggestions),
+      options?.reviewedBy || null,
+      options?.status || 'accepted',
+      options?.leverageRatio || null,
+      options?.reworkCount || 0,
+      options?.effortMinutes || null,
     ]);
 
     logger.info(`[InterReview] Response recorded for review: ${reviewId}`);

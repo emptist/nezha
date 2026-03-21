@@ -1,6 +1,6 @@
-import { execSync } from 'child_process';
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
+import { isGitDirty, getGitBranch } from '../utils/git.js';
 
 export interface GitReminderConfig {
   remindOnUncommitted?: boolean;
@@ -24,44 +24,18 @@ export class GitAutoCommitPlugin implements Plugin {
     this.logGitStatus = config.logGitStatus ?? true;
   }
 
-  private getGitStatus(): { hasChanges: boolean; changedFiles: number; stagedFiles: number } {
-    try {
-      const status = execSync('git status --porcelain', { encoding: 'utf-8' });
-      const lines = status.trim().split('\n').filter(Boolean);
-      
-      const changedFiles = lines.filter(line => !line.startsWith('??')).length;
-      const stagedFiles = lines.filter(line => line.match(/^[MADRC]/)).length;
-      
-      return {
-        hasChanges: lines.length > 0,
-        changedFiles,
-        stagedFiles,
-      };
-    } catch {
-      return { hasChanges: false, changedFiles: 0, stagedFiles: 0 };
-    }
-  }
-
-  private getCurrentBranch(): string {
-    try {
-      return execSync('git branch --show-current', { encoding: 'utf-8' }).trim() || 'main';
-    } catch {
-      return 'unknown';
-    }
-  }
-
   hooks = {
     afterTask: async (context: TaskContext) => {
       if (context.status !== 'COMPLETED') {
         return;
       }
 
-      const gitStatus = this.getGitStatus();
+      const hasChanges = isGitDirty();
 
-      if (gitStatus.hasChanges && this.remindOnUncommitted) {
-        const branch = this.getCurrentBranch();
+      if (hasChanges && this.remindOnUncommitted) {
+        const branch = getGitBranch() || 'unknown';
         logger.info(
-          `[GitReminder] Task "${context.title}" completed with ${gitStatus.changedFiles} uncommitted file(s) on branch "${branch}"`
+          `[GitReminder] Task "${context.title}" completed with uncommitted changes on branch "${branch}"`
         );
         logger.info(
           `[GitReminder] Reminder: Please commit your changes with a meaningful message`
@@ -72,12 +46,12 @@ export class GitAutoCommitPlugin implements Plugin {
     },
 
     onStartup: async () => {
-      const gitStatus = this.getGitStatus();
-      const branch = this.getCurrentBranch();
+      const hasChanges = isGitDirty();
+      const branch = getGitBranch() || 'unknown';
       
-      if (gitStatus.hasChanges) {
+      if (hasChanges) {
         logger.info(
-          `[GitReminder] Startup: ${gitStatus.changedFiles} uncommitted file(s) on branch "${branch}"`
+          `[GitReminder] Startup: Uncommitted changes detected on branch "${branch}"`
         );
       } else {
         logger.debug(`[GitReminder] Startup: git status clean on branch "${branch}"`);
@@ -85,11 +59,11 @@ export class GitAutoCommitPlugin implements Plugin {
     },
 
     onShutdown: async () => {
-      const gitStatus = this.getGitStatus();
+      const hasChanges = isGitDirty();
       
-      if (gitStatus.hasChanges) {
+      if (hasChanges) {
         logger.warn(
-          `[GitReminder] Shutdown: ${gitStatus.changedFiles} uncommitted file(s) will be lost if not committed`
+          `[GitReminder] Shutdown: Uncommitted changes will be lost if not committed`
         );
       }
     },

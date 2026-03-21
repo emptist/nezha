@@ -79,6 +79,7 @@
 - [x] 新增 ReviewService.test.ts 测试 (26 tests)
 - [x] 新增 AutoReviewService.test.ts 测试 (18 tests)
 - [x] 新增 git.test.ts 测试 (13 tests)
+- [x] 新增 BroadcastService.test.ts 测试 (18 tests)
 - [x] 修复 youtube-runner TypeScript 错误 (fs/promises import, Analytics API params)
 - [x] 新增 youtube-runner 测试 (39 tests): VideoCreator, UploadManager, AnalyticsReviewer
 - [x] 测试总数: 983 tests (1 skipped)
