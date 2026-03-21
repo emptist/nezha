@@ -49,16 +49,20 @@
 
 ## P2 - 中优先级
 
-### [ ] 向量搜索 (pgvector) 集成
+### [x] 向量搜索 (pgvector) 集成
 
 - **描述**: 完成 pgvector 向量搜索功能
-- **相关文件**: `src/services/EmbeddingService.ts`
-- **状态**: 设计中
+- **相关文件**: `src/core/Memory.ts`, `src/services/embedding/`
+- **状态**: ✅ 已实现
+  - `vectorSearch()` - 向量搜索 (Memory.ts:136)
+  - `keywordSearch()` - 全文关键词搜索 (Memory.ts:185)
+  - `hybridSearch()` - 混合搜索 (Memory.ts:228)
+  - 支持 Ollama, OpenAI, Zhipu 三种 embedding provider
 
-### [ ] 文档清理与整理
+### [x] 文档清理与整理
 
 - **描述**: 整理 docs/ 目录，删除过时文档
-- **状态**: 待执行
+- **状态**: ✅ 已完成 (删除 deprecated/ 文件夹 18 个文件)
 
 ---
 
@@ -73,6 +77,8 @@
   - SkillSystem 与 ContextBuilder 集成
   - 任务执行时自动推荐相关技能 (基于 trigger phrases)
   - 新增 ContextBuilder skill suggestions 测试 (2 tests)
+- [x] P2: 向量搜索已实现 (Memory.ts: vectorSearch, keywordSearch, hybridSearch)
+- [x] P2: 文档清理 - 删除 deprecated/ 文件夹 (18 文件)
 
 ### 2026-03-21
 
@@ -145,9 +151,10 @@
 - pgvector 向量搜索支持
 - DB-only skill loading (更安全)
 
-### 待实现
+### 已完成
 
-- P2: 向量搜索 (pgvector) 完善
+- P2: 向量搜索 (pgvector) - ✅ 已实现
+- P2: 文档清理 - ✅ 已完成
 
 ---
 
