@@ -33,15 +33,33 @@ WHERE project_id IS NULL
 ORDER BY importance DESC LIMIT 10;
 ```
 
-### 2. Load Key Skills
+### 2. Master Reflection (The #1 Meta-Skill)
 
-Essential skills to load on startup:
+**Reflection is the most important skill** - it enables all other skills. Master it first.
 
+```bash
+# Save learnings immediately after discovering something
+node dist/cli/index.js auto-reflect "[LEARN] insight: <what you learned> context: <optional context>"
+
+# Report issues
+node dist/cli/index.js auto-reflect "[ISSUE] title: <issue> type: bug severity: high"
+
+# Suggest improvements
+node dist/cli/index.js auto-reflect "[PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>"
+```
+
+**Key principle**: Reflect WHILE working, not just after. Every significant discovery should be saved immediately.
+
+### 3. Load Other Essential Skills
+
+After mastering reflection, load these skills:
+
+- `reflection-meta-skill` - The #1 meta-skill (master this first!)
 - `nezha-essential` - Core Nezha workflows
 - `testing-strategy` - Testing best practices
 - `nezha-workflow` - Daily operation patterns
 
-### 3. Check System Status
+### 4. Check System Status
 
 ```bash
 npm run cli -- status
@@ -66,14 +84,17 @@ npm run cli -- task list --status pending
 | `npm run cli -- memory search <query>` | Search memory         |
 | `npm run cli -- skill list`            | List available skills |
 
-## System Prompt Guidelines
+## Reflection Markers
 
-After completing tasks, reflect using markers:
+Use these markers throughout your work (not just after tasks):
 
-- `[LEARN]` - Save key insights
-- `[PROMPT_UPDATE]` - Suggest prompt improvements
+| Marker | Purpose | Example |
+|--------|---------|---------|
+| `[LEARN]` | Save insights | `[LEARN] insight: Always check pending tasks first context: Found 139 pending tasks` |
+| `[ISSUE]` | Report problems | `[ISSUE] title: Bug in X type: bug severity: high` |
+| `[PROMPT_UPDATE]` | Suggest improvements | `[PROMPT_UPDATE] current: X suggested: Y reason: Z` |
 
-These are auto-parsed by HeartbeatService.
+**Save via**: `node dist/cli/index.js auto-reflect "[LEARN] insight: ..."`
 
 ## Architecture Overview
 
