@@ -10,7 +10,7 @@ import { logger } from '../utils/logger.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { InterReviewService } from './InterReviewService.js';
-import { SkillSystem, type SkillSuggestion } from '../core/SkillSystem.js';
+import { SkillSystem } from '../core/SkillSystem.js';
 
 const DEFAULT_MEMORY_DIR = '.tmp/nezha-memory';
 const MEMORY_FILE = 'MEMORY.md';

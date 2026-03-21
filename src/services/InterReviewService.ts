@@ -183,7 +183,7 @@ export class InterReviewService extends EventEmitter {
     this.emit(InterReviewEvent.REVIEW_STARTED, { reviewId });
 
     try {
-      const reviewResult = await this.executeReviewPrompt(reviewId, prompt);
+      const { reviewResult, rawResponse } = await this.executeReviewPrompt(reviewId, prompt);
 
       await this.db.query(
         `SELECT update_inter_review($1, 'completed', $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -200,6 +200,11 @@ export class InterReviewService extends EventEmitter {
           reviewResult.documentationScore,
         ]
       );
+
+      await this.db.query(`UPDATE inter_reviews SET raw_response = $1 WHERE id = $2`, [
+        rawResponse,
+        reviewId,
+      ]);
 
       logger.info(
         `[InterReview] Review completed: ${reviewId} (score: ${reviewResult.overallScore})`
@@ -260,7 +265,10 @@ export class InterReviewService extends EventEmitter {
     }
   }
 
-  private async executeReviewPrompt(reviewId: string, systemPrompt: string): Promise<ReviewResult> {
+  private async executeReviewPrompt(
+    reviewId: string,
+    systemPrompt: string
+  ): Promise<{ reviewResult: ReviewResult; rawResponse: string }> {
     const context = await this.getReviewContext(reviewId);
 
     const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.
@@ -300,9 +308,11 @@ Format:
 
     try {
       const response = await this.callReviewAI(systemPrompt, prompt);
-      return this.parseReviewResponse(response);
+      const reviewResult = this.parseReviewResponse(response);
+      return { reviewResult, rawResponse: response };
     } catch {
-      return this.fallbackReview(context);
+      const fallbackResult = this.fallbackReview(context);
+      return { reviewResult: fallbackResult, rawResponse: context };
     }
   }
 
@@ -708,7 +718,8 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
       if (finding.type === 'praise' || finding.type === 'question') continue;
 
       const priority = severityPriority[finding.severity] || 30;
-      const title = `[${finding.type}] ${finding.message.substring(0, 100)}`;
+      const msg = finding.message || finding.suggestion || finding.file || 'Review finding';
+      const title = `[${finding.type}] ${msg.substring(0, 100)}`;
       const description = `**Severity**: ${finding.severity}
 **Source**: Inter-Review (Score: ${result.overallScore}/100)
 ${finding.file ? `**File**: ${finding.file}${finding.line ? `:${finding.line}` : ''}` : ''}
@@ -719,8 +730,8 @@ ${taskId ? `\n**Related Task**: ${taskId}` : ''}`;
       try {
         await this.db.query(
           `INSERT INTO tasks (id, title, description, status, priority, category, tags, created_at, updated_at)
-           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', finding.type, finding.severity], NOW(), NOW())`,
-          [title, description, priority]
+           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', $4, $5], NOW(), NOW())`,
+          [title, description, priority, finding.type, finding.severity]
         );
         createdCount++;
         logger.info(`[InterReview] Created task from finding: ${title.substring(0, 50)}`);

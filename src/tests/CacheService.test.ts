@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  CacheService,
-  CacheOptions,
-  getCache,
-  clearAllCaches,
-} from '../../src/services/CacheService.js';
+import { CacheService, getCache, clearAllCaches } from '../../src/services/CacheService.js';
 
 describe('CacheService', () => {
   let cache: CacheService<string>;

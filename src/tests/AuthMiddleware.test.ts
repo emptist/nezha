@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AuthMiddleware, parseBasicAuth, UserRole } from '../services/AuthMiddleware.js';
+import { AuthMiddleware, parseBasicAuth } from '../services/AuthMiddleware.js';
 
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => ({
