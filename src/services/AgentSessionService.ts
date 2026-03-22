@@ -15,9 +15,9 @@ export interface AgentSession {
 export class AgentSessionService {
   private db: DatabaseClient;
   private sessionId: string | null = null;
-  private maxSessionsPerType: number = 1;
+  private maxSessionsPerType: number = 3;
 
-  constructor(db: DatabaseClient, maxSessionsPerType: number = 1) {
+  constructor(db: DatabaseClient, maxSessionsPerType: number = 3) {
     this.db = db;
     this.maxSessionsPerType = maxSessionsPerType;
   }
