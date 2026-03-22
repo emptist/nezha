@@ -41,8 +41,17 @@ export function resolveLogPaths(env?: Record<string, string | undefined>): {
 export function buildLaunchAgentPlist(config: LaunchAgentConfig): string {
   const label = config.label || DAEMON_LABEL;
   const envVars = config.environment || {};
+  const home = process.env.HOME || '/Users/' + (process.env.USER || 'jk');
 
-  const envStrings = Object.entries(envVars)
+  const defaultEnv: Record<string, string> = {
+    HOME: home,
+    TMPDIR: process.env.TMPDIR || '/tmp',
+    PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin',
+  };
+
+  const mergedEnv = { ...defaultEnv, ...envVars };
+
+  const envStrings = Object.entries(mergedEnv)
     .map(([k, v]) => `        <key>${k}</key>\n        <string>${v}</string>`)
     .join('\n');
 
@@ -56,6 +65,8 @@ export function buildLaunchAgentPlist(config: LaunchAgentConfig): string {
 <dict>
     <key>Label</key>
     <string>${label}</string>
+    <key>Comment</key>
+    <string>Nezha Daemon</string>
     <key>ProgramArguments</key>
     <array>
 ${argsStrings}
@@ -74,6 +85,10 @@ ${envStrings}
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
+    <key>Umask</key>
+    <integer>63</integer>
     <key>ProcessType</key>
     <string>Background</string>
     <key>LowPriorityIO</key>
