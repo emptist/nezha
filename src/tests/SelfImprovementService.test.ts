@@ -220,4 +220,98 @@ describe('SelfImprovementService', () => {
       expect(templates.some(t => t.name === 'feature')).toBe(true);
     });
   });
+
+  describe('getReflectionTemplate', () => {
+    it('should return research template', () => {
+      const template = service.getReflectionTemplate('Research findings', 'research');
+      expect(template.name).toBe('research');
+    });
+
+    it('should return refactoring template', () => {
+      const template = service.getReflectionTemplate('Refactor code', 'refactoring');
+      expect(template.name).toBe('refactoring');
+    });
+
+    it('should return review template', () => {
+      const template = service.getReflectionTemplate('Review changes');
+      expect(template.name).toBe('review');
+    });
+
+    it('should return debugging template', () => {
+      const template = service.getReflectionTemplate('Debug the issue', 'debugging');
+      expect(template.name).toBe('debugging');
+    });
+
+    it('should return default for unknown type', () => {
+      const template = service.getReflectionTemplate('Some random task', 'unknown');
+      expect(template.name).toBe('default');
+    });
+  });
+
+  describe('getReflectionPrompt', () => {
+    it('should return formatted prompt with task info', async () => {
+      const prompt = await service.getReflectionPrompt(
+        'Fix bug in parser',
+        'Successfully fixed the parsing issue',
+        'bug-fix'
+      );
+
+      expect(prompt).toContain('Fix bug in parser');
+      expect(prompt).toContain('Successfully fixed the parsing issue');
+    });
+
+    it('should truncate long task results', async () => {
+      const longResult = 'x'.repeat(1000);
+      const prompt = await service.getReflectionPrompt('Task', longResult);
+
+      expect(prompt.length).toBeLessThan(1500);
+    });
+
+    it('should use correct template based on task title', async () => {
+      const prompt = await service.getReflectionPrompt(
+        'Implement new feature',
+        'Feature implemented'
+      );
+
+      expect(prompt).toContain('Feature Development Reflection');
+    });
+  });
+
+  describe('approveSuggestion', () => {
+    it('should throw error when suggestion not found', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      await expect(service.approveSuggestion('non-existent')).rejects.toThrow(
+        'Suggestion not found'
+      );
+    });
+  });
+
+  describe('learn with embedding', () => {
+    it('should handle embedding generation failure gracefully', async () => {
+      const mockEmbedding = vi.fn().mockRejectedValue(new Error('Embedding failed'));
+
+      const embeddingConfig = {
+        provider: 'ollama',
+        model: 'nomic-embed-text',
+        apiUrl: 'http://localhost:11434',
+      };
+      const serviceWithEmbedding = new SelfImprovementService(mockDb, embeddingConfig);
+
+      vi.spyOn(serviceWithEmbedding as any, 'embedding', 'get').mockReturnValue({
+        embed: mockEmbedding,
+      });
+
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+
+      const input: LearnInput = {
+        insight: 'Test insight',
+        tags: ['test'],
+      };
+
+      const result = await (serviceWithEmbedding as any).learn(input);
+
+      expect(result).toContain('Test insight');
+    });
+  });
 });

@@ -132,4 +132,71 @@ describe('TaskWatchdogService', () => {
       expect(stats.totalKills).toBe(3);
     });
   });
+
+  describe('isTaskTracked', () => {
+    it('should return true for tracked task', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+      await service.trackTask('task-1', 'Test Task');
+      expect(service['trackedTasks'].has('task-1')).toBe(true);
+    });
+
+    it('should return false for untracked task', () => {
+      expect(service['trackedTasks'].has('non-existent')).toBe(false);
+    });
+  });
+
+  describe('trackedTasks map', () => {
+    it('should store task with correct properties', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+      await service.trackTask('task-1', 'Test Task', 12345, 60);
+      const task = service['trackedTasks'].get('task-1');
+
+      expect(task).toBeDefined();
+      expect(task?.processId).toBe(12345);
+      expect(task?.watchdogTimeoutSeconds).toBe(60);
+      expect(task?.isKilled).toBe(false);
+      expect(task?.killCount).toBe(0);
+    });
+
+    it('should add to processCache when processId is provided', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+      await service.trackTask('task-1', 'Test Task', 12345);
+      expect(service['processCache'].has(12345)).toBe(true);
+      expect(service['processCache'].get(12345)).toBe('task-1');
+    });
+  });
+
+  describe('stop', () => {
+    it('should do nothing when not running', () => {
+      service.stop();
+      expect(service['isRunning']).toBe(false);
+    });
+  });
+
+  describe('getWatchdogStats edge cases', () => {
+    it('should handle zero values', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const stats = await service.getWatchdogStats();
+      expect(stats.trackedTasks).toBe(0);
+    });
+  });
+
+  describe('event listeners', () => {
+    it('should emit events when subscribed', async () => {
+      const startedEvent = vi.fn();
+      const stoppedEvent = vi.fn();
+      service.on(WatchdogEvent.WATCHDOG_STARTED, startedEvent);
+      service.on(WatchdogEvent.WATCHDOG_STOPPED, stoppedEvent);
+
+      service.start();
+      expect(startedEvent).toHaveBeenCalled();
+
+      service.stop();
+      expect(stoppedEvent).toHaveBeenCalled();
+    });
+  });
 });

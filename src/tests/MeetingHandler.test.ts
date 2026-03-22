@@ -282,4 +282,150 @@ describe('MeetingHandler', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('parseOpinionsFromOutput', () => {
+    it('should parse multiple opinions from output', () => {
+      const output = `## Opinion from agent-1
+
+**Perspective**: Option A
+
+**Key Points**:
+1. Point 1
+2. Point 2
+
+**Reasoning**: Because it works
+
+**Concerns**: - Concern 1
+
+**Suggestions**: - Suggestion 1
+
+---
+
+## Opinion from agent-2
+
+**Perspective**: Option B
+
+**Key Points**:
+1. Point X
+
+**Reasoning**: Because reasons
+
+**Concerns**: - Concern Y
+
+**Suggestions**: - Suggestion Y`;
+
+      const handlerAny = handler as unknown as {
+        parseOpinionsFromOutput: (output: string) => Opinion[];
+      };
+      const opinions = handlerAny.parseOpinionsFromOutput(output);
+
+      expect(opinions).toHaveLength(2);
+      expect(opinions[0].author).toBe('agent-1');
+      expect(opinions[1].author).toBe('agent-2');
+    });
+
+    it('should handle empty output', () => {
+      const handlerAny = handler as unknown as {
+        parseOpinionsFromOutput: (output: string) => Opinion[];
+      };
+      const opinions = handlerAny.parseOpinionsFromOutput('');
+
+      expect(opinions).toHaveLength(0);
+    });
+  });
+
+  describe('getExistingOpinions', () => {
+    it('should return empty array when no opinions exist', async () => {
+      mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+      const handlerAny = handler as unknown as {
+        getExistingOpinions: (discussionId: string) => Promise<Opinion[]>;
+      };
+      const opinions = await handlerAny.getExistingOpinions('task-123');
+
+      expect(opinions).toHaveLength(0);
+    });
+
+    it('should parse existing opinions from database', async () => {
+      mockDb.query.mockResolvedValueOnce({
+        rows: [
+          {
+            content: '## Opinion from agent-1\n\n**Perspective**: Option A',
+            metadata: { type: 'opinion', discussionId: 'task-123' },
+          },
+        ],
+      });
+
+      const handlerAny = handler as unknown as {
+        getExistingOpinions: (discussionId: string) => Promise<Opinion[]>;
+      };
+      const opinions = await handlerAny.getExistingOpinions('task-123');
+
+      expect(opinions).toHaveLength(1);
+      expect(opinions[0].author).toBe('agent-1');
+    });
+  });
+
+  describe('createMeetingFromTask', () => {
+    it('should create meeting and return meeting ID', async () => {
+      mockDb.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const task: DiscussionTask = {
+        id: 'task-1',
+        title: 'Discussion: Architecture Decision',
+        description: 'We need to decide',
+        status: 'PENDING',
+        priority: 5,
+      };
+
+      const meetingId = await handler.createMeetingFromTask(task);
+
+      expect(meetingId).toBeDefined();
+      expect(meetingId).toHaveLength(36); // UUID format
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+  });
+
+  describe('recordOpinion', () => {
+    it('should save opinion to database', async () => {
+      mockDb.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const opinion: Opinion = {
+        author: 'agent-1',
+        perspective: 'Option A',
+        keyPoints: ['Point 1'],
+        reasoning: 'Because it works',
+        concerns: ['Concern 1'],
+        suggestions: ['Suggestion 1'],
+      };
+
+      const handlerAny = handler as unknown as {
+        recordOpinion: (discussionId: string, opinion: Opinion) => Promise<void>;
+      };
+      await handlerAny.recordOpinion('task-123', opinion);
+
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+  });
+
+  describe('createConsensusTask', () => {
+    it('should create consensus task in database', async () => {
+      mockDb.query.mockResolvedValueOnce({ rowCount: 1 });
+
+      const task: DiscussionTask = {
+        id: 'task-1',
+        title: 'Discussion: Architecture Decision',
+        description: 'We need to decide',
+        status: 'PENDING',
+        priority: 5,
+      };
+
+      const handlerAny = handler as unknown as {
+        createConsensusTask: (originalTask: DiscussionTask, consensus: string) => Promise<void>;
+      };
+      await handlerAny.createConsensusTask(task, 'Use Option A');
+
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+  });
 });

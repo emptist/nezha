@@ -352,6 +352,9 @@ export class SelfImprovementService {
     const title = (taskTitle || '').toLowerCase();
     const type = (taskType || '').toLowerCase();
 
+    if (title.includes('debug') || title.includes('troubleshoot') || type === 'debugging') {
+      return REFLECTION_TEMPLATES.find(t => t.name === 'debugging')!;
+    }
     if (
       title.includes('fix') ||
       title.includes('bug') ||
@@ -378,9 +381,6 @@ export class SelfImprovementService {
     }
     if (title.includes('review') || type === 'review') {
       return REFLECTION_TEMPLATES.find(t => t.name === 'review')!;
-    }
-    if (title.includes('debug') || title.includes('troubleshoot') || type === 'debugging') {
-      return REFLECTION_TEMPLATES.find(t => t.name === 'debugging')!;
     }
     if (
       title.includes('feature') ||

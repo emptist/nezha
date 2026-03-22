@@ -114,11 +114,11 @@ export class Cli {
 
     this.heartbeatService.setCheckpointService(this.checkpointService);
 
-    await this.heartbeatService.start();
-
     this.healthServer = new HealthServer(db, 4097);
     this.healthServer.setAgentSystem(this.agentSystem);
     await this.healthServer.start();
+
+    await this.heartbeatService.start();
 
     // Handle graceful shutdown - save state before exit
     const shutdown = async (signal: string) => {

@@ -751,6 +751,10 @@ export class HeartbeatService {
     logger.info('HeartbeatService stopped');
   }
 
+  getStats(): { tasksExecuted: number; tasksSucceeded: number; tasksFailed: number; reconnectAttempts: number } {
+    return { ...this.stats };
+  }
+
   async executeTask(
     taskId: string,
     title: string,

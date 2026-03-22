@@ -232,4 +232,63 @@ describe('HeartbeatService', () => {
       expect(httpService.getTransportMode()).toBe('http');
     });
   });
+
+  describe('getStats', () => {
+    it('should return current statistics', async () => {
+      const startPromise = service.start();
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const stats = service.getStats();
+      expect(stats).toHaveProperty('tasksExecuted');
+      expect(stats).toHaveProperty('tasksSucceeded');
+      expect(stats).toHaveProperty('tasksFailed');
+      expect(stats).toHaveProperty('reconnectAttempts');
+
+      await service.stop();
+      await startPromise.catch(() => {});
+    });
+  });
+
+  describe('start without scheduler', () => {
+    it('should create internal scheduler if not provided', async () => {
+      const serviceWithoutScheduler = new HeartbeatService(mockDb, {
+        heartbeatIntervalMs: 500,
+      });
+
+      const startPromise = serviceWithoutScheduler.start();
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(serviceWithoutScheduler.isRunning()).toBe(true);
+
+      await serviceWithoutScheduler.stop();
+      await startPromise.catch(() => {});
+    });
+  });
+
+  describe('checkpoint service', () => {
+    it('should allow setting checkpoint service', () => {
+      const mockCheckpointService = {
+        save: vi.fn().mockResolvedValue(undefined),
+        load: vi.fn().mockResolvedValue({}),
+        list: vi.fn().mockResolvedValue([]),
+      };
+
+      service.setCheckpointService(mockCheckpointService as any);
+      expect(service).toBeDefined();
+    });
+  });
+
+  describe('task execution with different configurations', () => {
+    it('should handle task execution with custom retry config', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 1 } as QueryResult<unknown>);
+
+      const customService = new HeartbeatService(mockDb, {
+        agent: { maxRetries: 5, retryDelay: 1000 },
+      });
+
+      await customService.executeTask('task-custom', 'Custom Task');
+
+      expect(mockDb.query).toHaveBeenCalled();
+    });
+  });
 });

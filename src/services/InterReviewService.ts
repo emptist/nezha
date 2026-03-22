@@ -182,8 +182,16 @@ export class InterReviewService extends EventEmitter {
 
     this.emit(InterReviewEvent.REVIEW_STARTED, { reviewId });
 
+    let reviewResult: ReviewResult | null = null;
+    let rawResponse: string | null = null;
+
     try {
-      const { reviewResult, rawResponse } = await this.executeReviewPrompt(reviewId, prompt);
+      const result = await this.executeReviewPrompt(reviewId, prompt);
+      reviewResult = result.reviewResult;
+      rawResponse = result.rawResponse;
+
+      await this.db.query('BEGIN');
+      logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
       await this.db.query(
         `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
@@ -202,6 +210,16 @@ export class InterReviewService extends EventEmitter {
           rawResponse,
         ]
       );
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+
+      if (reviewResult.learnings.length > 0) {
+        const review = await this.getReview(reviewId);
+        await this.saveLearningsToMemory(reviewResult, review?.taskId || undefined);
+        logger.info(`[InterReview] Saved ${reviewResult.learnings.length} learnings to memory`);
+      }
+
+      await this.db.query('COMMIT');
+      logger.debug(`[InterReview] Transaction committed for review: ${reviewId}`);
 
       logger.info(
         `[InterReview] Review completed: ${reviewId} (score: ${reviewResult.overallScore})`
@@ -209,11 +227,7 @@ export class InterReviewService extends EventEmitter {
       this.emit(InterReviewEvent.REVIEW_COMPLETED, { reviewId, result: reviewResult });
 
       if (reviewResult.learnings.length > 0) {
-        const review = await this.getReview(reviewId);
-        await this.saveLearningsToMemory(reviewResult, review?.taskId || undefined);
-        logger.info(`[InterReview] Saved ${reviewResult.learnings.length} learnings to memory`);
-
-        await this.suggestPromptUpdatesFromLearnings(reviewResult, review?.taskId || undefined);
+        await this.suggestPromptUpdatesFromLearnings(reviewResult, undefined);
       }
 
       if (
@@ -251,12 +265,25 @@ export class InterReviewService extends EventEmitter {
 
       return reviewResult;
     } catch (error) {
-      await this.db.query(
-        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-        [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null]
-      );
-
       logger.error(`[InterReview] Review failed: ${reviewId}`, error);
+
+      try {
+        await this.db.query('ROLLBACK');
+        logger.debug(`[InterReview] Transaction rolled back for review: ${reviewId}`);
+      } catch (rollbackErr) {
+        logger.error(`[InterReview] Rollback failed for review ${reviewId}:`, rollbackErr);
+      }
+
+      try {
+        await this.db.query(
+          `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null]
+        );
+        logger.debug(`[InterReview] Marked review as failed: ${reviewId}`);
+      } catch (updateErr) {
+        logger.error(`[InterReview] Failed to mark review as failed: ${reviewId}`, updateErr);
+      }
+
       this.emit(InterReviewEvent.REVIEW_FAILED, { reviewId, error });
       throw error;
     }
