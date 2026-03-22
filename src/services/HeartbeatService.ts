@@ -103,7 +103,8 @@ const SKIP_REFLECTION_PATTERNS = [
   /^discussion$/i,
   /discussion participation/i,
   /^meeting$/i,
-  /participat/i,
+  /^participate/i,
+  /participation in/i,
 ];
 
 function shouldSkipReflection(title: string): boolean {

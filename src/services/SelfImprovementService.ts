@@ -353,7 +353,8 @@ export class SelfImprovementService {
     /^discussion$/i,
     /discussion participation/i,
     /^meeting$/i,
-    /participat/i,
+    /^participate/i,
+    /participation in/i,
   ];
 
   private shouldSkipTemplate(title: string): boolean {
