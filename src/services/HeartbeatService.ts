@@ -228,19 +228,21 @@ export class HeartbeatService {
     this.failureAnalysisService = new FailureAnalysisService(db);
     this.broadcastService = new BroadcastService(db);
 
+    const sessionId = getCurrentSessionId() || `nezha-heartbeat-${Date.now()}`;
+
     if (typeof this.scheduler.getEventBus === 'function') {
       this.autoReviewService = new AutoReviewService(this.scheduler.getEventBus(), db, {
         enabled: true,
         reviewOnSuccess: true,
         reviewOnFailure: true,
-        reviewerId: `nezha-heartbeat-${Date.now()}`,
+        reviewerId: sessionId,
       });
     } else {
       this.autoReviewService = new AutoReviewService(new EventBus(db), db, {
         enabled: false,
         reviewOnSuccess: false,
         reviewOnFailure: false,
-        reviewerId: `nezha-heartbeat-${Date.now()}`,
+        reviewerId: sessionId,
       });
     }
 
@@ -759,7 +761,12 @@ export class HeartbeatService {
     logger.info('HeartbeatService stopped');
   }
 
-  getStats(): { tasksExecuted: number; tasksSucceeded: number; tasksFailed: number; reconnectAttempts: number } {
+  getStats(): {
+    tasksExecuted: number;
+    tasksSucceeded: number;
+    tasksFailed: number;
+    reconnectAttempts: number;
+  } {
     return { ...this.stats };
   }
 
