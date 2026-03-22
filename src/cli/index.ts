@@ -21,6 +21,18 @@ import { MonitoringCommands } from './MonitoringCommands.js';
 import { MeetingCommands, parseKeyPoints, MeetingDbCommands } from './MeetingCommands.js';
 import { ReviewManagementCommands } from './ReviewCommands.js';
 import { IssueCommands } from './IssueCommands.js';
+import {
+  installLaunchAgent,
+  startLaunchAgent,
+  stopLaunchAgent,
+  uninstallLaunchAgent,
+  isLaunchAgentInstalled,
+  isLaunchAgentLoaded,
+  getLaunchAgentStatus,
+  resolveLogPaths,
+  DAEMON_LABEL,
+} from '../daemon/launchd.js';
+import path from 'node:path';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -217,7 +229,21 @@ export class Cli {
       [TASK_STATUS.PENDING]
     );
     const pendingCount = parseInt(result.rows[0]?.count ?? '0', 10);
-    console.log(`Heartbeat running: ${this.heartbeatService?.isRunning() ?? false}`);
+
+    const localRunning = this.heartbeatService?.isRunning() ?? false;
+
+    const sessionResult = await db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND last_heartbeat > NOW() - INTERVAL '5 minutes'`
+    );
+    const daemonRunning = parseInt(sessionResult.rows[0]?.count ?? '0', 10) > 0;
+
+    if (localRunning) {
+      console.log(`Heartbeat running: true (local)`);
+    } else if (daemonRunning) {
+      console.log(`Heartbeat running: true (daemon in background)`);
+    } else {
+      console.log(`Heartbeat running: false`);
+    }
     console.log(`Pending tasks: ${pendingCount}`);
   }
 
@@ -1087,6 +1113,98 @@ async function main(): Promise<void> {
       case 'status':
         await cliInstance.status();
         break;
+
+      case 'install': {
+        const isInstalled = await isLaunchAgentInstalled();
+        const status = await getLaunchAgentStatus();
+        const logs = resolveLogPaths();
+
+        if (isInstalled) {
+          cli.info(`Nezha daemon is already installed (label: ${DAEMON_LABEL})`);
+        } else {
+          cli.info('Installing Nezha daemon as launchd service...');
+        }
+
+        cli.step('Creating log directory...');
+        const fs = await import('node:fs/promises');
+        await fs.mkdir(logs.logDir, { recursive: true });
+
+        const daemonBin = path.resolve(process.cwd(), 'dist/daemon/index.js');
+        const config = Config.getInstance();
+        const envVars: Record<string, string> = {
+          NEZHA_DB_HOST: process.env.NEZHA_DB_HOST || 'localhost',
+          NEZHA_DB_PORT: process.env.NEZHA_DB_PORT || '5432',
+          NEZHA_DB_NAME: process.env.NEZHA_DB_NAME || 'nezha',
+          NEZHA_DB_USER: process.env.NEZHA_DB_USER || 'postgres',
+          NEZHA_DB_PASSWORD: process.env.NEZHA_DB_PASSWORD || 'postgres',
+          NEZHA_HEARTBEAT_INTERVAL: String(config.getTaskConfig().heartbeatIntervalMs),
+          NEZHA_TRANSPORT_MODE: process.env.NEZHA_TRANSPORT_MODE || 'http',
+        };
+
+        const installResult = await installLaunchAgent({
+          programArguments: ['node', daemonBin],
+          workingDirectory: process.cwd(),
+          stdoutPath: logs.stdoutPath,
+          stderrPath: logs.stderrPath,
+          environment: envVars,
+        });
+
+        if (!installResult.ok) {
+          cli.error(`Installation failed: ${installResult.error}`);
+          break;
+        }
+
+        cli.success(`Installed to ~/Library/LaunchAgents/${DAEMON_LABEL}.plist`);
+
+        const startResult = await startLaunchAgent();
+        if (startResult.ok) {
+          cli.success('Daemon started. Check logs at: ' + logs.stdoutPath);
+        } else {
+          cli.warn(`Daemon not started: ${startResult.error}`);
+          cli.info('To start manually: launchctl start ' + DAEMON_LABEL);
+        }
+        break;
+      }
+
+      case 'uninstall': {
+        cli.info('Uninstalling Nezha daemon...');
+        const result = await uninstallLaunchAgent();
+        if (result.ok) {
+          cli.success('Daemon uninstalled');
+        } else {
+          cli.error(`Uninstall failed: ${result.error}`);
+        }
+        break;
+      }
+
+      case 'daemon-status': {
+        const installed = await isLaunchAgentInstalled();
+        const loaded = await isLaunchAgentLoaded();
+        const status = await getLaunchAgentStatus();
+        const logs = resolveLogPaths();
+
+        console.log('\n  ' + colors.bright + 'Nezha Daemon Status' + colors.reset);
+        console.log('  ' + '-'.repeat(40));
+        console.log(
+          `  Installed:  ${installed ? colors.green + 'Yes' + colors.reset : colors.yellow + 'No' + colors.reset}`
+        );
+        console.log(
+          `  Loaded:     ${loaded ? colors.green + 'Yes' + colors.reset : colors.yellow + 'No' + colors.reset}`
+        );
+        console.log(
+          `  Status:     ${status.status === 'running' ? colors.green : status.status === 'stopped' ? colors.yellow : colors.red}${status.status}${colors.reset}${status.pid ? ' (PID: ' + status.pid + ')' : ''}`
+        );
+        console.log(`  Label:      ${DAEMON_LABEL}`);
+        console.log(`  Log:        ${logs.stdoutPath}`);
+        console.log('');
+
+        if (!installed) {
+          cli.info('Run "nezha install" to install the daemon');
+        } else if (!loaded) {
+          cli.info('Run "launchctl start ' + DAEMON_LABEL + '" to start');
+        }
+        break;
+      }
 
       case 'health':
         await cliInstance.health();
@@ -2807,6 +2925,9 @@ function showHelp(): void {
     start                         Start the heartbeat service
     stop                          Stop the heartbeat service
     status                        Show current status
+    install                       Install Nezha as launchd daemon (macOS)
+    uninstall                     Uninstall Nezha daemon
+    daemon-status                 Show daemon installation status
     health                        Show health information
     skill-sync                    Sync approved skills to Trae AI (.trae/skills/)
     task-add <title> [desc]      Add a new task

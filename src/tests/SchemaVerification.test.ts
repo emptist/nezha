@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import crypto from 'crypto';
 
 describe('Schema Verification Tests', () => {
   let db: DatabaseClient;
   let config: Config;
+  const testRecords: { table: string; condition: string }[] = [];
 
   beforeAll(async () => {
     config = Config.getInstance();
@@ -14,6 +16,13 @@ describe('Schema Verification Tests', () => {
     if (!health.healthy) {
       throw new Error(`Database not available: ${health.error}`);
     }
+  });
+
+  afterEach(async () => {
+    for (const record of testRecords) {
+      await db.query(`DELETE FROM ${record.table} WHERE ${record.condition}`);
+    }
+    testRecords.length = 0;
   });
 
   afterAll(async () => {
@@ -133,11 +142,16 @@ describe('Schema Verification Tests', () => {
     });
 
     it('should be able to insert task with executor fields', async () => {
-      const result = await db.query(`
-        INSERT INTO tasks (title, executor_type, executor_model, executor_provider)
-        VALUES ('Executor Test', 'opencode', 'big-pickle', 'opencode')
+      const testId = crypto.randomUUID();
+      const result = await db.query(
+        `
+        INSERT INTO tasks (id, title, executor_type, executor_model, executor_provider)
+        VALUES ($1, 'Executor Test', 'opencode', 'big-pickle', 'opencode')
         RETURNING id, executor_type, executor_model, executor_provider
-      `);
+      `,
+        [testId]
+      );
+      testRecords.push({ table: 'tasks', condition: `id = '${testId}'` });
       expect(result.rows[0]?.executor_type).toBe('opencode');
       expect(result.rows[0]?.executor_model).toBe('big-pickle');
       expect(result.rows[0]?.executor_provider).toBe('opencode');
@@ -168,25 +182,7 @@ describe('Schema Verification Tests', () => {
         `,
           [table]
         );
-        const pkCount = Number(result.rows[0]?.pk_count);
-        expect(pkCount).toBeGreaterThanOrEqual(1);
-      }
-    });
-
-    it('should have primary keys on all core tables', async () => {
-      const tables = ['tasks', 'projects', 'memory', 'agent_identity', 'inter_reviews'];
-      for (const table of tables) {
-        const result = await db.query(
-          `
-          SELECT COUNT(*) as pk_count
-          FROM information_schema.table_constraints
-          WHERE table_name = $1
-          AND constraint_type = 'PRIMARY KEY'
-        `,
-          [table]
-        );
-        const pkCount = Number(result.rows[0]?.pk_count);
-        expect(pkCount).toBeGreaterThanOrEqual(1);
+        expect(Number(result.rows[0]?.pk_count)).toBeGreaterThanOrEqual(1);
       }
     });
 
@@ -204,24 +200,26 @@ describe('Schema Verification Tests', () => {
 
   describe('Function Tests', () => {
     it('should register_agent function work correctly', async () => {
-      const agentId = '00000000-0000-0000-0000-000000000001';
+      const agentId = crypto.randomUUID();
       const result = await db.query<{ id: string }>(
         `
         SELECT register_agent($1, 'Test Agent', 'Test Description', ARRAY['task_execution'], 'worker', 'background text', '{"skill": "test"}'::jsonb) as id
       `,
         [agentId]
       );
+      testRecords.push({ table: 'agent_identity', condition: `id = '${agentId}'` });
       expect(result.rows[0]?.id).toBeDefined();
     });
 
     it('should handle duplicate agent registration', async () => {
-      const agentId = '00000000-0000-0000-0000-000000000003';
+      const agentId = crypto.randomUUID();
       await db.query(
         `
         SELECT register_agent($1, 'First Agent', NULL, NULL, NULL, NULL, NULL)
       `,
         [agentId]
       );
+      testRecords.push({ table: 'agent_identity', condition: `id = '${agentId}'` });
 
       const result = await db.query(
         `
@@ -229,8 +227,7 @@ describe('Schema Verification Tests', () => {
       `,
         [agentId]
       );
-      const columns = Object.keys(result.rows[0] || {});
-      expect(columns.length).toBeGreaterThan(0);
+      expect(Object.keys(result.rows[0] || {}).length).toBeGreaterThan(0);
     });
   });
 });
