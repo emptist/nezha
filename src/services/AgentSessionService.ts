@@ -14,9 +14,11 @@ export interface AgentSession {
 export class AgentSessionService {
   private db: DatabaseClient;
   private sessionId: string | null = null;
+  private maxSessionsPerType: number = 1;
 
-  constructor(db: DatabaseClient) {
+  constructor(db: DatabaseClient, maxSessionsPerType: number = 1) {
     this.db = db;
+    this.maxSessionsPerType = maxSessionsPerType;
   }
 
   getSessionId(): string | null {
@@ -26,6 +28,22 @@ export class AgentSessionService {
   async registerSession(agentType: string = 'opencode'): Promise<string> {
     if (this.sessionId) {
       return this.sessionId;
+    }
+
+    const countResult = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND agent_type = $1`,
+      [agentType]
+    );
+    const aliveCount = parseInt(countResult.rows[0]?.count ?? '0', 10);
+
+    if (aliveCount >= this.maxSessionsPerType) {
+      await this.db.query(
+        `UPDATE agent_sessions 
+         SET status = 'dead'
+         WHERE status = 'alive' AND agent_type = $1
+         AND id = (SELECT id FROM agent_sessions WHERE status = 'alive' AND agent_type = $1 ORDER BY last_heartbeat ASC LIMIT 1)`,
+        [agentType]
+      );
     }
 
     const result = await this.db.query<{ generate_bot_id: string }>(
