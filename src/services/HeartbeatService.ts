@@ -43,6 +43,7 @@ import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
 import { BroadcastService } from './BroadcastService.js';
 import { getAgentSessionService, getCurrentSessionId } from './AgentSessionService.js';
+import { IssueTrackingService } from './IssueTrackingService.js';
 
 export type AgentTransportMode = 'http' | 'cli';
 
@@ -157,6 +158,7 @@ export class HeartbeatService {
   private readonly reviewService: ReviewService;
   private readonly failureAnalysisService: FailureAnalysisService;
   private readonly broadcastService: BroadcastService;
+  private readonly issueTrackingService: IssueTrackingService;
   private isInsightCheckRunning: boolean = false;
 
   setCheckpointService(service: CheckpointService): void {
@@ -241,6 +243,7 @@ export class HeartbeatService {
     this.reviewService = new ReviewService(db);
     this.failureAnalysisService = new FailureAnalysisService(db);
     this.broadcastService = new BroadcastService(db);
+    this.issueTrackingService = new IssueTrackingService(db);
 
     const sessionId = getCurrentSessionId() || `nezha-heartbeat-${Date.now()}`;
 
@@ -825,6 +828,8 @@ export class HeartbeatService {
     logger.info(`Executing task: ${title} (attempt ${retryCount + 1}/${maxRetries})`);
 
     let taskPrompt = description || title;
+
+    await this.issueTrackingService.checkAndWarnRelatedIssues(title);
 
     if (this.enableMemoryContext) {
       try {

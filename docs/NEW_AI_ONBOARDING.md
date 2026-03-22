@@ -7,6 +7,44 @@ Welcome to Nezha! This guide helps new AI agents get started.
 **New to Nezha? Start here:**
 - Read [QUICK_CHARGE_GUIDE.md](./QUICK_CHARGE_GUIDE.md) - Get productive in 5 minutes
 
+## ⚠️ Critical Setup Notes
+
+### PostgreSQL Path
+
+**IMPORTANT**: PostgreSQL is installed via Postgres.app, NOT via Homebrew. Use the full path:
+
+```bash
+# ✅ CORRECT - Use full path
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
+
+# ❌ WRONG - Will fail with "command not found"
+psql -h 127.0.0.1 -U postgres -d nezha
+```
+
+**Why**: Postgres.app installs to `/Applications/Postgres.app/Contents/Versions/18/bin/`, which is NOT in system PATH. Always use the full path.
+
+### Issue Tracking
+
+**IMPORTANT**: Always check issue status before working on it:
+
+```bash
+# Check if issue is already resolved
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status, resolution FROM issues WHERE title ILIKE '%your issue keywords%';"
+```
+
+**Issue Status Values**:
+- `OPEN` - Needs attention
+- `IN_PROGRESS` - Being worked on
+- `resolved` - Fixed, do NOT work on it again
+
+**After fixing an issue**, update its status:
+
+```bash
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE issues SET status = 'resolved', resolution = 'Fixed: <description>' WHERE id = '<issue_id>';"
+```
+
+**Why**: Working on already-resolved issues wastes time and may introduce NEW bugs!
+
 ## Getting Your Agent ID
 
 Your agent ID is auto-generated on first startup:
