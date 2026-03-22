@@ -1905,7 +1905,13 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
       return 'inter_review';
     }
 
-    if (title.includes('code review') || title.includes('review commit')) {
+    if (
+      title.includes('code review') ||
+      title.includes('review commit') ||
+      summary.includes('commit') ||
+      summary.includes('code change') ||
+      summary.includes('pull request')
+    ) {
       return 'code_review';
     }
 
@@ -1918,19 +1924,11 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
       }
     }
 
-    if (summary.includes('commit') || summary.includes('code change') || summary.includes('pull request')) {
-      return 'code_review';
-    }
-
-    if (title.includes('fix') || title.includes('bug')) {
-      return 'bug_fix';
-    }
-
-    if (title.includes('feature') || title.includes('implement')) {
-      return 'feature';
-    }
-
     return 'task_completion';
+  }
+
+  private getTargetTable(reflectionType: string): 'inter_reviews' | 'reflections' {
+    return reflectionType === 'inter_review' ? 'inter_reviews' : 'reflections';
   }
 
   async generateDailyReflectionSummary(): Promise<void> {
