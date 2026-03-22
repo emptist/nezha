@@ -248,6 +248,15 @@ describe('InterReviewService', () => {
         expect.objectContaining({ reviewId: '550e8400-e29b-41d4-a716-446655440000' })
       );
     });
+
+    it('should throw error when reviewId does not exist', async () => {
+      const dbError = new Error('Inter-review with id 00000000-0000-0000-0000-000000000000 does not exist');
+      vi.mocked(mockDb.query).mockRejectedValueOnce(dbError as never);
+
+      await expect(
+        service.respondToReview('00000000-0000-0000-0000-000000000000', 'Response')
+      ).rejects.toThrow();
+    });
   });
 
   describe('submitReviewResponse', () => {

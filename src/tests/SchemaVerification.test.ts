@@ -185,7 +185,8 @@ describe('Schema Verification Tests', () => {
         `,
           [table]
         );
-        expect(result.rows[0]?.pk_count).toBeGreaterThanOrEqual(1);
+        const pkCount = Number(result.rows[0]?.pk_count);
+        expect(pkCount).toBeGreaterThanOrEqual(1);
       }
     });
 

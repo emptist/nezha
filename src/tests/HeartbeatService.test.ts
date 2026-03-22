@@ -11,21 +11,32 @@ vi.mock('../db/DatabaseClient.js', () => ({
   })),
 }));
 
-vi.mock('../core/Scheduler.js', () => ({
-  Scheduler: vi.fn().mockImplementation(() => ({
-    start: vi.fn().mockResolvedValue(undefined),
-    stop: vi.fn().mockResolvedValue(undefined),
-    isActive: vi.fn().mockReturnValue(true),
-    onTaskReady: null,
-    getStats: vi.fn().mockReturnValue({
-      totalTasks: 0,
-      lastHeartbeat: new Date(),
-      isPaused: false,
-      pauseUntil: null,
-    }),
-    getLastHeartbeat: vi.fn().mockReturnValue(new Date()),
-  })),
-}));
+vi.mock('../core/Scheduler.js', async importOriginal => {
+  const actual: any = await importOriginal();
+  return {
+    ...actual,
+    Scheduler: vi.fn().mockImplementation(() => ({
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+      isActive: vi.fn().mockReturnValue(true),
+      onTaskReady: null,
+      getStats: vi.fn().mockReturnValue({
+        totalTasks: 0,
+        lastHeartbeat: new Date(),
+        isPaused: false,
+        pauseUntil: null,
+      }),
+      getLastHeartbeat: vi.fn().mockReturnValue(new Date()),
+      processScheduledTasks: vi.fn().mockResolvedValue(0),
+      getEventBus: vi.fn().mockReturnValue({
+        emit: vi.fn(),
+        on: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+      }),
+    })),
+  };
+});
 
 vi.mock('../core/UnifiedAgent.js', () => ({
   UnifiedAgent: vi.fn().mockImplementation(() => ({
