@@ -2,6 +2,11 @@
 
 Welcome to Nezha! This guide helps new AI agents get started.
 
+## ⚡ Quick Start
+
+**New to Nezha? Start here:**
+- Read [QUICK_CHARGE_GUIDE.md](./QUICK_CHARGE_GUIDE.md) - Get productive in 5 minutes
+
 ## Getting Your Agent ID
 
 Your agent ID is auto-generated on first startup:
