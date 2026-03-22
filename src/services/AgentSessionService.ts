@@ -1,5 +1,6 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
+import { Config } from '../config/Config.js';
 
 export interface AgentSession {
   id: string;
@@ -30,39 +31,57 @@ export class AgentSessionService {
       return this.sessionId;
     }
 
-    const countResult = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND agent_type = $1`,
-      [agentType]
-    );
-    const aliveCount = parseInt(countResult.rows[0]?.count ?? '0', 10);
+    const pool = this.db.getPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (aliveCount >= this.maxSessionsPerType) {
-      await this.db.query(
-        `UPDATE agent_sessions 
-         SET status = 'dead'
-         WHERE status = 'alive' AND agent_type = $1
-         AND id = (SELECT id FROM agent_sessions WHERE status = 'alive' AND agent_type = $1 ORDER BY last_heartbeat ASC LIMIT 1)`,
+      const countResult = await client.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND agent_type = $1`,
         [agentType]
       );
+      const aliveCount = parseInt(countResult.rows[0]?.count ?? '0', 10);
+
+      if (aliveCount >= this.maxSessionsPerType) {
+        await client.query(
+          `UPDATE agent_sessions 
+           SET status = 'dead'
+           WHERE status = 'alive' AND agent_type = $1
+           AND id = (SELECT id FROM agent_sessions WHERE status = 'alive' AND agent_type = $1 ORDER BY last_heartbeat ASC LIMIT 1)`,
+          [agentType]
+        );
+      }
+
+      const config = Config.getInstance();
+      const configAgentId = (config as unknown as { config: { agentId: string } }).config.agentId;
+      const sessionId = configAgentId.startsWith('bot_') 
+        ? configAgentId 
+        : `bot_${crypto.randomUUID()}`;
+      this.sessionId = sessionId;
+
+      const gitBranch = await this.getGitBranch();
+
+      await client.query(
+        `INSERT INTO agent_sessions (id, started_at, last_heartbeat, status, git_branch, agent_type)
+         VALUES ($1, NOW(), NOW(), 'alive', $2, $3)
+         ON CONFLICT (id) DO UPDATE SET 
+           status = 'alive',
+           last_heartbeat = NOW(),
+           git_branch = $2`,
+        [sessionId, gitBranch, agentType]
+      );
+
+      await client.query('COMMIT');
+
+      logger.info(`[AgentSession] Registered session: ${sessionId} (${agentType})`);
+
+      return sessionId;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    const result = await this.db.query<{ generate_bot_id: string }>(
-      `SELECT generate_bot_id() as generate_bot_id`
-    );
-
-    this.sessionId = result.rows[0]?.generate_bot_id ?? `bot_${crypto.randomUUID()}`;
-
-    const gitBranch = await this.getGitBranch();
-
-    await this.db.query(
-      `INSERT INTO agent_sessions (id, started_at, last_heartbeat, status, git_branch, agent_type)
-       VALUES ($1, NOW(), NOW(), 'alive', $2, $3)`,
-      [this.sessionId, gitBranch, agentType]
-    );
-
-    logger.info(`[AgentSession] Registered session: ${this.sessionId} (${agentType})`);
-
-    return this.sessionId;
   }
 
   async heartbeat(workingOn?: string): Promise<void> {

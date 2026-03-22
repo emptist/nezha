@@ -32,19 +32,17 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
   try {
     if (fs.existsSync(idFilePath)) {
       const content = fs.readFileSync(idFilePath, 'utf-8');
-      return JSON.parse(content);
+      const data = JSON.parse(content);
+      if (data.id && data.id.startsWith('bot_')) {
+        return data;
+      }
     }
   } catch {
     // Ignore errors, create new
   }
 
   fs.mkdirSync(configDir, { recursive: true });
-  const now = new Date();
-  const timestamp =
-    now.toISOString().replace(/[-:T]/g, '').substring(0, 8) +
-    '-' +
-    now.toISOString().substring(11, 16).replace(':', '');
-  const agentId = `${timestamp}-${crypto.randomUUID()}`;
+  const agentId = `bot_${crypto.randomUUID()}`;
   const displayName = process.env[ENV_KEYS.AGENT_NAME];
   const data = { id: agentId, displayName: displayName || undefined };
   fs.writeFileSync(idFilePath, JSON.stringify(data, null, 2));

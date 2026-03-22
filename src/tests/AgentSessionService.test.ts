@@ -18,10 +18,31 @@ vi.mock('../services/AgentSessionService.js', async () => {
   };
 });
 
+vi.mock('../config/Config.js', () => ({
+  Config: {
+    getInstance: vi.fn(() => ({
+      config: { agentId: 'bot_test_session_id' },
+    })),
+  },
+}));
+
+let sharedQueryMock: ReturnType<typeof vi.fn>;
+
+const createMockPoolClient = () => ({
+  query: sharedQueryMock,
+  release: vi.fn(),
+});
+
 const createMockDb = (): DatabaseClient => {
+  sharedQueryMock = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
+  const mockPoolClient = createMockPoolClient();
+  const mockPool = {
+    connect: vi.fn().mockResolvedValue(mockPoolClient),
+  };
   const mockDb = {
-    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>),
+    query: sharedQueryMock,
     close: vi.fn().mockResolvedValue(undefined),
+    getPool: vi.fn().mockReturnValue(mockPool),
   } as unknown as DatabaseClient;
   return mockDb;
 };
@@ -29,9 +50,11 @@ const createMockDb = (): DatabaseClient => {
 describe('AgentSessionService', () => {
   let service: AgentSessionService;
   let mockDb: DatabaseClient;
+  let mockPoolClient: ReturnType<typeof createMockPoolClient>;
 
   beforeEach(() => {
     mockDb = createMockDb();
+    mockPoolClient = mockDb.getPool().connect() as ReturnType<typeof createMockPoolClient>;
     service = new AgentSessionService(mockDb);
   });
 
@@ -51,118 +74,65 @@ describe('AgentSessionService', () => {
 
   describe('registerSession', () => {
     it('should return existing sessionId if already registered', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_123' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       const sessionId1 = await service.registerSession();
       const sessionId2 = await service.registerSession();
 
-      expect(sessionId1).toBe('bot_123');
-      expect(sessionId2).toBe('bot_123');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
+      expect(sessionId1).toBe('bot_test_session_id');
+      expect(sessionId2).toBe('bot_test_session_id');
     });
 
     it('should register new session with default agent type', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_new' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       const sessionId = await service.registerSession();
 
-      expect(sessionId).toBe('bot_new');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
-      expect(mockDb.query).toHaveBeenNthCalledWith(
-        3,
+      expect(sessionId).toBe('bot_test_session_id');
+      expect(sharedQueryMock).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO agent_sessions'),
-        ['bot_new', 'main', 'opencode']
+        ['bot_test_session_id', 'main', 'opencode']
       );
     });
 
     it('should register new session with custom agent type', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({
-          rows: [{ generate_bot_id: 'bot_custom' }],
-        } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'feature' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'feature' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       const sessionId = await service.registerSession('custom-agent');
 
-      expect(sessionId).toBe('bot_custom');
-      expect(mockDb.query).toHaveBeenNthCalledWith(
-        3,
+      expect(sessionId).toBe('bot_test_session_id');
+      expect(sharedQueryMock).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO agent_sessions'),
-        ['bot_custom', 'feature', 'custom-agent']
-      );
-    });
-
-    it('should register new session with default agent type', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_new' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
-
-      const sessionId = await service.registerSession();
-
-      expect(sessionId).toBe('bot_new');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
-      expect(mockDb.query).toHaveBeenNthCalledWith(
-        3,
-        expect.stringContaining('INSERT INTO agent_sessions'),
-        ['bot_new', 'main', 'opencode']
-      );
-    });
-
-    it('should register new session with custom agent type', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({
-          rows: [{ generate_bot_id: 'bot_custom' }],
-        } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'feature' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
-
-      const sessionId = await service.registerSession('custom-agent');
-
-      expect(sessionId).toBe('bot_custom');
-      expect(mockDb.query).toHaveBeenNthCalledWith(
-        3,
-        expect.stringContaining('INSERT INTO agent_sessions'),
-        ['bot_custom', 'feature', 'custom-agent']
+        ['bot_test_session_id', 'feature', 'custom-agent']
       );
     });
 
     it('should handle git branch query failure gracefully', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({
-          rows: [{ generate_bot_id: 'bot_no_git' }],
-        } as QueryResult<unknown>)
-        .mockRejectedValueOnce(new Error('Git error'))
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockRejectedValueOnce(new Error('Git error')) // getGitBranch fails
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       const sessionId = await service.registerSession();
 
-      expect(sessionId).toBe('bot_no_git');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
-    });
-
-    it('should fallback to random UUID if generate_bot_id returns null', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{}] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
-
-      const sessionId = await service.registerSession();
-
-      expect(sessionId).toMatch(/^bot_[a-f0-9-]+$/);
+      expect(sessionId).toBe('bot_test_session_id');
     });
   });
 
@@ -170,38 +140,40 @@ describe('AgentSessionService', () => {
     it('should do nothing if no session registered', async () => {
       await service.heartbeat();
 
-      expect(mockDb.query).not.toHaveBeenCalled();
+      expect(sharedQueryMock).not.toHaveBeenCalled();
     });
 
     it('should update heartbeat with workingOn', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_hb' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       await service.registerSession();
       await service.heartbeat('Working on task 123');
 
-      expect(mockDb.query).toHaveBeenLastCalledWith(
+      expect(sharedQueryMock).toHaveBeenLastCalledWith(
         expect.stringContaining('UPDATE agent_sessions'),
-        ['Working on task 123', 'bot_hb']
+        ['Working on task 123', 'bot_test_session_id']
       );
     });
 
     it('should update heartbeat without changing workingOn', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_hb2' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       await service.registerSession();
       await service.heartbeat(undefined);
 
-      expect(mockDb.query).toHaveBeenLastCalledWith(
+      expect(sharedQueryMock).toHaveBeenLastCalledWith(
         expect.stringContaining('UPDATE agent_sessions'),
-        [undefined, 'bot_hb2']
+        [undefined, 'bot_test_session_id']
       );
     });
   });
@@ -210,24 +182,25 @@ describe('AgentSessionService', () => {
     it('should do nothing if no session registered', async () => {
       await service.unregister();
 
-      expect(mockDb.query).not.toHaveBeenCalled();
+      expect(sharedQueryMock).not.toHaveBeenCalled();
     });
 
     it('should mark session as dead and clear sessionId', async () => {
-      mockDb.query = vi
-        .fn()
-        .mockResolvedValueOnce({ rows: [{ generate_bot_id: 'bot_dead' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] } as QueryResult<unknown>)
-        .mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock
+        .mockResolvedValueOnce({ rows: [] }) // BEGIN
+        .mockResolvedValueOnce({ rows: [{ count: '0' }] }) // SELECT COUNT
+        .mockResolvedValueOnce({ rows: [{ branch: 'main' }] }) // getGitBranch
+        .mockResolvedValueOnce({ rows: [] }) // INSERT
+        .mockResolvedValueOnce({ rows: [] }); // COMMIT
 
       await service.registerSession();
-      expect(service.getSessionId()).toBe('bot_dead');
+      expect(service.getSessionId()).toBe('bot_test_session_id');
 
       await service.unregister();
 
-      expect(mockDb.query).toHaveBeenLastCalledWith(
+      expect(sharedQueryMock).toHaveBeenLastCalledWith(
         expect.stringContaining("UPDATE agent_sessions SET status = 'dead'"),
-        ['bot_dead']
+        ['bot_test_session_id']
       );
       expect(service.getSessionId()).toBeNull();
     });
@@ -235,7 +208,7 @@ describe('AgentSessionService', () => {
 
   describe('getActiveSessions', () => {
     it('should return empty array when no sessions', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock.mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
 
       const sessions = await service.getActiveSessions();
 
@@ -253,7 +226,7 @@ describe('AgentSessionService', () => {
         agent_type: 'opencode',
       };
 
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [mockRow] } as QueryResult<unknown>);
+      sharedQueryMock.mockResolvedValueOnce({ rows: [mockRow] } as QueryResult<unknown>);
 
       const sessions = await service.getActiveSessions();
 
@@ -280,7 +253,7 @@ describe('AgentSessionService', () => {
         agent_type: 'cli',
       };
 
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [mockRow] } as QueryResult<unknown>);
+      sharedQueryMock.mockResolvedValueOnce({ rows: [mockRow] } as QueryResult<unknown>);
 
       const sessions = await service.getActiveSessions();
 
@@ -289,7 +262,7 @@ describe('AgentSessionService', () => {
     });
 
     it('should sort by last_heartbeat descending', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [] } as QueryResult<unknown>);
+      sharedQueryMock.mockResolvedValueOnce({ rows: [] } as QueryResult<unknown>);
 
       await service.getActiveSessions();
 
