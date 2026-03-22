@@ -1802,29 +1802,59 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
     const sessionId = getCurrentSessionId();
     const agentId = Config.getInstance().getAgentId();
 
-    await this.db.query(
-      `INSERT INTO inter_reviews (
-        id, summary, overall_score, code_quality_score, test_coverage_score, 
-        documentation_score, findings, suggestions, issues, praise,
-        reviewer_id, status, completed_at, session_id, raw_response
-      ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed', NOW(), $11, $12
-      )`,
-      [
-        reflection.summary,
-        reflection.overallScore ?? null,
-        reflection.codeQualityScore ?? null,
-        reflection.testCoverageScore ?? null,
-        reflection.documentationScore ?? null,
-        JSON.stringify(reflection.learnings || []),
-        JSON.stringify(reflection.suggestions || []),
-        JSON.stringify(reflection.issues || []),
-        JSON.stringify(reflection.praise || []),
-        agentId,
-        sessionId,
-        JSON.stringify(reflection),
-      ]
-    );
+    const reflectionType = this.detectReflectionType(taskTitle, reflection);
+
+    if (reflectionType === 'inter_review') {
+      await this.db.query(
+        `INSERT INTO inter_reviews (
+          id, summary, overall_score, code_quality_score, test_coverage_score, 
+          documentation_score, findings, suggestions, issues, praise,
+          reviewer_id, status, completed_at, session_id, raw_response
+        ) VALUES (
+          gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed', NOW(), $11, $12
+        )`,
+        [
+          reflection.summary,
+          reflection.overallScore ?? null,
+          reflection.codeQualityScore ?? null,
+          reflection.testCoverageScore ?? null,
+          reflection.documentationScore ?? null,
+          JSON.stringify(reflection.learnings || []),
+          JSON.stringify(reflection.suggestions || []),
+          JSON.stringify(reflection.issues || []),
+          JSON.stringify(reflection.praise || []),
+          agentId,
+          sessionId,
+          JSON.stringify(reflection),
+        ]
+      );
+      logger.info(`[Reflection] Saved to inter_reviews for task: ${taskTitle}`);
+    } else {
+      await this.db.query(
+        `INSERT INTO reflections (
+          summary, learnings, issues, suggestions, praise,
+          overall_score, code_quality_score, test_coverage_score, documentation_score,
+          agent_id, session_id, task_title, raw_response, reflection_type
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [
+          reflection.summary,
+          JSON.stringify(reflection.learnings || []),
+          JSON.stringify(reflection.issues || []),
+          JSON.stringify(reflection.suggestions || []),
+          JSON.stringify(reflection.praise || []),
+          reflection.overallScore ?? null,
+          reflection.codeQualityScore ?? null,
+          reflection.testCoverageScore ?? null,
+          reflection.documentationScore ?? null,
+          agentId,
+          sessionId,
+          taskTitle,
+          JSON.stringify(reflection),
+          reflectionType,
+        ]
+      );
+      logger.info(`[Reflection] Saved to reflections table for task: ${taskTitle}`);
+    }
 
     if (reflection.learnings && reflection.learnings.length > 0) {
       for (const learning of reflection.learnings) {
@@ -1862,6 +1892,45 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
     logger.info(
       `[Reflection] Saved JSON reflection for task: ${taskTitle} (score: ${reflection.overallScore ?? 'N/A'})`
     );
+  }
+
+  private detectReflectionType(
+    taskTitle: string,
+    reflection: { summary: string; issues?: Array<{ location: string }> }
+  ): string {
+    const title = taskTitle.toLowerCase();
+    const summary = reflection.summary.toLowerCase();
+
+    if (title.includes('inter-review') || title.includes('inter review')) {
+      return 'inter_review';
+    }
+
+    if (title.includes('code review') || title.includes('review commit')) {
+      return 'code_review';
+    }
+
+    if (reflection.issues && reflection.issues.length > 0) {
+      const hasCodeLocation = reflection.issues.some(
+        i => i.location.includes('.ts') || i.location.includes('.js') || i.location.includes('Service')
+      );
+      if (hasCodeLocation) {
+        return 'code_review';
+      }
+    }
+
+    if (summary.includes('commit') || summary.includes('code change') || summary.includes('pull request')) {
+      return 'code_review';
+    }
+
+    if (title.includes('fix') || title.includes('bug')) {
+      return 'bug_fix';
+    }
+
+    if (title.includes('feature') || title.includes('implement')) {
+      return 'feature';
+    }
+
+    return 'task_completion';
   }
 
   async generateDailyReflectionSummary(): Promise<void> {
