@@ -34,11 +34,20 @@ export interface AutoReviewResponseMarker {
   acceptedSuggestions?: string[];
 }
 
+export interface AutoOpinionMarker {
+  meetingId: string;
+  author: string;
+  perspective: string;
+  reasoning?: string;
+  position?: 'support' | 'oppose' | 'neutral';
+}
+
 export interface AutoReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
   reviewResponses: number;
+  opinions: number;
   total: number;
 }
 
@@ -55,6 +64,8 @@ export class AutoReflect {
     /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
   private static readonly REVIEW_RESPONSE_PATTERN =
     /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
+  private static readonly OPINION_PATTERN =
+    /\[OPINION\]\s*meetingId:\s*(.+?)\s*perspective:\s*(.+?)(?:\s*reasoning:\s*(.+?))?(?:\s*position:\s*(\w+))?\s*(?=\[|$)/gis;
 
   constructor(config: AutoReflectConfig = {}) {
     this.config = config;
@@ -174,13 +185,57 @@ export class AutoReflect {
     return markers;
   }
 
+  parseOpinionMarkers(text: string): AutoOpinionMarker[] {
+    const markers: AutoOpinionMarker[] = [];
+    let match;
+
+    while ((match = AutoReflect.OPINION_PATTERN.exec(text)) !== null) {
+      const meetingId = match[1]?.trim();
+      const perspective = match[2]?.trim();
+      const reasoning = match[3]?.trim();
+      const position = match[4]?.trim() as 'support' | 'oppose' | 'neutral' | undefined;
+
+      if (meetingId && perspective) {
+        markers.push({
+          meetingId,
+          author: 'auto-reflect',
+          perspective,
+          reasoning,
+          position: position || undefined,
+        });
+      }
+    }
+
+    return markers;
+  }
+
+  async saveOpinion(marker: AutoOpinionMarker): Promise<void> {
+    const client = this.getClient();
+
+    await client.query(
+      `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        marker.meetingId,
+        marker.author,
+        marker.perspective,
+        marker.reasoning || null,
+        marker.position || null,
+      ]
+    );
+  }
+
   async saveLearning(marker: AutoLearnMarker): Promise<void> {
     const client = this.getClient();
 
     await client.query(
       `INSERT INTO memory (content, tags, source, importance, metadata) 
        VALUES ($1, ARRAY['learning', 'reflection'], 'auto-reflect', $2, $3)`,
-      [marker.insight, 7, JSON.stringify({ context: marker.context || null, source: 'auto-reflect' })]
+      [
+        marker.insight,
+        7,
+        JSON.stringify({ context: marker.context || null, source: 'auto-reflect' }),
+      ]
     );
   }
 
@@ -230,6 +285,7 @@ export class AutoReflect {
       promptUpdates: 0,
       issues: 0,
       reviewResponses: 0,
+      opinions: 0,
       total: 0,
     };
 
@@ -261,7 +317,19 @@ export class AutoReflect {
       console.log(`✓ Saved review response for: ${marker.reviewId}`);
     }
 
-    result.total = result.learnings + result.promptUpdates + result.issues + result.reviewResponses;
+    const opinionMarkers = this.parseOpinionMarkers(text);
+    for (const marker of opinionMarkers) {
+      await this.saveOpinion(marker);
+      result.opinions++;
+      console.log(`✓ Saved opinion for meeting: ${marker.meetingId.substring(0, 8)}`);
+    }
+
+    result.total =
+      result.learnings +
+      result.promptUpdates +
+      result.issues +
+      result.reviewResponses +
+      result.opinions;
 
     return result;
   }

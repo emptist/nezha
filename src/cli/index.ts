@@ -232,10 +232,26 @@ export class Cli {
 
     const localRunning = this.heartbeatService?.isRunning() ?? false;
 
-    const sessionResult = await db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND last_heartbeat > NOW() - INTERVAL '5 minutes'`
-    );
-    const daemonRunning = parseInt(sessionResult.rows[0]?.count ?? '0', 10) > 0;
+    let daemonRunning = false;
+    let daemonHealth = false;
+
+    try {
+      const response = await fetch('http://localhost:4097/health', {
+        signal: AbortSignal.timeout(1000),
+      });
+      daemonHealth = response.ok;
+    } catch {
+      daemonHealth = false;
+    }
+
+    if (!daemonHealth) {
+      const sessionResult = await db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM agent_sessions WHERE status = 'alive' AND last_heartbeat > NOW() - INTERVAL '5 minutes'`
+      );
+      daemonRunning = parseInt(sessionResult.rows[0]?.count ?? '0', 10) > 0;
+    } else {
+      daemonRunning = true;
+    }
 
     if (localRunning) {
       console.log(`Heartbeat running: true (local)`);

@@ -43,11 +43,11 @@ export function buildLaunchAgentPlist(config: LaunchAgentConfig): string {
   const envVars = config.environment || {};
 
   const envStrings = Object.entries(envVars)
-    .map(([k, v]) => `    <string>${k}=${v}</string>`)
+    .map(([k, v]) => `        <key>${k}</key>\n        <string>${v}</string>`)
     .join('\n');
 
   const argsStrings = config.programArguments
-    .map(arg => `    <string>${escapeXml(arg)}</string>`)
+    .map(arg => `        <string>${escapeXml(arg)}</string>`)
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
