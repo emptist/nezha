@@ -109,6 +109,12 @@ Please follow the meeting-protocol skill:
       ]
     );
 
+    await this.db.query(
+      `INSERT INTO meetings (id, topic, status, created_by, metadata)
+       VALUES ($1, $2, 'active', $3, $4)`,
+      [discussionId, title, createdBy, JSON.stringify({ description, participants })]
+    );
+
     cli.success(`Discussion created: "${title}"`);
     console.log(`   ID: ${discussionId}`);
     if (participants && participants.length > 0) {
@@ -206,45 +212,6 @@ Please follow the meeting-protocol skill:
     }
   }
 
-  async addOpinion(
-    discussionId: string,
-    author: string,
-    perspective: string,
-    keyPoints: string[],
-    reasoning: string,
-    concerns: string[],
-    suggestions: string[]
-  ): Promise<void> {
-    await this.db.query(
-      `INSERT INTO memory (content, project_id, metadata, importance)
-       VALUES ($1, $2, $3, $4)`,
-      [
-        `## Opinion from ${author}
-
-**Perspective**: ${perspective}
-
-**Key Points**:
-${keyPoints.map((p, i) => `${i + 1}. ${p}`).join('\n')}
-
-**Reasoning**: ${reasoning}
-
-**Concerns**:
-${concerns.length > 0 ? concerns.map(c => `- ${c}`).join('\n') : 'None'}
-
-**Suggestions**:
-${suggestions.length > 0 ? suggestions.map(s => `- ${s}`).join('\n') : 'None'}
-
-_Recorded for discussion: ${discussionId}_`,
-        null,
-        JSON.stringify({ type: 'opinion', discussionId, author }),
-        7,
-      ]
-    );
-
-    cli.success(`Opinion recorded from ${author}`);
-    console.log('');
-  }
-
   async reachConsensus(
     topic: string,
     participants: string[],
@@ -330,6 +297,22 @@ _Reached at: ${new Date().toISOString()}_`;
       console.log(`   ${colors.dim}${decision.substring(0, 60)}${colors.reset}`);
       console.log('');
     }
+  }
+
+  async addOpinion(
+    meetingId: string,
+    author: string,
+    perspective: string,
+    reasoning?: string,
+    position?: 'support' | 'oppose' | 'neutral'
+  ): Promise<void> {
+    await this.db.query(
+      `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [meetingId, author, perspective, reasoning || null, position || null]
+    );
+
+    console.log(`${colors.green}Added opinion to meeting #${meetingId.slice(0, 8)}${colors.reset}`);
   }
 }
 
@@ -460,18 +443,15 @@ export class MeetingDbCommands {
 
   async addOpinion(
     meetingId: string,
+    author: string,
     perspective: string,
-    options?: {
-      reasoning?: string;
-      position?: 'support' | 'oppose' | 'neutral';
-    }
+    reasoning?: string,
+    position?: 'support' | 'oppose' | 'neutral'
   ): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
-
     await this.db.query(
       `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
        VALUES ($1, $2, $3, $4, $5)`,
-      [meetingId, agentId, perspective, options?.reasoning || null, options?.position || null]
+      [meetingId, author, perspective, reasoning || null, position || null]
     );
 
     console.log(`${colors.green}Added opinion to meeting #${meetingId.slice(0, 8)}${colors.reset}`);

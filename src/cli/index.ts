@@ -2401,11 +2401,7 @@ async function main(): Promise<void> {
           await meeting.addOpinion(
             discussionId,
             author,
-            perspective,
-            parseKeyPoints(keyPointsRaw),
-            '',
-            [],
-            []
+            perspective + (keyPointsRaw ? '\n\n**Key Points**:\n' + keyPointsRaw : '')
           );
         } else if (subcommand === 'consensus') {
           const topic = args[2];
@@ -2483,7 +2479,8 @@ async function main(): Promise<void> {
               posIndex !== -1
                 ? (args[posIndex + 1] as 'support' | 'oppose' | 'neutral')
                 : undefined;
-            await dbMeeting.addOpinion(meetingId, perspective, { position });
+            const author = Config.getInstance().getAgentId();
+            await dbMeeting.addOpinion(meetingId, author, perspective, undefined, position);
           } else if (dbSubcommand === 'consensus') {
             const meetingId = args[3];
             const consensusText = args.slice(4).join(' ');
