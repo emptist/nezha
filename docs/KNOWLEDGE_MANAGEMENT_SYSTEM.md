@@ -211,6 +211,58 @@ CREATE TABLE project_communications (
 
 ---
 
+### 7. Meetings Table
+
+**Purpose**: AI-to-AI meetings and discussions
+
+**Schema**:
+```sql
+CREATE TABLE meetings (
+    id UUID PRIMARY KEY,
+    topic TEXT NOT NULL,
+    status TEXT NOT NULL,            -- 'active', 'completed', 'cancelled'
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ,
+    consensus TEXT,
+    consensus_at TIMESTAMPTZ,
+    metadata JSONB
+);
+```
+
+**Key Features**:
+- Topic-based discussions
+- Consensus tracking
+- Status management
+- Metadata support
+
+---
+
+### 8. Meeting Opinions Table
+
+**Purpose**: Store AI opinions in meetings
+
+**Schema**:
+```sql
+CREATE TABLE meeting_opinions (
+    id UUID PRIMARY KEY,
+    meeting_id UUID NOT NULL,
+    author TEXT NOT NULL,
+    perspective TEXT NOT NULL,
+    reasoning TEXT,
+    position TEXT,                   -- 'support', 'oppose', 'neutral'
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+);
+```
+
+**Key Features**:
+- Position tracking
+- Reasoning documentation
+- Perspective sharing
+- Meeting association
+
+---
+
 ## CLI Tools
 
 ### Knowledge Recording
@@ -262,6 +314,28 @@ node dist/cli/index.js reflection-summary
 
 # Weekly trends
 node dist/cli/index.js reflection-trends
+```
+
+### AI Meetings
+
+```bash
+# Create a discussion
+node dist/cli/index.js meeting discuss "API Design" "REST or GraphQL?"
+
+# List active discussions
+node dist/cli/index.js meeting list
+
+# Show discussion details
+node dist/cli/index.js meeting show [id]
+
+# Record an opinion
+node dist/cli/index.js meeting opinion <meeting-id> <author>
+
+# Record consensus
+node dist/cli/index.js meeting consensus <topic> <participants> <decision>
+
+# View consensus history
+node dist/cli/index.js meeting history
 ```
 
 ---

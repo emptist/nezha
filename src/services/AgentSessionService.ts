@@ -16,10 +16,12 @@ export class AgentSessionService {
   private db: DatabaseClient;
   private sessionId: string | null = null;
   private maxSessionsPerType: number = 3;
+  private useSmartScoring: boolean = true;
 
-  constructor(db: DatabaseClient, maxSessionsPerType: number = 3) {
+  constructor(db: DatabaseClient, maxSessionsPerType: number = 3, useSmartScoring: boolean = true) {
     this.db = db;
     this.maxSessionsPerType = maxSessionsPerType;
+    this.useSmartScoring = useSmartScoring;
   }
 
   getSessionId(): string | null {
@@ -43,13 +45,34 @@ export class AgentSessionService {
       const aliveCount = parseInt(countResult.rows[0]?.count ?? '0', 10);
 
       if (aliveCount >= this.maxSessionsPerType) {
-        await client.query(
-          `UPDATE agent_sessions 
-           SET status = 'dead'
-           WHERE status = 'alive' AND agent_type = $1
-           AND id = (SELECT id FROM agent_sessions WHERE status = 'alive' AND agent_type = $1 ORDER BY last_heartbeat ASC LIMIT 1)`,
-          [agentType]
-        );
+        if (this.useSmartScoring) {
+          const victimResult = await client.query<{ id: string }>(
+            `SELECT s.id 
+             FROM agent_sessions s
+             LEFT JOIN agent_scores a ON s.id = a.agent_id
+             WHERE s.status = 'alive' AND s.agent_type = $1
+             AND (a.is_protected IS NULL OR a.is_protected = FALSE)
+             ORDER BY COALESCE(a.composite_score, 0) ASC, s.last_heartbeat ASC
+             LIMIT 1`,
+            [agentType]
+          );
+          
+          if (victimResult.rows[0]) {
+            await client.query(
+              `UPDATE agent_sessions SET status = 'dead' WHERE id = $1`,
+              [victimResult.rows[0].id]
+            );
+            logger.info(`[AgentSession] Killed lowest-scoring agent: ${victimResult.rows[0].id}`);
+          }
+        } else {
+          await client.query(
+            `UPDATE agent_sessions 
+             SET status = 'dead'
+             WHERE status = 'alive' AND agent_type = $1
+             AND id = (SELECT id FROM agent_sessions WHERE status = 'alive' AND agent_type = $1 ORDER BY last_heartbeat ASC LIMIT 1)`,
+            [agentType]
+          );
+        }
       }
 
       const config = Config.getInstance();

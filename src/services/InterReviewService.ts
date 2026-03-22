@@ -62,13 +62,20 @@ export class InterReviewService extends EventEmitter {
   private readonly aiProvider: AIProvider | null;
   private readonly agent: UnifiedAgent | null;
   private readonly broadcastService: BroadcastService;
+  private getSessionId: () => string | null;
 
-  constructor(db: DatabaseClient, aiProvider?: AIProvider, agent?: UnifiedAgent) {
+  constructor(
+    db: DatabaseClient,
+    aiProvider?: AIProvider,
+    agent?: UnifiedAgent,
+    getSessionId?: () => string | null
+  ) {
     super();
     this.db = db;
     this.agent = agent || this.createOptionalAgent();
     this.aiProvider = aiProvider || (!this.agent ? this.createOptionalAIProvider() : null);
     this.broadcastService = new BroadcastService(db);
+    this.getSessionId = getSessionId || (() => null);
   }
 
   private createOptionalAgent(): UnifiedAgent | null {
@@ -787,10 +794,11 @@ ${finding.suggestion ? `**Suggestion**:\n${finding.suggestion}` : ''}
 ${taskId ? `\n**Related Task**: ${taskId}` : ''}`;
 
       try {
+        const sessionId = this.getSessionId();
         await this.db.query(
-          `INSERT INTO tasks (id, title, description, status, priority, category, tags, created_at, updated_at)
-           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', $4, $5], NOW(), NOW())`,
-          [title, description, priority, finding.type, finding.severity]
+          `INSERT INTO tasks (id, title, description, status, priority, category, tags, created_at, updated_at, session_id, created_by)
+           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', $4, $5], NOW(), NOW(), $6, COALESCE($6, 'human'))`,
+          [title, description, priority, finding.type, finding.severity, sessionId]
         );
         createdCount++;
         logger.info(`[InterReview] Created task from finding: ${title.substring(0, 50)}`);

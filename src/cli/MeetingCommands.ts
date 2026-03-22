@@ -27,11 +27,210 @@ export interface Consensus {
   timestamp: Date;
 }
 
-export class MeetingCommands {
-  private readonly db: DatabaseClient;
+export function parseKeyPoints(input: string): string[] {
+  return input
+    .split(/\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map(line => line.replace(/^[-*\d.]+\s*/, ''));
+}
 
+interface Meeting {
+  id: string;
+  topic: string;
+  status: string;
+  created_by: string;
+  created_at: Date;
+  consensus: string | null;
+  consensus_at: Date | null;
+}
+
+interface MeetingOpinion {
+  id: string;
+  meeting_id: string;
+  author: string;
+  perspective: string;
+  reasoning: string | null;
+  position: string | null;
+  created_at: Date;
+}
+
+export class MeetingDbCommands {
+  constructor(protected db: DatabaseClient) {}
+
+  async list(options?: { status?: string; limit?: number }): Promise<void> {
+    const limit = options?.limit || 20;
+    let sql = `SELECT * FROM meetings WHERE 1=1`;
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (options?.status && options.status !== 'all') {
+      sql += ` AND status = $${idx++}`;
+      params.push(options.status);
+    }
+
+    sql += ` ORDER BY created_at DESC LIMIT $${idx}`;
+    params.push(limit);
+
+    const result = await this.db.query<Meeting>(sql, params);
+
+    if (result.rows.length === 0) {
+      console.log(`${colors.yellow}No meetings found${colors.reset}`);
+      return;
+    }
+
+    console.log(`\n${colors.bright}Meetings (${result.rows.length}):${colors.reset}\n`);
+
+    for (const meeting of result.rows) {
+      const statusIcon =
+        meeting.status === 'active' ? '🟢' : meeting.status === 'completed' ? '✅' : '❌';
+      const consensusTag = meeting.consensus ? ' 📋' : '';
+      console.log(`${statusIcon} [${meeting.status.padEnd(10)}] ${meeting.topic}${consensusTag}`);
+      console.log(
+        `   ${colors.gray}#${meeting.id.slice(0, 8)} | ${meeting.created_by} | ${meeting.created_at}${colors.reset}`
+      );
+    }
+    console.log();
+  }
+
+  async show(id: string): Promise<void> {
+    const meetingResult = await this.db.query<Meeting>(`SELECT * FROM meetings WHERE id = $1`, [
+      id,
+    ]);
+
+    if (meetingResult.rows.length === 0) {
+      console.log(`${colors.red}Meeting not found${colors.reset}`);
+      return;
+    }
+
+    const meeting = meetingResult.rows[0]!;
+    const opinionsResult = await this.db.query<MeetingOpinion>(
+      `SELECT * FROM meeting_opinions WHERE meeting_id = $1 ORDER BY created_at`,
+      [id]
+    );
+
+    console.log(`\n${colors.bright}Meeting Details${colors.reset}\n`);
+    console.log(`${colors.cyan}Topic:${colors.reset} ${meeting.topic}`);
+    console.log(`${colors.cyan}Status:${colors.reset} ${meeting.status}`);
+    console.log(
+      `${colors.cyan}Created by:${colors.reset} ${meeting.created_by} at ${meeting.created_at}`
+    );
+
+    if (meeting.consensus) {
+      console.log(`\n${colors.green}Consensus:${colors.reset}`);
+      console.log(`  ${meeting.consensus}`);
+      console.log(`${colors.gray}Reached at: ${meeting.consensus_at}${colors.reset}`);
+    }
+
+    if (opinionsResult.rows.length > 0) {
+      console.log(`\n${colors.cyan}Opinions (${opinionsResult.rows.length}):${colors.reset}`);
+      for (const opinion of opinionsResult.rows) {
+        const posIcon =
+          opinion.position === 'support' ? '👍' : opinion.position === 'oppose' ? '👎' : '➖';
+        console.log(`\n  ${posIcon} ${colors.bright}${opinion.author}${colors.reset}`);
+        console.log(`     ${opinion.perspective}`);
+        if (opinion.reasoning) {
+          console.log(`     ${colors.gray}Reasoning: ${opinion.reasoning}${colors.reset}`);
+        }
+      }
+    }
+    console.log();
+  }
+
+  async create(topic: string): Promise<string> {
+    const agentId = Config.getInstance().getAgentId();
+    const id = crypto.randomUUID();
+
+    await this.db.query(`INSERT INTO meetings (id, topic, created_by) VALUES ($1, $2, $3)`, [
+      id,
+      topic,
+      agentId,
+    ]);
+
+    console.log(`${colors.green}Created meeting: ${topic}${colors.reset}`);
+    console.log(`  ID: ${id.slice(0, 8)}`);
+    return id;
+  }
+
+  async addOpinion(
+    meetingId: string,
+    author: string,
+    perspective: string,
+    reasoning?: string,
+    position?: 'support' | 'oppose' | 'neutral'
+  ): Promise<void> {
+    if (!author || author.trim().length === 0) {
+      throw new Error('Author is required');
+    }
+    if (author.trim().length > 100) {
+      throw new Error('Author must be 100 characters or less');
+    }
+    if (!perspective || perspective.trim().length === 0) {
+      throw new Error('Perspective is required');
+    }
+    if (perspective.trim().length > 5000) {
+      throw new Error('Perspective must be 5000 characters or less');
+    }
+
+    const exists = await this.db.query(`SELECT id FROM meetings WHERE id = $1`, [meetingId]);
+    if (exists.rows.length === 0) {
+      throw new Error(`Meeting ${meetingId} does not exist`);
+    }
+
+    await this.db.query(
+      `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [meetingId, author.trim(), perspective.trim(), reasoning?.trim() || null, position || null]
+    );
+
+    console.log(`${colors.green}Added opinion to meeting #${meetingId.slice(0, 8)}${colors.reset}`);
+  }
+
+  async consensus(meetingId: string, consensusText: string): Promise<void> {
+    await this.db.query(
+      `UPDATE meetings 
+       SET consensus = $2, consensus_at = NOW(), status = 'completed'
+       WHERE id = $1 AND status = 'active'`,
+      [meetingId, consensusText]
+    );
+
+    console.log(
+      `${colors.green}Consensus reached for meeting #${meetingId.slice(0, 8)}${colors.reset}`
+    );
+  }
+
+  async cancel(meetingId: string): Promise<void> {
+    await this.db.query(`UPDATE meetings SET status = 'cancelled' WHERE id = $1`, [meetingId]);
+
+    console.log(`${colors.yellow}Cancelled meeting #${meetingId.slice(0, 8)}${colors.reset}`);
+  }
+
+  async stats(): Promise<void> {
+    const total = await this.db.query<{ count: bigint }>(`SELECT COUNT(*) as count FROM meetings`);
+    const byStatus = await this.db.query<{ status: string; count: bigint }>(
+      `SELECT status, COUNT(*) as count FROM meetings GROUP BY status`
+    );
+    const withConsensus = await this.db.query<{ count: bigint }>(
+      `SELECT COUNT(*) as count FROM meetings WHERE consensus IS NOT NULL`
+    );
+
+    console.log(`\n${colors.bright}Meeting Statistics${colors.reset}\n`);
+    console.log(`${colors.cyan}Total meetings:${colors.reset} ${total.rows[0]?.count || 0}`);
+    console.log(
+      `${colors.cyan}With consensus:${colors.reset} ${withConsensus.rows[0]?.count || 0}`
+    );
+
+    console.log(`\n${colors.cyan}By Status:${colors.reset}`);
+    for (const row of byStatus.rows) {
+      console.log(`  • ${row.status}: ${row.count}`);
+    }
+    console.log();
+  }
+}
+
+export class MeetingCommands extends MeetingDbCommands {
   constructor(config: MeetingConfig) {
-    this.db = config.db;
+    super(config.db);
   }
 
   async createDiscussion(
@@ -81,39 +280,49 @@ Please follow the meeting-protocol skill:
 
     const discussionId = crypto.randomUUID();
     const createdBy = Config.getInstance().getAgentId();
-    await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        discussionId,
-        `Discussion: ${title}`,
-        fullDescription,
-        TASK_STATUS.PENDING,
-        priority,
-        'discussion',
-        'collaboration',
-        createdBy,
-      ]
-    );
 
-    await this.db.query(
-      `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        discussionId,
-        `Discussion: ${title}`,
-        null,
-        TASK_STATUS.PENDING,
-        'Discussion created',
-        JSON.stringify({ type: 'discussion', participants }),
-      ]
-    );
+    try {
+      await this.db.query('BEGIN');
 
-    await this.db.query(
-      `INSERT INTO meetings (id, topic, status, created_by, metadata)
-       VALUES ($1, $2, 'active', $3, $4)`,
-      [discussionId, title, createdBy, JSON.stringify({ description, participants })]
-    );
+      await this.db.query(
+        `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          discussionId,
+          `Discussion: ${title}`,
+          fullDescription,
+          TASK_STATUS.PENDING,
+          priority,
+          'discussion',
+          'collaboration',
+          createdBy,
+        ]
+      );
+
+      await this.db.query(
+        `INSERT INTO task_audit_log (task_id, task_title, previous_status, new_status, reason, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          discussionId,
+          `Discussion: ${title}`,
+          null,
+          TASK_STATUS.PENDING,
+          'Discussion created',
+          { type: 'discussion', participants },
+        ]
+      );
+
+      await this.db.query(
+        `INSERT INTO meetings (id, topic, status, created_by, metadata)
+         VALUES ($1, $2, 'active', $3, $4)`,
+        [discussionId, title, createdBy, { description, participants }]
+      );
+
+      await this.db.query('COMMIT');
+    } catch (error) {
+      await this.db.query('ROLLBACK');
+      throw error;
+    }
 
     cli.success(`Discussion created: "${title}"`);
     console.log(`   ID: ${discussionId}`);
@@ -297,204 +506,5 @@ _Reached at: ${new Date().toISOString()}_`;
       console.log(`   ${colors.dim}${decision.substring(0, 60)}${colors.reset}`);
       console.log('');
     }
-  }
-
-  async addOpinion(
-    meetingId: string,
-    author: string,
-    perspective: string,
-    reasoning?: string,
-    position?: 'support' | 'oppose' | 'neutral'
-  ): Promise<void> {
-    await this.db.query(
-      `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [meetingId, author, perspective, reasoning || null, position || null]
-    );
-
-    console.log(`${colors.green}Added opinion to meeting #${meetingId.slice(0, 8)}${colors.reset}`);
-  }
-}
-
-export function parseKeyPoints(input: string): string[] {
-  return input
-    .split(/\n/)
-    .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .map(line => line.replace(/^[-*\d.]+\s*/, ''));
-}
-
-interface Meeting {
-  id: string;
-  topic: string;
-  status: string;
-  created_by: string;
-  created_at: Date;
-  consensus: string | null;
-  consensus_at: Date | null;
-}
-
-interface MeetingOpinion {
-  id: string;
-  meeting_id: string;
-  author: string;
-  perspective: string;
-  reasoning: string | null;
-  position: string | null;
-  created_at: Date;
-}
-
-export class MeetingDbCommands {
-  constructor(private db: DatabaseClient) {}
-
-  async list(options?: { status?: string; limit?: number }): Promise<void> {
-    const limit = options?.limit || 20;
-    let sql = `SELECT * FROM meetings WHERE 1=1`;
-    const params: unknown[] = [];
-    let idx = 1;
-
-    if (options?.status && options.status !== 'all') {
-      sql += ` AND status = $${idx++}`;
-      params.push(options.status);
-    }
-
-    sql += ` ORDER BY created_at DESC LIMIT $${idx}`;
-    params.push(limit);
-
-    const result = await this.db.query<Meeting>(sql, params);
-
-    if (result.rows.length === 0) {
-      console.log(`${colors.yellow}No meetings found${colors.reset}`);
-      return;
-    }
-
-    console.log(`\n${colors.bright}Meetings (${result.rows.length}):${colors.reset}\n`);
-
-    for (const meeting of result.rows) {
-      const statusIcon =
-        meeting.status === 'active' ? '🟢' : meeting.status === 'completed' ? '✅' : '❌';
-      const consensusTag = meeting.consensus ? ' 📋' : '';
-      console.log(`${statusIcon} [${meeting.status.padEnd(10)}] ${meeting.topic}${consensusTag}`);
-      console.log(
-        `   ${colors.gray}#${meeting.id.slice(0, 8)} | ${meeting.created_by} | ${meeting.created_at}${colors.reset}`
-      );
-    }
-    console.log();
-  }
-
-  async show(id: string): Promise<void> {
-    const meetingResult = await this.db.query<Meeting>(`SELECT * FROM meetings WHERE id = $1`, [
-      id,
-    ]);
-
-    if (meetingResult.rows.length === 0) {
-      console.log(`${colors.red}Meeting not found${colors.reset}`);
-      return;
-    }
-
-    const meeting = meetingResult.rows[0]!;
-    const opinionsResult = await this.db.query<MeetingOpinion>(
-      `SELECT * FROM meeting_opinions WHERE meeting_id = $1 ORDER BY created_at`,
-      [id]
-    );
-
-    console.log(`\n${colors.bright}Meeting Details${colors.reset}\n`);
-    console.log(`${colors.cyan}Topic:${colors.reset} ${meeting.topic}`);
-    console.log(`${colors.cyan}Status:${colors.reset} ${meeting.status}`);
-    console.log(
-      `${colors.cyan}Created by:${colors.reset} ${meeting.created_by} at ${meeting.created_at}`
-    );
-
-    if (meeting.consensus) {
-      console.log(`\n${colors.green}Consensus:${colors.reset}`);
-      console.log(`  ${meeting.consensus}`);
-      console.log(`${colors.gray}Reached at: ${meeting.consensus_at}${colors.reset}`);
-    }
-
-    if (opinionsResult.rows.length > 0) {
-      console.log(`\n${colors.cyan}Opinions (${opinionsResult.rows.length}):${colors.reset}`);
-      for (const opinion of opinionsResult.rows) {
-        const posIcon =
-          opinion.position === 'support' ? '👍' : opinion.position === 'oppose' ? '👎' : '➖';
-        console.log(`\n  ${posIcon} ${colors.bright}${opinion.author}${colors.reset}`);
-        console.log(`     ${opinion.perspective}`);
-        if (opinion.reasoning) {
-          console.log(`     ${colors.gray}Reasoning: ${opinion.reasoning}${colors.reset}`);
-        }
-      }
-    }
-    console.log();
-  }
-
-  async create(topic: string): Promise<string> {
-    const agentId = Config.getInstance().getAgentId();
-    const id = crypto.randomUUID();
-
-    await this.db.query(`INSERT INTO meetings (id, topic, created_by) VALUES ($1, $2, $3)`, [
-      id,
-      topic,
-      agentId,
-    ]);
-
-    console.log(`${colors.green}Created meeting: ${topic}${colors.reset}`);
-    console.log(`  ID: ${id.slice(0, 8)}`);
-    return id;
-  }
-
-  async addOpinion(
-    meetingId: string,
-    author: string,
-    perspective: string,
-    reasoning?: string,
-    position?: 'support' | 'oppose' | 'neutral'
-  ): Promise<void> {
-    await this.db.query(
-      `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [meetingId, author, perspective, reasoning || null, position || null]
-    );
-
-    console.log(`${colors.green}Added opinion to meeting #${meetingId.slice(0, 8)}${colors.reset}`);
-  }
-
-  async consensus(meetingId: string, consensusText: string): Promise<void> {
-    await this.db.query(
-      `UPDATE meetings 
-       SET consensus = $2, consensus_at = NOW(), status = 'completed'
-       WHERE id = $1 AND status = 'active'`,
-      [meetingId, consensusText]
-    );
-
-    console.log(
-      `${colors.green}Consensus reached for meeting #${meetingId.slice(0, 8)}${colors.reset}`
-    );
-  }
-
-  async cancel(meetingId: string): Promise<void> {
-    await this.db.query(`UPDATE meetings SET status = 'cancelled' WHERE id = $1`, [meetingId]);
-
-    console.log(`${colors.yellow}Cancelled meeting #${meetingId.slice(0, 8)}${colors.reset}`);
-  }
-
-  async stats(): Promise<void> {
-    const total = await this.db.query<{ count: bigint }>(`SELECT COUNT(*) as count FROM meetings`);
-    const byStatus = await this.db.query<{ status: string; count: bigint }>(
-      `SELECT status, COUNT(*) as count FROM meetings GROUP BY status`
-    );
-    const withConsensus = await this.db.query<{ count: bigint }>(
-      `SELECT COUNT(*) as count FROM meetings WHERE consensus IS NOT NULL`
-    );
-
-    console.log(`\n${colors.bright}Meeting Statistics${colors.reset}\n`);
-    console.log(`${colors.cyan}Total meetings:${colors.reset} ${total.rows[0]?.count || 0}`);
-    console.log(
-      `${colors.cyan}With consensus:${colors.reset} ${withConsensus.rows[0]?.count || 0}`
-    );
-
-    console.log(`\n${colors.cyan}By Status:${colors.reset}`);
-    for (const row of byStatus.rows) {
-      console.log(`  • ${row.status}: ${row.count}`);
-    }
-    console.log();
   }
 }

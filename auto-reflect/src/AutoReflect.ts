@@ -212,6 +212,11 @@ export class AutoReflect {
   async saveOpinion(marker: AutoOpinionMarker): Promise<void> {
     const client = this.getClient();
 
+    const exists = await client.query(`SELECT id FROM meetings WHERE id = $1`, [marker.meetingId]);
+    if (exists.rows.length === 0) {
+      throw new Error(`Meeting ${marker.meetingId} does not exist`);
+    }
+
     await client.query(
       `INSERT INTO meeting_opinions (meeting_id, author, perspective, reasoning, position)
        VALUES ($1, $2, $3, $4, $5)`,

@@ -13,6 +13,7 @@ export interface LearningRecord {
 }
 
 export interface LearningFilter {
+  taskId?: string;
   category?: string;
   minImportance?: number;
   limit?: number;
@@ -58,7 +59,9 @@ export class LearningRecorder {
 
     const id = result.rows[0]?.id || '';
 
-    logger.info(`[LearningRecorder] Recorded learning for task ${taskId}: ${learning.substring(0, 50)}...`);
+    logger.info(
+      `[LearningRecorder] Recorded learning for task ${taskId}: ${learning.substring(0, 50)}...`
+    );
 
     return id;
   }
@@ -70,6 +73,12 @@ export class LearningRecorder {
                  FROM memory WHERE metadata->>'type' = 'learning'`;
     const params: (string | number)[] = [];
     let paramIndex = 1;
+
+    if (filter?.taskId) {
+      query += ` AND metadata->>'taskId' = $${paramIndex}`;
+      params.push(filter.taskId);
+      paramIndex++;
+    }
 
     if (filter?.category) {
       query += ` AND metadata->>'category' = $${paramIndex}`;
@@ -118,9 +127,7 @@ export class LearningRecorder {
   }
 
   async getLearningsForTask(taskId: string): Promise<LearningRecord[]> {
-    return this.getLearnings({ limit: 100 }).then(learnings =>
-      learnings.filter(l => l.taskId === taskId)
-    );
+    return this.getLearnings({ taskId, limit: 100 });
   }
 
   async recordOutcome(

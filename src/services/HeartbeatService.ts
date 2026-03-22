@@ -97,6 +97,20 @@ export interface HeartbeatHealth {
   lastError: string | null;
 }
 
+const SKIP_REFLECTION_PATTERNS = [
+  /inter-?review/i,
+  /^discussion$/i,
+  /discussion participation/i,
+  /^meeting$/i,
+  /participat/i,
+];
+
+function shouldSkipReflection(title: string): boolean {
+  return SKIP_REFLECTION_PATTERNS.some(p => p.test(title));
+}
+
+export { shouldSkipReflection };
+
 export class HeartbeatService {
   private readonly scheduler: Scheduler;
   private readonly agent: UnifiedAgent;
@@ -309,6 +323,10 @@ export class HeartbeatService {
     this.startInsightGeneration();
     this.startScheduledTaskProcessing();
 
+    const agentSession = getAgentSessionService(this.db);
+    await agentSession.registerSession('nezha-daemon');
+    this.startSessionHeartbeat();
+
     this.watchdogService.start();
     this.alertService.start();
     this.longTaskManager.start();
@@ -316,10 +334,6 @@ export class HeartbeatService {
 
     this.setupWatchdogListeners();
     this.setupLongTaskListeners();
-
-    const agentSession = getAgentSessionService(this.db);
-    await agentSession.registerSession('nezha-daemon');
-    this.startSessionHeartbeat();
 
     if (this.checkpointService) {
       const savedState = await this.checkpointService.loadState();
@@ -943,7 +957,9 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
         webhookService.sendTaskCompleted(taskId, title, description, result.message || 'Completed');
 
-        await this.runReflection(title, result.message || 'Completed');
+        if (!shouldSkipReflection(title)) {
+          await this.runReflection(title, result.message || 'Completed');
+        }
 
         await this.watchdogService.untrackTask(taskId);
         await this.longTaskManager.unregisterTask(taskId);
@@ -2151,7 +2167,9 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
         webhookService.sendTaskCompleted(taskId, title, description, resultMessage || 'Completed');
 
-        await this.runReflection(title, resultMessage || 'Completed');
+        if (!shouldSkipReflection(title)) {
+          await this.runReflection(title, resultMessage || 'Completed');
+        }
 
         return;
       }

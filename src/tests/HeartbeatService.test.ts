@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HeartbeatService } from '../services/HeartbeatService.js';
+import { HeartbeatService, shouldSkipReflection } from '../services/HeartbeatService.js';
 import { Scheduler } from '../core/Scheduler.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import type { QueryResult } from '../config/types.js';
@@ -301,5 +301,32 @@ describe('HeartbeatService', () => {
 
       expect(mockDb.query).toHaveBeenCalled();
     });
+  });
+});
+
+describe('shouldSkipReflection', () => {
+  it('should skip reflection for Inter-Review tasks', () => {
+    expect(shouldSkipReflection('Inter-Review: Code Review')).toBe(true);
+    expect(shouldSkipReflection('inter-review discussion')).toBe(true);
+  });
+
+  it('should skip reflection for discussion tasks', () => {
+    expect(shouldSkipReflection('discussion')).toBe(true);
+    expect(shouldSkipReflection('Discussion participation')).toBe(true);
+  });
+
+  it('should skip reflection for meeting tasks', () => {
+    expect(shouldSkipReflection('meeting')).toBe(true);
+  });
+
+  it('should skip reflection for participation tasks', () => {
+    expect(shouldSkipReflection('participate in review')).toBe(true);
+  });
+
+  it('should NOT skip reflection for normal tasks', () => {
+    expect(shouldSkipReflection('Fix bug in parser')).toBe(false);
+    expect(shouldSkipReflection('Implement new feature')).toBe(false);
+    expect(shouldSkipReflection('Review PR #123')).toBe(false);
+    expect(shouldSkipReflection('Code review for auth module')).toBe(false);
   });
 });

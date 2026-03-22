@@ -36,16 +36,21 @@ export class MeetingHandler {
     const meetingId = crypto.randomUUID();
     const agentId = Config.getInstance().getAgentId();
 
-    await this.db.query(
-      `INSERT INTO meetings (id, topic, status, created_by, metadata)
-       VALUES ($1, $2, 'active', $3, $4)`,
-      [
-        meetingId,
-        task.title.replace('Discussion: ', ''),
-        agentId,
-        JSON.stringify({ taskId: task.id, priority: task.priority }),
-      ]
-    );
+    try {
+      await this.db.query(
+        `INSERT INTO meetings (id, topic, status, created_by, metadata)
+         VALUES ($1, $2, 'active', $3, $4)`,
+        [
+          meetingId,
+          task.title.replace('Discussion: ', ''),
+          agentId,
+          JSON.stringify({ taskId: task.id, priority: task.priority }),
+        ]
+      );
+    } catch (error) {
+      logger.error(`[MeetingHandler] Failed to create meeting:`, error);
+      throw error;
+    }
 
     logger.info(`[MeetingHandler] Created meeting ${meetingId} for task ${task.id}`);
     return meetingId;
@@ -85,15 +90,20 @@ export class MeetingHandler {
   }
 
   private async getExistingOpinions(discussionId: string): Promise<Opinion[]> {
-    const result = await this.db.query<{ content: string; metadata: Record<string, unknown> }>(
-      `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
-       WHERE metadata->>'type' = 'opinion'
-         AND metadata->>'discussionId' = $1
-       ORDER BY created_at ASC`,
-      [discussionId]
-    );
+    try {
+      const result = await this.db.query<{ content: string; metadata: Record<string, unknown> }>(
+        `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
+         WHERE metadata->>'type' = 'opinion'
+           AND metadata->>'discussionId' = $1
+         ORDER BY created_at ASC`,
+        [discussionId]
+      );
 
-    return result.rows.map(row => this.parseOpinionContent(row.content));
+      return result.rows.map(row => this.parseOpinionContent(row.content));
+    } catch (error) {
+      logger.error(`[MeetingHandler] Failed to get existing opinions for ${discussionId}:`, error);
+      return [];
+    }
   }
 
   private parseOpinionContent(content: string): Opinion {
@@ -229,11 +239,16 @@ ${opinion.suggestions.length > 0 ? opinion.suggestions.map(s => `- ${s}`).join('
 
 _Recorded for discussion: ${discussionId}_`;
 
-    await this.db.query(
-      `INSERT INTO ${DATABASE_TABLES.MEMORY} (content, project_id, metadata, importance)
-       VALUES ($1, $2, $3, $4)`,
-      [content, null, JSON.stringify({ type: 'opinion', discussionId, author: agentId }), 7]
-    );
+    try {
+      await this.db.query(
+        `INSERT INTO ${DATABASE_TABLES.MEMORY} (content, project_id, metadata, importance)
+         VALUES ($1, $2, $3, $4)`,
+        [content, null, JSON.stringify({ type: 'opinion', discussionId, author: agentId }), 7]
+      );
+    } catch (error) {
+      logger.error(`[MeetingHandler] Failed to record opinion for ${discussionId}:`, error);
+      throw error;
+    }
   }
 
   private detectConsensus(existing: Opinion[], newOpinions: Opinion[]): string | null {
@@ -267,26 +282,31 @@ _Recorded for discussion: ${discussionId}_`;
     const consensusId = crypto.randomUUID();
     const agentId = Config.getInstance().getAgentId();
 
-    await this.db.query(
-      `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, type, category, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        consensusId,
-        `Consensus Reached: ${originalTask.title.replace('Discussion: ', '')}`,
-        `## Consensus Reached\n\n**Agreement**: ${consensus}\n\n**Discussion**: ${originalTask.title}\n\nBased on AI discussion, this consensus was reached.`,
-        TASK_STATUS.PENDING,
-        originalTask.priority + 1,
-        'decision',
-        'collaboration',
-        agentId,
-      ]
-    );
+    try {
+      await this.db.query(
+        `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, type, category, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          consensusId,
+          `Consensus Reached: ${originalTask.title.replace('Discussion: ', '')}`,
+          `## Consensus Reached\n\n**Agreement**: ${consensus}\n\n**Discussion**: ${originalTask.title}\n\nBased on AI discussion, this consensus was reached.`,
+          TASK_STATUS.PENDING,
+          originalTask.priority + 1,
+          'decision',
+          'collaboration',
+          agentId,
+        ]
+      );
 
-    await this.db.query(
-      `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, completed_at = NOW() WHERE id = $2`,
-      [TASK_STATUS.COMPLETED, originalTask.id]
-    );
+      await this.db.query(
+        `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, completed_at = NOW() WHERE id = $2`,
+        [TASK_STATUS.COMPLETED, originalTask.id]
+      );
 
-    logger.info(`[MeetingHandler] Consensus task created: ${consensusId}`);
+      logger.info(`[MeetingHandler] Consensus task created: ${consensusId}`);
+    } catch (error) {
+      logger.error(`[MeetingHandler] Failed to create consensus task:`, error);
+      throw error;
+    }
   }
 }
