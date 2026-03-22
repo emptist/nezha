@@ -1520,6 +1520,12 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
   ): Promise<void> {
     if (!output) return;
 
+    const jsonReflection = this.tryParseJsonReflection(output);
+    if (jsonReflection) {
+      await this.saveJsonReflection(jsonReflection, taskTitle);
+      return;
+    }
+
     const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
     const promptPattern =
       /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
@@ -1752,6 +1758,110 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
     }
 
     await this.clusterReflections();
+  }
+
+  private tryParseJsonReflection(output: string): {
+    summary: string;
+    learnings?: Array<{ topic: string; reminder: string }>;
+    issues?: Array<{ severity: string; location: string; description: string }>;
+    suggestions?: string[];
+    praise?: string[];
+    overallScore?: number;
+    codeQualityScore?: number;
+    testCoverageScore?: number;
+    documentationScore?: number;
+  } | null {
+    const jsonMatch = output.match(/\{[\s\S]*"summary"[\s\S]*"learnings"[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.summary && (parsed.learnings || parsed.issues || parsed.overallScore !== undefined)) {
+        return parsed;
+      }
+    } catch {
+      // Not valid JSON
+    }
+    return null;
+  }
+
+  private async saveJsonReflection(
+    reflection: {
+      summary: string;
+      learnings?: Array<{ topic: string; reminder: string }>;
+      issues?: Array<{ severity: string; location: string; description: string }>;
+      suggestions?: string[];
+      praise?: string[];
+      overallScore?: number;
+      codeQualityScore?: number;
+      testCoverageScore?: number;
+      documentationScore?: number;
+    },
+    taskTitle: string
+  ): Promise<void> {
+    const sessionId = getCurrentSessionId();
+    const agentId = Config.getInstance().getAgentId();
+
+    await this.db.query(
+      `INSERT INTO inter_reviews (
+        id, summary, overall_score, code_quality_score, test_coverage_score, 
+        documentation_score, findings, suggestions, issues, praise,
+        reviewer_id, status, completed_at, session_id, raw_response
+      ) VALUES (
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed', NOW(), $11, $12
+      )`,
+      [
+        reflection.summary,
+        reflection.overallScore ?? null,
+        reflection.codeQualityScore ?? null,
+        reflection.testCoverageScore ?? null,
+        reflection.documentationScore ?? null,
+        JSON.stringify(reflection.learnings || []),
+        JSON.stringify(reflection.suggestions || []),
+        JSON.stringify(reflection.issues || []),
+        JSON.stringify(reflection.praise || []),
+        agentId,
+        sessionId,
+        JSON.stringify(reflection),
+      ]
+    );
+
+    if (reflection.learnings && reflection.learnings.length > 0) {
+      for (const learning of reflection.learnings) {
+        const content = `## AI Learning from Reflection\n\n**Topic**: ${learning.topic}\n\n**Reminder**: ${learning.reminder}\n\n---\nSource: Task "${taskTitle}"`;
+        await this.db.query(
+          `INSERT INTO memory (content, tags, source, importance, metadata) 
+           VALUES ($1, ARRAY['learning', 'reflection', 'json'], 'reflection-json', $2, $3)`,
+          [
+            content,
+            7,
+            JSON.stringify({ taskTitle, topic: learning.topic, source: 'json-reflection' }),
+          ]
+        );
+      }
+      logger.info(`[Reflection] Saved ${reflection.learnings.length} learnings from JSON reflection`);
+    }
+
+    if (reflection.issues && reflection.issues.length > 0) {
+      for (const issue of reflection.issues) {
+        await this.db.query(
+          `INSERT INTO issues (title, description, severity, discovered_by, tags, metadata)
+           VALUES ($1, $2, $3, $4, ARRAY['reflection'], $5)`,
+          [
+            issue.description.substring(0, 255),
+            `**Location**: ${issue.location}\n\n${issue.description}`,
+            issue.severity || 'medium',
+            agentId,
+            JSON.stringify({ taskTitle, source: 'json-reflection' }),
+          ]
+        );
+      }
+      logger.info(`[Reflection] Created ${reflection.issues.length} issues from JSON reflection`);
+    }
+
+    logger.info(
+      `[Reflection] Saved JSON reflection for task: ${taskTitle} (score: ${reflection.overallScore ?? 'N/A'})`
+    );
   }
 
   async generateDailyReflectionSummary(): Promise<void> {
