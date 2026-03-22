@@ -1157,8 +1157,10 @@ async function main(): Promise<void> {
           NEZHA_TRANSPORT_MODE: process.env.NEZHA_TRANSPORT_MODE || 'http',
         };
 
+        const nodePath = process.execPath;
+        
         const installResult = await installLaunchAgent({
-          programArguments: ['node', daemonBin],
+          programArguments: [nodePath, daemonBin],
           workingDirectory: process.cwd(),
           stdoutPath: logs.stdoutPath,
           stderrPath: logs.stderrPath,
