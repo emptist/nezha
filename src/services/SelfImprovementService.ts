@@ -348,9 +348,25 @@ export class SelfImprovementService {
     logger.info(`Prompt suggestion rejected: ${suggestionId}`);
   }
 
+  private static readonly SKIP_TEMPLATE_PATTERNS = [
+    /inter-?review/i,
+    /^discussion$/i,
+    /discussion participation/i,
+    /^meeting$/i,
+    /participat/i,
+  ];
+
+  private shouldSkipTemplate(title: string): boolean {
+    return SelfImprovementService.SKIP_TEMPLATE_PATTERNS.some(p => p.test(title));
+  }
+
   getReflectionTemplate(taskTitle?: string, taskType?: string): ReflectionTemplate {
     const title = (taskTitle || '').toLowerCase();
     const type = (taskType || '').toLowerCase();
+
+    if (this.shouldSkipTemplate(title)) {
+      return REFLECTION_TEMPLATES[0]!;
+    }
 
     if (title.includes('debug') || title.includes('troubleshoot') || type === 'debugging') {
       return REFLECTION_TEMPLATES.find(t => t.name === 'debugging')!;
@@ -379,7 +395,7 @@ export class SelfImprovementService {
     ) {
       return REFLECTION_TEMPLATES.find(t => t.name === 'research')!;
     }
-    if (title.includes('review') || type === 'review') {
+    if ((title.includes('review') && !title.includes('inter')) || type === 'review') {
       return REFLECTION_TEMPLATES.find(t => t.name === 'review')!;
     }
     if (
