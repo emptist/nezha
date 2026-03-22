@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   const transportConfig = config.getTransportConfig();
 
   const agentSystem = new AgentSystem({
-    maxAgents: 10,
+    maxAgents: 5,
     heartbeatIntervalMs: config.getTaskConfig().heartbeatIntervalMs,
     agentConfig: {},
     unifiedAgentConfig: {

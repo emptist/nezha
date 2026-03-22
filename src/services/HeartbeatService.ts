@@ -143,6 +143,7 @@ export class HeartbeatService {
   private readonly reviewService: ReviewService;
   private readonly failureAnalysisService: FailureAnalysisService;
   private readonly broadcastService: BroadcastService;
+  private isInsightCheckRunning: boolean = false;
 
   setCheckpointService(service: CheckpointService): void {
     this.checkpointService = service;
@@ -199,7 +200,7 @@ export class HeartbeatService {
     this.memoryCleanupIntervalMs = MEMORY_CONFIG.DEFAULT_CLEANUP_INTERVAL_MS;
     this.memoryCompactionIntervalMs = MEMORY_CONFIG.DEFAULT_COMPACTION_INTERVAL_MS;
     this.checkpointIntervalMs = config?.checkpointIntervalMs ?? 300000;
-    this.insightIntervalMs = config?.insightIntervalMs ?? 300000; // 5 minutes default
+    this.insightIntervalMs = config?.insightIntervalMs ?? 1800000; // 30 minutes default (was 5 min)
     this.scheduledTaskIntervalMs = 60000; // 1 minute default for scheduled tasks
     this.enableMemoryContext = config?.agent?.enableMemoryContext ?? true;
 
@@ -399,6 +400,11 @@ export class HeartbeatService {
   private startInsightGeneration(): void {
     logger.info(`Starting insight generation (interval: ${this.insightIntervalMs}ms)`);
     const runInsightChecks = async (): Promise<void> => {
+      if (this.isInsightCheckRunning) {
+        logger.warn('[InsightCheck] Previous check still running, skipping this cycle');
+        return;
+      }
+      this.isInsightCheckRunning = true;
       try {
         const insights = await this.learning.autoGenerateInsights();
         if (insights.length > 0) {
@@ -421,6 +427,8 @@ export class HeartbeatService {
         await this.generateDailyReflectionSummary();
       } catch (error) {
         logger.error('Insight generation failed:', error);
+      } finally {
+        this.isInsightCheckRunning = false;
       }
     };
     runInsightChecks().catch(err => logger.error('Initial insight check failed:', err));

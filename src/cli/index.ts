@@ -104,7 +104,7 @@ export class Cli {
     const transportConfig = this.config.getTransportConfig();
 
     this.agentSystem = new AgentSystem({
-      maxAgents: 10,
+      maxAgents: 5,
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
       agentConfig: {},
       unifiedAgentConfig: {
