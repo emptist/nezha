@@ -66,9 +66,13 @@ ${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl} \
   -D ~/Library/Application\ Support/Postgres/var-18-2 \
   -l ~/Library/Application\ Support/Postgres/var-18-2/logfile start
 
-# Start opencode serve (REQUIRED for task execution)
-nohup opencode serve --port 4096 > /tmp/opencode_server.log 2>&1 &
+# Start opencode serve (REQUIRED for task execution) - with process limits to prevent runaway CPU
+nohup ./bin/opencode-limited.sh serve --port 4096 > /tmp/opencode_server.log 2>&1 &
 sleep 3
+
+# Start watchdog to monitor and kill runaway opencode processes (prevents 400% CPU)
+nohup ./bin/opencode-watchdog.sh > /tmp/opencode-watchdog.log 2>&1 &
+sleep 1
 
 # Start Nezha daemon
 cd /Users/jk/gits/hub/nezha
