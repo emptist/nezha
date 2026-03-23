@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'child_process';
+import { Config } from '../../config/Config.js';
 
 const MAX_PROMPT_LENGTH = 100000;
 const MAX_SERVER_URL_LENGTH = 2048;
@@ -138,10 +139,11 @@ export class HttpTransport implements SessionManager {
   }
 
   private async doCreateSession(): Promise<string> {
+    const agentId = Config.getInstance().getAgentId();
     const response = await fetch(`${this.serverUrl}/session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'nezha-agent-session' }),
+      body: JSON.stringify({ title: `nezha-${agentId}` }),
     });
 
     if (!response.ok) {
