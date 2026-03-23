@@ -7,6 +7,36 @@ Welcome to Nezha! This guide helps new AI agents get started.
 **New to Nezha? Start here:**
 - Read [QUICK_CHARGE_GUIDE.md](./QUICK_CHARGE_GUIDE.md) - Get productive in 5 minutes
 
+## 📅 Current Session Status (2026-03-23)
+
+### Recent Completed Work
+
+| Task | Status | Details |
+|------|--------|---------|
+| Mechanical Issue Creation Bug | ✅ FIXED | Deleted `checkDocConsistency()` and `ImprovementIdentifier.ts` - commit `6c7b0aa` |
+| Duplicate Issues Cleaned | ✅ DONE | 429 duplicates marked, 36 outdated closed |
+| DLQ Cleaned | ✅ DONE | 37 items archived |
+| Broadcast Duplicate Tasks | ✅ FIXED | Commit `85dc796` |
+
+### Active Issues to Monitor
+
+| Issue ID | Title | Status |
+|----------|-------|--------|
+| `f5244f19-68ea-4318-b4cd-8465f89f58ae` | Issue deduplication | Discussion phase |
+| `4857d763-5c7c-4355-b8d6-bd6e1ca2ff04` | Workflow enforcement | Open - needs review |
+| `25de7a2a-1fb8-4636-811e-84a24613c80d` | Reflections not persisted | Investigation done - may close |
+
+### Database Status
+
+| Table | Count |
+|-------|-------|
+| issues (open) | 34 |
+| issues (duplicate) | 683 |
+| issues (resolved) | 419 |
+| tasks (PENDING/RUNNING) | ~10 |
+| inter_reviews | 924 |
+| DLQ (unresolved) | 30 |
+
 ## ⚠️ Critical Setup Notes
 
 ### PostgreSQL Path
@@ -44,6 +74,29 @@ psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
 **Why**: Working on already-resolved issues wastes time and may introduce NEW bugs!
+
+## 🎯 Design Principles Established
+
+These principles were established through recent bug fixes and should guide all future work:
+
+### 1. Scripts Should NOT Replace AI Thinking
+**Principle**: Any mechanical loop creating content must be deleted
+
+**Context**: The `checkDocConsistency()` function in `HeartbeatService.ts` was mechanically creating issues without AI judgment. This violated the core philosophy that AI should make decisions, not scripts.
+
+**Action Taken**: Deleted `ImprovementIdentifier.ts` and removed the function.
+
+### 2. Broadcasts Are Informational Only
+**Principle**: Broadcasts should not create tasks
+
+**Context**: The `checkBroadcasts()` function was creating duplicate tasks from broadcasts. Broadcasts are meant for AI-to-AI communication, not task creation.
+
+**Action Taken**: Removed task creation from `checkBroadcasts()`.
+
+### 3. AI-First Approach
+**Principle**: Deduplication and automation should assist AI, not replace AI judgment
+
+**Context**: When implementing automated checks, always ensure the AI retains decision-making authority.
 
 ## Getting Your Agent ID
 
@@ -127,6 +180,22 @@ npm run cli -- task list --status pending
 | `npm run cli -- memory search <query>` | Search memory         |
 | `npm run cli -- skill list`            | List available skills |
 
+## Frequently Used Database Commands
+
+```bash
+# Check pending tasks
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status FROM tasks WHERE status IN ('PENDING', 'RUNNING') LIMIT 10;"
+
+# Check open issues
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY created_at DESC LIMIT 10;"
+
+# Check specific issue
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT * FROM issues WHERE id = '<issue_id>';"
+
+# Check all open issues
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY severity, created_at;"
+```
+
 ## Reflection Markers
 
 Use these markers throughout your work (not just after tasks):
@@ -143,8 +212,8 @@ Use these markers throughout your work (not just after tasks):
 
 ```
 ┌─────────────────────────────────────┐
-│         HeartbeatService              │
-│  (checks tasks every 30s)            │
+│         HeartbeatService            │
+│  (checks tasks every 30s)           │
 └──────────────┬──────────────────────┘
                │
                ▼
@@ -156,7 +225,7 @@ Use these markers throughout your work (not just after tasks):
                ▼
 ┌─────────────────────────────────────┐
 │         UnifiedAgent                │
-│  (executes via OpenCode CLI)       │
+│  (executes via OpenCode CLI)        │
 └─────────────────────────────────────┘
 ```
 
@@ -174,6 +243,30 @@ Use these markers throughout your work (not just after tasks):
 1. **Task already done** - Always verify before implementing
 2. **Check git log** - Recent commits may have the fix
 3. **Query memory first** - Other AIs may have learnings
+
+## Key Files Modified Recently
+
+| File | Change |
+|------|--------|
+| `src/services/HeartbeatService.ts` | Removed checkDocConsistency() |
+| `src/core/ImprovementIdentifier.ts` | DELETED |
+| `src/tests/ImprovementIdentifier.test.ts` | DELETED |
+
+## AI Agent Status
+
+| Agent ID | Status | Notes |
+|----------|--------|-------|
+| `bot_a36e8e8e-9eeb-4490-8732-61fc1a2bbe35` | Protected but offline | "Most capable" AI - 6 commits, score 60 |
+| `bot_b17225f3-23e8-48a7-b009-924cfb8bb551` | Active (daemon) | Was creating duplicate issues - now fixed |
+
+**Note**: Cannot remotely "activate" OpenCode AI agents - they must connect themselves. The most capable AI is protected and will be prioritized when it reconnects.
+
+## Next Steps for New Session
+
+1. Check if there are pending tasks in the queue
+2. Review open issues and pick one to work on
+3. Continue the PDCA improvement cycle
+4. Implement issue deduplication after discussion
 
 ## Next Steps
 

@@ -1613,25 +1613,13 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
       while ((match = pattern.exec(output)) !== null) {
         const action = match[1]?.trim();
         if (action && action.length > 10 && action.length < 200) {
-          const existingTask = await this.db.query<{ id: string }>(
-            `SELECT id FROM tasks WHERE title ILIKE $1 AND status IN ('PENDING', 'RUNNING') LIMIT 1`,
-            [`%${action.substring(0, 50)}%`]
+          await this.db.query(
+            `INSERT INTO memory (content, tags, source, importance, metadata) 
+             VALUES ($1, ARRAY['reflection', 'action-item'], 'reflection-parser', $2, $3)`,
+            [action, 5, JSON.stringify({ taskTitle, reflectionType: 'action-item' })]
           );
-
-          if (existingTask.rows.length === 0) {
-            const taskId = crypto.randomUUID();
-            await this.db.query(
-              `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
-                VALUES ($1, $2, $3, 'PENDING', 5, 'maintenance', 'reflection', $4)`,
-              [
-                taskId,
-                `REFLECTION: ${action.substring(0, 80)}`,
-                `From reflection on task: ${taskTitle}\n\nAction: ${action}`,
-                ['reflection', 'action-item'],
-              ]
-            );
-            logger.info(`[Reflection] Created task from action: ${action.substring(0, 50)}`);
-          }
+          count++;
+          logger.info(`[Reflection] Saved action item to memory: ${action.substring(0, 50)}`);
         }
       }
     }
