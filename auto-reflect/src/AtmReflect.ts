@@ -1,6 +1,6 @@
 import pg, { Pool, PoolClient } from 'pg';
 
-export interface AutoReflectConfig {
+export interface AtmReflectConfig {
   databaseUrl?: string;
   host?: string;
   port?: number;
@@ -10,7 +10,7 @@ export interface AutoReflectConfig {
 }
 
 function getAuthor(): string {
-  return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'auto-reflect';
+  return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'atmReflect';
 }
 
 export interface AutoLearnMarker {
@@ -46,7 +46,7 @@ export interface AutoOpinionMarker {
   position?: 'support' | 'oppose' | 'neutral';
 }
 
-export interface AutoReflectResult {
+export interface AtmReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
@@ -55,10 +55,10 @@ export interface AutoReflectResult {
   total: number;
 }
 
-export class AutoReflect {
+export class AtmReflect {
   private pool: Pool | null = null;
   private externalClient: PoolClient | null = null;
-  private config: AutoReflectConfig;
+  private config: AtmReflectConfig;
 
   private static readonly LEARN_PATTERN =
     /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
@@ -71,7 +71,7 @@ export class AutoReflect {
   private static readonly OPINION_PATTERN =
     /\[OPINION\]\s*meetingId:\s*(.+?)\s*perspective:\s*(.+?)(?:\s*reasoning:\s*(.+?))?(?:\s*position:\s*(\w+))?\s*(?=\[|$)/gis;
 
-  constructor(config: AutoReflectConfig = {}) {
+  constructor(config: AtmReflectConfig = {}) {
     this.config = config;
   }
 
@@ -109,7 +109,7 @@ export class AutoReflect {
     const markers: AutoLearnMarker[] = [];
     let match;
 
-    while ((match = AutoReflect.LEARN_PATTERN.exec(text)) !== null) {
+    while ((match = AtmReflect.LEARN_PATTERN.exec(text)) !== null) {
       const insight = match[1]?.trim();
       const context = match[2]?.trim();
 
@@ -125,7 +125,7 @@ export class AutoReflect {
     const markers: AutoPromptUpdateMarker[] = [];
     let match;
 
-    while ((match = AutoReflect.PROMPT_PATTERN.exec(text)) !== null) {
+    while ((match = AtmReflect.PROMPT_PATTERN.exec(text)) !== null) {
       const current = match[1]?.trim();
       const suggested = match[2]?.trim();
       const reason = match[3]?.trim();
@@ -142,7 +142,7 @@ export class AutoReflect {
     const markers: AutoIssueMarker[] = [];
     let match;
 
-    while ((match = AutoReflect.ISSUE_PATTERN.exec(text)) !== null) {
+    while ((match = AtmReflect.ISSUE_PATTERN.exec(text)) !== null) {
       const title = match[1]?.trim();
       const description = match[2]?.trim();
       const type = match[3]?.trim();
@@ -167,7 +167,7 @@ export class AutoReflect {
     const markers: AutoReviewResponseMarker[] = [];
     let match;
 
-    while ((match = AutoReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
+    while ((match = AtmReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
       const reviewId = match[1]?.trim();
       const response = match[2]?.trim();
       const acceptedStr = match[3]?.trim();
@@ -193,7 +193,7 @@ export class AutoReflect {
     const markers: AutoOpinionMarker[] = [];
     let match;
 
-    while ((match = AutoReflect.OPINION_PATTERN.exec(text)) !== null) {
+    while ((match = AtmReflect.OPINION_PATTERN.exec(text)) !== null) {
       const meetingId = match[1]?.trim();
       const perspective = match[2]?.trim();
       const reasoning = match[3]?.trim();
@@ -239,13 +239,13 @@ export class AutoReflect {
 
     await client.query(
       `INSERT INTO memory (content, tags, source, importance, metadata) 
-       VALUES ($1, ARRAY['learning', 'reflection'], 'auto-reflect', $2, $3)`,
+       VALUES ($1, ARRAY['learning', 'reflection'], 'atmReflect', $2, $3)`,
       [
         marker.insight,
         7,
         JSON.stringify({
           context: marker.context || null,
-          source: 'auto-reflect',
+          source: 'atmReflect',
           author: getAuthor(),
         }),
       ]
@@ -293,8 +293,8 @@ export class AutoReflect {
     }
   }
 
-  async reflect(text: string): Promise<AutoReflectResult> {
-    const result: AutoReflectResult = {
+  async reflect(text: string): Promise<AtmReflectResult> {
+    const result: AtmReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,

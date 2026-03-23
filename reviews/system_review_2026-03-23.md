@@ -403,7 +403,7 @@ Instead of direct integration, Nezha should follow the **Learn → Adopt → Def
 - **AI-Aware Security**: Detect AI session tokens, agent credentials
 - **Database Integration**: Query issues/tasks/reviews tables
 - **Multi-Agent Validation**: Validate agent_id, session validity
-- **Auto-Reflect Check**: Ensure reflection captured before commit
+- **AtmReflect Check**: Ensure reflection captured before commit
 
 | Feature | OpenClaw | Nezha "Defeat" Target |
 |---------|----------|----------------------|
@@ -479,7 +479,7 @@ Nezha has 8 integrated subsystems:
 5. **Announcements** - Broadcast messages
 6. **Reviews** - General review system
 7. **Git-Commits** - Version control integration
-8. **Auto-Reflect** - Knowledge capture
+8. **AtmReflect** - Knowledge capture
 
 ### 8.2 Integration Gaps
 

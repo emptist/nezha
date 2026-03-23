@@ -58,14 +58,14 @@ nezha task-add "Discussion: Topic" "Details" 7
 1. AI follows reflection conventions
 2. Access to PostgreSQL database
 3. **Option A**: HeartbeatService to parse markers (Server AI)
-4. **Option B**: `auto-reflect` CLI command (Editor-based AIs like Trae AI)
+4. **Option B**: `atmReflect` CLI command (Editor-based AIs like Trae AI)
 
 ## For Editor-Based AIs (Trae AI)
 
-Editor-based AIs cannot use HeartbeatService's automatic parsing. Use the `auto-reflect` CLI command instead:
+Editor-based AIs cannot use HeartbeatService's automatic parsing. Use the `atmReflect` CLI command instead:
 
 ```bash
-nezha auto-reflect "[LEARN] insight: <learning> context: <optional context> [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why> [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>"
+nezha atmReflect "[LEARN] insight: <learning> context: <optional context> [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why> [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>"
 ```
 
 This command parses the same markers and saves to the same database tables, ensuring consistency across all AI types.
