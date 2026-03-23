@@ -33,6 +33,9 @@ function runMigration(file: string): boolean {
     return true;
   } catch (error) {
     console.error(`Migration failed: ${file}`);
+    if (error instanceof Error) {
+      console.error('Error:', error.message);
+    }
     return false;
   }
 }

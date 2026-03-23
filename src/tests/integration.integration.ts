@@ -46,8 +46,11 @@ function runMigrations(): void {
           stdio: 'pipe',
         }
       );
-    } catch {
-      // Migration may fail if already applied
+    } catch (error) {
+      console.error(`Migration failed: ${file}`);
+      if (error instanceof Error) {
+        console.error('Error:', error.message);
+      }
     }
   }
 }

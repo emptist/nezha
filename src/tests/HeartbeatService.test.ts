@@ -63,10 +63,20 @@ vi.mock('../core/Memory.js', () => ({
   })),
 }));
 
+const createMockPoolClient = () => ({
+  query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>),
+  release: vi.fn(),
+});
+
+const createMockPool = () => ({
+  connect: vi.fn().mockResolvedValue(createMockPoolClient()),
+});
+
 const createMockDb = (): DatabaseClient => {
   const mockDb = {
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>),
     close: vi.fn().mockResolvedValue(undefined),
+    getPool: vi.fn().mockReturnValue(createMockPool()),
   } as unknown as DatabaseClient;
   return mockDb;
 };

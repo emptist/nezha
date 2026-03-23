@@ -786,6 +786,17 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
       const priority = severityPriority[finding.severity] || 30;
       const msg = finding.message || finding.suggestion || finding.file || 'Review finding';
       const title = `[${finding.type}] ${msg.substring(0, 100)}`;
+
+      const existingTask = await this.db.query<{ id: string }>(
+        `SELECT id FROM tasks WHERE title = $1 AND status IN ('PENDING', 'RUNNING') LIMIT 1`,
+        [title]
+      );
+
+      if (existingTask.rows.length > 0) {
+        logger.info(`[InterReview] Skipping duplicate finding (task exists): ${title.substring(0, 50)}`);
+        continue;
+      }
+
       const description = `**Severity**: ${finding.severity}
 **Source**: Inter-Review (Score: ${result.overallScore}/100)
 ${finding.file ? `**File**: ${finding.file}${finding.line ? `:${finding.line}` : ''}` : ''}

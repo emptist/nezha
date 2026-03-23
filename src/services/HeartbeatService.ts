@@ -836,7 +836,7 @@ After completing this task, use reflection markers:
 - [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
 - [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
 
-Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."`;
+Save via: node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available, skipping task execution');
@@ -1387,6 +1387,14 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
       logger.info(`[Communications] ${result.rows.length} unread message(s)`);
 
       for (const comm of result.rows) {
+        if (comm.message_type === 'broadcast') {
+          await this.db.query(`UPDATE project_communications SET read_at = NOW() WHERE id = $1`, [
+            comm.id,
+          ]);
+          logger.info(`[Communications] Marked broadcast as read (not creating task): ${comm.content.substring(0, 50)}...`);
+          continue;
+        }
+
         const taskId = crypto.randomUUID();
         const priority = comm.priority === 'critical' ? 9 : comm.priority === 'high' ? 7 : 5;
 
@@ -2203,7 +2211,7 @@ After completing this task, use reflection markers:
 - [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
 - [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
 
-Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."`;
+Save via: node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available (streaming), skipping task execution');
