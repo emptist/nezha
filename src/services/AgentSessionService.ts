@@ -21,7 +21,7 @@ export class AgentSessionService {
   constructor(db: DatabaseClient, maxSessionsPerType?: number, useSmartScoring: boolean = true) {
     this.db = db;
     this.maxSessionsPerType =
-      maxSessionsPerType ?? parseInt(process.env.NEZHA_MAX_SESSIONS ?? '3', 3);
+      maxSessionsPerType ?? parseInt(process.env.NEZHA_MAX_SESSIONS ?? '3', 10);
     this.useSmartScoring = useSmartScoring;
   }
 
