@@ -32,6 +32,29 @@ export class DatabaseClient {
       connectionTimeoutMillis: dbConfig.connectionTimeoutMillis,
     };
     this.pool = new PgPool(poolConfig);
+
+    this.pool.on('connect', async client => {
+      const branch = await this.getGitBranch();
+      if (branch) {
+        try {
+          await client.query(`SET app.git_branch = '${branch}'`);
+        } catch {
+          // Ignore errors - branch setting is optional
+        }
+      }
+    });
+  }
+
+  private async getGitBranch(): Promise<string | null> {
+    const { execSync } = await import('child_process');
+    try {
+      return execSync('git rev-parse --abbrev-ref HEAD', {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      return null;
+    }
   }
 
   async query<T extends QueryResultRow = QueryResultRow>(

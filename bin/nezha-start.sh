@@ -84,7 +84,12 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION git_branch_name()
 RETURNS TEXT AS $$
 BEGIN
-    RETURN NULL;
+    RETURN current_setting('app.git_branch', true);
+EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%app.git_branch%' THEN
+        RETURN NULL;
+    END IF;
+    RAISE;
 END;
 $$ LANGUAGE plpgsql;
 EOF

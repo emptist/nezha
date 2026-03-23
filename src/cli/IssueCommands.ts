@@ -378,8 +378,8 @@ export class IssueCommands {
             : 3);
 
     await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by, tags)
-       VALUES ($1, $2, $3, 'PENDING', $4, 'implementation', 'issue-resolution', $5, $6)`,
+      `INSERT INTO tasks (id, title, description, status, priority, category, created_by, tags)
+       VALUES ($1, $2, $3, 'PENDING', $4, 'issue-resolution', $5, $6)`,
       [
         taskId,
         `[Issue] ${issue.title}`,

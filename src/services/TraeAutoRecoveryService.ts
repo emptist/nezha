@@ -40,12 +40,12 @@ export class TraeAutoRecoveryService {
     this.isRunning = true;
 
     this.intervalId = setInterval(() => {
-      this.runRecoveryCycle().catch((error) => {
+      this.runRecoveryCycle().catch(error => {
         logger.error('[TraeAutoRecovery] Recovery cycle error:', error);
       });
     }, this.config.checkIntervalMs);
 
-    this.runRecoveryCycle().catch((error) => {
+    this.runRecoveryCycle().catch(error => {
       logger.error('[TraeAutoRecovery] Initial recovery cycle error:', error);
     });
   }
@@ -100,17 +100,13 @@ export class TraeAutoRecoveryService {
          AND completed_at < NOW() - ($2 || ' seconds')::INTERVAL
          AND error_category NOT IN ('FATAL', 'PERMANENT', 'INVALID_INPUT')
        RETURNING id, title, retry_count, error_category`,
-      [
-        this.config.maxAutoRetries,
-        this.config.failedTaskResetDelayMs / 1000,
-        60,
-      ]
+      [this.config.maxAutoRetries, this.config.failedTaskResetDelayMs / 1000, 60]
     );
 
     if (result.rows.length > 0) {
       logger.info(
         `[TraeAutoRecovery] Recovered ${result.rows.length} failed tasks:`,
-        result.rows.map((r) => r.title)
+        result.rows.map(r => r.title)
       );
     }
 
@@ -125,13 +121,13 @@ export class TraeAutoRecoveryService {
     }>(
       `UPDATE tasks 
        SET status = 'PENDING', 
-           error = 'Auto-recovered: stuck in RUNNING state',
-           retry_count = COALESCE(retry_count, 0) + 1,
-           updated_at = NOW()
-       WHERE status = 'RUNNING'
-         AND started_at < NOW() - INTERVAL '10 minutes'
-         AND (last_heartbeat_at IS NULL OR last_heartbeat_at < NOW() - INTERVAL '5 minutes')
-       RETURNING id, title, 
+            error = 'Auto-recovered: stuck in RUNNING state',
+            retry_count = COALESCE(retry_count, 0) + 1,
+            updated_at = NOW()
+        WHERE status = 'RUNNING'
+          AND started_at < NOW() - INTERVAL '10 minutes'
+          AND (updated_at IS NULL OR updated_at < NOW() - INTERVAL '5 minutes')
+        RETURNING id, title,
          EXTRACT(EPOCH FROM (NOW() - started_at))::INTEGER as running_duration_seconds`,
       []
     );
@@ -139,7 +135,7 @@ export class TraeAutoRecoveryService {
     if (result.rows.length > 0) {
       logger.warn(
         `[TraeAutoRecovery] Recovered ${result.rows.length} stuck tasks:`,
-        result.rows.map((r) => ({
+        result.rows.map(r => ({
           title: r.title,
           duration: `${Math.floor(r.running_duration_seconds / 60)}m`,
         }))

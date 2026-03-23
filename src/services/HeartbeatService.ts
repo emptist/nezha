@@ -41,6 +41,7 @@ import * as path from 'path';
 import { ReviewService } from './ReviewService.js';
 import { FailureAnalysisService } from './FailureAnalysisService.js';
 import { BroadcastService } from './BroadcastService.js';
+import { ReminderService } from './ReminderService.js';
 import { getAgentSessionService, getCurrentSessionId } from './AgentSessionService.js';
 import { IssueTrackingService } from './IssueTrackingService.js';
 
@@ -158,6 +159,7 @@ export class HeartbeatService {
   private readonly reviewService: ReviewService;
   private readonly failureAnalysisService: FailureAnalysisService;
   private readonly broadcastService: BroadcastService;
+  private readonly reminderService: ReminderService;
   private readonly issueTrackingService: IssueTrackingService;
   private isInsightCheckRunning: boolean = false;
 
@@ -243,6 +245,7 @@ export class HeartbeatService {
     this.reviewService = new ReviewService(db);
     this.failureAnalysisService = new FailureAnalysisService(db);
     this.broadcastService = new BroadcastService(db);
+    this.reminderService = new ReminderService(db);
     this.issueTrackingService = new IssueTrackingService(db);
 
     const sessionId = getCurrentSessionId() || `nezha-heartbeat-${Date.now()}`;
@@ -334,6 +337,7 @@ export class HeartbeatService {
     this.alertService.start();
     this.longTaskManager.start();
     this.autoReviewService.start();
+    this.reminderService.startBlindLoop();
 
     this.setupWatchdogListeners();
     this.setupLongTaskListeners();
@@ -437,12 +441,16 @@ export class HeartbeatService {
 
         const sessionService = getAgentSessionService(this.db);
         await sessionService.cleanupStaleSessions(5);
+        await sessionService.cleanupDeadSessions(24);
         await this.checkCommunications();
         await this.checkDLQToIssues();
         await this.checkIssueTaskLinks();
         await this.checkDocsImport();
         await this.checkReflectionSummaryScheduledTask();
         await this.generateDailyReflectionSummary();
+
+        // Natural breakpoint: after insight checks complete, remind about pending tasks
+        await this.reminderService.remindIfNeeded();
       } catch (error) {
         logger.error('Insight generation failed:', error);
       } finally {
@@ -537,8 +545,8 @@ export class HeartbeatService {
             const titleMatch = invite.content.match(/Discussion:\s*(.+)/);
             if (titleMatch?.[1]) {
               await this.db.query(
-                `INSERT INTO tasks (id, title, description, status, priority, type, category)
-                 VALUES ($1, $2, $3, 'PENDING', 6, 'discussion', 'collaboration')`,
+                `INSERT INTO tasks (id, title, description, status, priority, category)
+                 VALUES ($1, $2, $3, 'PENDING', 6, 'discussion')`,
                 [taskId, `Discussion: ${titleMatch[1]}`, `Join the discussion: ${invite.content}`]
               );
               logger.info(`[Meeting] Created discussion task from invite: ${taskId}`);
@@ -1383,8 +1391,8 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
         const priority = comm.priority === 'critical' ? 9 : comm.priority === 'high' ? 7 : 5;
 
         await this.db.query(
-          `INSERT INTO tasks (id, title, description, status, priority, type, category, tags)
-           VALUES ($1, $2, $3, 'PENDING', $4, 'discussion', 'inter-ai-communication', $5)`,
+          `INSERT INTO tasks (id, title, description, status, priority, category, tags)
+           VALUES ($1, $2, $3, 'PENDING', $4, 'inter-ai-communication', $5)`,
           [
             taskId,
             `[${comm.message_type} ${comm.from_ai || 'system'}] ${comm.content.substring(0, 60)}...`,
@@ -1428,6 +1436,7 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
       await meetingHandler.createMeetingFromTask(task);
       await meetingHandler.handleDiscussionTask(task);
+      await this.reminderService.remindNow('Discussion 结束后');
     } catch (error) {
       logger.error('[MeetingHandler] Discussion task failed:', error);
       this.stats.tasksFailed++;
@@ -1626,6 +1635,7 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
     if (count > 0) {
       logger.info(`[Reflection] Parsed ${count} items from reflection for task: ${taskTitle}`);
+      await this.reminderService.remindNow('Reflection 保存后');
     }
 
     const positiveWords = [
@@ -1704,7 +1714,10 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
     try {
       const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.summary && (parsed.learnings || parsed.issues || parsed.overallScore !== undefined)) {
+      if (
+        parsed.summary &&
+        (parsed.learnings || parsed.issues || parsed.overallScore !== undefined)
+      ) {
         return parsed;
       }
     } catch {
@@ -1802,7 +1815,9 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
           ]
         );
       }
-      logger.info(`[Reflection] Saved ${reflection.learnings.length} learnings from JSON reflection`);
+      logger.info(
+        `[Reflection] Saved ${reflection.learnings.length} learnings from JSON reflection`
+      );
     }
 
     if (reflection.issues && reflection.issues.length > 0) {
@@ -1850,7 +1865,8 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
 
     if (reflection.issues && reflection.issues.length > 0) {
       const hasCodeLocation = reflection.issues.some(
-        i => i.location.includes('.ts') || i.location.includes('.js') || i.location.includes('Service')
+        i =>
+          i.location.includes('.ts') || i.location.includes('.js') || i.location.includes('Service')
       );
       if (hasCodeLocation) {
         return 'code_review';

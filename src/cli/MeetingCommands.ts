@@ -285,15 +285,14 @@ Please follow the meeting-protocol skill:
       await this.db.query('BEGIN');
 
       await this.db.query(
-        `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO tasks (id, title, description, status, priority, category, created_by) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           discussionId,
           `Discussion: ${title}`,
           fullDescription,
           TASK_STATUS.PENDING,
           priority,
-          'discussion',
           'collaboration',
           createdBy,
         ]
@@ -453,15 +452,14 @@ _Reached at: ${new Date().toISOString()}_`;
 
     const createdBy = Config.getInstance().getAgentId();
     await this.db.query(
-      `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO tasks (id, title, description, status, priority, category, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [
         consensusId,
         `Consensus: ${topic}`,
         consensusContent,
         TASK_STATUS.PENDING,
         10,
-        'decision',
         'collaboration',
         createdBy,
       ]

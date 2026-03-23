@@ -52,3 +52,18 @@ BEGIN
     RETURN cleaned;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Function to permanently delete dead sessions older than specified hours
+CREATE OR REPLACE FUNCTION cleanup_dead_sessions(age_hours INTEGER DEFAULT 24)
+RETURNS INTEGER AS $$
+DECLARE
+    deleted INTEGER;
+BEGIN
+    DELETE FROM agent_sessions 
+    WHERE status = 'dead' 
+      AND last_heartbeat < NOW() - (age_hours || ' hours')::INTERVAL;
+    
+    GET DIAGNOSTICS deleted = ROW_COUNT;
+    RETURN deleted;
+END;
+$$ LANGUAGE plpgsql;

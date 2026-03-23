@@ -321,4 +321,44 @@ describe('AgentSessionService', () => {
       expect(cleaned).toBe(0);
     });
   });
+
+  describe('cleanupDeadSessions', () => {
+    it('should call cleanup function with default age', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ cleanup_dead_sessions: 3 }],
+      } as QueryResult<unknown>);
+
+      const deleted = await service.cleanupDeadSessions();
+
+      expect(deleted).toBe(3);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('cleanup_dead_sessions'),
+        [24]
+      );
+    });
+
+    it('should call cleanup function with custom age', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ cleanup_dead_sessions: 10 }],
+      } as QueryResult<unknown>);
+
+      const deleted = await service.cleanupDeadSessions(48);
+
+      expect(deleted).toBe(10);
+      expect(mockDb.query).toHaveBeenCalledWith(
+        expect.stringContaining('cleanup_dead_sessions'),
+        [48]
+      );
+    });
+
+    it('should return 0 when no sessions deleted', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [{ cleanup_dead_sessions: 0 }],
+      } as QueryResult<unknown>);
+
+      const deleted = await service.cleanupDeadSessions();
+
+      expect(deleted).toBe(0);
+    });
+  });
 });

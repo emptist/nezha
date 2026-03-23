@@ -20,7 +20,8 @@ export class AgentSessionService {
 
   constructor(db: DatabaseClient, maxSessionsPerType?: number, useSmartScoring: boolean = true) {
     this.db = db;
-    this.maxSessionsPerType = maxSessionsPerType ?? parseInt(process.env.NEZHA_MAX_SESSIONS ?? '3', 10);
+    this.maxSessionsPerType =
+      maxSessionsPerType ?? parseInt(process.env.NEZHA_MAX_SESSIONS ?? '3', 10);
     this.useSmartScoring = useSmartScoring;
   }
 
@@ -56,12 +57,11 @@ export class AgentSessionService {
              LIMIT 1`,
             [agentType]
           );
-          
+
           if (victimResult.rows[0]) {
-            await client.query(
-              `UPDATE agent_sessions SET status = 'dead' WHERE id = $1`,
-              [victimResult.rows[0].id]
-            );
+            await client.query(`UPDATE agent_sessions SET status = 'dead' WHERE id = $1`, [
+              victimResult.rows[0].id,
+            ]);
             logger.info(`[AgentSession] Killed lowest-scoring agent: ${victimResult.rows[0].id}`);
           }
         } else {
@@ -77,8 +77,8 @@ export class AgentSessionService {
 
       const config = Config.getInstance();
       const configAgentId = (config as unknown as { config: { agentId: string } }).config.agentId;
-      const sessionId = configAgentId.startsWith('bot_') 
-        ? configAgentId 
+      const sessionId = configAgentId.startsWith('bot_')
+        ? configAgentId
         : `bot_${crypto.randomUUID()}`;
       this.sessionId = sessionId;
 
@@ -168,6 +168,21 @@ export class AgentSessionService {
     }
 
     return cleaned;
+  }
+
+  async cleanupDeadSessions(ageHours: number = 24): Promise<number> {
+    const result = await this.db.query<{ cleanup_dead_sessions: number }>(
+      `SELECT cleanup_dead_sessions($1) as cleanup_dead_sessions`,
+      [ageHours]
+    );
+
+    const deleted = result.rows[0]?.cleanup_dead_sessions ?? 0;
+
+    if (deleted > 0) {
+      logger.info(`[AgentSession] Deleted ${deleted} dead sessions`);
+    }
+
+    return deleted;
   }
 
   private async getGitBranch(): Promise<string | null> {

@@ -258,16 +258,30 @@ export class Scheduler {
         return;
       }
 
-      // Also check database for any running tasks as additional protection
+      // Also check database for stuck tasks as additional protection
+      // Only block on tasks that are truly stuck (>10 min running without update)
+      const stuckCheck = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${tableName} 
+         WHERE status = $1 
+           AND started_at < NOW() - INTERVAL '10 minutes'
+           AND (updated_at IS NULL OR updated_at < NOW() - INTERVAL '5 minutes')`,
+        [TASK_STATUS.RUNNING]
+      );
+      const stuckCount = parseInt(stuckCheck.rows[0]?.count || '0', 10);
+      if (stuckCount > 0) {
+        logger.warn(
+          `Scheduler heartbeat: ${stuckCount} stuck task(s) detected, skipping to allow auto-recovery`
+        );
+        standardMetrics.workerUtilization.set(1);
+        return;
+      }
+
+      // Check for any running tasks (normal case - task currently executing)
       const runningCheck = await this.db.query<{ count: string }>(
         `SELECT COUNT(*) as count FROM ${tableName} WHERE status = $1`,
         [TASK_STATUS.RUNNING]
       );
       const runningCount = parseInt(runningCheck.rows[0]?.count || '0', 10);
-      if (runningCount > 0) {
-        logger.debug(`Scheduler heartbeat: ${runningCount} task(s) running in DB, skipping`);
-      }
-
       standardMetrics.workerUtilization.set(runningCount > 0 ? 1 : 0);
 
       // Find and lock pending task atomically to prevent race conditions
@@ -529,15 +543,14 @@ export class Scheduler {
       const priority = issue.severity === 'critical' ? 9 : 7;
 
       await this.db.query(
-        `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by, tags)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO tasks (id, title, description, status, priority, category, created_by, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           taskId,
           `[Issue] ${issue.title}`,
           issue.description || `Created from issue ${issue.id}`,
           TASK_STATUS.PENDING,
           priority,
-          'implementation',
           'issue-resolution',
           issue.discovered_by || 'system',
           ['from-issue', issue.severity],
