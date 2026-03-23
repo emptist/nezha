@@ -15,12 +15,12 @@ export interface AgentSession {
 export class AgentSessionService {
   private db: DatabaseClient;
   private sessionId: string | null = null;
-  private maxSessionsPerType: number = 3;
+  private maxSessionsPerType: number;
   private useSmartScoring: boolean = true;
 
-  constructor(db: DatabaseClient, maxSessionsPerType: number = 3, useSmartScoring: boolean = true) {
+  constructor(db: DatabaseClient, maxSessionsPerType?: number, useSmartScoring: boolean = true) {
     this.db = db;
-    this.maxSessionsPerType = maxSessionsPerType;
+    this.maxSessionsPerType = maxSessionsPerType ?? parseInt(process.env.NEZHA_MAX_SESSIONS ?? '3', 10);
     this.useSmartScoring = useSmartScoring;
   }
 

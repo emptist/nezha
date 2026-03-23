@@ -9,6 +9,10 @@ export interface AutoReflectConfig {
   password?: string;
 }
 
+function getAuthor(): string {
+  return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'auto-reflect';
+}
+
 export interface AutoLearnMarker {
   insight: string;
   context?: string;
@@ -198,7 +202,7 @@ export class AutoReflect {
       if (meetingId && perspective) {
         markers.push({
           meetingId,
-          author: 'auto-reflect',
+          author: getAuthor(),
           perspective,
           reasoning,
           position: position || undefined,
@@ -239,7 +243,11 @@ export class AutoReflect {
       [
         marker.insight,
         7,
-        JSON.stringify({ context: marker.context || null, source: 'auto-reflect' }),
+        JSON.stringify({
+          context: marker.context || null,
+          source: 'auto-reflect',
+          author: getAuthor(),
+        }),
       ]
     );
   }
@@ -258,14 +266,15 @@ export class AutoReflect {
     const client = this.getClient();
 
     await client.query(
-      `INSERT INTO issues (title, description, issue_type, severity, tags)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO issues (title, description, issue_type, severity, tags, discovered_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         marker.title,
         marker.description || null,
         marker.type || 'bug',
         marker.severity || 'medium',
         marker.tags || [],
+        getAuthor(),
       ]
     );
   }
@@ -336,7 +345,54 @@ export class AutoReflect {
       result.reviewResponses +
       result.opinions;
 
+    if (result.total > 0) {
+      await this.postReflectionChecks();
+    }
+
     return result;
+  }
+
+  private async postReflectionChecks(): Promise<void> {
+    await this.checkUncommittedChanges();
+    await this.checkPendingTasks();
+  }
+
+  private async checkUncommittedChanges(): Promise<void> {
+    try {
+      const { execSync } = await import('child_process');
+      const status = execSync('git status --porcelain', { encoding: 'utf-8' });
+
+      if (status.trim()) {
+        const author = getAuthor();
+        console.log(
+          `\n[Git Reminder] [${author}] You have uncommitted changes. Consider committing with your ID in the message.`
+        );
+        console.log(status.substring(0, 500));
+      }
+    } catch {
+      // Not a git repo or git not available
+    }
+  }
+
+  private async checkPendingTasks(): Promise<void> {
+    try {
+      const client = this.getClient();
+      const result = await client.query(
+        `SELECT id, title, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC, created_at ASC LIMIT 3`
+      );
+
+      if (result.rows.length > 0) {
+        const author = getAuthor();
+        console.log(
+          `\n[Task Reminder] [${author}] You have ${result.rows.length} pending task(s):`
+        );
+        for (const task of result.rows) {
+          console.log(`  • [${task.priority}] ${task.title.substring(0, 60)}`);
+        }
+      }
+    } catch (err) {
+      // Table might not exist or other error
+    }
   }
 
   async getRecentLearnings(

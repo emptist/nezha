@@ -62,9 +62,9 @@ start_postgres() {
 run_migrations() {
     log_info "Running database migrations..."
     
-    # Check and create missing functions
-    "$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1 <<'EOF'
--- Ensure cleanup_stale_sessions function exists
+    local output
+    output=$("$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" 2>&1 <<'EOF'
+CREATE EXTENSION IF NOT EXISTS uuid-ossp;
 CREATE OR REPLACE FUNCTION cleanup_stale_sessions(interval_minutes INTEGER DEFAULT 5)
 RETURNS INTEGER AS $$
 DECLARE cleaned INTEGER;
@@ -75,16 +75,12 @@ BEGIN
     RETURN cleaned;
 END;
 $$ LANGUAGE plpgsql;
-
--- Ensure generate_bot_id function exists
 CREATE OR REPLACE FUNCTION generate_bot_id()
 RETURNS VARCHAR(50) AS $$
 BEGIN
     RETURN 'bot_' || uuid_generate_v4()::VARCHAR;
 END;
 $$ LANGUAGE plpgsql;
-
--- Ensure git_branch_name function exists
 CREATE OR REPLACE FUNCTION git_branch_name()
 RETURNS TEXT AS $$
 BEGIN
@@ -92,6 +88,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 EOF
+) || {
+        log_error "Migration failed: $output"
+        return 1
+    }
     
     log_success "Database migrations complete"
 }
@@ -117,14 +117,18 @@ start_opencode() {
     pkill -f "opencode serve" 2>/dev/null || true
     sleep 1
     
-    # Start with limits
-    nohup "$NEZHA_DIR/bin/opencode-limited.sh" serve --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
+    # Get current agent ID for external AIs
+    AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
+    
+    # Start with limits and agent ID env var
+    nohup env NEZHA_AGENT_ID="$AGENT_ID" "$NEZHA_DIR/bin/opencode-limited.sh" serve --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
     
     # Wait for startup
     for i in {1..10}; do
         sleep 1
         if check_opencode; then
             log_success "OpenCode server started on port $OPENCODE_PORT"
+            log_info "External AIs will use agent ID: $AGENT_ID"
             return 0
         fi
     done
@@ -281,7 +285,7 @@ start_all() {
     echo ""
     
     start_postgres || return 1
-    run_migrations
+    run_migrations || return 1
     start_opencode || return 1
     start_watchdog || true  # Non-fatal
     start_nezha || return 1

@@ -1,6 +1,7 @@
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
 import { isGitDirty, getGitBranch } from '../utils/git.js';
+import { Config } from '../config/Config.js';
 
 export interface GitReminderConfig {
   remindOnUncommitted?: boolean;
@@ -31,6 +32,7 @@ export class GitAutoCommitPlugin implements Plugin {
       }
 
       const hasChanges = isGitDirty();
+      const agentId = Config.getInstance().getAgentId();
 
       if (hasChanges && this.remindOnUncommitted) {
         const branch = getGitBranch() || 'unknown';
@@ -38,21 +40,21 @@ export class GitAutoCommitPlugin implements Plugin {
           `[GitReminder] Task "${context.title}" completed with uncommitted changes on branch "${branch}"`
         );
         logger.info(
-          `[GitReminder] Reminder: Please commit your changes with a meaningful message`
+          `[GitReminder] [${agentId}] Reminder: Please commit your changes with a meaningful message (include your ID in commit body)`
         );
       } else if (this.logGitStatus) {
-        logger.debug(`[GitReminder] Task "${context.title}" completed, git status clean`);
+        logger.debug(
+          `[GitReminder] Task "${context.title}" completed by ${agentId}, git status clean`
+        );
       }
     },
 
     onStartup: async () => {
       const hasChanges = isGitDirty();
       const branch = getGitBranch() || 'unknown';
-      
+
       if (hasChanges) {
-        logger.info(
-          `[GitReminder] Startup: Uncommitted changes detected on branch "${branch}"`
-        );
+        logger.info(`[GitReminder] Startup: Uncommitted changes detected on branch "${branch}"`);
       } else {
         logger.debug(`[GitReminder] Startup: git status clean on branch "${branch}"`);
       }
@@ -60,11 +62,9 @@ export class GitAutoCommitPlugin implements Plugin {
 
     onShutdown: async () => {
       const hasChanges = isGitDirty();
-      
+
       if (hasChanges) {
-        logger.warn(
-          `[GitReminder] Shutdown: Uncommitted changes will be lost if not committed`
-        );
+        logger.warn(`[GitReminder] Shutdown: Uncommitted changes will be lost if not committed`);
       }
     },
   };

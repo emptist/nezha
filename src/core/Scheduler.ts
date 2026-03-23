@@ -207,6 +207,12 @@ export class Scheduler {
         logger.info(`Scheduler heartbeat: Triggered ${scheduledProcessed} scheduled task(s)`);
       }
 
+      // Auto-convert high-priority open issues to tasks
+      const issuesConverted = await this.convertIssuesToTasks();
+      if (issuesConverted > 0) {
+        logger.info(`Scheduler heartbeat: Converted ${issuesConverted} issue(s) to tasks`);
+      }
+
       const tableName = DATABASE_TABLES.TASKS;
 
       // Check for timed-out RUNNING tasks - fail them and schedule retry
@@ -281,7 +287,7 @@ export class Scheduler {
       }>(
         `WITH eligible_tasks AS (
         SELECT 
-          id, title, description, depends_on, retry_count, max_retries, timeout_seconds, priority, created_at,
+          id, title, description, depends_on, retry_count, max_retries, timeout_seconds, priority, created_at, type,
           LEAST(FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) / 300), 10) as age_boost,
           COALESCE(retry_count, 0) * 2 as retry_boost,
           CASE 
@@ -380,6 +386,11 @@ export class Scheduler {
               `Scheduler heartbeat: Task "${task.title}" (id: ${task.id}) completed successfully (total: ${this.totalTasksExecuted})`
             );
             this.lastTaskRun.set(task.id, new Date());
+
+            await this.db.query(
+              `UPDATE ${tableName} SET status = $1, completed_at = NOW(), retry_count = 0, next_retry_at = NULL WHERE id = $2`,
+              [TASK_STATUS.COMPLETED, task.id]
+            );
 
             this.consecutiveFailures = 0; // Reset failure count on success
 
@@ -484,6 +495,67 @@ export class Scheduler {
     } finally {
       this.isHeartbeatRunning = false;
     }
+  }
+
+  private async convertIssuesToTasks(): Promise<number> {
+    const issuesResult = await this.db.query<{
+      id: string;
+      title: string;
+      description: string | null;
+      severity: string;
+      discovered_by: string | null;
+    }>(
+      `SELECT id, title, description, severity, discovered_by 
+       FROM issues 
+       WHERE status = 'open' 
+       AND severity IN ('critical', 'high')
+       AND task_id IS NULL
+       ORDER BY 
+         CASE severity 
+           WHEN 'critical' THEN 1 
+           WHEN 'high' THEN 2 
+         END,
+         created_at ASC
+       LIMIT 5`
+    );
+
+    if (issuesResult.rows.length === 0) {
+      return 0;
+    }
+
+    let converted = 0;
+    for (const issue of issuesResult.rows) {
+      const taskId = crypto.randomUUID();
+      const priority = issue.severity === 'critical' ? 9 : 7;
+
+      await this.db.query(
+        `INSERT INTO tasks (id, title, description, status, priority, type, category, created_by, tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          taskId,
+          `[Issue] ${issue.title}`,
+          issue.description || `Created from issue ${issue.id}`,
+          TASK_STATUS.PENDING,
+          priority,
+          'implementation',
+          'issue-resolution',
+          issue.discovered_by || 'system',
+          ['from-issue', issue.severity],
+        ]
+      );
+
+      await this.db.query(`UPDATE issues SET task_id = $1, status = 'in_progress' WHERE id = $2`, [
+        taskId,
+        issue.id,
+      ]);
+
+      logger.info(
+        `Scheduler: Created task ${taskId.slice(0, 8)} from issue ${issue.id.slice(0, 8)}`
+      );
+      converted++;
+    }
+
+    return converted;
   }
 
   onTaskReady?: (

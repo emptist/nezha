@@ -797,7 +797,7 @@ ${taskId ? `\n**Related Task**: ${taskId}` : ''}`;
         const sessionId = this.getSessionId();
         await this.db.query(
           `INSERT INTO tasks (id, title, description, status, priority, category, tags, created_at, updated_at, session_id, created_by)
-           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', $4, $5], NOW(), NOW(), $6, COALESCE($6, 'human'))`,
+           VALUES (uuid_generate_v4(), $1, $2, 'PENDING', $3, 'review', ARRAY['review', $4, $5], NOW(), NOW(), $6::VARCHAR, COALESCE($6::VARCHAR, 'human'))`,
           [title, description, priority, finding.type, finding.severity, sessionId]
         );
         createdCount++;

@@ -4,6 +4,7 @@ config();
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/HeartbeatService.js';
+import { getCurrentSessionId } from '../services/AgentSessionService.js';
 import { HealthServer } from '../services/HealthServer.js';
 import { CheckpointService } from '../services/CheckpointService.js';
 import { TASK_STATUS } from '../config/constants.js';
@@ -1158,7 +1159,7 @@ async function main(): Promise<void> {
         };
 
         const nodePath = process.execPath;
-        
+
         const installResult = await installLaunchAgent({
           programArguments: [nodePath, daemonBin],
           workingDirectory: process.cwd(),
@@ -2927,11 +2928,20 @@ async function main(): Promise<void> {
         if (subcommand === 'scores' || subcommand === 'top') {
           const limit = parseInt(args[2] || '10', 10);
           const agents = await agentScoring.getTopAgents(limit);
-          
-          console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
           console.log(colors.bright + '  TOP AI AGENTS BY SCORE' + colors.reset);
-          console.log(colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
-          
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+
           for (let i = 0; i < agents.length; i++) {
             const agent = agents[i];
             if (!agent) continue;
@@ -2939,28 +2949,58 @@ async function main(): Promise<void> {
             const protectedIcon = agent.isProtected ? '🔒' : '  ';
             const shortId = agent.agentId.substring(0, 20) + '...';
             console.log(`\n  ${rank}. ${protectedIcon} ${colors.cyan}${shortId}${colors.reset}`);
-            console.log(`     Score: ${colors.green}${agent.compositeScore.toFixed(2)}${colors.reset}`);
-            console.log(`     Commits: ${agent.commitsCount} | Tasks: ${agent.tasksCompleted}✓ ${agent.tasksFailed}✗ | Meetings: ${agent.meetingContributions}`);
+            console.log(
+              `     Score: ${colors.green}${agent.compositeScore.toFixed(2)}${colors.reset}`
+            );
+            console.log(
+              `     Commits: ${agent.commitsCount} | Tasks: ${agent.tasksCompleted}✓ ${agent.tasksFailed}✗ | Meetings: ${agent.meetingContributions}`
+            );
             console.log(`     Last active: ${agent.lastActive.toLocaleString()}`);
           }
-          console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
         } else if (subcommand === 'stats') {
           const stats = await agentScoring.getStats();
-          console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
           console.log(colors.bright + '  AGENT SCORING STATISTICS' + colors.reset);
-          console.log(colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+          console.log(
+            colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
           console.log(`\n  Total Agents: ${stats.totalAgents}`);
           console.log(`  Average Score: ${stats.averageScore.toFixed(2)}`);
           console.log('\n  Top 5 Agents:');
           for (const agent of stats.topAgents) {
-            console.log(`    - ${agent.agentId.substring(0, 20)}... (${agent.compositeScore.toFixed(2)})`);
+            console.log(
+              `    - ${agent.agentId.substring(0, 20)}... (${agent.compositeScore.toFixed(2)})`
+            );
           }
-          console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+          console.log(
+            '\n' +
+              colors.bright +
+              '═══════════════════════════════════════════════════════════════' +
+              colors.reset
+          );
+        } else if (subcommand === 'whoami') {
+          const agentId = Config.getInstance().getAgentId();
+          console.log(`\n  Agent ID: ${colors.cyan}${agentId}${colors.reset}`);
+          console.log(`  Session: ${getCurrentSessionId() || '(none)'}`);
+          console.log('');
         } else if (subcommand === 'sync') {
           console.log('\nSyncing agent scores from git commits...');
           const commitCounts = await agentScoring.syncGitCommits();
           console.log(`✓ Synced commits for ${commitCounts.size} agents`);
-          
+
           console.log('Syncing agent scores from tasks...');
           await agentScoring.syncTaskStats();
           console.log('✓ Synced task stats');
@@ -2990,11 +3030,22 @@ async function main(): Promise<void> {
           if (!score) {
             console.log(`\nAgent not found: ${agentId}`);
           } else {
-            console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+            console.log(
+              '\n' +
+                colors.bright +
+                '═══════════════════════════════════════════════════════════════' +
+                colors.reset
+            );
             console.log(colors.bright + '  AGENT SCORE DETAILS' + colors.reset);
-            console.log(colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+            console.log(
+              colors.bright +
+                '═══════════════════════════════════════════════════════════════' +
+                colors.reset
+            );
             console.log(`\n  Agent ID: ${score.agentId}`);
-            console.log(`  Composite Score: ${colors.green}${score.compositeScore.toFixed(2)}${colors.reset}`);
+            console.log(
+              `  Composite Score: ${colors.green}${score.compositeScore.toFixed(2)}${colors.reset}`
+            );
             console.log(`  Protected: ${score.isProtected ? '🔒 Yes' : 'No'}`);
             console.log('\n  Metrics:');
             console.log(`    Commits: ${score.commitsCount}`);
@@ -3005,11 +3056,17 @@ async function main(): Promise<void> {
             console.log('\n  Timeline:');
             console.log(`    First Seen: ${score.firstSeen.toLocaleString()}`);
             console.log(`    Last Active: ${score.lastActive.toLocaleString()}`);
-            console.log('\n' + colors.bright + '═══════════════════════════════════════════════════════════════' + colors.reset);
+            console.log(
+              '\n' +
+                colors.bright +
+                '═══════════════════════════════════════════════════════════════' +
+                colors.reset
+            );
           }
         } else {
           console.log('\nUsage: nezha agents <subcommand>');
           console.log('\nSubcommands:');
+          console.log('  whoami               Show current agent identity');
           console.log('  scores [n]          Show top n agents by score (default: 10)');
           console.log('  stats               Show agent scoring statistics');
           console.log('  show <agent_id>     Show details for a specific agent');

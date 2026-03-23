@@ -57,6 +57,12 @@ Examples:
       process.exit(0);
     }
 
+    if (args[0] === '--post-commit') {
+      console.log('\n🔄 Post-Commit Check\n');
+      await reflect.checkPendingTasks();
+      process.exit(0);
+    }
+
     const text = args.join(' ');
     const result = await reflect.reflect(text);
 

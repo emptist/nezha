@@ -116,6 +116,55 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['broadcast_id', 'response'],
         },
       },
+      {
+        name: 'whoami',
+        description:
+          'Get the current agent identity. Returns the agent ID, session ID, and display name. Use this to verify your identity in the Nezha system.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'get_system_info',
+        description:
+          'Get system information for onboarding: current session status, open issues, active tasks, and essential skills. Use this to get context when starting in Nezha.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            include_issues: {
+              type: 'boolean',
+              description: 'Include open issues (default: true)',
+              default: true,
+            },
+            include_tasks: {
+              type: 'boolean',
+              description: 'Include active tasks (default: true)',
+              default: true,
+            },
+            include_skills: {
+              type: 'boolean',
+              description: 'Include essential skills (default: true)',
+              default: true,
+            },
+          },
+        },
+      },
+      {
+        name: 'get_skill',
+        description:
+          'Get a skill by name. Skills define behavior for AI agents. Use this to load Nezha skills like nezha-essential, ai-qc, meeting-protocol, self-improvement.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Name of the skill to retrieve',
+            },
+          },
+          required: ['name'],
+        },
+      },
     ],
   };
 });
@@ -279,6 +328,86 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `Response saved to broadcast ${broadcast_id}. Your opinion has been recorded.`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'whoami') {
+      const config = Config.getInstance();
+      const agentId = config.getAgentId();
+      const sessionId = config.getAgentId();
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${config.getAgentDisplayName() || '(not set)'}\n- Agent Name: ${config.getAgentName()}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_system_info') {
+      const {
+        include_issues = true,
+        include_tasks = true,
+        include_skills = true,
+      } = args as {
+        include_issues?: boolean;
+        include_tasks?: boolean;
+        include_skills?: boolean;
+      };
+      const database = getDb();
+      const lines: string[] = ['=== System Information ==='];
+
+      if (include_skills) {
+        const skillsResult = await database.query(
+          `SELECT name, description FROM skills WHERE status = 'approved' AND name IN ('ai-qc', 'meeting-protocol', 'self-improvement', 'nezha-essential') ORDER BY name LIMIT 10`
+        );
+        lines.push('\n--- Essential Skills ---');
+        if (skillsResult.rows.length > 0) {
+          lines.push(skillsResult.rows.map(s => `• ${s.name}: ${s.description}`).join('\n'));
+        } else {
+          lines.push('No essential skills found');
+        }
+      }
+
+      if (include_issues) {
+        const issuesResult = await database.query(
+          `SELECT id, title, severity, status FROM issues WHERE status = 'OPEN' ORDER BY severity DESC, created_at DESC LIMIT 5`
+        );
+        lines.push('\n--- Open Issues ---');
+        if (issuesResult.rows.length > 0) {
+          lines.push(
+            issuesResult.rows
+              .map(i => `• [${i.severity}] ${i.title} (${i.id?.substring(0, 8)})`)
+              .join('\n')
+          );
+        } else {
+          lines.push('No open issues');
+        }
+      }
+
+      if (include_tasks) {
+        const tasksResult = await database.query(
+          `SELECT id, title, status, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 5`
+        );
+        lines.push('\n--- Active Tasks ---');
+        if (tasksResult.rows.length > 0) {
+          lines.push(
+            tasksResult.rows.map(t => `• [${t.priority}] ${t.title.substring(0, 50)}`).join('\n')
+          );
+        } else {
+          lines.push('No active tasks');
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: lines.join('\n'),
           },
         ],
       };
