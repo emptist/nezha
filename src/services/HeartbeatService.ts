@@ -4,7 +4,6 @@ import { UnifiedAgent, CliAgent, type UnifiedAgentConfig } from '../core/Unified
 import { type StreamingCallback } from '../core/transports/index.js';
 import { MemoryService } from '../core/Memory.js';
 import { LearningAnalysisService } from '../core/LearningAnalysis.js';
-import { ImprovementIdentifier } from '../core/ImprovementIdentifier.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
@@ -431,7 +430,6 @@ export class HeartbeatService {
           logger.info(`Generated ${insights.length} new insights`);
         }
 
-        await this.checkDocConsistency();
         await this.checkReviewFollowUps();
         await this.checkMeetingInvites();
         await this.checkFailurePatterns();
@@ -580,47 +578,6 @@ export class HeartbeatService {
       }
     } catch (error) {
       logger.warn('[Review] Follow-up check failed:', error);
-    }
-  }
-
-  private async checkDocConsistency(): Promise<void> {
-    try {
-      const identifier = new ImprovementIdentifier();
-      const improvements = await identifier.identify();
-
-      const agentId = Config.getInstance().getAgentId();
-      const gitInfo = this.getGitInfo();
-      const environment = this.getEnvironment();
-      let issuesCreated = 0;
-
-      for (const imp of improvements) {
-        if (imp.priority >= 7 && imp.type !== 'optimization') {
-          await this.db.query(
-            `INSERT INTO issues (title, description, issue_type, severity, discovered_by, tags, metadata, git_hash, git_branch, environment)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-             ON CONFLICT DO NOTHING`,
-            [
-              imp.title,
-              imp.description,
-              imp.category === 'documentation' ? 'inconsistency' : 'improvement',
-              imp.type === 'critical' ? 'high' : 'medium',
-              agentId,
-              [imp.category],
-              JSON.stringify({ source: 'auto-check', priority: imp.priority }),
-              gitInfo.hash,
-              gitInfo.branch,
-              environment,
-            ]
-          );
-          issuesCreated++;
-        }
-      }
-
-      if (issuesCreated > 0) {
-        logger.info(`[AutoCheck] Created ${issuesCreated} issues from doc consistency check`);
-      }
-    } catch (error) {
-      logger.error('[AutoCheck] Doc consistency check failed:', error);
     }
   }
 
