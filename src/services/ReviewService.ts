@@ -77,8 +77,8 @@ export class ReviewService {
 
     await this.db.query(
       `INSERT INTO ${DATABASE_TABLES.TASKS}
-       (id, title, description, status, priority, type, category, depends_on)
-       VALUES ($1, $2, $3, 'PENDING', $4, 'qc-review', 'quality', $5)`,
+       (id, title, description, status, priority, category, depends_on)
+       VALUES ($1, $2, $3, 'PENDING', $4, 'quality', $5)`,
       [
         crypto.randomUUID(),
         title,
@@ -107,7 +107,7 @@ export class ReviewService {
     findings: ReviewFinding[],
     actionItems: { description: string }[] = []
   ): Promise<void> {
-    const actionItemsWithId = actionItems.map((item) => ({
+    const actionItemsWithId = actionItems.map(item => ({
       id: crypto.randomUUID(),
       description: item.description,
       status: 'pending' as const,

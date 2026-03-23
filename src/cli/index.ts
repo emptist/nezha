@@ -400,7 +400,7 @@ export class Cli {
     const taskId = crypto.randomUUID();
     const createdBy = this.config.getAgentId();
     await db.query(
-      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, type, assigned_to, category, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         taskId,
         projectId || null,
@@ -412,7 +412,6 @@ export class Cli {
         maxRetries,
         taskData.timeoutSeconds,
         taskData.timeoutSeconds && taskData.timeoutSeconds > 600,
-        taskData.taskType,
         taskData.assignedTo,
         taskData.category,
         createdBy,

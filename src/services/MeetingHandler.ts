@@ -93,7 +93,10 @@ export class MeetingHandler {
     const opinions: Opinion[] = [];
 
     try {
-      const memoryResult = await this.db.query<{ content: string; metadata: Record<string, unknown> }>(
+      const memoryResult = await this.db.query<{
+        content: string;
+        metadata: Record<string, unknown>;
+      }>(
         `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
          WHERE metadata->>'type' = 'opinion'
            AND metadata->>'discussionId' = $1
@@ -320,15 +323,14 @@ _Recorded for discussion: ${discussionId}_`;
 
     try {
       await this.db.query(
-        `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, type, category, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, category, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           consensusId,
           `Consensus Reached: ${originalTask.title.replace('Discussion: ', '')}`,
           `## Consensus Reached\n\n**Agreement**: ${consensus}\n\n**Discussion**: ${originalTask.title}\n\nBased on AI discussion, this consensus was reached.`,
           TASK_STATUS.PENDING,
           originalTask.priority + 1,
-          'decision',
           'collaboration',
           agentId,
         ]
