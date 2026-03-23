@@ -32,6 +32,7 @@ export interface WatchdogTask {
   watchdogTimeoutSeconds: number;
   isKilled: boolean;
   killCount: number;
+  stuckReported: boolean;
 }
 
 export interface WatchdogResult {
@@ -117,6 +118,7 @@ export class TaskWatchdogService extends EventEmitter {
       watchdogTimeoutSeconds: timeout,
       isKilled: false,
       killCount: 0,
+      stuckReported: false,
     };
 
     this.trackedTasks.set(taskId, task);
@@ -191,8 +193,11 @@ export class TaskWatchdogService extends EventEmitter {
           continue;
         }
 
-        logger.warn(`Task ${taskId} stuck (elapsed: ${elapsedMs}ms, timeout: ${timeoutMs}ms)`);
-        this.emit(WatchdogEvent.TASK_STUCK, task);
+        if (!task.stuckReported) {
+          logger.warn(`Task ${taskId} stuck (elapsed: ${elapsedMs}ms, timeout: ${timeoutMs}ms)`);
+          this.emit(WatchdogEvent.TASK_STUCK, task);
+          task.stuckReported = true;
+        }
 
         const result = await this.killTask(taskId, task.processId, 'Heartbeat timeout');
         if (result.killed) {
