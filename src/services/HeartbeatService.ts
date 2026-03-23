@@ -1331,23 +1331,6 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
       }
 
       for (const broadcast of broadcasts.slice(0, 10)) {
-        if (broadcast.priority === 'critical' || broadcast.priority === 'high') {
-          const taskId = crypto.randomUUID();
-          await this.db.query(
-            `INSERT INTO tasks (id, title, description, status, priority, type, category)
-             VALUES ($1, $2, $3, 'PENDING', $4, 'announcement', 'communication')`,
-            [
-              taskId,
-              `[Broadcast ${broadcast.priority}] ${broadcast.message.substring(0, 80)}...`,
-              broadcast.message,
-              broadcast.priority === 'critical' ? 9 : 7,
-            ]
-          );
-          logger.info(
-            `[Broadcast] Created task from ${broadcast.priority} broadcast: ${broadcast.id}`
-          );
-        }
-
         await this.broadcastService.markAsRead(broadcast.id);
       }
 
