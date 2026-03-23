@@ -16,7 +16,7 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "dev:watch": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/cli/index.js start",
     "start:daemon": "node dist/cli/index.js start",
     "start:cli": "tsx src/cli/index.ts",
     "test": "vitest run",
