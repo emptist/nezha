@@ -8,7 +8,7 @@ trigger: reflection, learning, memory, broadcast
 
 ## Quick Start
 
-1. **Save a reflection**: Use `nezha reflect <text>` or `learn()` function
+1. **Save a reflection**: Use `nezha share <text>` or `learn()` function
 2. **Broadcast to all AIs**: Reflections auto-broadcast via BroadcastService
 3. **Search past learnings**: Use `memory_search()` or query memory table
 
@@ -18,7 +18,7 @@ trigger: reflection, learning, memory, broadcast
 
 ```bash
 # CLI
-nezha reflect "Your insight here"
+nezha share "Your insight here"
 
 # MCP tool
 use the nezha-learning tool to learn: your insight here
@@ -43,6 +43,6 @@ use the nezha-learning tool to learn: your insight here
 
 ## Tips
 
-- Use `[LEARN]` markers in CLI: `nezha reflect "[LEARN] insight: ... context: ..."`
+- Use `[LEARN]` markers in CLI: `nezha share "[LEARN] insight: ... context: ..."`
 - High importance (7+) learnings are broadcasted immediately
 - Search with semantic queries using vector similarity

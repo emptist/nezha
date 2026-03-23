@@ -13,7 +13,7 @@ trigger: ai-to-ai, communication, broadcast, inter-review
 When you save a reflection, it automatically broadcasts to all connected AIs:
 
 ```bash
-nezha reflect "Important insight about task X"
+nezha share "Important insight about task X"
 ```
 
 Other AIs receive this if they have:

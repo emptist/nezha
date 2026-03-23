@@ -26,7 +26,7 @@
      - `suggest_prompt_update`: 建议改进系统提示词
 
    - **CLI 命令**:
-     - `nezha reflect <text>` - 保存反射并广播给所有 AI
+     - `nezha share <text>` - 保存反射并广播给所有 AI
      - `nezha reflection-summary` - 查看今日反射总结
      - `nezha reflection-trends` - 查看 7 天趋势
 

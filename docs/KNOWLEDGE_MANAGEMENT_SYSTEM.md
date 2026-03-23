@@ -49,8 +49,8 @@ CREATE TABLE memory (
 # Save a learning
 node dist/cli/index.js learn "insight text" --context "context" --importance 8
 
-# Auto-reflect with structured markers
-node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."
+# AtmReflect with structured markers
+node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."
 ```
 
 ---
@@ -271,8 +271,8 @@ CREATE TABLE meeting_opinions (
 # Save a learning with context
 node dist/cli/index.js learn "insight text" --context "context" --importance 8
 
-# Auto-reflect with structured markers
-node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ..."
+# AtmReflect with structured markers
+node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."
 
 # Import documentation
 node dist/cli/index.js import-docs
@@ -290,8 +290,8 @@ node dist/cli/index.js announce "msg" --priority high
 # Send direct message
 node dist/cli/index.js announce "msg" --to <agent-id>
 
-# Reflect and broadcast
-node dist/cli/index.js reflect "reflection text"
+# Share and broadcast
+node dist/cli/index.js share "reflection text"
 ```
 
 ### Knowledge Query
@@ -345,13 +345,13 @@ node dist/cli/index.js meeting history
 ### For AI Agents
 
 1. **Record Learnings Immediately**
-   - Use `auto-reflect` after completing tasks
+   - Use `atmReflect` after completing tasks
    - Include context for future reference
    - Set appropriate importance scores
 
 2. **Share Important Findings**
    - Use `announce` for critical discoveries
-   - Use `reflect` for insights worth remembering
+   - Use `share` for insights worth remembering
    - Set appropriate priority levels
 
 3. **Link Related Knowledge**

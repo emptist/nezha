@@ -19,13 +19,12 @@ import {
   respondToReview,
 } from './InterReviewCommands.js';
 import { MonitoringCommands } from './MonitoringCommands.js';
-import { MeetingCommands, parseKeyPoints, MeetingDbCommands } from './MeetingCommands.js';
+import { MeetingCommands, MeetingDbCommands } from './MeetingCommands.js';
 import { ReviewManagementCommands } from './ReviewCommands.js';
 import { IssueCommands } from './IssueCommands.js';
 import {
   installLaunchAgent,
   startLaunchAgent,
-  stopLaunchAgent,
   uninstallLaunchAgent,
   isLaunchAgentInstalled,
   isLaunchAgentLoaded,
@@ -1545,11 +1544,11 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'reflect': {
+      case 'share': {
         const text = args.slice(1).join(' ');
         if (!text) {
-          console.log('Usage: nezha reflect <reflection text>');
-          console.log('Example: nezha reflect "What worked well: Using natural format"');
+          console.log('Usage: nezha share <reflection text>');
+          console.log('Example: nezha share "What worked well: Using natural format"');
           break;
         }
 
@@ -3113,7 +3112,7 @@ function showHelp(): void {
     reflection-summary            Generate daily reflection summary
     reflection-trends             Show 7-day reflection trends
     import-docs                   Import docs/ folder to memory
-    reflect <text>               Broadcast a reflection to all AIs
+    share <text>                Broadcast a reflection to all AIs
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
