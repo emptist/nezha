@@ -1,0 +1,334 @@
+#!/bin/zsh
+# nezha-start.sh - Unified startup script for Nezha AI Orchestration System
+# Usage: ./bin/nezha-start.sh [--check | --stop | --restart | --status]
+
+set -e
+
+# Configuration
+NEZHA_DIR="/Users/jk/gits/hub/nezha"
+OPENCODE_PORT=4096
+NEZHA_PORT=4097
+PSQL_PATH="${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql}"
+PG_CTL_PATH="${PG_CTL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl}"
+PG_DATA="${PG_DATA:-$HOME/Library/Application Support/Postgres/var-18-2}"
+DB_NAME="nezha"
+DB_USER="postgres"
+DB_HOST="127.0.0.1"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() { echo "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo "${GREEN}[OK]${NC} $1"; }
+log_warn() { echo "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo "${RED}[ERROR]${NC} $1"; }
+
+check_postgres() {
+    if "$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+start_postgres() {
+    log_info "Checking PostgreSQL..."
+    if check_postgres; then
+        log_success "PostgreSQL is running"
+        return 0
+    fi
+    
+    log_info "Starting PostgreSQL..."
+    if [ -d "$PG_DATA" ]; then
+        "$PG_CTL_PATH" -D "$PG_DATA" -l "$PG_DATA/logfile" start 2>/dev/null || true
+        sleep 2
+        if check_postgres; then
+            log_success "PostgreSQL started"
+            return 0
+        else
+            log_error "Failed to start PostgreSQL"
+            return 1
+        fi
+    else
+        log_error "PostgreSQL data directory not found: $PG_DATA"
+        return 1
+    fi
+}
+
+run_migrations() {
+    log_info "Running database migrations..."
+    
+    # Check and create missing functions
+    "$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1 <<'EOF'
+-- Ensure cleanup_stale_sessions function exists
+CREATE OR REPLACE FUNCTION cleanup_stale_sessions(interval_minutes INTEGER DEFAULT 5)
+RETURNS INTEGER AS $$
+DECLARE cleaned INTEGER;
+BEGIN
+    UPDATE agent_sessions SET status = 'dead'
+    WHERE status = 'alive' AND last_heartbeat < NOW() - (interval_minutes || ' minutes')::INTERVAL;
+    GET DIAGNOSTICS cleaned = ROW_COUNT;
+    RETURN cleaned;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Ensure generate_bot_id function exists
+CREATE OR REPLACE FUNCTION generate_bot_id()
+RETURNS VARCHAR(50) AS $$
+BEGIN
+    RETURN 'bot_' || uuid_generate_v4()::VARCHAR;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Ensure git_branch_name function exists
+CREATE OR REPLACE FUNCTION git_branch_name()
+RETURNS TEXT AS $$
+BEGIN
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+EOF
+    
+    log_success "Database migrations complete"
+}
+
+check_opencode() {
+    if curl -s "http://localhost:$OPENCODE_PORT/health" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+start_opencode() {
+    log_info "Checking OpenCode server..."
+    if check_opencode; then
+        log_success "OpenCode server is running on port $OPENCODE_PORT"
+        return 0
+    fi
+    
+    log_info "Starting OpenCode server..."
+    
+    # Kill any existing processes
+    pkill -f "opencode serve" 2>/dev/null || true
+    sleep 1
+    
+    # Start with limits
+    nohup "$NEZHA_DIR/bin/opencode-limited.sh" serve --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
+    
+    # Wait for startup
+    for i in {1..10}; do
+        sleep 1
+        if check_opencode; then
+            log_success "OpenCode server started on port $OPENCODE_PORT"
+            return 0
+        fi
+    done
+    
+    log_error "OpenCode server failed to start"
+    return 1
+}
+
+start_watchdog() {
+    log_info "Checking OpenCode watchdog..."
+    
+    if pgrep -f "opencode-watchdog.sh" >/dev/null 2>&1; then
+        log_success "Watchdog is running"
+        return 0
+    fi
+    
+    log_info "Starting OpenCode watchdog..."
+    nohup "$NEZHA_DIR/bin/opencode-watchdog.sh" > /tmp/opencode-watchdog.log 2>&1 &
+    sleep 1
+    
+    if pgrep -f "opencode-watchdog.sh" >/dev/null 2>&1; then
+        log_success "Watchdog started"
+        return 0
+    else
+        log_error "Watchdog failed to start"
+        return 1
+    fi
+}
+
+check_nezha() {
+    if curl -s "http://localhost:$NEZHA_PORT/health" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+start_nezha() {
+    log_info "Checking Nezha daemon..."
+    if check_nezha; then
+        log_success "Nezha daemon is running on port $NEZHA_PORT"
+        return 0
+    fi
+    
+    log_info "Starting Nezha daemon..."
+    
+    # Kill any existing processes
+    pkill -f "node dist/cli/index.js start" 2>/dev/null || true
+    sleep 1
+    
+    cd "$NEZHA_DIR"
+    nohup node dist/cli/index.js start > .nezha.log 2>&1 &
+    
+    # Wait for startup
+    for i in {1..10}; do
+        sleep 1
+        if check_nezha; then
+            log_success "Nezha daemon started on port $NEZHA_PORT"
+            return 0
+        fi
+    done
+    
+    log_error "Nezha daemon failed to start"
+    return 1
+}
+
+reset_stuck_tasks() {
+    log_info "Resetting stuck tasks..."
+    local count=$("$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c \
+        "UPDATE tasks SET status = 'PENDING' WHERE status = 'RUNNING' RETURNING COUNT(*);" 2>/dev/null | tr -d ' ')
+    
+    if [ -n "$count" ] && [ "$count" -gt 0 ]; then
+        log_success "Reset $count stuck tasks to PENDING"
+    else
+        log_success "No stuck tasks found"
+    fi
+}
+
+show_status() {
+    echo ""
+    echo "========================================"
+    echo "       Nezha System Status"
+    echo "========================================"
+    echo ""
+    
+    # PostgreSQL
+    if check_postgres; then
+        echo "PostgreSQL:      ${GREEN}Running${NC}"
+        
+        # Task counts
+        echo ""
+        echo "Tasks:"
+        "$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c \
+            "SELECT status, COUNT(*) FROM tasks GROUP BY status ORDER BY status;" 2>/dev/null
+        
+        # Issues count
+        echo ""
+        echo "Open Issues: $("$PSQL_PATH" -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -t -c \
+            "SELECT COUNT(*) FROM issues WHERE status = 'open';" 2>/dev/null | tr -d ' ')"
+    else
+        echo "PostgreSQL:      ${RED}Not Running${NC}"
+    fi
+    
+    echo ""
+    
+    # OpenCode
+    if check_opencode; then
+        echo "OpenCode Server: ${GREEN}Running${NC} (port $OPENCODE_PORT)"
+    else
+        echo "OpenCode Server: ${RED}Not Running${NC}"
+    fi
+    
+    # Watchdog
+    if pgrep -f "opencode-watchdog.sh" >/dev/null 2>&1; then
+        echo "Watchdog:        ${GREEN}Running${NC}"
+    else
+        echo "Watchdog:        ${YELLOW}Not Running${NC}"
+    fi
+    
+    # Nezha
+    if check_nezha; then
+        echo "Nezha Daemon:    ${GREEN}Running${NC} (port $NEZHA_PORT)"
+    else
+        echo "Nezha Daemon:    ${RED}Not Running${NC}"
+    fi
+    
+    echo ""
+    echo "========================================"
+}
+
+stop_all() {
+    log_info "Stopping all services..."
+    
+    # Stop Nezha
+    pkill -f "node dist/cli/index.js start" 2>/dev/null || true
+    log_success "Nezha daemon stopped"
+    
+    # Stop watchdog
+    pkill -f "opencode-watchdog.sh" 2>/dev/null || true
+    log_success "Watchdog stopped"
+    
+    # Stop OpenCode
+    pkill -f "opencode serve" 2>/dev/null || true
+    log_success "OpenCode server stopped"
+    
+    log_success "All services stopped"
+}
+
+start_all() {
+    echo ""
+    echo "========================================"
+    echo "    Starting Nezha System"
+    echo "========================================"
+    echo ""
+    
+    start_postgres || return 1
+    run_migrations
+    start_opencode || return 1
+    start_watchdog || true  # Non-fatal
+    start_nezha || return 1
+    
+    echo ""
+    log_success "Nezha system is fully operational!"
+    echo ""
+    
+    show_status
+}
+
+case "${1:-start}" in
+    start)
+        start_all
+        ;;
+    stop)
+        stop_all
+        ;;
+    restart)
+        stop_all
+        sleep 2
+        start_all
+        ;;
+    status)
+        show_status
+        ;;
+    check)
+        show_status
+        if check_postgres && check_opencode && check_nezha; then
+            exit 0
+        else
+            exit 1
+        fi
+        ;;
+    reset-tasks)
+        reset_stuck_tasks
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status|check|reset-tasks}"
+        echo ""
+        echo "Commands:"
+        echo "  start       Start all services (default)"
+        echo "  stop        Stop all services"
+        echo "  restart     Restart all services"
+        echo "  status      Show system status"
+        echo "  check       Check if all services are running (exit code)"
+        echo "  reset-tasks Reset stuck RUNNING tasks to PENDING"
+        exit 1
+        ;;
+esac
