@@ -90,8 +90,10 @@ export class MeetingHandler {
   }
 
   private async getExistingOpinions(discussionId: string): Promise<Opinion[]> {
+    const opinions: Opinion[] = [];
+
     try {
-      const result = await this.db.query<{ content: string; metadata: Record<string, unknown> }>(
+      const memoryResult = await this.db.query<{ content: string; metadata: Record<string, unknown> }>(
         `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
          WHERE metadata->>'type' = 'opinion'
            AND metadata->>'discussionId' = $1
@@ -99,11 +101,45 @@ export class MeetingHandler {
         [discussionId]
       );
 
-      return result.rows.map(row => this.parseOpinionContent(row.content));
+      for (const row of memoryResult.rows) {
+        opinions.push(this.parseOpinionContent(row.content));
+      }
+
+      const taskResult = await this.db.query<{ description: string }>(
+        `SELECT description FROM ${DATABASE_TABLES.TASKS} WHERE id = $1`,
+        [discussionId]
+      );
+
+      const taskRow = taskResult.rows[0];
+      if (taskRow?.description) {
+        const taskOpinions = this.parseOpinionsFromDescription(taskRow.description);
+        for (const opinion of taskOpinions) {
+          const exists = opinions.some(o => o.author === opinion.author);
+          if (!exists) {
+            opinions.push(opinion);
+          }
+        }
+      }
+
+      return opinions;
     } catch (error) {
       logger.error(`[MeetingHandler] Failed to get existing opinions for ${discussionId}:`, error);
       return [];
     }
+  }
+
+  private parseOpinionsFromDescription(description: string): Opinion[] {
+    const opinions: Opinion[] = [];
+    const opinionRegex = /## Opinion from (.+?)\n([\s\S]+?)(?=## Opinion from |$)/g;
+    let match;
+
+    while ((match = opinionRegex.exec(description)) !== null) {
+      const author = (match[1] || 'unknown').trim();
+      const content = match[2] || '';
+      opinions.push(this.parseOpinionContent(`## Opinion from ${author}\n${content}`));
+    }
+
+    return opinions;
   }
 
   private parseOpinionContent(content: string): Opinion {

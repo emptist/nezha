@@ -1733,6 +1733,11 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
     const reflectionType = this.detectReflectionType(taskTitle, reflection);
 
     if (reflectionType === 'inter_review') {
+      const allFindings = [
+        ...(reflection.issues || []).map(i => ({ ...i, type: 'issue' })),
+        ...(reflection.suggestions || []).map(s => ({ type: 'suggestion', message: s })),
+        ...(reflection.praise || []).map(p => ({ type: 'praise', message: p })),
+      ];
       await this.db.query(
         `INSERT INTO inter_reviews (
           id, summary, overall_score, code_quality_score, test_coverage_score, 
@@ -1747,7 +1752,7 @@ Save via: node dist/cli/index.js auto-reflect "[LEARN] insight: ... context: ...
           reflection.codeQualityScore ?? null,
           reflection.testCoverageScore ?? null,
           reflection.documentationScore ?? null,
-          JSON.stringify(reflection.learnings || []),
+          JSON.stringify(allFindings),
           JSON.stringify(reflection.suggestions || []),
           JSON.stringify(reflection.issues || []),
           JSON.stringify(reflection.praise || []),
