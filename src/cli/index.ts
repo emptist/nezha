@@ -1227,6 +1227,47 @@ async function main(): Promise<void> {
         await cliInstance.health();
         break;
 
+      case 'processes': {
+        const { execSync } = await import('child_process');
+        const subCmd = args[1];
+        
+        try {
+          const output = execSync('ps aux | grep -E "opencode run" | grep -v grep', {
+            encoding: 'utf-8',
+          });
+          const lines = output.trim().split('\n').filter(Boolean);
+          
+          if (subCmd === 'kill') {
+            if (lines.length === 0) {
+              console.log('No opencode run processes to kill');
+            } else {
+              execSync('pkill -f "opencode run --attach"', { encoding: 'utf-8' });
+              console.log(`Killed ${lines.length} opencode run process(es)`);
+            }
+          } else {
+            console.log(`\nOpenCode Run Processes: ${lines.length}\n`);
+            if (lines.length > 0) {
+              console.log('PID      CPU%   MEM%   COMMAND');
+              console.log('-'.repeat(60));
+              for (const line of lines) {
+                const parts = line.split(/\s+/);
+                if (parts.length >= 11) {
+                  const pid = parts[1] ?? '';
+                  const cpu = parts[2] ?? '';
+                  const mem = parts[3] ?? '';
+                  const cmd = parts.slice(10).join(' ').substring(0, 40);
+                  console.log(`${pid.padEnd(8)} ${cpu.padEnd(6)} ${mem.padEnd(6)} ${cmd}`);
+                }
+              }
+              console.log('\nUsage: nezha processes kill  - Kill all opencode run processes');
+            }
+          }
+        } catch {
+          console.log('No opencode run processes found');
+        }
+        break;
+      }
+
       case 'skill-sync': {
         const { traeSkillSyncService } = await import('../services/TraeSkillSyncService.js');
         const db = await cliInstance.getDb();
@@ -1599,24 +1640,59 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'prompt-suggest': {
+        const current = args[1];
+        const suggested = args[2];
+        const reason = args[3];
+
+        if (!current || !suggested) {
+          cli.error('Current and suggested prompts are required');
+          console.log('\nUsage: nezha prompt-suggest "current prompt" "suggested prompt" "reason"');
+          console.log('\nExamples:');
+          console.log('  nezha prompt-suggest "Review code" "Review code and run tests" "Tests often missed"');
+          console.log('  nezha prompt-suggest "Fix bug" "Fix bug and add test" "Prevent regression"');
+          process.exit(1);
+        }
+
+        const db = await cliInstance.getDb();
+        await db.query(
+          `INSERT INTO prompt_suggestions (id, current_prompt, suggested_prompt, reason, status)
+           VALUES (gen_random_uuid(), $1, $2, $3, 'pending')`,
+          [current, suggested, reason || null]
+        );
+        console.log(`✓ Saved prompt suggestion: ${suggested.substring(0, 50)}...`);
+        break;
+      }
+
       case 'atmReflect': {
         const text = args.slice(1).join(' ');
-        if (!text) {
-          cli.error('Reflection text is required');
-          console.log('\nUsage: nezha atmReflect "Your reflection with [LEARN] markers"');
-          console.log(
-            '\nThis command is designed for Trae AI (editor-based) to use reflection markers.'
-          );
-          console.log('\nMarkers supported:');
-          console.log('  [LEARN] insight: <learning> context: <optional context>');
-          console.log('  [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>');
-          console.log(
-            '  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <critical|high|medium|low>'
-          );
-          console.log(
-            '  [REVIEW_RESPONSE] reviewId: <id> response: <text> accepted: <comma-separated-suggestions>'
-          );
-          process.exit(1);
+        if (!text || text === '--help' || text === '-h') {
+          console.log(`
+Trae Reflect - Standalone reflection tool for Trae Editor AI
+
+Usage: nezha atmReflect <text with markers>
+
+Markers:
+  [LEARN] insight: <learning> context: <optional context>
+  [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
+  [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
+  [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
+  [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
+  [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
+
+Commands:
+  atmReflect "<text>"           Parse and save reflection markers
+  atmReflect --check            Check for pending work
+  atmReflect --learnings        Show recent learnings
+
+Examples:
+  nezha atmReflect "[LEARN] insight: Always check for pending work before stopping"
+  nezha atmReflect "[ISSUE] title: Bug in parser type: bug severity: high"
+  nezha atmReflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
+  nezha atmReflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
+  nezha atmReflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
+`);
+          process.exit(0);
         }
 
         const db = await cliInstance.getDb();
@@ -1629,6 +1705,12 @@ async function main(): Promise<void> {
           /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
         const reviewResponsePattern =
           /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
+        const taskPattern =
+          /\[TASK\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?(?:\s*type:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+        const announcePattern =
+          /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
+        const schedulePattern =
+          /\[SCHEDULE\]\s*title:\s*(.+?)(?:\s*cron:\s*(.+?))?(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?\s*(?=\[|$)/gis;
 
         let match;
 
@@ -1701,6 +1783,60 @@ async function main(): Promise<void> {
             } catch (err) {
               console.error(`✗ Failed to save review response for ${reviewId}:`, err);
             }
+          }
+        }
+
+        while ((match = taskPattern.exec(text)) !== null) {
+          const title = match[1]?.trim();
+          const description = match[2]?.trim() || null;
+          const priorityStr = match[3]?.trim();
+          const taskType = match[4]?.trim() || 'implementation';
+          const tagsStr = match[5]?.trim();
+          const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
+          const priority = priorityStr ? parseInt(priorityStr, 10) : 5;
+          if (title) {
+            await db.query(
+              `INSERT INTO tasks (title, description, priority, type, tags, status)
+               VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+              [title, description, priority, taskType, tags]
+            );
+            console.log(`✓ Created task: ${title.substring(0, 50)}...`);
+            count++;
+          }
+        }
+
+        while ((match = announcePattern.exec(text)) !== null) {
+          const message = match[1]?.trim();
+          const priority = match[2]?.trim() || 'normal';
+          const targetAgent = match[3]?.trim() || null;
+          if (message) {
+            await db.query(
+              `INSERT INTO project_communications (from_ai, to_ai, message_type, content, priority)
+               VALUES ($1, $2, 'broadcast', $3, $4)`,
+              ['atmReflect-cli', targetAgent, message, priority]
+            );
+            console.log(`✓ Sent broadcast: ${message.substring(0, 50)}...`);
+            count++;
+          }
+        }
+
+        while ((match = schedulePattern.exec(text)) !== null) {
+          const title = match[1]?.trim();
+          const cron = match[2]?.trim();
+          const description = match[3]?.trim() || null;
+          const priorityStr = match[4]?.trim();
+          const priority = priorityStr ? parseInt(priorityStr, 10) : 5;
+          if (title && cron) {
+            const { Cron } = await import('croner');
+            const cronJob = new Cron(cron, { timezone: 'UTC' });
+            const nextRun = cronJob.nextRun() || new Date(Date.now() + 3600000);
+            await db.query(
+              `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, enabled, next_run)
+               VALUES ($1, $2, $3, $4, true, $5)`,
+              [title, description, cron, priority, nextRun]
+            );
+            console.log(`✓ Created schedule: ${title.substring(0, 50)}...`);
+            count++;
           }
         }
 
@@ -3075,7 +3211,16 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'help':
+      case 'help': {
+        const searchTerm = args[1]?.toLowerCase();
+        if (searchTerm && searchTerm !== '--help' && searchTerm !== '-h') {
+          showHelpFiltered(searchTerm);
+        } else {
+          showHelp();
+        }
+        break;
+      }
+
       default:
         showHelp();
         break;
@@ -3102,12 +3247,16 @@ function showHelp(): void {
     uninstall                     Uninstall Nezha daemon
     daemon-status                 Show daemon installation status
     health                        Show health information
+    processes                     Show opencode run processes
+    processes kill                Kill all opencode run processes
     skill-sync                    Sync approved skills to Trae AI (.trae/skills/)
     task-add <title> [desc]      Add a new task
     schedule <name> <desc> <cron> Create a scheduled task
     continuous-improvement       Add a continuous improvement cycle task
     improve                      (alias for continuous-improvement)
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
+    prompt-suggest <cur> <sug> [reason]  Suggest a prompt improvement
+    atmReflect <text>             Parse reflection markers (for Trae AI)
     reflection-stats              Show reflection system statistics
     reflection-summary            Generate daily reflection summary
     reflection-trends             Show 7-day reflection trends
@@ -3202,6 +3351,102 @@ function showHelp(): void {
     ${colors.cyan}$ nezha meeting list${colors.reset}
     ${colors.cyan}$ nezha meeting history${colors.reset}
   `);
+}
+
+function showHelpFiltered(searchTerm: string): void {
+  const allCommands = [
+    { cmd: 'start', desc: 'Start the heartbeat service' },
+    { cmd: 'stop', desc: 'Stop the heartbeat service' },
+    { cmd: 'status', desc: 'Show current status' },
+    { cmd: 'install', desc: 'Install Nezha as launchd daemon (macOS)' },
+    { cmd: 'uninstall', desc: 'Uninstall Nezha daemon' },
+    { cmd: 'daemon-status', desc: 'Show daemon installation status' },
+    { cmd: 'health', desc: 'Show health information' },
+    { cmd: 'processes', desc: 'Show opencode run processes' },
+    { cmd: 'processes kill', desc: 'Kill all opencode run processes' },
+    { cmd: 'skill-sync', desc: 'Sync approved skills to Trae AI (.trae/skills/)' },
+    { cmd: 'task-add <title> [desc]', desc: 'Add a new task' },
+    { cmd: 'schedule <name> <desc> <cron>', desc: 'Create a scheduled task' },
+    { cmd: 'continuous-improvement', desc: 'Add a continuous improvement cycle task' },
+    { cmd: 'improve', desc: '(alias for continuous-improvement)' },
+    { cmd: 'learn <insight>', desc: 'Save learning to memory [--context] [--importance 1-10]' },
+    { cmd: 'prompt-suggest <cur> <sug> [reason]', desc: 'Suggest a prompt improvement' },
+    { cmd: 'atmReflect <text>', desc: 'Parse reflection markers (for Trae AI)' },
+    { cmd: 'reflection-stats', desc: 'Show reflection system statistics' },
+    { cmd: 'reflection-summary', desc: 'Generate daily reflection summary' },
+    { cmd: 'reflection-trends', desc: 'Show 7-day reflection trends' },
+    { cmd: 'import-docs', desc: 'Import docs/ folder to memory' },
+    { cmd: 'share <text>', desc: 'Broadcast a reflection to all AIs' },
+    { cmd: 'tasks [--tag <tag>]', desc: 'List tasks (filter by tag, status, category)' },
+    { cmd: 'table-of-tasks (tot)', desc: 'Show task table with summary' },
+    { cmd: 'templates <cmd>', desc: 'Manage task templates' },
+    { cmd: 'auto-tag-rules <cmd>', desc: 'Manage auto-tagging rules' },
+    { cmd: 'api-key create <name>', desc: 'Create API key' },
+    { cmd: 'api-key list', desc: 'List API keys' },
+    { cmd: 'api-key revoke <name>', desc: 'Revoke API key' },
+    { cmd: 'review-request [commit]', desc: 'Request AI review of current changes' },
+    { cmd: 'review-show [id]', desc: 'Show review details or pending reviews' },
+    { cmd: 'review-stats', desc: 'Show review statistics' },
+    { cmd: 'review-respond <id> <msg>', desc: 'Respond to a review' },
+    { cmd: 'dlq list', desc: 'List dead letter queue' },
+    { cmd: 'dlq resolve <id> [--notes]', desc: 'Mark DLQ item as resolved' },
+    { cmd: 'dlq retry <id>', desc: 'Retry DLQ item as new task' },
+    { cmd: 'dlq retry-all', desc: 'Retry all DLQ items as new tasks' },
+    { cmd: 'dlq delete <id>', desc: 'Delete DLQ item' },
+    { cmd: 'reset-failed [--older-than]', desc: 'Reset all FAILED tasks to PENDING' },
+    { cmd: 'learn-from-failures', desc: 'Create improvement tasks from failure patterns' },
+    { cmd: 'alerts list', desc: 'List failure alerts' },
+    { cmd: 'alerts ack <id>', desc: 'Acknowledge an alert' },
+    { cmd: 'alerts stats', desc: 'Show alert statistics' },
+    { cmd: 'watchdog stats', desc: 'Show watchdog statistics' },
+    { cmd: 'watchdog cleanup', desc: 'Clean up orphaned processes' },
+    { cmd: 'longtasks stats', desc: 'Show long task statistics' },
+    { cmd: 'longtasks paused', desc: 'List paused tasks' },
+    { cmd: 'longtasks failures', desc: 'Show failure statistics by category' },
+    { cmd: 'meeting discuss <title>', desc: 'Create an AI discussion' },
+    { cmd: 'meeting list [--status]', desc: 'List active discussions' },
+    { cmd: 'meeting show [id]', desc: 'Show discussion details' },
+    { cmd: 'meeting opinion <id> <author>', desc: 'Record an opinion' },
+    { cmd: 'meeting consensus <t> <p> <d>', desc: 'Record consensus reached' },
+    { cmd: 'meeting history [--limit]', desc: 'Show consensus history' },
+    { cmd: 'announce <message>', desc: 'Broadcast message to all AIs' },
+    { cmd: 'announce <msg> --priority <p>', desc: 'Broadcast with priority' },
+    { cmd: 'announce <msg> --to <agent>', desc: 'Send direct message to specific AI' },
+    { cmd: 'who-is-working', desc: 'Show which AI is working on what' },
+    { cmd: 'broadcasts list', desc: 'List all broadcasts' },
+    { cmd: 'broadcasts unread', desc: 'List unread broadcasts' },
+    { cmd: 'broadcasts read', desc: 'Mark all broadcasts as read' },
+    { cmd: 'activity stats', desc: 'Show activity statistics' },
+    { cmd: 'activity recent [--limit]', desc: 'Show recent activities' },
+    { cmd: 'agents scores [n]', desc: 'Show top n agents by score' },
+    { cmd: 'agents stats', desc: 'Show agent scoring statistics' },
+    { cmd: 'agents show <id>', desc: 'Show details for a specific agent' },
+    { cmd: 'agents sync', desc: 'Sync scores from git commits and tasks' },
+    { cmd: 'agents protect <id>', desc: 'Protect an agent from being killed' },
+    { cmd: 'agents unprotect <id>', desc: 'Remove protection from an agent' },
+    { cmd: 'issue create <title>', desc: 'Create an issue' },
+    { cmd: 'issue list', desc: 'List issues' },
+    { cmd: 'issue show <id>', desc: 'Show issue details' },
+    { cmd: 'issue close <id>', desc: 'Close an issue' },
+    { cmd: 'help [keyword]', desc: 'Show this help (or search by keyword)' },
+  ];
+
+  const filtered = allCommands.filter(
+    c => c.cmd.toLowerCase().includes(searchTerm) || c.desc.toLowerCase().includes(searchTerm)
+  );
+
+  if (filtered.length === 0) {
+    console.log(`${colors.yellow}No commands found matching "${searchTerm}"${colors.reset}`);
+    console.log(`\nTry: nezha help (to see all commands)`);
+    return;
+  }
+
+  cli.header(`Nezha CLI - Commands matching "${searchTerm}"`);
+  console.log('');
+  filtered.forEach(c => {
+    console.log(`  ${colors.cyan}${c.cmd.padEnd(35)}${colors.reset} ${c.desc}`);
+  });
+  console.log(`\n${colors.bright}Total: ${filtered.length} command(s)${colors.reset}`);
 }
 
 main();

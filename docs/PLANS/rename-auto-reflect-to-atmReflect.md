@@ -1,5 +1,10 @@
 # Plan: Rename auto-reflect to atmReflect
 
+```
+  DONE.
+
+```
+
 ## Background
 
 The `auto-reflect` command name is confusing with `reflect`. This plan renames all occurrences to `atmReflect` (autonomous reflection), keeping "reflect" as the consistent root word.

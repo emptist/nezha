@@ -1,4 +1,5 @@
 import { Cron } from 'croner';
+import { execSync } from 'child_process';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import {
   DATABASE_TABLES,
@@ -22,6 +23,18 @@ import { TraeAutoRecoveryService } from '../services/TraeAutoRecoveryService.js'
 import { getCurrentSessionId } from '../services/AgentSessionService.js';
 
 const standardMetrics = createStandardMetrics();
+
+function countOpenCodeProcesses(): number {
+  try {
+    const output = execSync('ps aux | grep -E "opencode run" | grep -v grep | wc -l', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    return parseInt(output.trim(), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
 
 export interface ScheduledTask {
   id: string;
@@ -271,6 +284,15 @@ export class Scheduler {
       if (stuckCount > 0) {
         logger.warn(
           `Scheduler heartbeat: ${stuckCount} stuck task(s) detected, skipping to allow auto-recovery`
+        );
+        standardMetrics.workerUtilization.set(1);
+        return;
+      }
+
+      const openCodeProcessCount = countOpenCodeProcesses();
+      if (openCodeProcessCount >= SCHEDULER_CONFIG.MAX_CONCURRENT_SESSIONS) {
+        logger.debug(
+          `Scheduler heartbeat: ${openCodeProcessCount} opencode process(es) running, skipping (max: ${SCHEDULER_CONFIG.MAX_CONCURRENT_SESSIONS})`
         );
         standardMetrics.workerUtilization.set(1);
         return;

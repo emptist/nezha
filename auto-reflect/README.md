@@ -67,6 +67,9 @@ await reflect.disconnect();
 | `[LEARN]` | Save a learning | `memory` table |
 | `[PROMPT_UPDATE]` | Suggest prompt change | `prompt_suggestions` table |
 | `[ISSUE]` | Create an issue | `issues` table |
+| `[TASK]` | Create a task | `tasks` table |
+| `[ANNOUNCE]` | Broadcast message | `project_communications` table |
+| `[SCHEDULE]` | Schedule a task | `scheduled_tasks` table |
 
 ### Marker Syntax
 
@@ -103,6 +106,40 @@ Example:
 [ISSUE] title: Missing error handling type: bug severity: high tags: api, error-handling
 ```
 
+#### TASK Marker
+
+```
+[TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research> tags: <tag1,tag2>
+```
+
+Example:
+```
+[TASK] title: Fix parser bug priority: 8 type: implementation tags: parser, bug
+```
+
+#### ANNOUNCE Marker
+
+```
+[ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
+```
+
+Example:
+```
+[ANNOUNCE] message: DLQ has 43 items, needs attention priority: high
+[ANNOUNCE] message: Hey OpenCode, check this out priority: normal to: opencode-ai
+```
+
+#### SCHEDULE Marker
+
+```
+[SCHEDULE] title: <title> cron: <cron-expression> description: <desc> priority: <1-10>
+```
+
+Example:
+```
+[SCHEDULE] title: Daily cleanup cron: "0 2 * * *" description: Clean up old tasks priority: 5
+```
+
 ## API Reference
 
 ### `AtmReflect`
@@ -125,9 +162,15 @@ const reflect = new AtmReflect(config?: AtmReflectConfig);
 | `parseLearnMarkers(text)` | Parse LEARN markers only |
 | `parsePromptUpdateMarkers(text)` | Parse PROMPT_UPDATE markers only |
 | `parseIssueMarkers(text)` | Parse ISSUE markers only |
+| `parseTaskMarkers(text)` | Parse TASK markers only |
+| `parseAnnounceMarkers(text)` | Parse ANNOUNCE markers only |
+| `parseScheduleMarkers(text)` | Parse SCHEDULE markers only |
 | `saveLearning(marker)` | Save a single learning |
 | `savePromptUpdate(marker)` | Save a single prompt suggestion |
 | `saveIssue(marker)` | Save a single issue |
+| `saveTask(marker)` | Save a single task |
+| `saveAnnounce(marker)` | Save a single broadcast |
+| `saveSchedule(marker)` | Save a single schedule |
 | `setExternalClient(client)` | Use external pg client for transactions |
 
 ### `AtmReflectConfig`

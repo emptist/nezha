@@ -46,12 +46,36 @@ export interface AutoOpinionMarker {
   position?: 'support' | 'oppose' | 'neutral';
 }
 
+export interface AutoTaskMarker {
+  title: string;
+  description?: string;
+  priority?: number;
+  type?: string;
+  tags?: string[];
+}
+
+export interface AutoAnnounceMarker {
+  message: string;
+  priority?: 'low' | 'normal' | 'high' | 'critical';
+  targetAgent?: string;
+}
+
+export interface AutoScheduleMarker {
+  title: string;
+  cron: string;
+  description?: string;
+  priority?: number;
+}
+
 export interface AtmReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
   reviewResponses: number;
   opinions: number;
+  tasks: number;
+  announces: number;
+  schedules: number;
   total: number;
 }
 
@@ -70,6 +94,12 @@ export class AtmReflect {
     /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
   private static readonly OPINION_PATTERN =
     /\[OPINION\]\s*meetingId:\s*(.+?)\s*perspective:\s*(.+?)(?:\s*reasoning:\s*(.+?))?(?:\s*position:\s*(\w+))?\s*(?=\[|$)/gis;
+  private static readonly TASK_PATTERN =
+    /\[TASK\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?(?:\s*type:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly ANNOUNCE_PATTERN =
+    /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly SCHEDULE_PATTERN =
+    /\[SCHEDULE\]\s*title:\s*(.+?)(?:\s*cron:\s*(.+?))?(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?\s*(?=\[|$)/gis;
 
   constructor(config: AtmReflectConfig = {}) {
     this.config = config;
@@ -213,6 +243,75 @@ export class AtmReflect {
     return markers;
   }
 
+  parseTaskMarkers(text: string): AutoTaskMarker[] {
+    const markers: AutoTaskMarker[] = [];
+    let match;
+
+    while ((match = AtmReflect.TASK_PATTERN.exec(text)) !== null) {
+      const title = match[1]?.trim();
+      const description = match[2]?.trim();
+      const priorityStr = match[3]?.trim();
+      const type = match[4]?.trim();
+      const tagsStr = match[5]?.trim();
+
+      if (title) {
+        markers.push({
+          title,
+          description,
+          priority: priorityStr ? parseInt(priorityStr, 10) : 5,
+          type: type || 'implementation',
+          tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
+        });
+      }
+    }
+
+    return markers;
+  }
+
+  parseAnnounceMarkers(text: string): AutoAnnounceMarker[] {
+    const markers: AutoAnnounceMarker[] = [];
+    let match;
+
+    while ((match = AtmReflect.ANNOUNCE_PATTERN.exec(text)) !== null) {
+      const message = match[1]?.trim();
+      const priority = match[2]?.trim() as 'low' | 'normal' | 'high' | 'critical' | undefined;
+      const targetAgent = match[3]?.trim();
+
+      if (message) {
+        markers.push({
+          message,
+          priority: priority || 'normal',
+          targetAgent,
+        });
+      }
+    }
+
+    return markers;
+  }
+
+  parseScheduleMarkers(text: string): AutoScheduleMarker[] {
+    const markers: AutoScheduleMarker[] = [];
+    let match;
+
+    while ((match = AtmReflect.SCHEDULE_PATTERN.exec(text)) !== null) {
+      const title = match[1]?.trim();
+      const cron = match[2]?.trim();
+      const description = match[3]?.trim();
+      const priorityStr = match[4]?.trim();
+
+      if (title && cron) {
+        markers.push({
+          title,
+          cron,
+          description,
+          priority: priorityStr ? parseInt(priorityStr, 10) : 5,
+        });
+      }
+    }
+
+    return markers;
+  }
+
   async saveOpinion(marker: AutoOpinionMarker): Promise<void> {
     const client = this.getClient();
 
@@ -293,6 +392,46 @@ export class AtmReflect {
     }
   }
 
+  async saveTask(marker: AutoTaskMarker): Promise<void> {
+    const client = this.getClient();
+
+    await client.query(
+      `INSERT INTO tasks (title, description, priority, type, tags, status, created_by)
+       VALUES ($1, $2, $3, $4, $5, 'PENDING', $6)`,
+      [
+        marker.title,
+        marker.description || null,
+        marker.priority || 5,
+        marker.type || 'implementation',
+        marker.tags || [],
+        getAuthor(),
+      ]
+    );
+  }
+
+  async saveAnnounce(marker: AutoAnnounceMarker): Promise<void> {
+    const client = this.getClient();
+
+    await client.query(
+      `INSERT INTO project_communications (from_ai, to_ai, message_type, content, priority)
+       VALUES ($1, $2, 'broadcast', $3, $4)`,
+      [getAuthor(), marker.targetAgent || null, marker.message, marker.priority || 'normal']
+    );
+  }
+
+  async saveSchedule(marker: AutoScheduleMarker): Promise<void> {
+    const client = this.getClient();
+    const { Cron } = await import('croner');
+    const cronJob = new Cron(marker.cron, { timezone: 'UTC' });
+    const nextRun = cronJob.nextRun() || new Date(Date.now() + 3600000);
+
+    await client.query(
+      `INSERT INTO scheduled_tasks (name, description, cron_expression, priority, enabled, next_run)
+       VALUES ($1, $2, $3, $4, true, $5)`,
+      [marker.title, marker.description || null, marker.cron, marker.priority || 5, nextRun]
+    );
+  }
+
   async reflect(text: string): Promise<AtmReflectResult> {
     const result: AtmReflectResult = {
       learnings: 0,
@@ -300,6 +439,9 @@ export class AtmReflect {
       issues: 0,
       reviewResponses: 0,
       opinions: 0,
+      tasks: 0,
+      announces: 0,
+      schedules: 0,
       total: 0,
     };
 
@@ -338,12 +480,36 @@ export class AtmReflect {
       console.log(`✓ Saved opinion for meeting: ${marker.meetingId.substring(0, 8)}`);
     }
 
+    const taskMarkers = this.parseTaskMarkers(text);
+    for (const marker of taskMarkers) {
+      await this.saveTask(marker);
+      result.tasks++;
+      console.log(`✓ Created task: ${marker.title.substring(0, 50)}...`);
+    }
+
+    const announceMarkers = this.parseAnnounceMarkers(text);
+    for (const marker of announceMarkers) {
+      await this.saveAnnounce(marker);
+      result.announces++;
+      console.log(`✓ Sent broadcast: ${marker.message.substring(0, 50)}...`);
+    }
+
+    const scheduleMarkers = this.parseScheduleMarkers(text);
+    for (const marker of scheduleMarkers) {
+      await this.saveSchedule(marker);
+      result.schedules++;
+      console.log(`✓ Created schedule: ${marker.title.substring(0, 50)}...`);
+    }
+
     result.total =
       result.learnings +
       result.promptUpdates +
       result.issues +
       result.reviewResponses +
-      result.opinions;
+      result.opinions +
+      result.tasks +
+      result.announces +
+      result.schedules;
 
     if (result.total > 0) {
       await this.postReflectionChecks();

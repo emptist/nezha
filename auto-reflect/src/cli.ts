@@ -17,6 +17,9 @@ Markers:
   [LEARN] insight: <learning> context: <optional context>
   [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
+  [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
+  [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
+  [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
 
 Commands:
   atmReflect "<text>"           Parse and save reflection markers
@@ -26,6 +29,9 @@ Commands:
 Examples:
   atmReflect "[LEARN] insight: Always check for pending work before stopping"
   atmReflect "[ISSUE] title: Bug in parser type: bug severity: high"
+  atmReflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
+  atmReflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
+  atmReflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
   atmReflect --check
 `);
     process.exit(0);
@@ -73,6 +79,9 @@ Examples:
       console.log(`   Learnings: ${result.learnings}`);
       console.log(`   Prompt Updates: ${result.promptUpdates}`);
       console.log(`   Issues: ${result.issues}`);
+      console.log(`   Tasks: ${result.tasks}`);
+      console.log(`   Announces: ${result.announces}`);
+      console.log(`   Schedules: ${result.schedules}`);
     }
   } catch (error) {
     console.error('Error:', error instanceof Error ? error.message : error);

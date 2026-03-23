@@ -6,13 +6,26 @@ The reflection system has **three components**:
 
 The reflection questions in `## Task Reflection` sections guide AI to reflect after tasks.
 
-### 2. `[LEARN]` / `[PROMPT_UPDATE]` Markers (System-parsed)
+### 2. Reflection Markers (System-parsed)
 
 These markers are:
 
 - **Written by AI** in reflections
-- **Parsed by HeartbeatService** (`parseReflectionOutput()`)
-- **Saved to PostgreSQL** (`memory` table for learnings)
+- **Parsed by HeartbeatService** (`parseReflectionOutput()`) or **atmReflect CLI**
+- **Saved to PostgreSQL** tables
+
+#### Available Markers (8 total)
+
+| Marker | Description | Saves To |
+|--------|-------------|----------|
+| `[LEARN]` | Save a learning | `memory` table |
+| `[PROMPT_UPDATE]` | Suggest prompt change | `prompt_suggestions` table |
+| `[ISSUE]` | Create an issue | `issues` table |
+| `[TASK]` | Create a task | `tasks` table |
+| `[ANNOUNCE]` | Broadcast message | `project_communications` table |
+| `[SCHEDULE]` | Schedule a task | `scheduled_tasks` table |
+| `[REVIEW_RESPONSE]` | Respond to review | `inter_reviews` table |
+| `[OPINION]` | Record meeting opinion | `meeting_opinions` table |
 
 ### 3. Common Reflection Formats
 
