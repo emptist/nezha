@@ -16,6 +16,8 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+nezha.db
+data.db
 
 # IDE
 .idea/
@@ -49,3 +51,4 @@ AI_providers.md
 !AI_providers.md.example
 .secretes/conversations/
 conversations/
+data.db
