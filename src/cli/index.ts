@@ -1600,11 +1600,11 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'auto-reflect': {
+      case 'atmReflect': {
         const text = args.slice(1).join(' ');
         if (!text) {
           cli.error('Reflection text is required');
-          console.log('\nUsage: nezha auto-reflect "Your reflection with [LEARN] markers"');
+          console.log('\nUsage: nezha atmReflect "Your reflection with [LEARN] markers"');
           console.log(
             '\nThis command is designed for Trae AI (editor-based) to use reflection markers.'
           );
