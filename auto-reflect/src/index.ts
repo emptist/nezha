@@ -1,9 +1,9 @@
-export { AtmReflect } from './AtmReflect.js';
+export { AutonomousReflect } from './AutonomousReflect.js';
 export type {
-  AtmReflectConfig,
+  AutonomousReflectConfig,
   AutoLearnMarker,
   AutoPromptUpdateMarker,
   AutoIssueMarker,
   AutoReviewResponseMarker,
-  AtmReflectResult,
-} from './AtmReflect.js';
+  AutonomousReflectResult,
+} from './AutonomousReflect.js';

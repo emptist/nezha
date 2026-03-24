@@ -1,6 +1,6 @@
 import pg, { Pool, PoolClient } from 'pg';
 
-export interface AtmReflectConfig {
+export interface AutonomousReflectConfig {
   databaseUrl?: string;
   host?: string;
   port?: number;
@@ -10,7 +10,7 @@ export interface AtmReflectConfig {
 }
 
 function getAuthor(): string {
-  return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'atmReflect';
+  return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'areflect';
 }
 
 export interface AutoLearnMarker {
@@ -67,7 +67,7 @@ export interface AutoScheduleMarker {
   priority?: number;
 }
 
-export interface AtmReflectResult {
+export interface AutonomousReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
@@ -79,10 +79,10 @@ export interface AtmReflectResult {
   total: number;
 }
 
-export class AtmReflect {
+export class AutonomousReflect {
   private pool: Pool | null = null;
   private externalClient: PoolClient | null = null;
-  private config: AtmReflectConfig;
+  private config: AutonomousReflectConfig;
 
   private static readonly LEARN_PATTERN =
     /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
@@ -101,7 +101,7 @@ export class AtmReflect {
   private static readonly SCHEDULE_PATTERN =
     /\[SCHEDULE\]\s*title:\s*(.+?)(?:\s*cron:\s*(.+?))?(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?\s*(?=\[|$)/gis;
 
-  constructor(config: AtmReflectConfig = {}) {
+  constructor(config: AutonomousReflectConfig = {}) {
     this.config = config;
   }
 
@@ -139,7 +139,7 @@ export class AtmReflect {
     const markers: AutoLearnMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.LEARN_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.LEARN_PATTERN.exec(text)) !== null) {
       const insight = match[1]?.trim();
       const context = match[2]?.trim();
 
@@ -155,7 +155,7 @@ export class AtmReflect {
     const markers: AutoPromptUpdateMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.PROMPT_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.PROMPT_PATTERN.exec(text)) !== null) {
       const current = match[1]?.trim();
       const suggested = match[2]?.trim();
       const reason = match[3]?.trim();
@@ -172,7 +172,7 @@ export class AtmReflect {
     const markers: AutoIssueMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.ISSUE_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.ISSUE_PATTERN.exec(text)) !== null) {
       const title = match[1]?.trim();
       const description = match[2]?.trim();
       const type = match[3]?.trim();
@@ -197,7 +197,7 @@ export class AtmReflect {
     const markers: AutoReviewResponseMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.REVIEW_RESPONSE_PATTERN.exec(text)) !== null) {
       const reviewId = match[1]?.trim();
       const response = match[2]?.trim();
       const acceptedStr = match[3]?.trim();
@@ -223,7 +223,7 @@ export class AtmReflect {
     const markers: AutoOpinionMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.OPINION_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.OPINION_PATTERN.exec(text)) !== null) {
       const meetingId = match[1]?.trim();
       const perspective = match[2]?.trim();
       const reasoning = match[3]?.trim();
@@ -247,7 +247,7 @@ export class AtmReflect {
     const markers: AutoTaskMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.TASK_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.TASK_PATTERN.exec(text)) !== null) {
       const title = match[1]?.trim();
       const description = match[2]?.trim();
       const priorityStr = match[3]?.trim();
@@ -272,7 +272,7 @@ export class AtmReflect {
     const markers: AutoAnnounceMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.ANNOUNCE_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.ANNOUNCE_PATTERN.exec(text)) !== null) {
       const message = match[1]?.trim();
       const priority = match[2]?.trim() as 'low' | 'normal' | 'high' | 'critical' | undefined;
       const targetAgent = match[3]?.trim();
@@ -293,7 +293,7 @@ export class AtmReflect {
     const markers: AutoScheduleMarker[] = [];
     let match;
 
-    while ((match = AtmReflect.SCHEDULE_PATTERN.exec(text)) !== null) {
+    while ((match = AutonomousReflect.SCHEDULE_PATTERN.exec(text)) !== null) {
       const title = match[1]?.trim();
       const cron = match[2]?.trim();
       const description = match[3]?.trim();
@@ -338,13 +338,13 @@ export class AtmReflect {
 
     await client.query(
       `INSERT INTO memory (content, tags, source, importance, metadata) 
-       VALUES ($1, ARRAY['learning', 'reflection'], 'atmReflect', $2, $3)`,
+       VALUES ($1, ARRAY['learning', 'reflection'], 'areflect', $2, $3)`,
       [
         marker.insight,
         7,
         JSON.stringify({
           context: marker.context || null,
-          source: 'atmReflect',
+          source: 'areflect',
           author: getAuthor(),
         }),
       ]
@@ -432,8 +432,8 @@ export class AtmReflect {
     );
   }
 
-  async reflect(text: string): Promise<AtmReflectResult> {
-    const result: AtmReflectResult = {
+  async reflect(text: string): Promise<AutonomousReflectResult> {
+    const result: AutonomousReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,

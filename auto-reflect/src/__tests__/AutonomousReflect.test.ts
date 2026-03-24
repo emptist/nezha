@@ -1,8 +1,8 @@
-import { AtmReflect } from '../AtmReflect.js';
+import { AutonomousReflect } from '../AutonomousReflect.js';
 import { describe, it, expect } from 'vitest';
 
-describe('AtmReflect Parser', () => {
-  const reflect = new AtmReflect();
+describe('AutonomousReflect Parser', () => {
+  const reflect = new AutonomousReflect();
 
   describe('parseLearnMarkers', () => {
     it('should parse a single LEARN marker', () => {

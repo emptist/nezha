@@ -2,7 +2,7 @@
 import { config } from 'dotenv';
 config();
 
-import { AtmReflect } from './AtmReflect.js';
+import { AutonomousReflect } from './AutonomousReflect.js';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -11,7 +11,7 @@ async function main(): Promise<void> {
     console.log(`
 Trae Reflect - Standalone reflection tool for Trae Editor AI
 
-Usage: atmReflect <text with markers>
+Usage: areflect <text with markers>
 
 Markers:
   [LEARN] insight: <learning> context: <optional context>
@@ -22,28 +22,28 @@ Markers:
   [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
 
 Commands:
-  atmReflect "<text>"           Parse and save reflection markers
-  atmReflect --check            Check for pending work
-  atmReflect --learnings        Show recent learnings
+  areflect "<text>"           Parse and save reflection markers
+  areflect --check            Check for pending work
+  areflect --learnings        Show recent learnings
 
 Examples:
-  atmReflect "[LEARN] insight: Always check for pending work before stopping"
-  atmReflect "[ISSUE] title: Bug in parser type: bug severity: high"
-  atmReflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
-  atmReflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
-  atmReflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
-  atmReflect --check
+  areflect "[LEARN] insight: Always check for pending work before stopping"
+  areflect "[ISSUE] title: Bug in parser type: bug severity: high"
+  areflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
+  areflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
+  areflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
+  areflect --check
 `);
     process.exit(0);
   }
 
-  const atmReflect = new AtmReflect();
+  const areflect = new AutonomousReflect();
 
   try {
-    await atmReflect.connect();
+    await areflect.connect();
 
     if (args[0] === '--check') {
-      const work = await atmReflect.checkPendingWork();
+      const work = await areflect.checkPendingWork();
       console.log('\n📊 Pending Work Check\n');
       console.log(`   Tasks:    ${work.tasks}`);
       console.log(`   DLQ:      ${work.dlq}`);
@@ -54,7 +54,7 @@ Examples:
     }
 
     if (args[0] === '--learnings') {
-      const learnings = await atmReflect.getRecentLearnings(10);
+      const learnings = await areflect.getRecentLearnings(10);
       console.log('\n📚 Recent Learnings\n');
       for (const l of learnings) {
         console.log(`   [${l.source}] ${l.content.substring(0, 60)}...`);
@@ -65,18 +65,18 @@ Examples:
 
     if (args[0] === '--post-commit') {
       console.log('\n🔄 Post-Commit Check\n');
-      await atmReflect.checkPendingTasks();
+      await areflect.checkPendingTasks();
       process.exit(0);
     }
 
     const text = args.join(' ');
 
-    if (!text.toLowerCase().includes('atmreflect')) {
-      console.error('Error: atmReflect keyword is required. Usage: atmReflect "[MARKER]..."');
+    if (!text.toLowerCase().includes('areflect')) {
+      console.error('Error: areflect keyword is required. Usage: areflect "[MARKER]..."');
       process.exit(1);
     }
 
-    const result = await atmReflect.reflect(text);
+    const result = await areflect.reflect(text);
 
     if (result.total === 0) {
       console.log('No reflection markers found in text.');
@@ -93,7 +93,7 @@ Examples:
     console.error('Error:', error instanceof Error ? error.message : error);
     process.exit(1);
   } finally {
-    await atmReflect.disconnect();
+    await areflect.disconnect();
   }
 }
 
