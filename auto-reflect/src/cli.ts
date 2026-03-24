@@ -70,6 +70,12 @@ Examples:
     }
 
     const text = args.join(' ');
+
+    if (!text.toLowerCase().includes('atmreflect')) {
+      console.error('Error: atmReflect keyword is required. Usage: atmReflect "[MARKER]..."');
+      process.exit(1);
+    }
+
     const result = await atmReflect.reflect(text);
 
     if (result.total === 0) {
