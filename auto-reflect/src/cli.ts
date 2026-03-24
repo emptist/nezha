@@ -18,6 +18,7 @@ Markers:
   [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
   [ISSUE_RESOLVE] id: <uuid> resolution: <text>
+  [ISSUE_COMMENT] id: <uuid> comment: <text> internal: <true|false>
   [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
   [TASK_COMPLETE] id: <uuid> result: <optional result>
   [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
@@ -88,6 +89,7 @@ Examples:
       console.log(`   Prompt Updates: ${result.promptUpdates}`);
       console.log(`   Issues Created: ${result.issues}`);
       console.log(`   Issues Resolved: ${result.issuesResolved}`);
+      console.log(`   Issue Comments: ${result.issueComments}`);
       console.log(`   Tasks Created: ${result.tasks}`);
       console.log(`   Tasks Completed: ${result.tasksCompleted}`);
       console.log(`   Announces: ${result.announces}`);

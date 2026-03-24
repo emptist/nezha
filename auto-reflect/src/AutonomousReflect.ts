@@ -77,11 +77,18 @@ export interface AutoTaskCompleteMarker {
   result?: string;
 }
 
+export interface AutoIssueCommentMarker {
+  id: string;
+  comment: string;
+  internal?: boolean;
+}
+
 export interface AutonomousReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
   issuesResolved: number;
+  issueComments: number;
   tasks: number;
   tasksCompleted: number;
   reviewResponses: number;
@@ -116,6 +123,8 @@ export class AutonomousReflect {
     /\[ISSUE_RESOLVE\]\s*id:\s*([a-f0-9-]+)\s+resolution:\s*(.+?)\s*(?=\[|$)/gis;
   private static readonly TASK_COMPLETE_PATTERN =
     /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
+  private static readonly ISSUE_COMMENT_PATTERN =
+    /\[ISSUE_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)(?:\s+internal:\s*(true|false))?\s*(?=\[|$)/gis;
 
   constructor(config: AutonomousReflectConfig = {}) {
     this.config = config;
@@ -360,6 +369,23 @@ export class AutonomousReflect {
     return markers;
   }
 
+  parseIssueCommentMarkers(text: string): AutoIssueCommentMarker[] {
+    const markers: AutoIssueCommentMarker[] = [];
+    let match;
+
+    while ((match = AutonomousReflect.ISSUE_COMMENT_PATTERN.exec(text)) !== null) {
+      const id = match[1]?.trim();
+      const comment = match[2]?.trim();
+      const internalStr = match[3]?.trim();
+
+      if (id && comment) {
+        markers.push({ id, comment, internal: internalStr === 'true' });
+      }
+    }
+
+    return markers;
+  }
+
   async saveOpinion(marker: AutoOpinionMarker): Promise<void> {
     const client = this.getClient();
 
@@ -523,12 +549,34 @@ export class AutonomousReflect {
     );
   }
 
+  async commentOnIssue(marker: AutoIssueCommentMarker): Promise<void> {
+    const client = this.getClient();
+    const author = getAuthor();
+
+    const result = await client.query<{ title: string }>(
+      `SELECT title FROM issues WHERE id = $1`,
+      [marker.id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`Issue not found: ${marker.id}`);
+      return;
+    }
+
+    await client.query(
+      `INSERT INTO issue_comments (issue_id, author, content, is_internal)
+       VALUES ($1, $2, $3, $4)`,
+      [marker.id, author, marker.comment, marker.internal || false]
+    );
+  }
+
   async reflect(text: string): Promise<AutonomousReflectResult> {
     const result: AutonomousReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,
       issuesResolved: 0,
+      issueComments: 0,
       tasks: 0,
       tasksCompleted: 0,
       reviewResponses: 0,
@@ -608,11 +656,19 @@ export class AutonomousReflect {
       console.log(`✓ Completed task: ${marker.id.substring(0, 8)}...`);
     }
 
+    const issueCommentMarkers = this.parseIssueCommentMarkers(text);
+    for (const marker of issueCommentMarkers) {
+      await this.commentOnIssue(marker);
+      result.issueComments++;
+      console.log(`✓ Commented on issue: ${marker.id.substring(0, 8)}...`);
+    }
+
     result.total =
       result.learnings +
       result.promptUpdates +
       result.issues +
       result.issuesResolved +
+      result.issueComments +
       result.reviewResponses +
       result.opinions +
       result.tasks +

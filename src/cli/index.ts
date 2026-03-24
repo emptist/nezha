@@ -1707,6 +1707,7 @@ Markers:
   [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
   [ISSUE_RESOLVE] id: <uuid> resolution: <text>
+  [ISSUE_COMMENT] id: <uuid> comment: <text> internal: <true|false>
   [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
   [TASK_COMPLETE] id: <uuid> result: <optional result>
   [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
@@ -1747,6 +1748,8 @@ Examples:
           /\[ISSUE_RESOLVE\]\s*id:\s*([a-f0-9-]+)\s+resolution:\s*(.+?)\s*(?=\[|$)/gis;
         const taskCompletePattern =
           /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
+        const issueCommentPattern =
+          /\[ISSUE_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)(?:\s+internal:\s*(true|false))?\s*(?=\[|$)/gis;
 
         let match;
 
@@ -1917,6 +1920,29 @@ Examples:
                 [id, taskResult ? JSON.stringify({ message: taskResult }) : null]
               );
               console.log(`✓ Completed task: ${result.rows[0]!.title.substring(0, 50)}...`);
+              count++;
+            }
+          }
+        }
+
+        while ((match = issueCommentPattern.exec(text)) !== null) {
+          const id = match[1]?.trim();
+          const comment = match[2]?.trim();
+          const internalStr = match[3]?.trim();
+          if (id && comment) {
+            const result = await db.query<{ title: string }>(
+              `SELECT title FROM issues WHERE id = $1`,
+              [id]
+            );
+            if (result.rows.length === 0) {
+              console.log(`Issue not found: ${id}`);
+            } else {
+              await db.query(
+                `INSERT INTO issue_comments (issue_id, author, content, is_internal)
+                 VALUES ($1, $2, $3, $4)`,
+                [id, Config.getInstance().getAgentId(), comment, internalStr === 'true']
+              );
+              console.log(`✓ Commented on issue: ${result.rows[0]!.title.substring(0, 50)}...`);
               count++;
             }
           }
