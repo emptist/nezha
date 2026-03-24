@@ -1,6 +1,6 @@
-# atmReflect
+# areflect
 
-[![npm version](https://badge.fury.io/js/atmReflect.svg)](https://badge.fury.io/js/atmReflect)
+[![npm version](https://badge.fury.io/js/areflect.svg)](https://badge.fury.io/js/areflect)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
@@ -18,7 +18,7 @@ Editor-based AIs (like Trae AI) get interrupted when they declare "done" or "com
 ## Installation
 
 ```bash
-npm install atmReflect
+npm install areflect
 ```
 
 ## Quick Start
@@ -27,21 +27,21 @@ npm install atmReflect
 
 ```bash
 # Save a learning
-npx atmReflect "[LEARN] insight: Always check for pending work before stopping"
+npx areflect "[LEARN] insight: Always check for pending work before stopping"
 
 # Check for pending work
-npx atmReflect --check
+npx areflect --check
 
 # View recent learnings
-npx atmReflect --learnings
+npx areflect --learnings
 ```
 
 ### Programmatic Usage
 
 ```typescript
-import { AtmReflect } from 'atmReflect';
+import { AutonomousReflect } from 'areflect';
 
-const reflect = new AtmReflect({
+const reflect = new AutonomousReflect({
   databaseUrl: 'postgresql://postgres@localhost:5432/nezha'
 });
 
@@ -142,12 +142,12 @@ Example:
 
 ## API Reference
 
-### `AtmReflect`
+### `AutonomousReflect`
 
 #### Constructor
 
 ```typescript
-const reflect = new AtmReflect(config?: AtmReflectConfig);
+const reflect = new AutonomousReflect(config?: AutonomousReflectConfig);
 ```
 
 #### Methods
@@ -173,10 +173,10 @@ const reflect = new AtmReflect(config?: AtmReflectConfig);
 | `saveSchedule(marker)` | Save a single schedule |
 | `setExternalClient(client)` | Use external pg client for transactions |
 
-### `AtmReflectConfig`
+### `AutonomousReflectConfig`
 
 ```typescript
-interface AtmReflectConfig {
+interface AutonomousReflectConfig {
   databaseUrl?: string;  // Full connection string
   host?: string;         // Default: localhost
   port?: number;         // Default: 5432
@@ -225,10 +225,10 @@ See the [Nezha project](https://github.com/nezha-project/nezha) for database sch
 This package is designed to work with the Nezha autonomous development system:
 
 ```typescript
-import { AtmReflect } from 'atmReflect';
+import { AutonomousReflect } from 'areflect';
 
 // In your AI agent
-const reflect = new AtmReflect();
+const reflect = new AutonomousReflect();
 await reflect.connect();
 
 // After completing work, always check for more

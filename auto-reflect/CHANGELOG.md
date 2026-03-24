@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial release
-- `AtmReflect` class for parsing and saving reflection markers
+- `AutonomousReflect` class for parsing and saving reflection markers
 - Support for three marker types:
   - `[LEARN]` - Save learnings to memory
   - `[PROMPT_UPDATE]` - Suggest prompt changes

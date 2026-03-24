@@ -1,5 +1,5 @@
 {
-  "name": "atmReflect",
+  "name": "areflect",
   "version": "1.0.0",
   "description": "Standalone reflection tool for Trae Editor AI - persists knowledge across sessions",
   "type": "module",
@@ -10,13 +10,13 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./AtmReflect": {
-      "import": "./dist/AtmReflect.js",
-      "types": "./dist/AtmReflect.d.ts"
+    "./AutonomousReflect": {
+      "import": "./dist/AutonomousReflect.js",
+      "types": "./dist/AutonomousReflect.d.ts"
     }
   },
   "bin": {
-    "atmReflect": "./dist/cli.js",
+    "areflect": "./dist/cli.js",
     "privacy-check": "./dist/privacy-check.js"
   },
   "scripts": {
