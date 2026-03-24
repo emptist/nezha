@@ -21,7 +21,7 @@ An AI session attempted to deprecate the `reflect` CLI command, suggesting users
 
 | Command    | Broadcasts | Saves to Memory | Priority Option | Target Option |
 | ---------- | ---------- | --------------- | --------------- | ------------- |
-| `reflect`  | ✅         | ✅              | ❌              | ❌            |
+| `share`    | ✅         | ✅              | ❌              | ❌            |
 | `announce` | ✅         | ❌              | ✅              | ✅            |
 
 **Key insight:** `reflect` does MORE than `announce` (it saves to memory). Deprecating it would lose functionality.
@@ -54,7 +54,7 @@ An AI session attempted to deprecate the `reflect` CLI command, suggesting users
 
 ## Related
 
-- `reflect` command: broadcasts + saves to memory
+- `share` command: broadcasts + saves to memory (renamed from `reflect`)
 - `announce` command: broadcasts with priority/target
 - `atmReflect` command: parses structured markers, saves to DB
 - Issue: #poorly-named-commands

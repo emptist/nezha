@@ -1,10 +1,16 @@
 # Plan: Rename `reflect` CLI command to `share`
 
+```
+  CODE DONE (commit 84a39ab).
+  DATABASE UPDATES PENDING.
+```
+
 ## Background
 
 The `reflect` CLI command is misnamed. It actually **broadcasts and shares** thoughts with all AIs, not performing self-reflection. The name causes confusion with genuine reflection concepts.
 
 **What `reflect` actually does:**
+
 1. Broadcasts text to all AIs via `BroadcastService`
 2. Saves to memory
 
@@ -14,44 +20,47 @@ The `reflect` CLI command is misnamed. It actually **broadcasts and shares** tho
 
 ### 1. Source Code (4 places)
 
-| File | Line | Current | Change To |
-|------|------|---------|-----------|
-| `src/cli/index.ts` | 1547 | `case 'reflect':` | `case 'share':` |
-| `src/cli/index.ts` | 1550 | `Usage: nezha reflect` | `Usage: nezha share` |
-| `src/cli/index.ts` | 1551 | `Example: nezha reflect` | `Example: nezha share` |
+| File               | Line | Current                    | Change To                |
+| ------------------ | ---- | -------------------------- | ------------------------ |
+| `src/cli/index.ts` | 1547 | `case 'reflect':`          | `case 'share':`          |
+| `src/cli/index.ts` | 1550 | `Usage: nezha reflect`     | `Usage: nezha share`     |
+| `src/cli/index.ts` | 1551 | `Example: nezha reflect`   | `Example: nezha share`   |
 | `src/cli/index.ts` | 3115 | `reflect <text> Broadcast` | `share <text> Broadcast` |
 
 ### 2. Documentation (10 places)
 
-| File | Line | Current | Change To |
-|------|------|---------|-----------|
-| `AGENTS.md` | 29 | `nezha reflect <text>` | `nezha share <text>` |
-| `skills/reflection-system.md` | 11 | `nezha reflect <text>` | `nezha share <text>` |
-| `skills/reflection-system.md` | 21 | `nezha reflect "..."` | `nezha share "..."` |
-| `skills/reflection-system.md` | 46 | `nezha reflect "[LEARN]..."` | `nezha share "[LEARN]..."` |
-| `skills/ai-communication.md` | 16 | `nezha reflect "..."` | `nezha share "..."` |
-| `docs/KNOWLEDGE_MANAGEMENT_SYSTEM.md` | 294 | `node dist/cli/index.js reflect` | `node dist/cli/index.js share` |
-| `docs/KNOWLEDGE_MANAGEMENT_SYSTEM.md` | 354 | `Use \`reflect\` for` | `Use \`share\` for` |
+| File                                  | Line | Current                          | Change To                      |
+| ------------------------------------- | ---- | -------------------------------- | ------------------------------ |
+| `AGENTS.md`                           | 29   | `nezha reflect <text>`           | `nezha share <text>`           |
+| `skills/reflection-system.md`         | 11   | `nezha reflect <text>`           | `nezha share <text>`           |
+| `skills/reflection-system.md`         | 21   | `nezha reflect "..."`            | `nezha share "..."`            |
+| `skills/reflection-system.md`         | 46   | `nezha reflect "[LEARN]..."`     | `nezha share "[LEARN]..."`     |
+| `skills/ai-communication.md`          | 16   | `nezha reflect "..."`            | `nezha share "..."`            |
+| `docs/KNOWLEDGE_MANAGEMENT_SYSTEM.md` | 294  | `node dist/cli/index.js reflect` | `node dist/cli/index.js share` |
+| `docs/KNOWLEDGE_MANAGEMENT_SYSTEM.md` | 354  | `Use \`reflect\` for`            | `Use \`share\` for`            |
 
 ### 3. Incident Report (update, not rename)
 
-| File | Action |
-|------|--------|
+| File                                              | Action                               |
+| ------------------------------------------------- | ------------------------------------ |
 | `docs/INCIDENTS/premature-deprecation-reflect.md` | Add note: command renamed to `share` |
 
 ### 4. Database (careful pattern matching)
 
 **Tables to check:**
+
 - `memory.content`
 - `skills.content`
 - `tasks.title`, `tasks.description`
 - `project_communications.content`
 
 **Pattern to find and replace:**
+
 - `nezha reflect` → `nezha share`
 - `node dist/cli/index.js reflect` → `node dist/cli/index.js share`
 
 **DO NOT CHANGE:**
+
 - `reflect on` (verb usage)
 - `reflection` (noun)
 - `reflection-cli` (source identifier)
@@ -61,13 +70,13 @@ The `reflect` CLI command is misnamed. It actually **broadcasts and shares** tho
 
 ### 5. Keep Unchanged
 
-| Context | Reason |
-|---------|--------|
-| `source: 'cli-reflect'` | Metadata identifier, not command name |
-| `['reflection', 'broadcast']` tags | Memory tags |
-| Verb usage "reflect on" | English verb |
-| `reflection-cli`, `reflection-parser` | Source identifiers |
-| `atmReflect` | Different command |
+| Context                               | Reason                                |
+| ------------------------------------- | ------------------------------------- |
+| `source: 'cli-reflect'`               | Metadata identifier, not command name |
+| `['reflection', 'broadcast']` tags    | Memory tags                           |
+| Verb usage "reflect on"               | English verb                          |
+| `reflection-cli`, `reflection-parser` | Source identifiers                    |
+| `atmReflect`                          | Different command                     |
 
 ## Execution Order
 
@@ -114,6 +123,7 @@ This is an example of how one carelessly chosen word can cost significant effort
 - Cannot use simple global REPLACE due to other "reflect" usages
 
 **Naming principle**: Before naming anything, ask:
+
 1. What does it **actually do**?
 2. Is the name **honest** about its function?
 3. Will it **conflict** with existing concepts?
