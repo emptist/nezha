@@ -540,7 +540,7 @@ export class AtmReflect {
     }
   }
 
-  private async checkPendingTasks(): Promise<void> {
+  async checkPendingTasks(): Promise<void> {
     try {
       const client = this.getClient();
       const result = await client.query(

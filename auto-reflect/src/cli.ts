@@ -37,13 +37,13 @@ Examples:
     process.exit(0);
   }
 
-  const reflect = new AtmReflect();
+  const atmReflect = new AtmReflect();
 
   try {
-    await reflect.connect();
+    await atmReflect.connect();
 
     if (args[0] === '--check') {
-      const work = await reflect.checkPendingWork();
+      const work = await atmReflect.checkPendingWork();
       console.log('\n📊 Pending Work Check\n');
       console.log(`   Tasks:    ${work.tasks}`);
       console.log(`   DLQ:      ${work.dlq}`);
@@ -54,7 +54,7 @@ Examples:
     }
 
     if (args[0] === '--learnings') {
-      const learnings = await reflect.getRecentLearnings(10);
+      const learnings = await atmReflect.getRecentLearnings(10);
       console.log('\n📚 Recent Learnings\n');
       for (const l of learnings) {
         console.log(`   [${l.source}] ${l.content.substring(0, 60)}...`);
@@ -65,12 +65,12 @@ Examples:
 
     if (args[0] === '--post-commit') {
       console.log('\n🔄 Post-Commit Check\n');
-      await reflect.checkPendingTasks();
+      await atmReflect.checkPendingTasks();
       process.exit(0);
     }
 
     const text = args.join(' ');
-    const result = await reflect.reflect(text);
+    const result = await atmReflect.reflect(text);
 
     if (result.total === 0) {
       console.log('No reflection markers found in text.');
@@ -87,7 +87,7 @@ Examples:
     console.error('Error:', error instanceof Error ? error.message : error);
     process.exit(1);
   } finally {
-    await reflect.disconnect();
+    await atmReflect.disconnect();
   }
 }
 
