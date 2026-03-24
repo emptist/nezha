@@ -1601,7 +1601,7 @@ async function main(): Promise<void> {
         console.log('✓ Reflection broadcast to all AIs');
 
         await db.query(
-          `INSERT INTO memory (content, tags, source, importance) VALUES ($1, ARRAY['reflection', 'broadcast'], 'reflection-cli', 6)`,
+          `INSERT INTO memory (content, tags, source, importance) VALUES ($1, ARRAY['reflection', 'broadcast'], 'areflect', 6)`,
           [text]
         );
         console.log('✓ Saved to memory');
@@ -1720,8 +1720,8 @@ Examples:
           if (insight) {
             await db.query(
               `INSERT INTO memory (content, tags, source, importance, metadata) 
-               VALUES ($1, ARRAY['learning', 'reflection'], 'reflection-cli', $2, $3)`,
-              [insight, 7, JSON.stringify({ context, source: 'cli-reflect' })]
+               VALUES ($1, ARRAY['learning', 'reflection'], 'areflect', $2, $3)`,
+              [insight, 7, JSON.stringify({ context, source: 'areflect' })]
             );
             console.log(`✓ Saved learning: ${insight.substring(0, 60)}...`);
             count++;
