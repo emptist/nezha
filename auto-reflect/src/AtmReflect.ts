@@ -111,7 +111,7 @@ export class AtmReflect {
     this.pool = new pg.Pool({
       connectionString: this.config.databaseUrl || process.env.DATABASE_URL,
       host: this.config.host || process.env.DB_HOST || 'localhost',
-      port: this.config.port || parseInt(process.env.DB_PORT || '5432'),
+      port: this.config.port || parseInt(process.env.DB_PORT || '5432', 10),
       database: this.config.database || process.env.DB_NAME || 'nezha',
       user: this.config.user || process.env.DB_USER || 'postgres',
       password: this.config.password || process.env.DB_PASSWORD || '',
@@ -258,7 +258,7 @@ export class AtmReflect {
         markers.push({
           title,
           description,
-          priority: priorityStr ? parseInt(priorityStr, 10) : 5,
+          priority: priorityStr ? Math.min(10, Math.max(1, parseInt(priorityStr, 10) || 5)) : 5,
           type: type || 'implementation',
           tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
         });
@@ -304,7 +304,7 @@ export class AtmReflect {
           title,
           cron,
           description,
-          priority: priorityStr ? parseInt(priorityStr, 10) : 5,
+          priority: priorityStr ? Math.min(10, Math.max(1, parseInt(priorityStr, 10) || 5)) : 5,
         });
       }
     }
@@ -381,7 +381,7 @@ export class AtmReflect {
   async saveReviewResponse(marker: AutoReviewResponseMarker): Promise<void> {
     try {
       const client = this.getClient();
-      await client.query(`SELECT respond_to_inter_review($1, $2, $3)`, [
+      await client.query(`SELECT respond_to_inter_review($1::uuid, $2::text, $3::jsonb)`, [
         marker.reviewId,
         marker.response,
         JSON.stringify(marker.acceptedSuggestions || []),
