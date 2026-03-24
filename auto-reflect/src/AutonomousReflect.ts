@@ -67,13 +67,25 @@ export interface AutoScheduleMarker {
   priority?: number;
 }
 
+export interface AutoIssueResolveMarker {
+  id: string;
+  resolution: string;
+}
+
+export interface AutoTaskCompleteMarker {
+  id: string;
+  result?: string;
+}
+
 export interface AutonomousReflectResult {
   learnings: number;
   promptUpdates: number;
   issues: number;
+  issuesResolved: number;
+  tasks: number;
+  tasksCompleted: number;
   reviewResponses: number;
   opinions: number;
-  tasks: number;
   announces: number;
   schedules: number;
   total: number;
@@ -100,6 +112,10 @@ export class AutonomousReflect {
     /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
   private static readonly SCHEDULE_PATTERN =
     /\[SCHEDULE\]\s*title:\s*(.+?)(?:\s*cron:\s*(.+?))?(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?\s*(?=\[|$)/gis;
+  private static readonly ISSUE_RESOLVE_PATTERN =
+    /\[ISSUE_RESOLVE\]\s*id:\s*([a-f0-9-]+)\s+resolution:\s*(.+?)\s*(?=\[|$)/gis;
+  private static readonly TASK_COMPLETE_PATTERN =
+    /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
 
   constructor(config: AutonomousReflectConfig = {}) {
     this.config = config;
@@ -312,6 +328,38 @@ export class AutonomousReflect {
     return markers;
   }
 
+  parseIssueResolveMarkers(text: string): AutoIssueResolveMarker[] {
+    const markers: AutoIssueResolveMarker[] = [];
+    let match;
+
+    while ((match = AutonomousReflect.ISSUE_RESOLVE_PATTERN.exec(text)) !== null) {
+      const id = match[1]?.trim();
+      const resolution = match[2]?.trim();
+
+      if (id && resolution) {
+        markers.push({ id, resolution });
+      }
+    }
+
+    return markers;
+  }
+
+  parseTaskCompleteMarkers(text: string): AutoTaskCompleteMarker[] {
+    const markers: AutoTaskCompleteMarker[] = [];
+    let match;
+
+    while ((match = AutonomousReflect.TASK_COMPLETE_PATTERN.exec(text)) !== null) {
+      const id = match[1]?.trim();
+      const result = match[2]?.trim();
+
+      if (id) {
+        markers.push({ id, result });
+      }
+    }
+
+    return markers;
+  }
+
   async saveOpinion(marker: AutoOpinionMarker): Promise<void> {
     const client = this.getClient();
 
@@ -432,14 +480,59 @@ export class AutonomousReflect {
     );
   }
 
+  async resolveIssue(marker: AutoIssueResolveMarker): Promise<void> {
+    const client = this.getClient();
+    const author = getAuthor();
+
+    const result = await client.query<{ title: string }>(
+      `SELECT title FROM issues WHERE id = $1 AND status != 'resolved'`,
+      [marker.id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`Issue not found or already resolved: ${marker.id}`);
+      return;
+    }
+
+    await client.query(
+      `UPDATE issues 
+       SET status = 'resolved', resolution = $2, resolved_at = NOW(), resolved_by = $3
+       WHERE id = $1`,
+      [marker.id, marker.resolution, author]
+    );
+  }
+
+  async completeTask(marker: AutoTaskCompleteMarker): Promise<void> {
+    const client = this.getClient();
+
+    const result = await client.query<{ title: string }>(
+      `SELECT title FROM tasks WHERE id = $1 AND status NOT IN ('COMPLETED', 'FAILED')`,
+      [marker.id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`Task not found or already completed: ${marker.id}`);
+      return;
+    }
+
+    await client.query(
+      `UPDATE tasks 
+       SET status = 'COMPLETED', result = $2, completed_at = NOW()
+       WHERE id = $1`,
+      [marker.id, marker.result ? JSON.stringify({ message: marker.result }) : null]
+    );
+  }
+
   async reflect(text: string): Promise<AutonomousReflectResult> {
     const result: AutonomousReflectResult = {
       learnings: 0,
       promptUpdates: 0,
       issues: 0,
+      issuesResolved: 0,
+      tasks: 0,
+      tasksCompleted: 0,
       reviewResponses: 0,
       opinions: 0,
-      tasks: 0,
       announces: 0,
       schedules: 0,
       total: 0,
@@ -501,13 +594,29 @@ export class AutonomousReflect {
       console.log(`✓ Created schedule: ${marker.title.substring(0, 50)}...`);
     }
 
+    const issueResolveMarkers = this.parseIssueResolveMarkers(text);
+    for (const marker of issueResolveMarkers) {
+      await this.resolveIssue(marker);
+      result.issuesResolved++;
+      console.log(`✓ Resolved issue: ${marker.id.substring(0, 8)}...`);
+    }
+
+    const taskCompleteMarkers = this.parseTaskCompleteMarkers(text);
+    for (const marker of taskCompleteMarkers) {
+      await this.completeTask(marker);
+      result.tasksCompleted++;
+      console.log(`✓ Completed task: ${marker.id.substring(0, 8)}...`);
+    }
+
     result.total =
       result.learnings +
       result.promptUpdates +
       result.issues +
+      result.issuesResolved +
       result.reviewResponses +
       result.opinions +
       result.tasks +
+      result.tasksCompleted +
       result.announces +
       result.schedules;
 

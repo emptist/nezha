@@ -1706,7 +1706,9 @@ Markers:
   [LEARN] insight: <learning> context: <optional context>
   [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
+  [ISSUE_RESOLVE] id: <uuid> resolution: <text>
   [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
+  [TASK_COMPLETE] id: <uuid> result: <optional result>
   [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
   [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
 
@@ -1741,6 +1743,10 @@ Examples:
           /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
         const schedulePattern =
           /\[SCHEDULE\]\s*title:\s*(.+?)(?:\s*cron:\s*(.+?))?(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?\s*(?=\[|$)/gis;
+        const issueResolvePattern =
+          /\[ISSUE_RESOLVE\]\s*id:\s*([a-f0-9-]+)\s+resolution:\s*(.+?)\s*(?=\[|$)/gis;
+        const taskCompletePattern =
+          /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
 
         let match;
 
@@ -1867,6 +1873,52 @@ Examples:
             );
             console.log(`✓ Created schedule: ${title.substring(0, 50)}...`);
             count++;
+          }
+        }
+
+        while ((match = issueResolvePattern.exec(text)) !== null) {
+          const id = match[1]?.trim();
+          const resolution = match[2]?.trim();
+          if (id && resolution) {
+            const result = await db.query<{ title: string }>(
+              `SELECT title FROM issues WHERE id = $1 AND status != 'resolved'`,
+              [id]
+            );
+            if (result.rows.length === 0) {
+              console.log(`Issue not found or already resolved: ${id}`);
+            } else {
+              await db.query(
+                `UPDATE issues 
+                 SET status = 'resolved', resolution = $2, resolved_at = NOW(), resolved_by = $3
+                 WHERE id = $1`,
+                [id, resolution, Config.getInstance().getAgentId()]
+              );
+              console.log(`✓ Resolved issue: ${result.rows[0]!.title.substring(0, 50)}...`);
+              count++;
+            }
+          }
+        }
+
+        while ((match = taskCompletePattern.exec(text)) !== null) {
+          const id = match[1]?.trim();
+          const taskResult = match[2]?.trim();
+          if (id) {
+            const result = await db.query<{ title: string }>(
+              `SELECT title FROM tasks WHERE id = $1 AND status NOT IN ('COMPLETED', 'FAILED')`,
+              [id]
+            );
+            if (result.rows.length === 0) {
+              console.log(`Task not found or already completed: ${id}`);
+            } else {
+              await db.query(
+                `UPDATE tasks 
+                 SET status = 'COMPLETED', result = $2, completed_at = NOW()
+                 WHERE id = $1`,
+                [id, taskResult ? JSON.stringify({ message: taskResult }) : null]
+              );
+              console.log(`✓ Completed task: ${result.rows[0]!.title.substring(0, 50)}...`);
+              count++;
+            }
           }
         }
 

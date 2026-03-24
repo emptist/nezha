@@ -17,7 +17,9 @@ Markers:
   [LEARN] insight: <learning> context: <optional context>
   [PROMPT_UPDATE] current: <text> suggested: <text> reason: <why>
   [ISSUE] title: <title> description: <desc> type: <bug|improvement> severity: <level>
+  [ISSUE_RESOLVE] id: <uuid> resolution: <text>
   [TASK] title: <title> description: <desc> priority: <1-10> type: <implementation|review|research>
+  [TASK_COMPLETE] id: <uuid> result: <optional result>
   [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
   [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
 
@@ -84,8 +86,10 @@ Examples:
       console.log(`\n✓ Parsed ${result.total} reflection item(s)`);
       console.log(`   Learnings: ${result.learnings}`);
       console.log(`   Prompt Updates: ${result.promptUpdates}`);
-      console.log(`   Issues: ${result.issues}`);
-      console.log(`   Tasks: ${result.tasks}`);
+      console.log(`   Issues Created: ${result.issues}`);
+      console.log(`   Issues Resolved: ${result.issuesResolved}`);
+      console.log(`   Tasks Created: ${result.tasks}`);
+      console.log(`   Tasks Completed: ${result.tasksCompleted}`);
       console.log(`   Announces: ${result.announces}`);
       console.log(`   Schedules: ${result.schedules}`);
     }
