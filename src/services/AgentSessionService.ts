@@ -1,3 +1,4 @@
+import { execSync } from 'child_process';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { Config } from '../config/Config.js';
@@ -187,8 +188,11 @@ export class AgentSessionService {
 
   private async getGitBranch(): Promise<string | null> {
     try {
-      const result = await this.db.query<{ branch: string }>(`SELECT git_branch_name() as branch`);
-      return result.rows[0]?.branch ?? null;
+      const branch = execSync('git branch --show-current', {
+        encoding: 'utf-8',
+        timeout: 5000,
+      }).trim();
+      return branch || null;
     } catch {
       return null;
     }
