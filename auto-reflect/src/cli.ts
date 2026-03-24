@@ -69,7 +69,7 @@ Examples:
       process.exit(0);
     }
 
-    const text = args.slice(1).join(' ');
+    const text = args.join(' ');
     const result = await atmReflect.reflect(text);
 
     if (result.total === 0) {
