@@ -1,0 +1,44 @@
+#!/bin/sh
+#
+# prepare-commit-msg hook: Auto-append agent ID to commit messages
+#
+# This hook reads the agent ID from .nezha/agent-id.json and appends
+# [Agent: bot_xxx] to the commit message if not already present.
+#
+# Installation: Run `nezha setup-hooks` or manually copy to .git/hooks/
+#
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"
+
+AGENT_ID_FILE=".nezha/agent-id.json"
+
+if [ ! -f "$AGENT_ID_FILE" ]; then
+    exit 0
+fi
+
+AGENT_ID=$(cat "$AGENT_ID_FILE" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+if [ -z "$AGENT_ID" ]; then
+    exit 0
+fi
+
+if [ ! -f "$COMMIT_MSG_FILE" ]; then
+    exit 0
+fi
+
+if grep -q "\[Agent:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    exit 0
+fi
+
+if grep -q "Vibe-Author:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    exit 0
+fi
+
+if [ -s "$COMMIT_MSG_FILE" ]; then
+    echo "" >> "$COMMIT_MSG_FILE"
+fi
+
+echo "[Agent: $AGENT_ID]" >> "$COMMIT_MSG_FILE"
+
+exit 0

@@ -1194,6 +1194,36 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'setup-hooks': {
+        const { execSync } = await import('child_process');
+        const fs = await import('fs');
+        const path = await import('path');
+
+        const hookSource = path.join(process.cwd(), 'scripts', 'git-hooks', 'prepare-commit-msg');
+        const hookTarget = path.join(process.cwd(), '.git', 'hooks', 'prepare-commit-msg');
+
+        if (!fs.existsSync(hookSource)) {
+          cli.error('Hook source not found: ' + hookSource);
+          cli.info('Make sure you are running from the project root');
+          break;
+        }
+
+        const gitHooksDir = path.dirname(hookTarget);
+        if (!fs.existsSync(gitHooksDir)) {
+          fs.mkdirSync(gitHooksDir, { recursive: true });
+        }
+
+        fs.copyFileSync(hookSource, hookTarget);
+        execSync(`chmod +x "${hookTarget}"`);
+
+        cli.success('Git hooks installed successfully!');
+        console.log(`\n  Hook: prepare-commit-msg`);
+        console.log(`  Location: ${hookTarget}`);
+        console.log(`\n  This hook will automatically append [Agent: bot_xxx] to your commits.`);
+        console.log(`  Run 'node dist/cli/index.js agents whoami' to see your agent ID.\n`);
+        break;
+      }
+
       case 'daemon-status': {
         const installed = await isLaunchAgentInstalled();
         const loaded = await isLaunchAgentLoaded();
@@ -3245,6 +3275,7 @@ function showHelp(): void {
     status                        Show current status
     install                       Install Nezha as launchd daemon (macOS)
     uninstall                     Uninstall Nezha daemon
+    setup-hooks                   Install git hooks for auto agent ID in commits
     daemon-status                 Show daemon installation status
     health                        Show health information
     processes                     Show opencode run processes
@@ -3360,6 +3391,7 @@ function showHelpFiltered(searchTerm: string): void {
     { cmd: 'status', desc: 'Show current status' },
     { cmd: 'install', desc: 'Install Nezha as launchd daemon (macOS)' },
     { cmd: 'uninstall', desc: 'Uninstall Nezha daemon' },
+    { cmd: 'setup-hooks', desc: 'Install git hooks for auto agent ID in commits' },
     { cmd: 'daemon-status', desc: 'Show daemon installation status' },
     { cmd: 'health', desc: 'Show health information' },
     { cmd: 'processes', desc: 'Show opencode run processes' },
