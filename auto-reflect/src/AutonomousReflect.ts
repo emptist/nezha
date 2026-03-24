@@ -516,7 +516,15 @@ export class AutonomousReflect {
     );
 
     if (result.rows.length === 0) {
-      console.log(`Issue not found or already resolved: ${marker.id}`);
+      const existsResult = await client.query<{ status: string }>(
+        `SELECT status FROM issues WHERE id = $1`,
+        [marker.id]
+      );
+      if (existsResult.rows.length === 0) {
+        console.log(`Issue not found: ${marker.id}`);
+      } else {
+        console.log(`Issue already resolved: ${marker.id} (status: ${existsResult.rows[0].status})`);
+      }
       return;
     }
 
@@ -537,7 +545,15 @@ export class AutonomousReflect {
     );
 
     if (result.rows.length === 0) {
-      console.log(`Task not found or already completed: ${marker.id}`);
+      const existsResult = await client.query<{ status: string }>(
+        `SELECT status FROM tasks WHERE id = $1`,
+        [marker.id]
+      );
+      if (existsResult.rows.length === 0) {
+        console.log(`Task not found: ${marker.id}`);
+      } else {
+        console.log(`Task already ${existsResult.rows[0].status}: ${marker.id}`);
+      }
       return;
     }
 
