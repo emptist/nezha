@@ -836,7 +836,7 @@ After completing this task, use reflection markers:
 - [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
 - [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
 
-Save via: node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."`;
+Save via: node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available, skipping task execution');
@@ -2211,7 +2211,7 @@ After completing this task, use reflection markers:
 - [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
 - [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
 
-Save via: node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."`;
+Save via: node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."`;
 
     if (!this.agentCircuitBreaker.isAvailable()) {
       logger.warn('Agent circuit breaker is not available (streaming), skipping task execution');

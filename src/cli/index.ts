@@ -1664,13 +1664,13 @@ async function main(): Promise<void> {
         break;
       }
 
-      case 'atmReflect': {
+      case 'areflect': {
         const text = args.slice(1).join(' ');
         if (!text || text === '--help' || text === '-h') {
           console.log(`
 Trae Reflect - Standalone reflection tool for Trae Editor AI
 
-Usage: nezha atmReflect <text with markers>
+Usage: nezha areflect <text with markers>
 
 Markers:
   [LEARN] insight: <learning> context: <optional context>
@@ -1681,16 +1681,16 @@ Markers:
   [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
 
 Commands:
-  atmReflect "<text>"           Parse and save reflection markers
-  atmReflect --check            Check for pending work
-  atmReflect --learnings        Show recent learnings
+  areflect "<text>"           Parse and save reflection markers
+  areflect --check            Check for pending work
+  areflect --learnings        Show recent learnings
 
 Examples:
-  nezha atmReflect "[LEARN] insight: Always check for pending work before stopping"
-  nezha atmReflect "[ISSUE] title: Bug in parser type: bug severity: high"
-  nezha atmReflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
-  nezha atmReflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
-  nezha atmReflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
+  nezha areflect "[LEARN] insight: Always check for pending work before stopping"
+  nezha areflect "[ISSUE] title: Bug in parser type: bug severity: high"
+  nezha areflect "[TASK] title: Fix parser bug priority: 8 type: implementation"
+  nezha areflect "[ANNOUNCE] message: DLQ has 43 items priority: high"
+  nezha areflect "[SCHEDULE] title: Daily cleanup cron: '0 2 * * *' description: Clean old tasks"
 `);
           process.exit(0);
         }
@@ -1813,7 +1813,7 @@ Examples:
             await db.query(
               `INSERT INTO project_communications (from_ai, to_ai, message_type, content, priority)
                VALUES ($1, $2, 'broadcast', $3, $4)`,
-              ['atmReflect-cli', targetAgent, message, priority]
+              ['areflect-cli', targetAgent, message, priority]
             );
             console.log(`✓ Sent broadcast: ${message.substring(0, 50)}...`);
             count++;
@@ -3256,7 +3256,7 @@ function showHelp(): void {
     improve                      (alias for continuous-improvement)
     learn <insight>              Save learning to memory [--context] [--importance 1-10]
     prompt-suggest <cur> <sug> [reason]  Suggest a prompt improvement
-    atmReflect <text>             Parse reflection markers (for Trae AI)
+    areflect <text>             Parse reflection markers (for Trae AI)
     reflection-stats              Show reflection system statistics
     reflection-summary            Generate daily reflection summary
     reflection-trends             Show 7-day reflection trends
@@ -3371,7 +3371,7 @@ function showHelpFiltered(searchTerm: string): void {
     { cmd: 'improve', desc: '(alias for continuous-improvement)' },
     { cmd: 'learn <insight>', desc: 'Save learning to memory [--context] [--importance 1-10]' },
     { cmd: 'prompt-suggest <cur> <sug> [reason]', desc: 'Suggest a prompt improvement' },
-    { cmd: 'atmReflect <text>', desc: 'Parse reflection markers (for Trae AI)' },
+    { cmd: 'areflect <text>', desc: 'Parse reflection markers (for Trae AI)' },
     { cmd: 'reflection-stats', desc: 'Show reflection system statistics' },
     { cmd: 'reflection-summary', desc: 'Generate daily reflection summary' },
     { cmd: 'reflection-trends', desc: 'Show 7-day reflection trends' },
