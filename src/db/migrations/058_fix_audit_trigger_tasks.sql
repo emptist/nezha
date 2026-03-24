@@ -9,7 +9,7 @@ DECLARE
     v_author TEXT := 'unknown';
     v_record_id UUID;
     v_instruction TEXT;
-    v_allowed_sources TEXT[] := ARRAY['atmReflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api'];
+    v_allowed_sources TEXT[] := ARRAY['areflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api'];
 BEGIN
     IF TG_TABLE_NAME = 'project_communications' THEN
         IF NEW.from_ai = 'nezha-audit' THEN
@@ -61,7 +61,7 @@ BEGIN
                 'nezha-audit',
                 v_author,
                 'notification',
-                'Direct INSERT detected on ' || TG_TABLE_NAME || E'\n\n' || v_instruction || E'\n\nPlease use atmReflect or CLI commands for better tracking and consistency.',
+                'Direct INSERT detected on ' || TG_TABLE_NAME || E'\n\n' || v_instruction || E'\n\nPlease use areflect or CLI commands for better tracking and consistency.',
                 'high'
             );
             
@@ -75,6 +75,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION audit_direct_insert() IS 'Trigger function that audits direct inserts and sends reminders to use atmReflect or CLI. Fixed in migration 058 to use unknown source for tasks table (no source column).';
+COMMENT ON FUNCTION audit_direct_insert() IS 'Trigger function that audits direct inserts and sends reminders to use areflect or CLI. Fixed in migration 058 to use unknown source for tasks table (no source column).';
 
 -- Vibe-Author: bot_b17225f3-23e8-48a7-b009-924cfb8bb551

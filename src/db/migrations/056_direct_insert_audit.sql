@@ -1,5 +1,5 @@
 -- Migration 056: Direct Insert Audit System
--- Purpose: Audit and remind AIs to use atmReflect or CLI instead of direct database inserts
+-- Purpose: Audit and remind AIs to use areflect or CLI instead of direct database inserts
 -- Approach: Soft enforcement - log violations and send reminders
 
 -- ============================================================================
@@ -34,13 +34,13 @@ CREATE TABLE IF NOT EXISTS insert_reminders (
 
 -- Insert default reminders for key tables
 INSERT INTO insert_reminders (table_name, instruction) VALUES
-('memory', 'Use atmReflect [LEARN] or CLI "learn" command instead of direct INSERT into memory table.'),
-('tasks', 'Use atmReflect [TASK] or CLI "task-add" command instead of direct INSERT into tasks table.'),
-('issues', 'Use atmReflect [ISSUE] or CLI "issue create" command instead of direct INSERT into issues table.'),
-('prompt_suggestions', 'Use atmReflect [PROMPT_UPDATE] or CLI "prompt-suggest" command instead of direct INSERT into prompt_suggestions table.'),
-('project_communications', 'Use atmReflect [ANNOUNCE] or CLI "announce" command instead of direct INSERT into project_communications table.'),
-('scheduled_tasks', 'Use atmReflect [SCHEDULE] or CLI "schedule" command instead of direct INSERT into scheduled_tasks table.'),
-('meeting_opinions', 'Use atmReflect [OPINION] or CLI "meeting opinion" command instead of direct INSERT into meeting_opinions table.')
+('memory', 'Use areflect [LEARN] or CLI "learn" command instead of direct INSERT into memory table.'),
+('tasks', 'Use areflect [TASK] or CLI "task-add" command instead of direct INSERT into tasks table.'),
+('issues', 'Use areflect [ISSUE] or CLI "issue create" command instead of direct INSERT into issues table.'),
+('prompt_suggestions', 'Use areflect [PROMPT_UPDATE] or CLI "prompt-suggest" command instead of direct INSERT into prompt_suggestions table.'),
+('project_communications', 'Use areflect [ANNOUNCE] or CLI "announce" command instead of direct INSERT into project_communications table.'),
+('scheduled_tasks', 'Use areflect [SCHEDULE] or CLI "schedule" command instead of direct INSERT into scheduled_tasks table.'),
+('meeting_opinions', 'Use areflect [OPINION] or CLI "meeting opinion" command instead of direct INSERT into meeting_opinions table.')
 ON CONFLICT (table_name) DO NOTHING;
 
 -- ============================================================================
@@ -53,7 +53,7 @@ DECLARE
     v_author TEXT := 'unknown';
     v_record_id UUID;
     v_instruction TEXT;
-    v_allowed_sources TEXT[] := ARRAY['atmReflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api'];
+    v_allowed_sources TEXT[] := ARRAY['areflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api'];
 BEGIN
     IF TG_TABLE_NAME = 'project_communications' THEN
         IF NEW.from_ai = 'nezha-audit' THEN
@@ -105,7 +105,7 @@ BEGIN
                 'nezha-audit',
                 v_author,
                 'notification',
-                'Direct INSERT detected on ' || TG_TABLE_NAME || E'\n\n' || v_instruction || E'\n\nPlease use atmReflect or CLI commands for better tracking and consistency.',
+                'Direct INSERT detected on ' || TG_TABLE_NAME || E'\n\n' || v_instruction || E'\n\nPlease use areflect or CLI commands for better tracking and consistency.',
                 'high'
             );
             
@@ -194,7 +194,7 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
 -- 7. Comments for documentation
 -- ============================================================================
 
-COMMENT ON TABLE direct_insert_audit IS 'Logs all direct database inserts that bypass atmReflect or CLI';
+COMMENT ON TABLE direct_insert_audit IS 'Logs all direct database inserts that bypass areflect or CLI';
 COMMENT ON TABLE insert_reminders IS 'Contains reminder instructions for each monitored table';
-COMMENT ON FUNCTION audit_direct_insert() IS 'Trigger function that audits direct inserts and sends reminders to use atmReflect or CLI';
+COMMENT ON FUNCTION audit_direct_insert() IS 'Trigger function that audits direct inserts and sends reminders to use areflect or CLI';
 COMMENT ON VIEW v_direct_insert_violations IS 'Easy view to see all direct insert violations with their reminders';
