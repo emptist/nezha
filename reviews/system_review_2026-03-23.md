@@ -1,5 +1,8 @@
 # Nezha System Deep Review Report
 
+> **OUTDATED REFERENCES**: This review mentions `AtmReflect` which was renamed to `AutonomousReflect` on 2026-03-24.
+> See `reviews/renaming_for_ai.md` for rename details.
+
 > **Review Type**: System Review  
 > **Review Date**: 2026-03-23  
 > **Reviewer**: Trae AI (System Reviewer Role)  

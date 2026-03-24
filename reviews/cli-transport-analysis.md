@@ -145,7 +145,7 @@ proc = spawn('opencode', args, {
 
 ## Next Steps
 
-1. Create issue via atmReflect
+1. Create issue via areflect
 2. Implement `ALLOW_CLI_FALLBACK` option
 3. Run tests with HTTP-only mode
 4. Document results

@@ -135,13 +135,13 @@ ORDER BY importance DESC LIMIT 10;
 
 ```bash
 # Save learnings immediately after discovering something
-node dist/cli/index.js atmReflect "[LEARN] insight: <what you learned> context: <optional context>"
+node dist/cli/index.js areflect "[LEARN] insight: <what you learned> context: <optional context>"
 
 # Report issues
-node dist/cli/index.js atmReflect "[ISSUE] title: <issue> type: bug severity: high"
+node dist/cli/index.js areflect "[ISSUE] title: <issue> type: bug severity: high"
 
 # Suggest improvements
-node dist/cli/index.js atmReflect "[PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>"
+node dist/cli/index.js areflect "[PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>"
 ```
 
 **Key principle**: Reflect WHILE working, not just after. Every significant discovery should be saved immediately.
@@ -206,7 +206,7 @@ Use these markers throughout your work (not just after tasks):
 | `[ISSUE]` | Report problems | `[ISSUE] title: Bug in X type: bug severity: high` |
 | `[PROMPT_UPDATE]` | Suggest improvements | `[PROMPT_UPDATE] current: X suggested: Y reason: Z` |
 
-**Save via**: `node dist/cli/index.js atmReflect "[LEARN] insight: ..."`
+**Save via**: `node dist/cli/index.js areflect "[LEARN] insight: ..."`
 
 ## Architecture Overview
 

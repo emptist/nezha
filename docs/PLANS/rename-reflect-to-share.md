@@ -65,7 +65,7 @@ The `reflect` CLI command is misnamed. It actually **broadcasts and shares** tho
 - `reflection` (noun)
 - `reflection-cli` (source identifier)
 - `reflection-parser` (source identifier)
-- `atmReflect` (different command)
+- `areflect` (different command)
 - Any other "reflect" as verb/concept
 
 ### 5. Keep Unchanged
@@ -76,7 +76,7 @@ The `reflect` CLI command is misnamed. It actually **broadcasts and shares** tho
 | `['reflection', 'broadcast']` tags    | Memory tags                           |
 | Verb usage "reflect on"               | English verb                          |
 | `reflection-cli`, `reflection-parser` | Source identifiers                    |
-| `atmReflect`                          | Different command                     |
+| `areflect`                          | Different command                     |
 
 ## Execution Order
 

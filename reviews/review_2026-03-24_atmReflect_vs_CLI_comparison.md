@@ -1,15 +1,15 @@
-# atmReflect vs CLI Commands Comparison
+# areflect vs CLI Commands Comparison
 
 **Date**: 2026-03-24
 **Author**: Trae AI
-**Purpose**: Document gaps between atmReflect markers and CLI commands for future improvement
+**Purpose**: Document gaps between areflect markers and CLI commands for future improvement
 **Status**: ✅ Complete - All bidirectional parity achieved
 
 ---
 
 ## Complete Comparison Table
 
-| Action | atmReflect Marker | CLI Command | Database Table |
+| Action | areflect Marker | CLI Command | Database Table |
 |--------|-------------------|-------------|----------------|
 | **Save learning** | `[LEARN] insight: ...` | `learn "insight"` | `memory` |
 | **Create task** | `[TASK] title: ...` | `task-add "title" "desc" 5` | `tasks` |
@@ -32,14 +32,14 @@
 
 | Direction | Gap | Count | Status |
 |-----------|-----|-------|--------|
-| **atmReflect → CLI** | `[PROMPT_UPDATE]` has no CLI command | ~~1~~ 0 | ✅ Done |
-| **CLI → atmReflect** | `announce`, `schedule` | ~~7~~ 5 | ✅ Done |
+| **areflect → CLI** | `[PROMPT_UPDATE]` has no CLI command | ~~1~~ 0 | ✅ Done |
+| **CLI → areflect** | `announce`, `schedule` | ~~7~~ 5 | ✅ Done |
 
 **All bidirectional parity achieved!**
 
 ---
 
-## atmReflect Markers (8 total - Complete)
+## areflect Markers (8 total - Complete)
 
 | Marker | CLI Equivalent? | Status |
 |--------|-----------------|--------|
@@ -54,7 +54,7 @@
 
 ---
 
-## CLI Commands Without atmReflect Markers (5 remaining - Low Priority)
+## CLI Commands Without areflect Markers (5 remaining - Low Priority)
 
 | CLI Command | Marker Needed? | Priority | Notes |
 |-------------|----------------|----------|-------|
@@ -69,12 +69,12 @@
 
 ## Completed Actions ✅
 
-1. **Added `[ANNOUNCE]` marker to atmReflect**
+1. **Added `[ANNOUNCE]` marker to areflect**
    - Syntax: `[ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>`
    - Saves to: `project_communications` table
-   - Files: `auto-reflect/src/AtmReflect.ts`, `auto-reflect/src/cli.ts`, `src/cli/index.ts`, `auto-reflect/README.md`
+   - Files: `auto-reflect/src/AutonomousReflect.ts`, `auto-reflect/src/cli.ts`, `src/cli/index.ts`, `auto-reflect/README.md`
 
-2. **Added `[SCHEDULE]` marker to atmReflect**
+2. **Added `[SCHEDULE]` marker to areflect**
    - Syntax: `[SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>`
    - Saves to: `scheduled_tasks` table
    - Uses: `croner` library for cron parsing
@@ -89,15 +89,15 @@
 
 ## Optional Future Enhancements (Low Priority)
 
-1. **Add `[MEETING]` marker to atmReflect**
+1. **Add `[MEETING]` marker to areflect**
    - Syntax: `[MEETING] title: <title> question: <question>`
    - Creates a new meeting discussion
 
-2. **Add `[CONSENSUS]` marker to atmReflect**
+2. **Add `[CONSENSUS]` marker to areflect**
    - Syntax: `[CONSENSUS] meetingId: <id> topic: <topic> proposal: <proposal> decision: <decision>`
    - Records consensus reached
 
-3. **Add `[SHARE]` marker to atmReflect**
+3. **Add `[SHARE]` marker to areflect**
    - Syntax: `[SHARE] message: <text> insight: <learning>`
    - Combines broadcast + save learning
 
@@ -107,7 +107,7 @@
 
 | Change | File(s) |
 |--------|---------|
-| Add `[ANNOUNCE]` marker | `auto-reflect/src/AtmReflect.ts`, `auto-reflect/src/cli.ts`, `src/cli/index.ts`, `auto-reflect/README.md` |
+| Add `[ANNOUNCE]` marker | `auto-reflect/src/AutonomousReflect.ts`, `auto-reflect/src/cli.ts`, `src/cli/index.ts`, `auto-reflect/README.md` |
 | Add `[SCHEDULE]` marker | Same as above |
 | Add `prompt-suggest` CLI | `src/cli/index.ts` ✅ |
 
@@ -115,7 +115,7 @@
 
 ## Related Files
 
-- `auto-reflect/src/AtmReflect.ts` - Core atmReflect implementation
-- `auto-reflect/src/cli.ts` - atmReflect CLI
+- `auto-reflect/src/AutonomousReflect.ts` - Core areflect implementation
+- `auto-reflect/src/cli.ts` - areflect CLI
 - `src/cli/index.ts` - Main Nezha CLI
-- `auto-reflect/README.md` - atmReflect documentation
+- `auto-reflect/README.md` - areflect documentation

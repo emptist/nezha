@@ -90,4 +90,4 @@ export const TRANSPORT_CONFIG = {
 
 *Created: 2026-03-24*
 *Vibe-Author: bot_b17225f3-23e8-48a7-b009-924cfb8bb551*
-*Note: This issue was blocked by the trigger bug - couldn't be reported via atmReflect [ISSUE]*
+*Note: This issue was blocked by the trigger bug - couldn't be reported via areflect [ISSUE]*

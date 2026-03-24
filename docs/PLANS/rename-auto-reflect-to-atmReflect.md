@@ -1,30 +1,34 @@
-# Plan: Rename auto-reflect to atmReflect
+# Plan: Rename auto-reflect to areflect
 
 ```
   DONE (2026-03-24).
   - Code rename: commits 92dfc2c, 0f20e25
   - Folder kept as auto-reflect/ (preserves git history)
-  - Database source updated to 'atmReflect'
+  - Database source updated to 'areflect'
 ```
+
+> **OUTDATED**: This plan documents the rename from `AutoReflect` to `AtmReflect`.
+> On 2026-03-24, `AtmReflect` was further renamed to `AutonomousReflect`.
+> See `reviews/renaming_for_ai.md` for the latest rename details.
 
 ## Background
 
-The `auto-reflect` command name is confusing with `reflect`. This plan renames all occurrences to `atmReflect` (autonomous reflection), keeping "reflect" as the consistent root word.
+The `auto-reflect` command name is confusing with `reflect`. This plan renames all occurrences to `areflect` (autonomous reflection), keeping "reflect" as the consistent root word.
 
 **Key Design Decision**: Keep "reflect" as the root word in all commands. This allows a future single whole-word replace to update all variants consistently:
 
 - `reflect` → `share`
-- `atmReflect` → `atmShare`
+- `areflect` → `atmShare`
 
 ## Naming Convention
 
 | Current        | New           | Context                                 |
 | -------------- | ------------- | --------------------------------------- |
-| `auto-reflect` | `atmReflect`  | CLI command                             |
+| `auto-reflect` | `areflect`  | CLI command                             |
 | `auto-reflect` | `atm-reflect` | Folder names, file paths, memory source |
 | `auto_reflect` | `atm_reflect` | Database columns, snake_case contexts   |
 | `AutoReflect`  | `AtmReflect`  | Class names, TypeScript interfaces      |
-| `autoReflect`  | `atmReflect`  | Variable names, camelCase contexts      |
+| `autoReflect`  | `areflect`  | Variable names, camelCase contexts      |
 | `AUTOREFLECT`  | `ATMREFLECT`  | Constants, env vars                     |
 | `Auto-Reflect` | `Atm-Reflect` | Titles, headers                         |
 | `Auto-reflect` | `Atm-reflect` | Sentence start                          |
@@ -160,18 +164,18 @@ UPDATE memory SET source = 'auto-reflect' WHERE source = 'atm-reflect';
 
 ### Issues Found in Initial Execution
 
-1. **Wrong naming convention used**: Used `atm-reflect` (hyphen) instead of `atmReflect` (camelCase) in many places
+1. **Wrong naming convention used**: Used `atm-reflect` (hyphen) instead of `areflect` (camelCase) in many places
 2. **Folder renamed incorrectly**: Changed `auto-reflect/` to `atm-reflect/` when folder should remain unchanged
-3. **Memory source inconsistency**: Set to `'atm-reflect'` instead of `'atmReflect'`
+3. **Memory source inconsistency**: Set to `'atm-reflect'` instead of `'areflect'`
 
 ### Correct Naming Convention
 
 | Context       | Correct Value       | Notes                      |
 | ------------- | ------------------- | -------------------------- |
-| CLI command   | `atmReflect`        | camelCase                  |
-| Memory source | `'atmReflect'`      | camelCase string           |
-| Package name  | `atmReflect`        | camelCase                  |
-| Import path   | `from 'atmReflect'` | camelCase                  |
+| CLI command   | `areflect`        | camelCase                  |
+| Memory source | `'areflect'`      | camelCase string           |
+| Package name  | `areflect`        | camelCase                  |
+| Import path   | `from 'areflect'` | camelCase                  |
 | Folder name   | `auto-reflect/`     | **UNCHANGED**              |
 | File names    | `AutoReflect.ts`    | PascalCase for class files |
 
@@ -187,9 +191,9 @@ mv atm-reflect auto-reflect
 
 ```json
 {
-  "name": "atmReflect",
+  "name": "areflect",
   "bin": {
-    "atmReflect": "./dist/cli.js"
+    "areflect": "./dist/cli.js"
   },
   "repository": {
     "directory": "auto-reflect"
@@ -213,47 +217,47 @@ mv atm-reflect auto-reflect
 
 ```typescript
 // Line 13: default author
-return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'atmReflect';
+return process.env.NEZHA_AGENT_ID || process.env.AUTHOR || 'areflect';
 
 // Line 242: memory source in SQL
-VALUES ($1, ARRAY['learning', 'reflection'], 'atmReflect', $2, $3)
+VALUES ($1, ARRAY['learning', 'reflection'], 'areflect', $2, $3)
 
 // Line 248: metadata source
-source: 'atmReflect',
+source: 'areflect',
 ```
 
 #### Step 5: Fix cli.ts usage text
 
 ```typescript
-Usage: atmReflect <text with markers>
+Usage: areflect <text with markers>
 Commands:
-  atmReflect "<text>"
-  atmReflect --check
-  atmReflect --learnings
+  areflect "<text>"
+  areflect --check
+  areflect --learnings
 ```
 
 #### Step 6: Fix README.md
 
-- Title: `# atmReflect`
-- npm badge: `atmReflect`
-- Install: `npm install atmReflect`
-- CLI examples: `npx atmReflect`
-- Import: `from 'atmReflect'`
+- Title: `# areflect`
+- npm badge: `areflect`
+- Install: `npm install areflect`
+- CLI examples: `npx areflect`
+- Import: `from 'areflect'`
 
 #### Step 7: Fix database
 
 ```sql
 -- Fix memory source
-UPDATE memory SET source = 'atmReflect' WHERE source = 'atm-reflect';
+UPDATE memory SET source = 'areflect' WHERE source = 'atm-reflect';
 
 -- Fix memory content
-UPDATE memory SET content = REPLACE(content, 'atm-reflect', 'atmReflect')
+UPDATE memory SET content = REPLACE(content, 'atm-reflect', 'areflect')
 WHERE content ILIKE '%atm-reflect%';
 ```
 
 #### Step 8: Fix documentation files
 
-Replace all `atm-reflect` with `atmReflect` in:
+Replace all `atm-reflect` with `areflect` in:
 
 - docs/NEW_AI_ONBOARDING.md
 - docs/KNOWLEDGE_MANAGEMENT_SYSTEM.md
@@ -269,13 +273,13 @@ Replace all `atm-reflect` with `atmReflect` in:
 # Should return NO matches
 grep -ri "atm-reflect" --include="*.ts" --include="*.json" --include="*.md" .
 
-# Should return matches for atmReflect
-grep -ri "atmReflect" --include="*.ts" --include="*.json" .
+# Should return matches for areflect
+grep -ri "areflect" --include="*.ts" --include="*.json" .
 ```
 
 ### Key Lesson
 
-**ALWAYS use consistent camelCase `atmReflect` everywhere**, except:
+**ALWAYS use consistent camelCase `areflect` everywhere**, except:
 
 - Folder names: keep as `auto-reflect/`
 - File names: use PascalCase `AtmReflect.ts` for class files

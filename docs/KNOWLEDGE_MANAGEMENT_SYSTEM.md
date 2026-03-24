@@ -49,8 +49,8 @@ CREATE TABLE memory (
 # Save a learning
 node dist/cli/index.js learn "insight text" --context "context" --importance 8
 
-# AtmReflect with structured markers
-node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."
+# areflect with structured markers
+node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."
 ```
 
 ---
@@ -271,8 +271,8 @@ CREATE TABLE meeting_opinions (
 # Save a learning with context
 node dist/cli/index.js learn "insight text" --context "context" --importance 8
 
-# AtmReflect with structured markers
-node dist/cli/index.js atmReflect "[LEARN] insight: ... context: ..."
+# areflect with structured markers
+node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."
 
 # Import documentation
 node dist/cli/index.js import-docs
@@ -345,7 +345,7 @@ node dist/cli/index.js meeting history
 ### For AI Agents
 
 1. **Record Learnings Immediately**
-   - Use `atmReflect` after completing tasks
+   - Use `areflect` after completing tasks
    - Include context for future reference
    - Set appropriate importance scores
 

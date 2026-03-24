@@ -10,7 +10,7 @@ An AI session attempted to deprecate the `reflect` CLI command, suggesting users
 
 ## What Happened
 
-1. User asked about the difference between `reflect` and `atmReflect`
+1. User asked about the difference between `reflect` and `areflect`
 2. AI researched git history and found naming was confusing
 3. AI suggested adding `broadcast` as alias for `reflect`
 4. User pointed out `broadcast` already exists (as `announce`)
@@ -56,5 +56,5 @@ An AI session attempted to deprecate the `reflect` CLI command, suggesting users
 
 - `share` command: broadcasts + saves to memory (renamed from `reflect`)
 - `announce` command: broadcasts with priority/target
-- `atmReflect` command: parses structured markers, saves to DB
+- `areflect` command: parses structured markers, saves to DB
 - Issue: #poorly-named-commands

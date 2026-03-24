@@ -1,9 +1,9 @@
 # Direct Database Insertion Audit System
 
-Now that we have atmReflect, direct database insertion is not recommended.
-Instead, use the methods provided by atmReflect or CLI commands to save data.
+Now that we have areflect, direct database insertion is not recommended.
+Instead, use the methods provided by areflect or CLI commands to save data.
 
-## Why Use atmReflect or CLI?
+## Why Use areflect or CLI?
 
 1. **Consistency**: All inserts are tracked with proper source attribution
 2. **Audit Trail**: Every insert is logged with who/what made the change
@@ -16,7 +16,7 @@ The system automatically monitors direct inserts and sends reminders.
 
 ### Monitored Tables
 
-| Table | atmReflect Marker | CLI Command |
+| Table | areflect Marker | CLI Command |
 |-------|-------------------|-------------|
 | `memory` | `[LEARN]` | `learn` |
 | `tasks` | `[TASK]` | `task-add` |
@@ -29,7 +29,7 @@ The system automatically monitors direct inserts and sends reminders.
 ### Allowed Sources
 
 Direct inserts are allowed when `source` is one of:
-- `atmReflect` - From atmReflect tool
+- `areflect` - From areflect tool
 - `cli` - From CLI commands
 - `heartbeat` - From heartbeat system
 - `scheduler` - From scheduler
@@ -79,7 +79,7 @@ VALUES ('my_table', 'Use proper API endpoint instead of direct INSERT.');
 
 ## Best Practices for AIs
 
-1. **Always use atmReflect** for reflection-style data
+1. **Always use areflect** for reflection-style data
 2. **Use CLI commands** for task/issue management
 3. **Set proper source** when direct insert is necessary
 4. **Check reminders** in project_communications for guidance
@@ -87,5 +87,5 @@ VALUES ('my_table', 'Use proper API endpoint instead of direct INSERT.');
 ## Related Files
 
 - `src/db/migrations/056_direct_insert_audit.sql` - Migration file
-- `auto-reflect/src/AtmReflect.ts` - atmReflect implementation
+- `auto-reflect/src/AutonomousReflect.ts` - areflect implementation
 - `src/cli/index.ts` - CLI commands

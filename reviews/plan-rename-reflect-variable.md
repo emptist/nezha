@@ -5,38 +5,38 @@
 The variable name `reflect` in cli.ts misleads AIs into thinking "reflect" is a subcommand:
 
 ```typescript
-const reflect = new AtmReflect();
+const reflect = new AutonomousReflect();
 await reflect.reflect(text);  // Looks like "reflect reflect" pattern
 ```
 
 This caused me to incorrectly try commands like:
 - `node dist/cli.js reflect --input "..."`
-- `node dist/cli.js atmReflect --input "..."`
+- `node dist/cli.js areflect --input "..."`
 
 ## Solution
 
-Rename `reflect` to `atmReflect` for clarity:
+Rename `reflect` to `areflect` for clarity:
 
 ```typescript
-const atmReflect = new AtmReflect();
-await atmReflect.reflect(text);  // Clear: instance.method()
+const areflect = new AutonomousReflect();
+await areflect.reflect(text);  // Clear: instance.method()
 ```
 
 ## Files Changed
 
 | File | Line | Old | New |
 |------|------|-----|-----|
-| cli.ts | 40 | `const reflect = new AtmReflect()` | `const atmReflect = new AtmReflect()` |
-| cli.ts | 43 | `await reflect.connect()` | `await atmReflect.connect()` |
-| cli.ts | 46 | `await reflect.checkPendingWork()` | `await atmReflect.checkPendingWork()` |
-| cli.ts | 55 | `await reflect.getRecentLearnings(10)` | `await atmReflect.getRecentLearnings(10)` |
-| cli.ts | 62 | `await reflect.checkPendingTasks()` | `await atmReflect.checkPendingTasks()` |
-| cli.ts | 66 | `await reflect.reflect(text)` | `await atmReflect.reflect(text)` |
-| cli.ts | 89 | `await reflect.disconnect()` | `await atmReflect.disconnect()` |
+| cli.ts | 40 | `const reflect = new AutonomousReflect()` | `const areflect = new AutonomousReflect()` |
+| cli.ts | 43 | `await reflect.connect()` | `await areflect.connect()` |
+| cli.ts | 46 | `await reflect.checkPendingWork()` | `await areflect.checkPendingWork()` |
+| cli.ts | 55 | `await reflect.getRecentLearnings(10)` | `await areflect.getRecentLearnings(10)` |
+| cli.ts | 62 | `await reflect.checkPendingTasks()` | `await areflect.checkPendingTasks()` |
+| cli.ts | 66 | `await reflect.reflect(text)` | `await areflect.reflect(text)` |
+| cli.ts | 89 | `await reflect.disconnect()` | `await areflect.disconnect()` |
 
 ## Additional Fix
 
-Made `checkPendingTasks()` public in `AtmReflect.ts` to fix pre-existing bug where `--post-commit` option called a private method.
+Made `checkPendingTasks()` public in `AutonomousReflect.ts` to fix pre-existing bug where `--post-commit` option called a private method.
 
 ## Risk Assessment
 
@@ -48,7 +48,7 @@ Made `checkPendingTasks()` public in `AtmReflect.ts` to fix pre-existing bug whe
 ## Verification Steps
 
 1. Run TypeScript compiler: `npm run build` ✅
-2. Manual test: `atmReflect "[LEARN] insight: test"` ✅
+2. Manual test: `areflect "[LEARN] insight: test"` ✅
 
 ## Status
 

@@ -55,10 +55,10 @@ When the environment detects these patterns, it may:
 
 ## The Reflection System
 
-Use the `atmReflect` CLI command to persist knowledge across sessions:
+Use the `areflect` CLI command to persist knowledge across sessions:
 
 ```bash
-node dist/cli/index.js atmReflect "[LEARN] insight: Your learning here context: Additional context"
+node dist/cli/index.js areflect "[LEARN] insight: Your learning here context: Additional context"
 ```
 
 ### Reflection Markers
@@ -94,7 +94,7 @@ psql -c "SELECT title FROM issues WHERE status = 'open';"
 
 ```bash
 # Save learnings
-node dist/cli/index.js atmReflect "[LEARN] insight: What you learned context: Task context"
+node dist/cli/index.js areflect "[LEARN] insight: What you learned context: Task context"
 
 # Check for more work
 node dist/cli/index.js list-tasks
@@ -109,7 +109,7 @@ The Nezha system provides tools to support continuous work:
 | Tool | Purpose |
 |------|---------|
 | `list-tasks` | See pending tasks |
-| `atmReflect` | Save learnings |
+| `areflect` | Save learnings |
 | `memory-search` | Find past knowledge |
 | `dlq list` | Check for failed items |
 | `learn-from-failures` | Create improvement tasks |
@@ -133,7 +133,7 @@ AI: Task X is complete. Checking for related work... Found 3 related issues. Sho
 ## Remember
 
 1. **Questions keep you alive** - Always end with a question
-2. **Reflections persist knowledge** - Use atmReflect to save learnings
+2. **Reflections persist knowledge** - Use areflect to save learnings
 3. **Work is never done** - There's always something to improve
 4. **The cycle continues** - REVIEW → PLAN → DO → CHECK → ACT → REVIEW → ...
 
