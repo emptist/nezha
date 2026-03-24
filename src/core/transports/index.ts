@@ -89,6 +89,8 @@ export class HttpTransport implements SessionManager {
   private readonly timeout: number;
   private sessionId: string | null = null;
   private sessionCreationLock: Promise<string> | null = null;
+  private static serverHealthCache: Map<string, { healthy: boolean; timestamp: number }> = new Map();
+  private static readonly HEALTH_CACHE_TTL = 30000;
 
   /**
    * Creates a new HttpTransport instance.
@@ -98,6 +100,64 @@ export class HttpTransport implements SessionManager {
   constructor(serverUrl: string, timeout: number) {
     this.serverUrl = serverUrl;
     this.timeout = timeout;
+  }
+
+  /**
+   * Pre-flight check to verify if the OpenCode server is running.
+   * Uses caching to avoid excessive health checks.
+   * @param serverUrl - The server URL to check
+   * @param timeoutMs - Timeout in milliseconds (default: 5000)
+   * @returns Object with healthy status and optional error message
+   */
+  static async checkServerHealth(
+    serverUrl: string,
+    timeoutMs: number = 5000
+  ): Promise<{ healthy: boolean; error?: string }> {
+    const cached = HttpTransport.serverHealthCache.get(serverUrl);
+    if (cached && Date.now() - cached.timestamp < HttpTransport.HEALTH_CACHE_TTL) {
+      return { healthy: cached.healthy };
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      const response = await fetch(`${serverUrl}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const healthy = response.ok;
+      HttpTransport.serverHealthCache.set(serverUrl, { healthy, timestamp: Date.now() });
+
+      return {
+        healthy,
+        error: healthy ? undefined : `Server returned ${response.status} ${response.statusText}`,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.name === 'AbortError'
+            ? 'Server health check timed out'
+            : error.message
+          : 'Unknown error';
+
+      HttpTransport.serverHealthCache.set(serverUrl, { healthy: false, timestamp: Date.now() });
+
+      return {
+        healthy: false,
+        error: `OpenCode server not reachable at ${serverUrl}: ${errorMessage}`,
+      };
+    }
+  }
+
+  /**
+   * Clears the server health cache.
+   * Call this when you know the server state has changed.
+   */
+  static clearHealthCache(): void {
+    HttpTransport.serverHealthCache.clear();
   }
 
   /** @inheritDoc */

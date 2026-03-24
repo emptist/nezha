@@ -206,7 +206,7 @@ export class UnifiedAgent {
    * @param config.serverUrl - Server URL for HTTP transport (default: 'http://localhost:4096')
    * @param config.logDir - Directory for conversation logs (default: 'conversations')
    * @param config.enableLogging - Enable conversation logging (default: true)
-   * @param config.enableFallback - Enable automatic fallback (default: true)
+   * @param config.enableFallback - Enable automatic fallback (default: false)
    * @param config.fallbackMode - Fallback transport mode when primary fails
    * @param config.enableCache - Enable response caching (default: true)
    * @param config.cacheTtlMs - Cache TTL in milliseconds (default: 300000)
@@ -222,7 +222,7 @@ export class UnifiedAgent {
     this.transportMode = config?.mode ?? 'http';
     this.currentMode = this.transportMode;
     this.enableLogging = config?.enableLogging ?? true;
-    this.enableFallback = config?.enableFallback ?? true;
+    this.enableFallback = config?.enableFallback ?? false;
     this.enableCache = config?.enableCache ?? true;
     this.cacheTtlMs = config?.cacheTtlMs ?? 5 * 60 * 1000;
     this.enableObservability = config?.enableObservability ?? true;
@@ -274,9 +274,18 @@ export class UnifiedAgent {
       halfOpenAttempts: 1,
       onStateChange: (from: CircuitState, to: CircuitState) => {
         logger.info(`Circuit breaker: ${from} -> ${to}`);
-        if (to === 'open' && this.enableFallback && this.fallbackTransport) {
-          logger.info('Switching to fallback transport due to circuit breaker open');
-          this.switchMode(config?.fallbackMode ?? (this.transportMode === 'http' ? 'cli' : 'http'));
+        if (to === 'open') {
+          if (this.enableFallback && this.fallbackTransport) {
+            logger.warn(
+              `Circuit breaker opened. Fallback to ${config?.fallbackMode ?? 'cli'} mode is available but NOT recommended due to high memory usage (~500MB per process). ` +
+                `Consider starting the OpenCode server: opencode serve`
+            );
+          } else {
+            logger.error(
+              `Circuit breaker opened. Server appears unavailable. ` +
+                `Start the OpenCode server: opencode serve`
+            );
+          }
         }
       },
       onFailure: (error: Error, count: number) => {
@@ -599,6 +608,21 @@ export class UnifiedAgent {
     task?: AgentTask
   ): Promise<UnifiedAgentResponse> {
     const startTime = Date.now();
+
+    if (this.transportMode === 'http') {
+      const healthCheck = await HttpTransport.checkServerHealth(this.serverUrl);
+      if (!healthCheck.healthy) {
+        logger.error(`Pre-flight check failed: ${healthCheck.error}`);
+        return {
+          success: false,
+          message: healthCheck.error,
+          errorCategory: 'TRANSPORT',
+          durationMs: Date.now() - startTime,
+          correlationId: this.agentMetrics.correlationId,
+        };
+      }
+    }
+
     const sessionId = this.conversationLogger?.startConversation(
       {
         id: task?.id || crypto.randomUUID(),
