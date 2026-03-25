@@ -1813,7 +1813,7 @@ async function main(): Promise<void> {
 
         const db = new DatabaseClient(Config.getInstance());
         const { BroadcastService } = await import('../services/BroadcastService.js');
-        const broadcastService = new BroadcastService(db);
+        const broadcastService = await BroadcastService.create(db);
 
         await broadcastService.sendBroadcast(text, { priority: 'normal' });
         console.log('✓ Reflection broadcast to all AIs');
@@ -3022,7 +3022,7 @@ Examples:
 
         const db = await cliInstance.getDb();
         const { BroadcastService } = await import('../services/BroadcastService.js');
-        const broadcastService = new BroadcastService(db);
+        const broadcastService = await BroadcastService.create(db);
 
         const validPriorities = ['low', 'normal', 'high', 'critical'];
         const broadcastPriority = validPriorities.includes(priority || 'normal')
@@ -3280,7 +3280,7 @@ Examples:
         const subcommand = args[1];
         const db = await cliInstance.getDb();
         const { BroadcastService } = await import('../services/BroadcastService.js');
-        const broadcastService = new BroadcastService(db);
+        const broadcastService = await BroadcastService.create(db);
 
         if (subcommand === 'list') {
           const broadcasts = await broadcastService.getBroadcasts(20);
