@@ -96,6 +96,39 @@ Trae AI → 读到 ID A (冲突！)
 | **同步**   | 复制, CDC               | Git (仅文本) |
 | **完整性** | 约束，触发器            | 无           |
 
+### ⚠️ AI ID System - 数字人身份设计
+
+> **核心洞察**: AI 没有记忆，AI 只是数据的临时容器。真正的"知识"存在于 PostgreSQL 中，用 Agent ID 作为数据的标签/锚点。
+
+#### ID 格式
+
+```
+S-{project}-{git-hash}-{timestamp}-{hash}   # Specific: 有项目/git
+G-{machine-fingerprint}-{timestamp}-{hash}  # General: 无项目/git
+```
+
+#### 示例
+
+```
+S-nezha-e33f9a0-20260325-133422-64db91
+G-71c2ae97-20260325-133422-64db91
+```
+
+#### 核心原则
+
+- **幂等性**: 同样上下文 = 同样 ID = 知识累积 = 专家养成
+- **确定性**: ID 生成用哈希，不含随机数
+- **自动灌注**: AI 启动时自动解析/创建身份
+
+#### 依赖
+
+- Daemon + PostgreSQL (必须运行)
+- 自动检测 Daemon 状态，未运行则自动启动
+
+**详细文档**: 参见 [docs/AGENT_ID_SYSTEM.md](./docs/AGENT_ID_SYSTEM.md)
+
+---
+
 ### ⚠️ 重要概念：真正的持续工作 vs 虚伪的持续工作
 
 **核心原则**: 完成工作的主体必须是**大模型**，而不是程序代码

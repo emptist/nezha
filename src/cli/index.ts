@@ -13,6 +13,7 @@ import { cli, colors } from '../utils/cli.js';
 import { setVerboseMode } from '../utils/verboseLogger.js';
 import { AgentSystem } from '../core/AgentSystem.js';
 import { AgentIdentityService, type AgentIdentity } from '../services/AgentIdentityService.js';
+import { DaemonAutoStartService } from '../services/DaemonAutoStartService.js';
 import {
   requestReviewFromAI,
   showReview,
@@ -117,7 +118,14 @@ export class Cli {
   async start(): Promise<void> {
     const db = await this.getDb();
 
-    // Resolve agent identity first
+    // Auto-start daemon if not running
+    const daemonService = new DaemonAutoStartService();
+    const daemonStatus = await daemonService.ensureDaemonRunning();
+    if (!daemonStatus.success) {
+      cli.warn(`Daemon: ${daemonStatus.message}`);
+    }
+
+    // Resolve agent identity
     await this.resolveAgentIdentity();
 
     const embeddingConfig = this.config.getEmbeddingConfig();
@@ -1156,6 +1164,30 @@ async function main(): Promise<void> {
         await cliInstance.status();
         break;
 
+      case 'daemon': {
+        const daemonService = new DaemonAutoStartService();
+        const status = await daemonService.getStatus();
+
+        console.log('Daemon Status:');
+        console.log(`  Installed: ${status.installed ? '✅' : '❌'}`);
+        console.log(`  Loaded:    ${status.loaded ? '✅' : '❌'}`);
+        console.log(`  Running:   ${status.running ? '✅' : '❌'}`);
+        if (status.pid) {
+          console.log(`  PID:       ${status.pid}`);
+        }
+
+        if (!status.running) {
+          cli.step('Starting daemon...');
+          const result = await daemonService.ensureDaemonRunning();
+          if (result.success) {
+            cli.success('Daemon started');
+          } else {
+            cli.error(`Failed: ${result.message}`);
+          }
+        }
+        break;
+      }
+
       case 'install': {
         const isInstalled = await isLaunchAgentInstalled();
         const status = await getLaunchAgentStatus();
@@ -1248,6 +1280,89 @@ async function main(): Promise<void> {
         console.log(`  Location: ${hookTarget}`);
         console.log(`\n  This hook will automatically append [Agent: bot_xxx] to your commits.`);
         console.log(`  Run 'node dist/cli/index.js agents whoami' to see your agent ID.\n`);
+        break;
+      }
+
+      case 'validate-commit': {
+        const commitMsgFile = args[1];
+        if (!commitMsgFile) {
+          cli.error('Usage: nezha validate-commit <commit-msg-file>');
+          process.exit(1);
+        }
+
+        const fs = await import('fs');
+        if (!fs.existsSync(commitMsgFile)) {
+          cli.error(`Commit message file not found: ${commitMsgFile}`);
+          process.exit(1);
+        }
+
+        const commitMsg = fs.readFileSync(commitMsgFile, 'utf-8');
+        const db = await cliInstance.getDb();
+
+        const uuidPattern =
+          /\[(task|issue|review):\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+        const matches = [...commitMsg.matchAll(uuidPattern)];
+
+        if (matches.length === 0) {
+          cli.error('Commit message must contain one of:');
+          cli.error('  [task: <uuid>] - Task ID');
+          cli.error('  [issue: <uuid>] - Issue ID');
+          cli.error('  [review: <uuid>] - Inter-review ID');
+          cli.error('');
+          cli.error(
+            'Example: git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"'
+          );
+          process.exit(1);
+        }
+
+        let valid = false;
+        const errors: string[] = [];
+
+        for (const match of matches) {
+          const type = (match[1] || '').toLowerCase();
+          const id = match[2] || '';
+
+          let exists = false;
+          if (type === 'task') {
+            const result = await db.query(
+              'SELECT EXISTS(SELECT 1 FROM tasks WHERE id = $1) as exists',
+              [id]
+            );
+            exists = result.rows[0]?.exists ?? false;
+          } else if (type === 'issue') {
+            const result = await db.query(
+              'SELECT EXISTS(SELECT 1 FROM issues WHERE id = $1) as exists',
+              [id]
+            );
+            exists = result.rows[0]?.exists ?? false;
+          } else if (type === 'review') {
+            const result = await db.query(
+              'SELECT EXISTS(SELECT 1 FROM inter_reviews WHERE id = $1) as exists',
+              [id]
+            );
+            exists = result.rows[0]?.exists ?? false;
+          }
+
+          if (exists) {
+            valid = true;
+          } else {
+            errors.push(`  [${type}: ${id}] - Not found in database`);
+          }
+        }
+
+        if (!valid) {
+          cli.error('Invalid or non-existent IDs in commit message:');
+          errors.forEach(e => cli.error(e));
+          cli.error('');
+          cli.error('All IDs must reference existing tasks, issues, or inter-reviews.');
+          process.exit(1);
+        }
+
+        console.log(
+          `✓ Commit message validated (${matches.length} ID${matches.length > 1 ? 's' : ''} found)`
+        );
+        await db.close();
+        process.exit(0);
         break;
       }
 
@@ -3496,6 +3611,7 @@ function showHelp(): void {
     install                       Install Nezha as launchd daemon (macOS)
     uninstall                     Uninstall Nezha daemon
     setup-hooks                   Install git hooks for auto agent ID in commits
+    validate-commit <file>        Validate commit message has task/issue/review ID
     daemon-status                 Show daemon installation status
     health                        Show health information
     processes                     Show opencode run processes
@@ -3613,6 +3729,7 @@ function showHelpFiltered(searchTerm: string): void {
     { cmd: 'install', desc: 'Install Nezha as launchd daemon (macOS)' },
     { cmd: 'uninstall', desc: 'Uninstall Nezha daemon' },
     { cmd: 'setup-hooks', desc: 'Install git hooks for auto agent ID in commits' },
+    { cmd: 'validate-commit', desc: 'Validate commit message has task/issue/review ID' },
     { cmd: 'daemon-status', desc: 'Show daemon installation status' },
     { cmd: 'health', desc: 'Show health information' },
     { cmd: 'processes', desc: 'Show opencode run processes' },

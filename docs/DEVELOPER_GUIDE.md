@@ -13,33 +13,49 @@
 
 ### 荒唐的错误设计
 
-最初的设计将 AI ID 存储在共享文件 `.nezha/agent-id.json` 中：
+最初的设计将 AI ID 存储在共享文件 `.nezha/agent-id.json` 中，导致所有 AI 共享同一个 ID。
 
-```javascript
-// ❌ 错误：所有 AI 共享同一个 ID
-.nezha/agent-id.json  →  { "id": "bot_xxx" }
-                              ↓
-OpenCode AI 启动  →  读到 ID A
-Daemon AI 启动   →  读到 ID A  (冲突！)
-Trae AI 启动     →  读到 ID A  (冲突！)
-```
-
-**后果**:
-
-- 无法追踪谁做了什么
-- 知识混乱，无法累积
-- 数字人身份形同虚设
-- 无法产生专家
-
-### 正确的设计
-
-**幂等性 + 确定性**:
+### 正确的设计：幂等 + 确定性
 
 ```
 相同的上下文 → 相同的 ID → 知识累积 → 专家养成
 ```
 
-**ID 格式**: `{project}-{git-hash}-{timestamp}`
+### ID 格式
+
+```
+S-{project}-{git-hash}-{timestamp}-{hash}   # Specific: 有项目/git
+G-{machine-fingerprint}-{timestamp}-{hash}  # General: 无项目/git
+```
+
+**示例**:
+
+```
+S-nezha-e33f9a0-20260325-133422-64db91
+G-71c2ae97-20260325-133422-64db91
+```
+
+### 核心原则
+
+| 原则         | 说明                  |
+| ------------ | --------------------- |
+| **幂等性**   | 同样上下文 = 同样 ID  |
+| **确定性**   | 哈希生成，无随机数    |
+| **自动灌注** | AI 启动时自动解析身份 |
+
+### 依赖
+
+| 依赖           | 说明                    |
+| -------------- | ----------------------- |
+| **Daemon**     | 必须运行，负责调度      |
+| **PostgreSQL** | 必须运行，存储身份数据  |
+| **自动检测**   | 未运行则自动启动 Daemon |
+
+### 实现
+
+- `AgentIdentityService` - 身份服务
+- `agent_identities` 表 - 身份存储
+- `created_by_identity` 字段 - 任务关联
 
 详见: [AGENT_ID_SYSTEM.md](./AGENT_ID_SYSTEM.md)
 
