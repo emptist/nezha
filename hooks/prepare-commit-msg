@@ -1,0 +1,51 @@
+#!/bin/sh
+#
+# prepare-commit-msg hook: Auto-append agent ID to commit messages
+#
+# Priority:
+# 1. NEZHA_AGENT_ID environment variable (recommended for unique per-session ID)
+# 2. .nezha/agent-id.json file (shared by default)
+#
+# Installation: Run `nezha setup-hooks` or manually copy to .git/hooks/
+#
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="$2"
+
+# Priority 1: Check environment variable first
+if [ -n "$NEZHA_AGENT_ID" ]; then
+    AGENT_ID="$NEZHA_AGENT_ID"
+else
+    # Priority 2: Fall back to file-based ID
+    AGENT_ID_FILE=".nezha/agent-id.json"
+    
+    if [ ! -f "$AGENT_ID_FILE" ]; then
+        exit 0
+    fi
+    
+    AGENT_ID=$(cat "$AGENT_ID_FILE" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+fi
+
+if [ -z "$AGENT_ID" ]; then
+    exit 0
+fi
+
+if [ ! -f "$COMMIT_MSG_FILE" ]; then
+    exit 0
+fi
+
+if grep -q "\[Agent:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    exit 0
+fi
+
+if grep -q "Vibe-Author:" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    exit 0
+fi
+
+if [ -s "$COMMIT_MSG_FILE" ]; then
+    echo "" >> "$COMMIT_MSG_FILE"
+fi
+
+echo "[Agent: $AGENT_ID]" >> "$COMMIT_MSG_FILE"
+
+exit 0
