@@ -1,10 +1,6 @@
 #!/bin/sh
 #
-# post-commit hook: Notify ReminderService about git commit
-#
-# This hook:
-# 1. Publishes git commit event to EventBus
-# 2. Triggers reminder for AI to review the commit
+# post-commit hook: Notify about git commit
 #
 # Installation: Run `nezha setup-hooks` or manually copy to .git/hooks/
 
@@ -16,17 +12,14 @@ if [ -z "$COMMIT_HASH" ]; then
     exit 0
 fi
 
-# Find node binary
-if command -v node >/dev/null 2>&1; then
-    NODE_BIN="node"
-elif [ -x "/opt/homebrew/bin/node" ]; then
-    NODE_BIN="/opt/homebrew/bin/node"
+GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$GIT_ROOT" ]; then
+    exit 0
 fi
 
-# Try to notify via nezha command
-if command -v nezha >/dev/null 2>&1; then
-    # Send a reminder broadcast
-    nezha announce "📝 **Git Commit**: ${COMMIT_MSG:0:50}... on $BRANCH" --priority low 2>/dev/null &
-fi
+# Load env and announce
+cd "$GIT_ROOT"
+source .env 2>/dev/null
+/opt/homebrew/bin/node "$GIT_ROOT/dist/cli/index.js" announce "📝 **Git Commit**: ${COMMIT_MSG:0:60} on $BRANCH" --priority low 2>/dev/null
 
 exit 0
