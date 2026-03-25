@@ -98,19 +98,17 @@ export class AgentIdentityService {
   }
 
   generateSemanticId(context: AgentContext): string {
-    const parts: string[] = [context.project];
+    const hash = this.generateDeterministicHash(context);
+    const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace('T', '-').slice(0, 15);
+    const shortHash = hash.substring(0, 6);
 
-    if (context.gitHash) {
-      parts.push(context.gitHash);
+    // S = Specific: 有项目/git 信息
+    if (context.project && context.gitHash) {
+      return `S-${context.project}-${context.gitHash}-${timestamp}-${shortHash}`;
     }
 
-    const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace('T', '-').slice(0, 15); // YYYYMMDD-HHmmss
-    parts.push(timestamp);
-
-    const hash = this.generateDeterministicHash(context);
-    parts.push(hash.substring(0, 6));
-
-    return parts.join('-');
+    // G = General: 无项目/git 信息
+    return `G-${context.machineFingerprint}-${timestamp}-${shortHash}`;
   }
 
   generateDeterministicHash(context: AgentContext): string {
