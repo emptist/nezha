@@ -3453,8 +3453,15 @@ Examples:
               colors.reset
           );
         } else if (subcommand === 'whoami') {
-          const agentId = Config.getInstance().getAgentId();
-          console.log(`\n  Agent ID: ${colors.cyan}${agentId}${colors.reset}`);
+          const db = await cliInstance.getDb();
+          const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+          const identityService = new AgentIdentityService(db);
+          const resolved = await identityService.resolve();
+          await db.close();
+          console.log(`\n  Agent ID: ${colors.cyan}${resolved.id}${colors.reset}`);
+          if (resolved.displayName) {
+            console.log(`  Display Name: ${colors.cyan}${resolved.displayName}${colors.reset}`);
+          }
           console.log(`  Session: ${getCurrentSessionId() || '(none)'}`);
           console.log('');
         } else if (subcommand === 'sync') {
