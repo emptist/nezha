@@ -5,8 +5,8 @@ import { EventBus } from '../core/EventBus.js';
 import { SCHEDULER_EVENTS } from '../core/Scheduler.js';
 import { Config } from '../config/Config.js';
 
-const REMINDER_COOLDOWN_MS = 5 * 60 * 1000;
-const BLIND_LOOP_INTERVAL_MS = 5 * 60 * 1000;
+const REMINDER_COOLDOWN_MS = 1 * 60 * 1000;
+const BLIND_LOOP_INTERVAL_MS = 1 * 60 * 1000;
 const MAX_TASKS_TO_SHOW = 5;
 
 export interface ReminderConfig {
