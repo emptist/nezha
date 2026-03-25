@@ -219,7 +219,7 @@ Nezha 采用**真正的持续工作**模式：
 
 1. **HeartbeatService**: 调度器，负责定时触发
 2. **Scheduler**: 任务调度器，从数据库获取任务
-3. **Agent**: 大模型调用器，调用 OpenCode API 执行任务
+3. **AIProvider**: AI 调用器，通过 OpenAI/Anthropic API 执行任务
 4. **大模型**: 实际执行工作，自主决策
 
 **工作流程**:
@@ -229,15 +229,13 @@ HeartbeatService 定时触发
     ↓
 Scheduler 从数据库获取任务
     ↓
-Agent 调用 OpenCode API
+AIProvider 调用 LLM API
     ↓
 大模型接收任务，自主决策
     ↓
-大模型执行任务（调用工具、读写文件、运行命令）
-    ↓
 大模型返回结果
     ↓
-Agent 更新数据库状态
+更新数据库状态
     ↓
 循环...
 ```
@@ -388,10 +386,9 @@ interface InterReviewService {
 
 **AI 提供者支持**:
 
-- ✅ **OpenCode 集成** (推荐) - 使用 UnifiedAgent，无需外部 API key
-- ✅ **GLM-4-Flash** - 通过 ZHIPU_API_KEY 环境变量
 - ✅ **OpenAI** - 通过 OPENAI_API_KEY 环境变量
 - ✅ **Anthropic** - 通过 ANTHROPIC_API_KEY 环境变量
+- ✅ **GLM-4-Flash** - 通过 ZHIPU_API_KEY 环境变量
 
 **Learnings 示例**:
 
@@ -479,23 +476,21 @@ interface ClawHubClient {
 nezha/
 ├── src/
 │   ├── core/
-│   │   ├── Agent.ts              # Agent 通信系统 ✅
-│   │   ├── AgentSystem.ts        # Agent 管理系统 ✅
 │   │   ├── ContinuousImprovementLoop.ts  # 持续改进循环 ✅
 │   │   ├── EventBus.ts          # 事件总线 ✅
 │   │   ├── Memory.ts            # 记忆系统 ✅
 │   │   ├── Scheduler.ts         # 调度系统 ✅
 │   │   └── SkillSystem.ts       # 技能系统 ✅
 │   ├── services/
-│   │   ├── HeartbeatService.ts  # 心跳服务 ✅
+│   │   ├── heartbeat/           # 心跳服务 ✅
+│   │   │   └── HeartbeatService.ts  # 99行精简版
+│   │   ├── ai/                  # AI 调用 ✅
+│   │   │   └── AIProvider.ts   # OpenAI/Anthropic
 │   │   ├── InterReviewService.ts # AI 互相 Review ✅
 │   │   ├── AutoReviewService.ts  # 自动触发 Review ✅
 │   │   ├── TaskReviewSkill.ts    # 任务 QC ✅
 │   │   ├── SkillBuilder.ts       # AI 构建技能 ✅
-│   │   ├── ClawHubClient.ts      # ClawHub 集成 ✅
-│   │   ├── MemoryService.ts      # 记忆服务 ✅
 │   │   └── DatabaseSkillLoader.ts # DB-only 技能加载 ✅
-│   │   └── MemoryService.ts   # 记忆服务 ✅
 │   ├── db/
 │   │   ├── DatabaseClient.ts  # 数据库客户端 ✅
 │   │   └── migrations/
@@ -508,6 +503,8 @@ nezha/
 │   │   ├── index.ts           # CLI 入口 ✅
 │   │   └── process-guardian.ts # 进程守护 ✅
 │   └── NezhaCore.ts           # 核心入口 ✅
+├── deprecated/                # 已废弃代码
+│   └── opencode-coupling/     # OpenCode 耦合代码 (已移除)
 ├── conversations/             # 会话日志 (JSONL)
 ├── memory/                    # 每日记忆
 ├── reviews/                    # 代码评审
@@ -596,32 +593,14 @@ nezha start
 # 4. 构建
 npm run build
 
-# 5. 启动 OpenCode serve（ Nezha 会自动检测端口）
-opencode serve
-
-# 6. 启动 Nezha daemon
+# 5. 启动 Nezha daemon
 nezha start
 
-# 7. 添加任务
+# 6. 添加任务
 nezha task-add "Review code" "Review src/core for issues" 5
 ```
 
-#### OpenCode 端口自动检测
-
-Nezha 会自动检测 OpenCode 的端口：
-
-1. 检查 `NEZHA_OPENCODE_PORT` 环境变量
-2. 读取 OpenCode 配置文件 (`.config/opencode/config.yaml`)
-3. 使用默认值
-
-````bash
-# 方式 1: 环境变量
-export NEZHA_OPENCODE_PORT=4096
-
-# 方式 2: OpenCode 配置文件自动检测
-# ~/.config/opencode/config.yaml
-serve:
-  port: 4096  # Nezha 会自动读取这个端口
+**注意**: Nezha 不再依赖 OpenCode 服务。它直接通过 AIProvider 调用 OpenAI/Anthropic API。
 
 #### 旧版方式（仅参考）
 
@@ -635,7 +614,7 @@ CREATE DATABASE nezha;
 # 运行迁移
 \c nezha
 \i src/db/migrations/001_initial.sql
-````
+```
 
 ### 运行
 
@@ -1269,12 +1248,12 @@ MIT
 - [OpenClaw](https://github.com/openclaw/openclaw) - 心跳机制和调度系统灵感
 - [PostgreSQL](https://www.postgresql.org/) - 强大的数据库系统
 - [Node.js](https://nodejs.org/) - 运行时环境
-test
-test2
-test3
-test final
-test debug
-test fix2
-test eval
-final test
-block test
+  test
+  test2
+  test3
+  test final
+  test debug
+  test fix2
+  test eval
+  final test
+  block test

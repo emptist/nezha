@@ -1,48 +1,59 @@
-# OpenCode 耦合分析
+# OpenCode 耦合清理 - 已完成
 
-## 真实情况
+## 状态：✅ 已完成
 
-**OpenCode 只是一个可选的、带 Tools 的 LLM 调用方式**
+## 清理概述
 
-OpenCode 不是必须的，Nezha 可以完全独立运行。
+本次重构删除了 ~3500 行不必要的 OpenCode HTTP API 耦合代码。
 
-### OpenCode 的实际角色
+### 删除的文件
 
-| 用途           | 说明                                |
-| -------------- | ----------------------------------- |
-| 给人类用的 CLI | 带 Tools（文件/命令），方便人类工作 |
-| 可选的 LLM     | 可以用它的免费 model                |
-| 端口自动检测   | 不需要硬编码 4096                   |
+| 文件                               | 说明                        |
+| ---------------------------------- | --------------------------- |
+| `src/core/UnifiedAgent.ts`         | OpenCode API 封装           |
+| `src/core/Agent.ts`                | HTTP transport 封装         |
+| `src/core/AgentSystem.ts`          | 多 agent 管理               |
+| `src/core/transports/`             | HttpTransport, CliTransport |
+| `src/core/OpenCodeClient.ts`       | OpenCode CLI 客户端         |
+| `src/services/HeartbeatService.ts` | 旧的 2440 行版本            |
 
-### 问题根源
+### 新增的文件
 
-某个 AI 错误地把 OpenCode 集成进来作为"任务执行器"：
+| 文件                                         | 说明          |
+| -------------------------------------------- | ------------- |
+| `src/services/heartbeat/HeartbeatService.ts` | 精简版 99 行  |
+| `src/services/AITaskExecutor.ts`             | AI 任务执行器 |
+| `src/services/DocsImporter.ts`               | 文档导入工具  |
 
+## 残留文件清单
+
+以下文件仍存在但已废弃，建议后续清理：
+
+```bash
+./bin/opencode-watchdog.sh      # 旧脚本，可能需要
+./bin/opencode-limited.sh       # 旧脚本，可能需要
+./.nezha/agent-id.json         # ❌ 已废弃，使用数据库
+./.tmp/discussion_opencode.sql  # 临时文件
+./.git/opencode                 # git 配置？
 ```
-错误设计: UnifiedAgent → OpenCode API
-                ↓
-    所有服务都开始依赖它
-```
 
-### 正确架构
+## 正确架构
 
 ```
 Nezha (任务调度器)
     │
     ├── DatabaseClient (任务存储)
     ├── AIProvider (LLM 调用) ← 主要方式
-    ├── OpenCode (可选) ← 如果要用免费 model
-    │   └── 通过 AIProvider 接口封装
-    └── 其他服务 (观察/记录)
+    └── 人类用 OpenCode 直接工作
 ```
 
-### 端口检测
+## 验证
 
-OpenCode 启动后端口是自动可检测的，不需要硬编码。
+```bash
+npm run build   # 编译通过
+npm test        # 960 tests 通过
+```
 
-## 待办
+## 日期
 
-- [ ] 移除硬编码的 4096 端口
-- [ ] 将 OpenCode 封装为可选的 AIProvider
-- [ ] 验证 AIProvider 可以完全替代
-- [ ] 更新配置说明
+2026-03-26
