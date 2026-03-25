@@ -1273,3 +1273,4 @@ test
 test2
 test3
 test final
+test debug
