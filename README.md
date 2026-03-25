@@ -1276,3 +1276,4 @@ test final
 test debug
 test fix2
 test eval
+final test
