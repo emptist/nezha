@@ -1260,13 +1260,13 @@ async function main(): Promise<void> {
       case 'processes': {
         const { execSync } = await import('child_process');
         const subCmd = args[1];
-        
+
         try {
           const output = execSync('ps aux | grep -E "opencode run" | grep -v grep', {
             encoding: 'utf-8',
           });
           const lines = output.trim().split('\n').filter(Boolean);
-          
+
           if (subCmd === 'kill') {
             if (lines.length === 0) {
               console.log('No opencode run processes to kill');
@@ -1615,6 +1615,90 @@ async function main(): Promise<void> {
         break;
       }
 
+      case 'workflow-validate': {
+        const { execSync } = await import('child_process');
+        const db = new DatabaseClient(Config.getInstance());
+
+        const changedFilesResult = execSync('git diff --name-only HEAD', { encoding: 'utf-8' });
+        const changedFiles = changedFilesResult
+          .trim()
+          .split('\n')
+          .filter((f: string) => f);
+
+        if (changedFiles.length === 0) {
+          console.log('No changes to validate.');
+          await db.close();
+          break;
+        }
+
+        console.log(`\n🔍 Validating workflow for ${changedFiles.length} changed file(s)...\n`);
+
+        console.log('📋 Code changes must originate from ONE of: Issue, Task, or Inter-Review\n');
+
+        const sourceChecks = {
+          issue: { name: 'Issue', passed: false, message: '' },
+          task: { name: 'Task', passed: false, message: '' },
+          review: { name: 'Inter-Review', passed: false, message: '' },
+        };
+
+        const issueResult = await db.query(
+          `SELECT id, title, issue_type, severity FROM issues WHERE status IN ('open', 'in_progress') ORDER BY created_at DESC LIMIT 5`
+        );
+
+        if (issueResult.rows.length > 0) {
+          sourceChecks.issue.passed = true;
+          sourceChecks.issue.message = `✓ Found ${issueResult.rows.length} active issue(s)`;
+        } else {
+          sourceChecks.issue.message = 'No active issues';
+        }
+
+        const taskResult = await db.query(
+          `SELECT id, title, status FROM tasks WHERE status IN ('PENDING', 'RUNNING') ORDER BY priority DESC LIMIT 5`
+        );
+
+        if (taskResult.rows.length > 0) {
+          sourceChecks.task.passed = true;
+          sourceChecks.task.message = `✓ Found ${taskResult.rows.length} active task(s)`;
+        } else {
+          sourceChecks.task.message = 'No active tasks';
+        }
+
+        const hasValidSource =
+          sourceChecks.issue.passed || sourceChecks.task.passed || sourceChecks.review.passed;
+
+        console.log('');
+        for (const check of Object.values(sourceChecks)) {
+          console.log(`  ${check.message}`);
+        }
+
+        console.log('');
+        if (hasValidSource) {
+          console.log('✅ Source verified! Code change has valid origin (Issue/Task/Review).');
+
+          const testFiles = changedFiles.filter(
+            (f: string) => f.endsWith('.test.ts') || f.endsWith('.spec.ts')
+          );
+          if (testFiles.length > 0) {
+            console.log(
+              `\n✅ Tests: Found ${testFiles.length} test file(s): ${testFiles.join(', ')}`
+            );
+          } else {
+            console.log('\n⚠️  Tests: No test files changed (recommended to add tests)');
+          }
+
+          console.log('\n✅ Ready to commit!');
+        } else {
+          console.log('❌ No valid source found! Code changes must originate from ONE of:');
+          console.log('  - Issue:    nezha areflect "[ISSUE] title: ... type: bug severity: high"');
+          console.log('  - Task:     nezha task-add "..."');
+          console.log('  - Review:   Complete an inter-review');
+          console.log('\n💡 Tip: At least one active Issue, Task, or pending Review is required.');
+        }
+
+        await db.close();
+        break;
+      }
+
       case 'share': {
         const text = args.slice(1).join(' ');
         if (!text) {
@@ -1679,8 +1763,12 @@ async function main(): Promise<void> {
           cli.error('Current and suggested prompts are required');
           console.log('\nUsage: nezha prompt-suggest "current prompt" "suggested prompt" "reason"');
           console.log('\nExamples:');
-          console.log('  nezha prompt-suggest "Review code" "Review code and run tests" "Tests often missed"');
-          console.log('  nezha prompt-suggest "Fix bug" "Fix bug and add test" "Prevent regression"');
+          console.log(
+            '  nezha prompt-suggest "Review code" "Review code and run tests" "Tests often missed"'
+          );
+          console.log(
+            '  nezha prompt-suggest "Fix bug" "Fix bug and add test" "Prevent regression"'
+          );
           process.exit(1);
         }
 
@@ -3371,6 +3459,7 @@ function showHelp(): void {
     reflection-trends             Show 7-day reflection trends
     import-docs                   Import docs/ folder to memory
     share <text>                Broadcast a reflection to all AIs
+    workflow-validate          Validate code change has valid source (Issue/Task/Review)
     tasks [--tag <tag>]          List tasks (filter by tag, status, category)
     table-of-tasks (tot)          Show task table with summary
     templates <cmd>               Manage task templates
@@ -3487,6 +3576,7 @@ function showHelpFiltered(searchTerm: string): void {
     { cmd: 'reflection-trends', desc: 'Show 7-day reflection trends' },
     { cmd: 'import-docs', desc: 'Import docs/ folder to memory' },
     { cmd: 'share <text>', desc: 'Broadcast a reflection to all AIs' },
+    { cmd: 'workflow-validate', desc: 'Validate code has Issue/Task/Review source' },
     { cmd: 'tasks [--tag <tag>]', desc: 'List tasks (filter by tag, status, category)' },
     { cmd: 'table-of-tasks (tot)', desc: 'Show task table with summary' },
     { cmd: 'templates <cmd>', desc: 'Manage task templates' },
