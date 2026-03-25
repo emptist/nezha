@@ -56,17 +56,64 @@ AI 启动时自动选择/创建身份，无需手动干预。
 ## ID 格式
 
 ```
-{project}-{git-hash}-{timestamp}[-{uuid}]
+S-{project}-{git-hash}-{timestamp}-{hash}   # Specific: 有项目/git
+G-{machine-fingerprint}-{timestamp}-{hash}  # General: 无项目/git
 ```
 
 ### 示例
 
 ```
-nezha-abc1234-20260325T104500
-     │        │
-     │        └── 2026-03-25 10:45:00
-     └── 项目名 + git short hash
+# Specific: 有项目 + git
+S-nezha-e33f9a0-20260325-133422-64db91
+ ↑  │        │         │          │
+ │  │        │         │          └── 确定性哈希 (6位)
+ │  │        │         └── 时间戳 (YYYYMMDD-HHmmss)
+ │  │        └── Git short hash
+ │  └── 项目名
+ └── 特定标识 (有项目/git)
+
+# General: 无项目/git
+G-71c2ae97d5d52059-20260325-133422-64db91
+ ↑  │                │          │
+ │  │                │          └── 确定性哈希 (6位)
+ │  │                └── 时间戳
+ │  └── 机器指纹
+ └── 通用标识 (无项目/git)
 ```
+
+### 字段说明
+
+| 字段                  | 来源                          | 价值              |
+| --------------------- | ----------------------------- | ----------------- |
+| `S/G`                 | 自动判断                      | 区分特定/通用身份 |
+| `project`             | git remote 或目录名           | 知道来自哪个项目  |
+| `git-hash`            | `git rev-parse --short HEAD`  | 可还原代码版本    |
+| `machine-fingerprint` | SHA256(主机名+平台+CPU)       | 机器识别          |
+| `timestamp`           | YYYYMMDD-HHmmss               | 知道出生时间      |
+| `hash`                | SHA256(project\|git\|machine) | 确定性保证        |
+
+### 降级方案
+
+如果 git 不可用，自动降级到 General 格式：
+
+```
+无项目/git → 机器指纹 → G-格式
+```
+
+{project}-{git-hash}-{timestamp}[-{uuid}]
+
+```
+
+### 示例
+
+```
+
+nezha-abc1234-20260325T104500
+│ │
+│ └── 2026-03-25 10:45:00
+└── 项目名 + git short hash
+
+````
 
 ### 字段说明
 
@@ -84,18 +131,18 @@ nezha-abc1234-20260325T104500
 ```sql
 -- 组合指纹
 md5(current_database() || inet_server_addr() || clock_timestamp())
-```
+````
 
 ## 匹配优先级
 
 当 AI 启动时，按以下优先级查找已有身份：
 
-| 优先级 | 匹配条件            | 含义                 |
-| ------ | ------------------- | -------------------- |
-| 1      | project + git hash  | 同一项目同一代码版本 |
-| 2      | project             | 同一项目             |
-| 3      | machine fingerprint | 同一机器             |
-| 4      | 无匹配              | 生成新 ID            |
+| 优先级 | 匹配条件            | 生成格式 | 含义                 |
+| ------ | ------------------- | -------- | -------------------- |
+| 1      | project + git hash  | S-       | 同一项目同一代码版本 |
+| 2      | project             | S-       | 同一项目             |
+| 3      | machine fingerprint | G-       | 同一机器             |
+| 4      | 无匹配              | S-/G-    | 生成新 ID            |
 
 ## 实现逻辑
 
