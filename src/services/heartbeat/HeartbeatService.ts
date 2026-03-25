@@ -34,6 +34,7 @@ export class HeartbeatService {
   async start(): Promise<void> {
     logger.info('Starting HeartbeatService...');
 
+    await this.reminderService.initialize();
     this.reminderService.setEventBus(this.scheduler.getEventBus());
     this.reminderService.startBlindLoop();
 

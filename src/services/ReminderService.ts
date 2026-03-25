@@ -17,7 +17,7 @@ export interface ReminderConfig {
 
 export class ReminderService {
   private readonly db: DatabaseClient;
-  private readonly broadcastService: BroadcastService;
+  private broadcastService: BroadcastService | null = null;
   private readonly config: ReminderConfig;
   private lastReminderTime: number = 0;
   private blindLoopTimer: ReturnType<typeof setInterval> | null = null;
@@ -25,12 +25,16 @@ export class ReminderService {
 
   constructor(db: DatabaseClient, config: ReminderConfig = {}) {
     this.db = db;
-    this.broadcastService = new BroadcastService(db);
     this.config = {
       enableEventTriggers: config.enableEventTriggers ?? true,
       enableInterReviewCheck: config.enableInterReviewCheck ?? true,
       enableMemorySave: config.enableMemorySave ?? true,
     };
+  }
+
+  async initialize(): Promise<void> {
+    this.broadcastService = await BroadcastService.create(this.db);
+    logger.info('[Reminder] BroadcastService initialized');
   }
 
   setEventBus(eventBus: EventBus): void {
@@ -133,6 +137,10 @@ export class ReminderService {
   }
 
   private async notifyAI(message: string, priority: 'low' | 'normal' | 'high'): Promise<void> {
+    if (!this.broadcastService) {
+      logger.warn('[Reminder] BroadcastService not initialized');
+      return;
+    }
     await this.broadcastService.sendBroadcast(message, { priority });
     logger.info(`[Reminder] Notified AI: ${message.substring(0, 50)}...`);
   }
