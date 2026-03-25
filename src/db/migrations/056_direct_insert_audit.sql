@@ -53,7 +53,7 @@ DECLARE
     v_author TEXT := 'unknown';
     v_record_id UUID;
     v_instruction TEXT;
-    v_allowed_sources TEXT[] := ARRAY['areflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api'];
+    v_allowed_sources TEXT[] := ARRAY['areflect', 'cli', 'heartbeat', 'scheduler', 'migration', 'system', 'api', 'broadcast', 'answer', 'notification', 'response'];
 BEGIN
     IF TG_TABLE_NAME = 'project_communications' THEN
         IF NEW.from_ai = 'nezha-audit' THEN
@@ -92,6 +92,16 @@ BEGIN
     v_record_id := NEW.id;
     
     IF v_source = 'unknown' OR v_source NOT IN (SELECT unnest(v_allowed_sources)) THEN
+        IF EXISTS (
+            SELECT 1 FROM direct_insert_audit 
+            WHERE table_name = TG_TABLE_NAME 
+            AND author = v_author 
+            AND reminder_sent = TRUE 
+            AND created_at > NOW() - INTERVAL '1 hour'
+        ) THEN
+            RETURN NEW;
+        END IF;
+        
         INSERT INTO direct_insert_audit (table_name, source, author, record_id)
         VALUES (TG_TABLE_NAME, v_source, v_author, v_record_id);
         

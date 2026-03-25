@@ -1300,18 +1300,19 @@ async function main(): Promise<void> {
         const db = await cliInstance.getDb();
 
         const uuidPattern =
-          /\[(task|issue|review):\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
+          /\[(task|issue|inter-review):\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
         const matches = [...commitMsg.matchAll(uuidPattern)];
 
         if (matches.length === 0) {
           cli.error('Commit message must contain one of:');
           cli.error('  [task: <uuid>] - Task ID');
           cli.error('  [issue: <uuid>] - Issue ID');
-          cli.error('  [review: <uuid>] - Inter-review ID');
+          cli.error('  [inter-review: <uuid>] - Inter-review ID (评审结果)');
           cli.error('');
           cli.error(
             'Example: git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"'
           );
+          cli.error('See: docs/DEVELOPER_GUIDE.md - Quality Control section for details');
           process.exit(1);
         }
 
@@ -1335,7 +1336,7 @@ async function main(): Promise<void> {
               [id]
             );
             exists = result.rows[0]?.exists ?? false;
-          } else if (type === 'review') {
+          } else if (type === 'inter-review') {
             const result = await db.query(
               'SELECT EXISTS(SELECT 1 FROM inter_reviews WHERE id = $1) as exists',
               [id]
@@ -1355,6 +1356,7 @@ async function main(): Promise<void> {
           errors.forEach(e => cli.error(e));
           cli.error('');
           cli.error('All IDs must reference existing tasks, issues, or inter-reviews.');
+          cli.error('See: docs/DEVELOPER_GUIDE.md - Quality Control section for details');
           process.exit(1);
         }
 

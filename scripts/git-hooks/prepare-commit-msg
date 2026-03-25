@@ -1,15 +1,45 @@
 #!/bin/sh
 #
-# prepare-commit-msg hook: Auto-append agent ID to commit messages
+# prepare-commit-msg hook: Quality control + Auto-append agent ID
 #
-# This hook reads the agent ID from .nezha/agent-id.json and appends
-# [Agent: bot_xxx] to the commit message if not already present.
+# This hook:
+# 1. Validates commit message contains task/issue/inter-review ID (quality control)
+# 2. Appends [Agent: xxx] to the commit message
+#
+# Validation rules:
+# - Commit must contain at least one of: [task:], [issue:], [inter-review:]
+# - All IDs found must exist in the database (task, issue, or inter_reviews table)
+# - If validation fails, commit is blocked with error message
 #
 # Installation: Run `nezha setup-hooks` or manually copy to .git/hooks/
 #
 
 COMMIT_MSG_FILE="$1"
 COMMIT_SOURCE="$2"
+
+if [ ! -f "$COMMIT_MSG_FILE" ]; then
+    exit 0
+fi
+
+NEZHA_CLI="node dist/cli/index.js"
+
+if [ -f "$NEZHA_CLI" ] || command -v nezha >/dev/null 2>&1; then
+    NEZHA_CMD="nezha"
+else
+    NEZHA_CMD="$NEZHA_CLI"
+fi
+
+if command -v "$NEZHA_CMD" >/dev/null 2>&1; then
+    if ! "$NEZHA_CMD" validate-commit "$COMMIT_MSG_FILE" 2>/dev/null; then
+        echo ""
+        echo "=========================================="
+        echo " COMMIT BLOCKED - Quality Control Check"
+        echo "=========================================="
+        echo ""
+        "$NEZHA_CMD" validate-commit "$COMMIT_MSG_FILE"
+        exit 1
+    fi
+fi
 
 AGENT_ID_FILE=".nezha/agent-id.json"
 
@@ -20,10 +50,6 @@ fi
 AGENT_ID=$(cat "$AGENT_ID_FILE" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
 if [ -z "$AGENT_ID" ]; then
-    exit 0
-fi
-
-if [ ! -f "$COMMIT_MSG_FILE" ]; then
     exit 0
 fi
 

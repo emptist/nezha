@@ -126,6 +126,7 @@ export interface UnifiedAgentResponse {
   errorCategory?: string;
   fallbackUsed?: boolean;
   fromCache?: boolean;
+  serverUnavailable?: boolean;
 }
 
 export interface TaskMetrics {
@@ -255,42 +256,31 @@ export class UnifiedAgent {
     }
 
     this.transport = createTransport({
-      mode: this.transportMode,
       serverUrl: this.serverUrl,
       timeout: this.timeout,
-    }) as HttpTransport | CliTransport;
+    }) as HttpTransport;
 
     if (this.enableFallback && config?.fallbackMode) {
       this.fallbackTransport = createTransport({
-        mode: config.fallbackMode,
         serverUrl: this.serverUrl,
         timeout: this.timeout,
-      }) as HttpTransport | CliTransport;
+      }) as HttpTransport;
     }
 
     const circuitBreakerConfig = {
-      failureThreshold: config?.circuitBreakerThreshold ?? 3,
+      failureThreshold: config?.circuitBreakerThreshold ?? 9999,
       resetTimeoutMs: config?.circuitBreakerResetMs ?? 5 * 60 * 1000,
       halfOpenAttempts: 1,
       onStateChange: (from: CircuitState, to: CircuitState) => {
-        logger.info(`Circuit breaker: ${from} -> ${to}`);
         if (to === 'open') {
-          if (this.enableFallback && this.fallbackTransport) {
-            logger.warn(
-              `Circuit breaker opened. Fallback to ${config?.fallbackMode ?? 'cli'} mode is available but NOT recommended due to high memory usage (~500MB per process). ` +
-                `Consider starting the OpenCode server: opencode serve`
-            );
-          } else {
-            logger.error(
-              `Circuit breaker opened. Server appears unavailable. ` +
-                `Start the OpenCode server: opencode serve`
-            );
-          }
+          logger.warn(
+            `Circuit breaker would open, but is disabled (high threshold). Server may be unavailable.`
+          );
         }
       },
       onFailure: (error: Error, count: number) => {
         const categorized = categorizeError(error);
-        logger.warn(`Circuit breaker failure ${count} [${categorized.category}]: ${error.message}`);
+        logger.debug(`Circuit breaker check [${categorized.category}]: ${error.message}`);
       },
     };
 
@@ -612,14 +602,9 @@ export class UnifiedAgent {
     if (this.transportMode === 'http') {
       const healthCheck = await HttpTransport.checkServerHealth(this.serverUrl);
       if (!healthCheck.healthy) {
-        logger.error(`Pre-flight check failed: ${healthCheck.error}`);
-        return {
-          success: false,
-          message: healthCheck.error,
-          errorCategory: 'TRANSPORT',
-          durationMs: Date.now() - startTime,
-          correlationId: this.agentMetrics.correlationId,
-        };
+        logger.warn(
+          `OpenCode server unavailable (${this.serverUrl}): ${healthCheck.error}. Will retry on request.`
+        );
       }
     }
 
@@ -659,10 +644,8 @@ export class UnifiedAgent {
       }
     }
 
-    const sendWithCircuitBreaker = async (): Promise<string> => {
-      return this.circuitBreaker.execute(async () => {
-        return this.getCurrentTransport().sendMessage(message);
-      });
+    const sendMessage = async (): Promise<string> => {
+      return this.getCurrentTransport().sendMessage(message);
     };
 
     let lastError: Error | null = null;
@@ -677,7 +660,7 @@ export class UnifiedAgent {
           `Executing task (attempt ${attempt}/${this.maxRetries}, mode: ${this.currentMode}): ${logMessage}`
         );
 
-        const result = await sendWithCircuitBreaker();
+        const result = await sendMessage();
         const artifacts = this.extractArtifacts(result);
 
         if (this.enableCache) {
@@ -722,8 +705,7 @@ export class UnifiedAgent {
         }
 
         if (lastCategorizedError.category === 'AUTH') {
-          logger.error('Authentication error - will not retry');
-          break;
+          logger.warn('Authentication error - retrying (server may need configuration)');
         }
 
         if (lastError.name === 'AbortError') {
@@ -785,6 +767,8 @@ export class UnifiedAgent {
       durationMs: Date.now() - startTime,
       errorCategory: lastCategorizedError?.category,
       fallbackUsed,
+      serverUnavailable:
+        lastCategorizedError?.category === 'AUTH' || lastCategorizedError?.category === 'TRANSPORT',
     };
   }
 

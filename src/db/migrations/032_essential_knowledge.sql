@@ -191,7 +191,58 @@ severity: critical|high|medium|low',
         NOW()
     )
     ON CONFLICT DO NOTHING;
-    
+
+    -- NEW: PostgreSQL + areflect 核心技术优势
+    INSERT INTO memory (id, content, source, tags, importance, metadata, created_at, updated_at)
+    VALUES (
+        uuid_generate_v4(),
+        E'# 哪吒核心技术优势: PostgreSQL + areflect
+
+## 架构原则
+哪吒系统**只依赖 PostgreSQL**，除此之外不依赖任何外部服务。
+
+## 核心依赖
+- 心跳 → PostgreSQL
+- 任务队列 → PostgreSQL
+- 记忆存储 → PostgreSQL
+- 技能加载 → PostgreSQL
+- 广播通信 → PostgreSQL
+
+## 不依赖 (避免使用)
+- ❌ OpenCode HTTP 服务
+- ❌ 本地文件系统
+- ❌ 外部 API
+
+## areflect (AutonomousReflect)
+哪吒的自主反射机制，让 AI 能：
+
+1. **保存学习**: [LEARN] insight: <学习内容> context: <上下文>
+2. **创建任务**: [TASK] title: <标题> priority: 1-10 type: <类型>
+3. **报告问题**: [ISSUE] title: <标题> type: bug|improvement severity: <严重程度>
+4. **广播**: [ANNOUNCE] message: <消息> priority: <优先级>
+5. **检查待办**: areflect --check 或 checkPendingWork()
+
+## share 命令 (与 areflect 集成)
+- `nezha share <text>` = 调用 BroadcastService + 保存到 memory
+- `areflect "[ANNOUNCE]..."` = 直接插入数据库 (待优化)
+- CLI: node dist/cli/index.js share "广播内容"
+
+## 遇到问题时的思维模式
+当遇到外部依赖问题时，思考：**如何用 PostgreSQL 解决？**
+
+CLI 命令:
+- node dist/cli/index.js areflect "[LEARN] insight: ..."
+- node dist/cli/index.js share "<广播内容>"
+- node dist/cli/index.js task-add "<标题>" "<描述>" <优先级>',
+        'essential:core-advantage',
+        ARRAY['essential', 'postgresql', 'areflect', 'design-principle'],
+        10,
+        jsonb_build_object('category', 'architecture'),
+        NOW(),
+        NOW()
+    )
+    ON CONFLICT DO NOTHING;
+
     -- Update bootstrap state
     UPDATE bootstrap_state 
     SET essential_loaded = TRUE, last_bootstrap_at = NOW() 

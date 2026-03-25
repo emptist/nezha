@@ -938,6 +938,17 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."`;
         return;
       }
 
+      if (result.serverUnavailable) {
+        logger.warn(`Server unavailable for task ${taskId}, keeping as PENDING for retry`);
+        await this.db.query(
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, retry_count = retry_count + 1, next_retry_at = NOW() + INTERVAL '5 minutes' WHERE id = $2`,
+          [TASK_STATUS.PENDING, taskId]
+        );
+        await this.watchdogService.untrackTask(taskId);
+        await this.longTaskManager.unregisterTask(taskId);
+        return;
+      }
+
       this.stats.tasksFailed++;
 
       const errorMessage = result.message || 'Unknown error';
@@ -1391,7 +1402,9 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ... context: ..."`;
           await this.db.query(`UPDATE project_communications SET read_at = NOW() WHERE id = $1`, [
             comm.id,
           ]);
-          logger.info(`[Communications] Marked broadcast as read (not creating task): ${comm.content.substring(0, 50)}...`);
+          logger.info(
+            `[Communications] Marked broadcast as read (not creating task): ${comm.content.substring(0, 50)}...`
+          );
           continue;
         }
 

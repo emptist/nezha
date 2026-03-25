@@ -1573,6 +1573,114 @@ export class MyPlugin implements Plugin {
 
 ---
 
+## ✅ Quality Control - Commit Traceability
+
+### Overview
+
+All code changes must be traceable to a source (task, issue, or inter-review). This prevents AI from "rushing in without thinking" and ensures proper PDCA cycles.
+
+### Three Sources (Choose One)
+
+| Source | Format | Description |
+|--------|--------|-------------|
+| Task | `[task: <uuid>]` | Task ID from task system |
+| Issue | `[issue: <uuid>]` | Issue ID from issue tracking |
+| Inter-review | `[inter-review: <uuid>]` | AI peer review result |
+
+### Commit Message Format
+
+```bash
+# Example with task
+git commit -m "Fix authentication bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"
+
+# Example with issue
+git commit -m "Implement new feature [issue: xxx-xxx-xxx]"
+
+# Example with inter-review
+git commit -m "Address review feedback [inter-review: xxx-xxx-xxx]"
+```
+
+### Validation Rules
+
+1. Commit message must contain **at least one** valid ID tag
+2. All ID tags found must **exist in the database**
+3. If validation fails, commit is **blocked** with error message
+
+### Traceability Chain (Reverse Order)
+
+```
+commit → hook → inter-review → announce finished → announce will implement → pick up → [task, issue, inter-review]
+```
+
+### Full Workflow (Forward Order)
+
+```
+1. [task, issue, inter-review]  ← Choose one as source
+         ↓
+2. pick up (claim the task)
+         ↓
+3. announce will implement
+         ↓
+4. Research + Design
+         ↓
+5. Implement
+         ↓
+6. Self-test
+         ↓
+7. Update documentation
+         ↓
+8. areflect (save learnings)
+         ↓
+9. announce finished
+         ↓
+10. inter-review (AI peer review)
+         ↓
+11. commit (with ID tag)
+         ↓
+12. hook (validates traceability)
+```
+
+### Installation
+
+```bash
+# Install the quality control hook
+nezha setup-hooks
+
+# Manual validation
+nezha validate-commit <commit-msg-file>
+```
+
+### Error Messages
+
+If commit is blocked, you'll see:
+
+```
+✗ Commit message must contain one of:
+✗   [task: <uuid>] - Task ID
+✗   [issue: <uuid>] - Issue ID
+✗   [inter-review: <uuid>] - Inter-review ID (评审结果)
+✗
+✗ Example: git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"
+✗ See: docs/DEVELOPER_GUIDE.md - Quality Control section for details
+```
+
+### Why This Matters
+
+| Without QC | With QC |
+|------------|---------|
+| AI rushes in | AI follows PDCA cycle |
+| Random changes | Traceable changes |
+| Hard to trace bugs | Easy to find source |
+| Quality degrades | Quality improves |
+
+### See Also
+
+- [PDCA_CYCLE.md](./PDCA_CYCLE.md) - PDCA improvement cycle
+- [ISSUE_TRACKING.md](./ISSUE_TRACKING.md) - Issue tracking system
+- [AI_COLLABORATION.md](./AI_COLLABORATION.md) - AI collaboration guide
+
+---
+
 **创建时间**: 2026-03-16  
 **状态**: 完整指南  
 **维护者**: Nezha Team

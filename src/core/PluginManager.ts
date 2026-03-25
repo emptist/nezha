@@ -22,6 +22,22 @@ export interface WebhookContext {
   source: string;
 }
 
+export interface CommitContext {
+  commitHash: string;
+  message: string;
+  files: string[];
+  author: string;
+  timestamp: Date;
+}
+
+export interface NextStepSuggestion {
+  type: 'task' | 'commit' | 'review' | 'test' | 'refactor' | 'docs';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  reason: string;
+  action?: string;
+}
+
 export interface PluginHooks {
   beforeTask?: (context: TaskContext) => Promise<void> | void;
   afterTask?: (context: TaskContext) => Promise<void> | void;
@@ -32,6 +48,11 @@ export interface PluginHooks {
   onWebhook?: (context: WebhookContext) => Promise<void> | void;
   onWake?: (context: WebhookContext & { message?: string }) => Promise<void> | void;
   onWebhookTask?: (context: WebhookContext, task: { id: string }) => Promise<void> | void;
+  afterCommit?: (context: CommitContext, suggestions: NextStepSuggestion[]) => Promise<void> | void;
+  afterTaskWithChanges?: (
+    context: TaskContext,
+    suggestions: NextStepSuggestion[]
+  ) => Promise<void> | void;
 }
 
 export interface Plugin {

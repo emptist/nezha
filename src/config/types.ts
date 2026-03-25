@@ -40,9 +40,9 @@ export interface NezhaConfig {
 }
 
 export interface TransportConfig {
-  mode: 'http' | 'cli';
-  opencodeApiUrl: string;
-  fallbackMode?: 'http' | 'cli';
+  /** @deprecated CLI mode removed - only HTTP is supported */
+  mode?: 'http' | 'cli';
+  opencodeApiUrl?: string;
   timeout?: number;
   enableFallback?: boolean;
   enableCache?: boolean;

@@ -2,7 +2,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 
 export interface NezhaYamlConfig {
   database?: {
@@ -48,8 +47,7 @@ export class YamlConfigLoader {
   private config: NezhaYamlConfig | null = null;
 
   constructor(configPath?: string) {
-    // Default to ~/.nezha/config.yaml
-    this.configPath = configPath || path.join(os.homedir(), '.nezha', 'config.yaml');
+    this.configPath = configPath || path.join(process.cwd(), 'config.yaml');
   }
 
   load(): NezhaYamlConfig {

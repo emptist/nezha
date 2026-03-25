@@ -337,12 +337,32 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
       const config = Config.getInstance();
       const agentId = config.getAgentId();
       const sessionId = config.getAgentId();
+      const configDisplayName = config.getAgentDisplayName();
+
+      let displayName = configDisplayName || '(not set)';
+      if (!configDisplayName) {
+        try {
+          const db = getDb();
+          const result = await db.query(
+            'SELECT display_name FROM agent_identity WHERE agent_name = $1',
+            [agentId.replace('bot_', '')]
+          );
+          if (result.rows.length > 0) {
+            const row = result.rows[0];
+            if (row && row.display_name) {
+              displayName = row.display_name;
+            }
+          }
+        } catch {
+          // Fallback to config value
+        }
+      }
 
       return {
         content: [
           {
             type: 'text',
-            text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${config.getAgentDisplayName() || '(not set)'}\n- Agent Name: ${config.getAgentName()}`,
+            text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${displayName}\n- Agent Name: ${config.getAgentName()}`,
           },
         ],
       };

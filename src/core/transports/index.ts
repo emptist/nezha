@@ -40,9 +40,9 @@ export type TransportMode = 'http' | 'cli';
  * Configuration for creating a transport instance.
  */
 export interface TransportConfig {
-  /** Transport mode: 'http' or 'cli' */
-  mode: TransportMode;
-  /** Server URL for HTTP transport or CLI server address */
+  /** @deprecated CLI mode disabled - causes resource exhaustion */
+  // mode: TransportMode;
+  /** Server URL for HTTP transport */
   serverUrl: string;
   /** Request timeout in milliseconds */
   timeout: number;
@@ -83,23 +83,48 @@ export interface SessionManager {
 /**
  * HTTP-based transport for communicating with OpenCode server via REST API.
  * Maintains persistent sessions and provides reliable request/response handling.
+ * Supports Basic Auth via OPENCODE_SERVER_USERNAME/OPENCODE_SERVER_PASSWORD env vars.
  */
 export class HttpTransport implements SessionManager {
   private readonly serverUrl: string;
   private readonly timeout: number;
   private sessionId: string | null = null;
   private sessionCreationLock: Promise<string> | null = null;
-  private static serverHealthCache: Map<string, { healthy: boolean; timestamp: number }> = new Map();
+  private readonly authHeader?: string;
+  private static serverHealthCache: Map<string, { healthy: boolean; timestamp: number }> =
+    new Map();
   private static readonly HEALTH_CACHE_TTL = 30000;
 
   /**
    * Creates a new HttpTransport instance.
    * @param serverUrl - Base URL of the OpenCode server
    * @param timeout - Request timeout in milliseconds
+   * @param authHeader - Optional Basic Auth header (auto-detected from env if not provided)
    */
-  constructor(serverUrl: string, timeout: number) {
+  constructor(serverUrl: string, timeout: number, authHeader?: string) {
     this.serverUrl = serverUrl;
     this.timeout = timeout;
+    if (authHeader) {
+      this.authHeader = authHeader;
+    } else {
+      this.authHeader = HttpTransport.buildAuthHeader();
+    }
+  }
+
+  private static buildAuthHeader(): string | undefined {
+    const password = process.env.OPENCODE_SERVER_PASSWORD;
+    if (!password) return undefined;
+    const username = process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+    const encoded = Buffer.from(`${username}:${password}`).toString('base64');
+    return `Basic ${encoded}`;
+  }
+
+  private getHeaders(): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.authHeader) {
+      headers['Authorization'] = this.authHeader;
+    }
+    return headers;
   }
 
   /**
@@ -122,8 +147,17 @@ export class HttpTransport implements SessionManager {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+      const headers: Record<string, string> = {};
+      const password = process.env.OPENCODE_SERVER_PASSWORD;
+      if (password) {
+        const username = process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+        headers['Authorization'] =
+          `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+      }
+
       const response = await fetch(`${serverUrl}/health`, {
         method: 'GET',
+        headers,
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -202,7 +236,7 @@ export class HttpTransport implements SessionManager {
     const agentId = Config.getInstance().getAgentId();
     const response = await fetch(`${this.serverUrl}/session`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getHeaders(),
       body: JSON.stringify({ title: `nezha-${agentId}` }),
     });
 
@@ -230,7 +264,7 @@ export class HttpTransport implements SessionManager {
     try {
       const response = await fetch(`${this.serverUrl}/session/${sessionId}/message`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           parts: [{ type: 'text', text: message }],
         }),
@@ -532,11 +566,14 @@ export class CliTransport implements SessionManager {
 /**
  * Factory function to create the appropriate transport based on configuration.
  * @param config - Transport configuration
- * @returns HttpTransport or CliTransport instance
+ * @returns HttpTransport
+ * @deprecated CLI mode disabled - causes resource exhaustion
  */
-export function createTransport(config: TransportConfig): HttpTransport | CliTransport {
-  if (config.mode === 'cli') {
-    return new CliTransport(config.serverUrl, config.timeout);
-  }
+export function createTransport(config: TransportConfig): HttpTransport {
+  // CLI mode disabled - causes resource exhaustion
+  // if (config.mode === 'cli') {
+  //   return new CliTransport(config.serverUrl, config.timeout);
+  // }
+  console.warn('[Transport] CLI mode disabled - using HTTP transport');
   return new HttpTransport(config.serverUrl, config.timeout);
 }
