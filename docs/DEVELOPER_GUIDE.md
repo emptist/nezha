@@ -51,9 +51,31 @@ G-71c2ae97-20260325-133422-64db91
 | **PostgreSQL** | 必须运行，存储身份数据  |
 | **自动检测**   | 未运行则自动启动 Daemon |
 
+### 使用方式
+
+```bash
+# 首次设置
+nezha install      # 安装 daemon
+nezha daemon      # 启动 daemon
+
+# 日常工作
+nezha daemon      # 检查状态，未运行则启动
+nezha start       # 开始工作
+```
+
+### 以前 vs 现在
+
+| 方面 | 以前                        | 现在               |
+| ---- | --------------------------- | ------------------ |
+| 启动 | 打开项目即可                | 先确保 daemon 运行 |
+| ID   | 共享 `.nezha/agent-id.json` | 幂等分配           |
+| 身份 | 无追踪                      | 自动关联           |
+| 知识 | 混乱累积                    | 确定性累积         |
+
 ### 实现
 
 - `AgentIdentityService` - 身份服务
+- `DaemonAutoStartService` - Daemon 自动启动
 - `agent_identities` 表 - 身份存储
 - `created_by_identity` 字段 - 任务关联
 

@@ -252,6 +252,90 @@ agent_identities (身份)
     └── skills (技能配置)
 ```
 
+## 使用方式
+
+### 新流程 (推荐)
+
+```bash
+# 1. 确保 PostgreSQL 运行
+/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18 start
+
+# 2. 安装并启动 daemon (首次需要)
+nezha install
+nezha daemon
+
+# 3. 启动工作
+nezha start
+```
+
+### 自动化 (推荐配置)
+
+```bash
+# 安装后，daemon 会自动启动 (RunAtLoad: true)
+# 每次打开终端，daemon 应该已经在运行
+
+# 检查状态
+nezha daemon  # 显示状态并自动启动
+
+# 开始工作
+nezha start
+```
+
+### 以前 vs 现在
+
+| 方面 | 以前         | 现在               |
+| ---- | ------------ | ------------------ |
+| 启动 | 打开项目即可 | 先确保 daemon 运行 |
+| ID   | 共享文件     | 幂等分配           |
+| 身份 | 无追踪       | 自动关联           |
+| 知识 | 混乱累积     | 确定性累积         |
+
+### AI 身份自动解析
+
+当 `nezha` 命令执行时：
+
+```
+1. 检测 daemon 状态
+   ↓
+2. 未运行 → 自动启动
+   ↓
+3. 连接 PostgreSQL
+   ↓
+4. 解析/创建身份
+   ↓
+5. 任务关联身份
+   ↓
+6. 知识累积到身份
+```
+
+### 命令速查
+
+```bash
+# 检查/启动 daemon
+nezha daemon
+
+# 启动工作
+nezha start
+
+# 查看身份
+# 在任务列表中查看 created_by_identity 字段
+nezha tasks
+
+# 查看所有身份
+# 直接查询数据库
+psql -d nezha -c "SELECT * FROM agent_identities;"
+```
+
+### 环境变量
+
+```bash
+# 可选：手动指定身份 (覆盖自动解析)
+export NEZHA_AGENT_ID=S-nezha-abc1234-20260325-123456-xyz789
+
+# 可选：指定身份名称
+export NEZHA_AGENT_NAME=jk-opencode
+```
+
 ## 与 Daemon + PostgreSQL 的关系
 
 ```

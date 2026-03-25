@@ -558,6 +558,24 @@ cp .env.example .env
 | WEBHOOK_URL        | Webhook 通知 URL                 | -             |
 | NEZHA_MAX_RETRIES  | 任务最大重试次数                 | 3             |
 | NEZHA_TASK_TIMEOUT | 任务超时时间 (ms)                | 300000        |
+| NEZHA_AGENT_ID     | 手动指定身份 ID (覆盖自动)       | 自动解析      |
+| NEZHA_AGENT_NAME   | 身份显示名称                     | -             |
+
+### 启动流程
+
+```bash
+# 1. 确保 PostgreSQL 运行
+pg_ctl -D /Users/jk/Library/Application\ Support/Postgres/var-18 start
+
+# 2. 首次安装 daemon
+nezha install
+
+# 3. 检查/启动 daemon
+nezha daemon
+
+# 4. 启动工作
+nezha start
+```
 
 ### 数据库初始化
 
