@@ -1,4 +1,5 @@
 import http from 'http';
+import { WebSocketServer, WebSocket } from 'ws';
 import * as fs from 'fs/promises';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS, MEMORY_CONFIG } from '../config/constants.js';
@@ -146,6 +147,8 @@ export interface HealthServerConfig {
 
 export class HealthServer {
   private server: http.Server | null = null;
+  private wss: WebSocketServer | null = null;
+  private wsClients: Set<WebSocket> = new Set();
   private startTime: number;
   private db: DatabaseClient;
   private port: number;
@@ -236,7 +239,6 @@ export class HealthServer {
       this.server = http.createServer(async (req, res) => {
         const url = new URL(req.url || '/', `http://localhost:${this.port}`);
 
-        // Check authentication for protected endpoints
         if (
           (url.pathname === '/health' || url.pathname === '/metrics') &&
           !this.authenticate(req)
@@ -276,7 +278,7 @@ export class HealthServer {
             res.end(
               JSON.stringify({
                 name: 'Nezha Health Server',
-                endpoints: ['/health', '/metrics'],
+                endpoints: ['/health', '/metrics', '/ws'],
               })
             );
           } else {
@@ -290,8 +292,49 @@ export class HealthServer {
         }
       });
 
+      this.wss = new WebSocketServer({ noServer: true });
+      this.wss.on('connection', (ws: WebSocket) => {
+        this.wsClients.add(ws);
+        logger.info(`[WS] Client connected (total: ${this.wsClients.size})`);
+
+        ws.on('message', (data: Buffer) => {
+          try {
+            const msg = JSON.parse(data.toString());
+            if (msg.type === 'ping') {
+              ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
+            }
+          } catch {
+            // ignore parse errors
+          }
+        });
+
+        ws.on('close', () => {
+          this.wsClients.delete(ws);
+          logger.info(`[WS] Client disconnected (total: ${this.wsClients.size})`);
+        });
+
+        ws.send(JSON.stringify({
+          type: 'connected',
+          message: 'Nezha WebSocket ready',
+          timestamp: new Date().toISOString(),
+        }));
+      });
+
+      this.server.on('upgrade', (req, socket, head) => {
+        const url = new URL(req.url || '', `http://localhost:${this.port}`);
+        if (url.pathname === '/ws') {
+          this.wss?.handleUpgrade(req, socket, head, (ws) => {
+            this.wss?.emit('connection', ws, req);
+          });
+        }
+      });
+
+      this.server.on('upgradeError', (err) => {
+        logger.error('WebSocket upgrade error:', err);
+      });
+
       this.server.listen(this.port, () => {
-        logger.info(`Health server started on port ${this.port}`);
+        logger.info(`Health server started on port ${this.port} with WebSocket support`);
         resolve();
       });
     });
@@ -299,6 +342,10 @@ export class HealthServer {
 
   async stop(): Promise<void> {
     return new Promise(resolve => {
+      if (this.wss) {
+        this.wss.close();
+        this.wss = null;
+      }
       if (this.server) {
         this.server.close(() => {
           logger.info('Health server stopped');
@@ -308,6 +355,19 @@ export class HealthServer {
         resolve();
       }
     });
+  }
+
+  broadcastNotification(type: string, data?: unknown): void {
+    if (!this.wss) return;
+    const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
+    let sent = 0;
+    this.wsClients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+        sent++;
+      }
+    });
+    logger.debug(`[WS] Broadcast ${type} to ${sent} clients`);
   }
 
   async getHealth(): Promise<HealthResponse> {

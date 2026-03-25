@@ -5,7 +5,6 @@ import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/heartbeat/index.js';
 import { HealthServer } from '../services/HealthServer.js';
-import { NotificationService } from '../services/NotificationService.js';
 import { logger } from '../utils/logger.js';
 
 const TASK_WAIT_TIMEOUT_MS = 20000;
@@ -47,9 +46,6 @@ async function main(): Promise<void> {
   const healthServer = new HealthServer(db, 4097);
   await healthServer.start();
 
-  const notificationService = new NotificationService(db);
-  await notificationService.start(4098);
-
   await heartbeatService.start();
 
   const shutdown = async (signal: string) => {
@@ -59,7 +55,6 @@ async function main(): Promise<void> {
     const runningCount = await waitForRunningTasks(db, TASK_WAIT_TIMEOUT_MS);
 
     await heartbeatService.stop();
-    await notificationService.stop();
     await healthServer.stop();
     await db.close();
 
