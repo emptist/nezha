@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
 import { setVerboseMode } from '../utils/verboseLogger.js';
 import { AgentSystem } from '../core/AgentSystem.js';
+import { AgentIdentityService, type AgentIdentity } from '../services/AgentIdentityService.js';
 import {
   requestReviewFromAI,
   showReview,
@@ -68,10 +69,26 @@ export class Cli {
   private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
   private monitoringCommands: MonitoringCommands | null = null;
   private meetingCommands: MeetingCommands | null = null;
+  public agentIdentity: AgentIdentity | null = null;
 
   constructor() {
     this.config = Config.getInstance();
     this.checkpointService = new CheckpointService();
+  }
+
+  public async resolveAgentIdentity(): Promise<AgentIdentity | null> {
+    if (this.agentIdentity) return this.agentIdentity;
+
+    try {
+      const db = await this.getDb();
+      const identityService = new AgentIdentityService(db);
+      this.agentIdentity = await identityService.resolve();
+      console.log(`[AgentIdentity] Resolved: ${this.agentIdentity.id}`);
+      return this.agentIdentity;
+    } catch (error) {
+      console.warn('[AgentIdentity] Failed to resolve:', error);
+      return null;
+    }
   }
 
   public async getDb(): Promise<DatabaseClient> {
@@ -99,6 +116,9 @@ export class Cli {
 
   async start(): Promise<void> {
     const db = await this.getDb();
+
+    // Resolve agent identity first
+    await this.resolveAgentIdentity();
 
     const embeddingConfig = this.config.getEmbeddingConfig();
     const transportConfig = this.config.getTransportConfig();
@@ -395,11 +415,17 @@ export class Cli {
     }
 
     const db = await this.getDb();
+
+    // Resolve agent identity before creating task
+    await this.resolveAgentIdentity();
+
     const maxRetries = this.config.getTaskConfig().maxRetries;
     const taskId = crypto.randomUUID();
-    const createdBy = this.config.getAgentId();
+    const createdBy = this.agentIdentity?.id || this.config.getAgentId();
+    const createdByIdentity = this.agentIdentity?.id || null;
+
     await db.query(
-      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by, created_by_identity) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         taskId,
         projectId || null,
@@ -414,6 +440,7 @@ export class Cli {
         taskData.assignedTo,
         taskData.category,
         createdBy,
+        createdByIdentity,
       ]
     );
 
