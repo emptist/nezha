@@ -128,7 +128,7 @@ export class ReminderService {
     }
 
     if (messages.length > 0) {
-      const message = `⏰ **哪吒提醒** (每 5 分钟)\n\n${messages.join('\n')}\n\n💡 使用 \`nezha tasks\` 查看详情`;
+      const message = `⏰ **哪吒提醒** (每 1 分钟)\n\n${messages.join('\n')}\n\n💡 使用 \`nezha tasks\` 查看详情`;
       await this.notifyAI(message, 'normal');
       await this.saveToMemory(`周期性提醒: ${messages.join(', ')}`);
     }
