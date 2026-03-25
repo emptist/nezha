@@ -1,7 +1,7 @@
 # Issue: Task/Commit Mismatch Pattern
 
 **Date:** 2026-03-21
-**Status:** Open
+**Status:** Partially Resolved (2026-03-25)
 **Severity:** Medium
 
 ## Problem
@@ -79,10 +79,14 @@ When AI can't access required resources or is unsure how to proceed:
 
 ## Action Items
 
-- [ ] Implement pre-flight validation for research tasks
-- [ ] Add mismatch detection to review process
+- [x] Implement pre-flight validation via quality control hook (2026-03-25)
+- [x] Add mismatch detection via database ID verification
 - [ ] Update task descriptions to be more specific
 - [ ] Create "how to escalate" documentation
+
+## Resolution Notes (2026-03-25)
+
+The `prepare-commit-msg` hook now enforces that all commits must contain valid task/issue/inter-review IDs. This prevents random commits but does NOT verify that the commit content matches the task description. Additional task-content alignment checks remain as future work.
 
 ## Related
 

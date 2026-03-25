@@ -155,8 +155,6 @@ export class HealthServer {
   private opencodeApiUrl?: string;
   private memoryDir: string;
   private diskWarningThreshold: number;
-  private agentSystem: import('../core/AgentSystem.js').AgentSystem | null = null;
-  private interReviewService: import('./InterReviewService.js').InterReviewService | null = null;
 
   constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
@@ -168,14 +166,6 @@ export class HealthServer {
     this.opencodeApiUrl = config?.opencodeApiUrl ?? process.env.OPENCODE_API_URL;
     this.memoryDir = config?.memoryDir ?? MEMORY_CONFIG.DEFAULT_BOOTSTRAP_DIR;
     this.diskWarningThreshold = config?.diskWarningThreshold ?? 1024 * 1024 * 1024; // 1GB default
-  }
-
-  setAgentSystem(agentSystem: import('../core/AgentSystem.js').AgentSystem): void {
-    this.agentSystem = agentSystem;
-  }
-
-  setInterReviewService(service: import('./InterReviewService.js').InterReviewService): void {
-    this.interReviewService = service;
   }
 
   private async checkOpenCodeApi(): Promise<{
@@ -281,10 +271,6 @@ export class HealthServer {
             this.updateMetricsFromDb();
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
             res.end(registry.export());
-          } else if (url.pathname === '/inter-review/response' && req.method === 'POST') {
-            const result = await this.handleInterReviewResponse(req);
-            res.writeHead(result.statusCode);
-            res.end(JSON.stringify(result.body));
           } else if (url.pathname === '/') {
             res.writeHead(200);
             res.end(
@@ -478,45 +464,18 @@ export class HealthServer {
   }
 
   getAgentHealth(): AgentHealthResponse {
-    if (!this.agentSystem) {
-      return {
-        status: 'unhealthy',
-        agents: [],
-        stats: {
-          totalAgents: 0,
-          idleAgents: 0,
-          busyAgents: 0,
-          errorAgents: 0,
-          totalTasksExecuted: 0,
-          agentsByMode: { http: 0, cli: 0 },
-        },
-        defaultMode: 'http',
-      };
-    }
-
-    const agents = this.agentSystem.getAllAgents();
-    const stats = this.agentSystem.getStats();
-    const defaultMode = this.agentSystem.getDefaultMode();
-
     return {
-      status: agents.length > 0 ? 'healthy' : 'healthy',
-      agents: agents.map(info => ({
-        id: info.id,
-        mode: info.mode,
-        status: info.status,
-        registeredAt: info.registeredAt.toISOString(),
-        lastActivity: info.lastActivity.toISOString(),
-        taskCount: info.taskCount,
-      })),
+      status: 'healthy',
+      agents: [],
       stats: {
-        totalAgents: stats.totalAgents,
-        idleAgents: stats.idleAgents,
-        busyAgents: stats.busyAgents,
-        errorAgents: stats.errorAgents,
-        totalTasksExecuted: stats.totalTasksExecuted,
-        agentsByMode: stats.agentsByMode,
+        totalAgents: 0,
+        idleAgents: 0,
+        busyAgents: 0,
+        errorAgents: 0,
+        totalTasksExecuted: 0,
+        agentsByMode: { http: 0, cli: 0 },
       },
-      defaultMode,
+      defaultMode: 'http',
     };
   }
 
@@ -553,83 +512,6 @@ export class HealthServer {
       standardMetrics.memoryUsageBytes.set(memUsage.heapUsed);
     } catch (error) {
       logger.warn('Failed to update metrics from DB:', error);
-    }
-  }
-
-  private async handleInterReviewResponse(
-    req: http.IncomingMessage
-  ): Promise<{ statusCode: number; body: InterReviewResponseResult | { error: string } }> {
-    if (!this.interReviewService) {
-      return { statusCode: 503, body: { error: 'InterReview service not available' } };
-    }
-
-    const body = await new Promise<string>((resolve, reject) => {
-      let data = '';
-      req.on('data', chunk => (data += chunk));
-      req.on('end', () => resolve(data));
-      req.on('error', reject);
-    });
-
-    let parsed: InterReviewResponseRequest;
-    try {
-      parsed = JSON.parse(body);
-    } catch {
-      return { statusCode: 400, body: { error: 'Invalid JSON body' } };
-    }
-
-    if (!parsed.reviewId || typeof parsed.reviewId !== 'string') {
-      return { statusCode: 400, body: { error: 'Missing required field: reviewId' } };
-    }
-
-    if (!parsed.summary || typeof parsed.summary !== 'string') {
-      return { statusCode: 400, body: { error: 'Missing required field: summary' } };
-    }
-
-    if (!Array.isArray(parsed.findings)) {
-      return { statusCode: 400, body: { error: 'Missing required field: findings (array)' } };
-    }
-
-    if (!parsed.scores || typeof parsed.scores !== 'object') {
-      return { statusCode: 400, body: { error: 'Missing required field: scores' } };
-    }
-
-    const review = await this.interReviewService.getReview(parsed.reviewId);
-    if (!review) {
-      return { statusCode: 404, body: { error: 'Review not found' } };
-    }
-
-    if (review.status !== 'pending' && review.status !== 'in_progress') {
-      return {
-        statusCode: 409,
-        body: { error: `Review is already ${review.status}, cannot submit response` },
-      };
-    }
-
-    try {
-      await this.interReviewService.submitReviewResponse(
-        parsed.reviewId,
-        parsed.summary,
-        parsed.findings,
-        parsed.scores,
-        parsed.response,
-        parsed.acceptedSuggestions,
-        parsed.options
-      );
-
-      return {
-        statusCode: 200,
-        body: {
-          success: true,
-          reviewId: parsed.reviewId,
-          message: 'Review response recorded successfully',
-        },
-      };
-    } catch (error) {
-      logger.error('[InterReview] Failed to record response:', error);
-      return {
-        statusCode: 500,
-        body: { error: 'Failed to record response' },
-      };
     }
   }
 }

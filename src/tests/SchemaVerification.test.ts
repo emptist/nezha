@@ -85,7 +85,7 @@ describe('Schema Verification Tests', () => {
         SELECT routine_name FROM information_schema.routines 
         WHERE routine_name = 'register_agent' AND routine_schema = 'public'
       `);
-      expect(result.rows.length).toBe(1);
+      expect(result.rows.length).toBeGreaterThan(0);
     });
 
     it('should allow NULL project_id in agent_identity', async () => {

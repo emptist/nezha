@@ -3,7 +3,7 @@ config();
 
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { HeartbeatService } from '../services/HeartbeatService.js';
+import { HeartbeatService } from '../services/heartbeat/index.js';
 import { getCurrentSessionId } from '../services/AgentSessionService.js';
 import { HealthServer } from '../services/HealthServer.js';
 import { CheckpointService } from '../services/CheckpointService.js';
@@ -11,7 +11,6 @@ import { TASK_STATUS } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { cli, colors } from '../utils/cli.js';
 import { setVerboseMode } from '../utils/verboseLogger.js';
-import { AgentSystem } from '../core/AgentSystem.js';
 import { AgentIdentityService, type AgentIdentity } from '../services/AgentIdentityService.js';
 import { DaemonAutoStartService } from '../services/DaemonAutoStartService.js';
 import {
@@ -64,7 +63,6 @@ export class Cli {
   private heartbeatService: HeartbeatService | null = null;
   private healthServer: HealthServer | null = null;
   private checkpointService: CheckpointService;
-  private agentSystem: AgentSystem | null = null;
   private isShuttingDown: boolean = false;
   private readonly SHUTDOWN_TIMEOUT_MS: number = 30000;
   private readonly TASK_WAIT_TIMEOUT_MS: number = 20000;
@@ -128,34 +126,11 @@ export class Cli {
     // Resolve agent identity
     await this.resolveAgentIdentity();
 
-    const embeddingConfig = this.config.getEmbeddingConfig();
-    const transportConfig = this.config.getTransportConfig();
-
-    this.agentSystem = new AgentSystem({
-      maxAgents: 5,
-      heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
-      agentConfig: {},
-      unifiedAgentConfig: {
-        mode: transportConfig.mode,
-        serverUrl: transportConfig.opencodeApiUrl,
-      },
-      defaultMode: transportConfig.mode,
-    });
-    await this.agentSystem.start();
-
     this.heartbeatService = new HeartbeatService(db, {
       heartbeatIntervalMs: this.config.getTaskConfig().heartbeatIntervalMs,
-      embedding: embeddingConfig,
-      agent: {
-        mode: transportConfig.mode,
-        serverUrl: transportConfig.opencodeApiUrl,
-      },
     });
 
-    this.heartbeatService.setCheckpointService(this.checkpointService);
-
     this.healthServer = new HealthServer(db, 4097);
-    this.healthServer.setAgentSystem(this.agentSystem);
     await this.healthServer.start();
 
     await this.heartbeatService.start();
@@ -227,11 +202,6 @@ export class Cli {
   }
 
   async stop(): Promise<void> {
-    logger.info('Stopping AgentSystem...');
-    if (this.agentSystem) {
-      await this.agentSystem.stop();
-    }
-
     logger.info('Stopping HeartbeatService...');
     if (this.heartbeatService) {
       await this.heartbeatService.stop();
@@ -292,22 +262,8 @@ export class Cli {
   }
 
   async health(): Promise<void> {
-    const heartbeatHealth = this.heartbeatService?.getHealth();
-    if (heartbeatHealth) {
-      console.log('Heartbeat Service:', JSON.stringify(heartbeatHealth, null, 2));
-    } else {
-      console.log('Heartbeat service not initialized');
-    }
-
-    if (this.agentSystem) {
-      console.log('\nAgent System:');
-      console.log('  Status:', this.agentSystem.isActive() ? 'running' : 'stopped');
-      console.log('  Default Mode:', this.agentSystem.getDefaultMode());
-      console.log('  Total Agents:', this.agentSystem.getAgentCount());
-
-      const stats = this.agentSystem.getStats();
-      console.log('  Stats:', JSON.stringify(stats, null, 2));
-    }
+    const running = this.heartbeatService?.isRunning() ?? false;
+    console.log('Heartbeat Service:', running ? 'running' : 'stopped');
   }
 
   async addTask(
@@ -501,6 +457,7 @@ export class Cli {
     }
 
     cli.success(`Task created: "${taskData.title}"${extras}`);
+    console.log(`   ID: ${taskId}`);
   }
 
   async listTemplates(): Promise<void> {
@@ -1750,9 +1707,12 @@ async function main(): Promise<void> {
       }
 
       case 'import-docs': {
-        const heartbeat = new HeartbeatService(new DatabaseClient(Config.getInstance()));
+        const { DocsImporter } = await import('../services/DocsImporter.js');
+        const db = new DatabaseClient(Config.getInstance());
+        const importer = new DocsImporter();
+        importer.setDatabaseClient(db);
         console.log('\n  Importing docs to memory...\n');
-        const result = await heartbeat.importAllDocs();
+        const result = await importer.importAll(path.join(process.cwd(), 'docs'));
         console.log(`  ✓ Imported: ${result.imported} docs`);
         console.log(`  - Skipped: ${result.skipped} docs (already imported)`);
         console.log();
@@ -2049,12 +2009,12 @@ Examples:
           const tagsStr = match[5]?.trim();
           const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
           if (title) {
-            await db.query(
+            const result = await db.query<{ id: string }>(
               `INSERT INTO issues (title, description, issue_type, severity, tags)
-               VALUES ($1, $2, $3, $4, $5)`,
+               VALUES ($1, $2, $3, $4, $5) RETURNING id`,
               [title, description, issueType, severity, tags]
             );
-            console.log(`✓ Created issue: ${title.substring(0, 50)}...`);
+            console.log(`✓ Created issue: ${title.substring(0, 50)}... (ID: ${result.rows[0]?.id})`);
             count++;
           }
         }
@@ -2093,12 +2053,12 @@ Examples:
           const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
           const priority = priorityStr ? parseInt(priorityStr, 10) : 5;
           if (title) {
-            await db.query(
+            const result = await db.query<{ id: string }>(
               `INSERT INTO tasks (title, description, priority, type, tags, status)
-               VALUES ($1, $2, $3, $4, $5, 'PENDING')`,
+               VALUES ($1, $2, $3, $4, $5, 'PENDING') RETURNING id`,
               [title, description, priority, taskType, tags]
             );
-            console.log(`✓ Created task: ${title.substring(0, 50)}...`);
+            console.log(`✓ Created task: ${title.substring(0, 50)}... (ID: ${result.rows[0]?.id})`);
             count++;
           }
         }

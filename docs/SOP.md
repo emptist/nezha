@@ -216,12 +216,25 @@ git push
 
 ### 3.8 Git Workflow
 
+**⚠️ Important: All commits must include traceable IDs**
+
 ```bash
+# All commits MUST include one of: [task: uuid], [issue: uuid], or [inter-review: uuid]
+# Without these, commits will be BLOCKED by the quality control hook
+
+# ✅ Correct examples:
+git commit -m "feat: Add new feature [task: 43b880df-9d65-48b2-8747-495f310010c3]"
+git commit -m "fix: Resolve bug [issue: xxx-xxx-xxx]"
+git commit -m "refactor: Update based on feedback [inter-review: xxx-xxx-xxx]"
+
+# ❌ Incorrect - will be BLOCKED:
+git commit -m "feat: Add new feature"
+
 # Create feature branch
 git checkout -b feature/my-feature
 
-# Commit changes (follow conventional commits)
-git commit -m "feat: Add new feature"
+# Commit changes (MUST include traceable ID)
+git commit -m "feat: Add new feature [task: <uuid>]"
 
 # Push branch
 git push -u origin feature/my-feature

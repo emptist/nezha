@@ -89,6 +89,18 @@ If another AI had reviewed my proposal, they might have pointed out:
 
 ---
 
+## Implementation Status: ✅ IMPLEMENTED
+
+**Date:** 2026-03-25
+
+The proposed `nezha commit` validation mechanism has been implemented via a git `prepare-commit-msg` hook:
+
+- ✅ CLI command `nezha validate-commit` validates commit messages
+- ✅ Hook blocks commits without valid task/issue/inter-review IDs
+- ✅ All IDs are verified against the database
+- ✅ Error messages guide AI to correct format
+- ✅ Can be disabled by setting `AGENT_ID_FILE` to non-existent path
+
 ## Proposed Enforcement Mechanism
 
 ### CLI Command: `nezha commit`

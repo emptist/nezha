@@ -1,7 +1,6 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { InterReviewService, type ReviewRequest } from '../services/InterReviewService.js';
 import { Config } from '../config/Config.js';
-import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
 import { getGitHash, getGitBranch, getGitDiff, getLastCommitMessage } from '../utils/git.js';
 import { logger } from '../utils/logger.js';
 
@@ -10,13 +9,7 @@ const REVIWER_ID = `nezha-${Date.now()}`;
 function createReviewService(): InterReviewService {
   const config = Config.getInstance();
   const db = new DatabaseClient(config);
-  const transportConfig = config.getTransportConfig();
-  const agentConfig: UnifiedAgentConfig = {
-    mode: transportConfig.mode,
-    serverUrl: transportConfig.opencodeApiUrl,
-  };
-  const agent = new UnifiedAgent(agentConfig);
-  return new InterReviewService(db, undefined, agent);
+  return new InterReviewService(db);
 }
 
 export async function requestReviewFromAI(

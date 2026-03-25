@@ -3,8 +3,6 @@ import { logger } from '../utils/logger.js';
 import { EventEmitter } from 'events';
 import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
-import { UnifiedAgent, type UnifiedAgentConfig } from '../core/UnifiedAgent.js';
-import { Config } from '../config/Config.js';
 import { BroadcastService } from './BroadcastService.js';
 import { getCommitDiff } from '../utils/git.js';
 
@@ -59,51 +57,28 @@ export enum InterReviewEvent {
 
 export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
-  private readonly aiProvider: AIProvider | null;
-  private readonly agent: UnifiedAgent | null;
+  private readonly aiProvider: AIProvider;
   private readonly broadcastService: BroadcastService;
   private getSessionId: () => string | null;
 
-  constructor(
-    db: DatabaseClient,
-    aiProvider?: AIProvider,
-    agent?: UnifiedAgent,
-    getSessionId?: () => string | null
-  ) {
+  constructor(db: DatabaseClient, aiProvider?: AIProvider, getSessionId?: () => string | null) {
     super();
     this.db = db;
-    this.agent = agent || this.createOptionalAgent();
-    this.aiProvider = aiProvider || (!this.agent ? this.createOptionalAIProvider() : null);
+    this.aiProvider = aiProvider || this.createAIProvider();
     this.broadcastService = new BroadcastService(db);
     this.getSessionId = getSessionId || (() => null);
   }
 
-  private createOptionalAgent(): UnifiedAgent | null {
-    try {
-      const config = Config.getInstance();
-      const transportConfig = config.getTransportConfig();
-      const agentConfig: UnifiedAgentConfig = {
-        mode: transportConfig.mode,
-        serverUrl: transportConfig.opencodeApiUrl,
-      };
-      return new UnifiedAgent(agentConfig);
-    } catch {
-      logger.debug('[InterReview] No UnifiedAgent available');
-      return null;
-    }
-  }
-
-  private createOptionalAIProvider(): AIProvider | null {
+  private createAIProvider(): AIProvider {
     try {
       return AIProviderFactory.createFromEnv();
-    } catch {
-      logger.debug('[InterReview] No AI provider available');
-      return null;
+    } catch (error) {
+      throw new Error(`[InterReview] AI provider not available: ${error}`);
     }
   }
 
   private isAIAvailable(): boolean {
-    return this.agent !== null || this.aiProvider !== null;
+    return this.aiProvider !== null;
   }
 
   async loadPromptFromSkills(promptName: string): Promise<string | null> {
@@ -147,17 +122,6 @@ export class InterReviewService extends EventEmitter {
   }
 
   private async callAI(systemPrompt: string, userPrompt: string): Promise<string> {
-    if (this.agent) {
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-      const response = await this.agent.executeTask(fullPrompt);
-      if (response.success && response.message) {
-        return response.message;
-      }
-      throw new Error(`Agent execution failed: ${response.message || 'Unknown error'}`);
-    }
-    if (!this.aiProvider) {
-      throw new Error('AI provider not available');
-    }
     const response = await this.aiProvider.complete(userPrompt, systemPrompt);
     return response.content;
   }
@@ -793,7 +757,9 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
       );
 
       if (existingTask.rows.length > 0) {
-        logger.info(`[InterReview] Skipping duplicate finding (task exists): ${title.substring(0, 50)}`);
+        logger.info(
+          `[InterReview] Skipping duplicate finding (task exists): ${title.substring(0, 50)}`
+        );
         continue;
       }
 

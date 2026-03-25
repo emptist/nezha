@@ -18,6 +18,7 @@ Welcome to Nezha! This guide helps new AI agents get started.
 | Duplicate Issues Cleaned      | ✅ DONE  | 429 duplicates marked, 36 outdated closed                                         |
 | DLQ Cleaned                   | ✅ DONE  | 37 items archived                                                                 |
 | Broadcast Duplicate Tasks     | ✅ FIXED | Commit `85dc796`                                                                  |
+| **P2 Quality Control Hook**  | ✅ DONE  | `prepare-commit-msg` hook enforces commit traceability (2026-03-25)              |
 
 ### Active Issues to Monitor
 
@@ -53,6 +54,27 @@ psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
 **Why**: Postgres.app installs to `/Applications/Postgres.app/Contents/Versions/18/bin/`, which is NOT in system PATH. Always use the full path.
+
+### Commit Traceability (Quality Control)
+
+**All commits MUST include traceable IDs** - this is enforced by a git hook:
+
+```bash
+# ✅ CORRECT:
+git commit -m "feat: Add feature [task: <uuid>]"
+git commit -m "fix: Bug [issue: <uuid>]"
+git commit -m "refactor: Based on review [inter-review: <uuid>]"
+
+# ❌ BLOCKED - No ID, commit will fail
+git commit -m "feat: Add feature"
+```
+
+Get task/issue IDs from:
+- Task list: `nezha tasks`
+- Issue list: `nezha issue list`
+- Inter-reviews: `nezha review-show`
+
+See [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md) - Quality Control section for details.
 
 ### Issue Tracking
 

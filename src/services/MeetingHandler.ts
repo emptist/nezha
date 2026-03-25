@@ -2,7 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS, DATABASE_TABLES } from '../config/constants.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
-import { UnifiedAgent } from '../core/UnifiedAgent.js';
+import { AIProvider, AIProviderFactory } from './ai/index.js';
 
 export interface DiscussionTask {
   id: string;
@@ -25,32 +25,27 @@ export interface Opinion {
 
 export class MeetingHandler {
   private readonly db: DatabaseClient;
-  private readonly agent: UnifiedAgent;
+  private readonly aiProvider: AIProvider;
 
-  constructor(db: DatabaseClient, agent: UnifiedAgent) {
+  constructor(db: DatabaseClient, aiProvider?: AIProvider) {
     this.db = db;
-    this.agent = agent;
+    this.aiProvider = aiProvider || AIProviderFactory.createFromEnv();
   }
 
   async createMeetingFromTask(task: DiscussionTask): Promise<string> {
     const meetingId = crypto.randomUUID();
     const agentId = Config.getInstance().getAgentId();
 
-    try {
-      await this.db.query(
-        `INSERT INTO meetings (id, topic, status, created_by, metadata)
-         VALUES ($1, $2, 'active', $3, $4)`,
-        [
-          meetingId,
-          task.title.replace('Discussion: ', ''),
-          agentId,
-          JSON.stringify({ taskId: task.id, priority: task.priority }),
-        ]
-      );
-    } catch (error) {
-      logger.error(`[MeetingHandler] Failed to create meeting:`, error);
-      throw error;
-    }
+    await this.db.query(
+      `INSERT INTO meetings (id, topic, status, created_by, metadata)
+       VALUES ($1, $2, 'active', $3, $4)`,
+      [
+        meetingId,
+        task.title.replace('Discussion: ', ''),
+        agentId,
+        JSON.stringify({ taskId: task.id, priority: task.priority }),
+      ]
+    );
 
     logger.info(`[MeetingHandler] Created meeting ${meetingId} for task ${task.id}`);
     return meetingId;
@@ -63,25 +58,23 @@ export class MeetingHandler {
     const contextPrompt = this.buildDiscussionPrompt(task, existingOpinions);
 
     try {
-      const result = await this.agent.executeTask(contextPrompt);
+      const result = await this.aiProvider.complete(contextPrompt);
 
-      if (result.success && result.output) {
-        const parsedOpinions = this.parseOpinionsFromOutput(result.output);
+      const parsedOpinions = this.parseOpinionsFromOutput(result.content);
 
-        for (const opinion of parsedOpinions) {
-          await this.recordOpinion(task.id, opinion);
-        }
+      for (const opinion of parsedOpinions) {
+        await this.recordOpinion(task.id, opinion);
+      }
 
-        if (parsedOpinions.length > 0) {
-          logger.info(
-            `[MeetingHandler] Recorded ${parsedOpinions.length} opinions for ${task.title}`
-          );
-        }
+      if (parsedOpinions.length > 0) {
+        logger.info(
+          `[MeetingHandler] Recorded ${parsedOpinions.length} opinions for ${task.title}`
+        );
+      }
 
-        const consensus = this.detectConsensus(existingOpinions, parsedOpinions);
-        if (consensus) {
-          await this.createConsensusTask(task, consensus);
-        }
+      const consensus = this.detectConsensus(existingOpinions, parsedOpinions);
+      if (consensus) {
+        await this.createConsensusTask(task, consensus);
       }
     } catch (error) {
       logger.error('[MeetingHandler] Failed to process discussion:', error);
@@ -92,54 +85,19 @@ export class MeetingHandler {
   private async getExistingOpinions(discussionId: string): Promise<Opinion[]> {
     const opinions: Opinion[] = [];
 
-    try {
-      const memoryResult = await this.db.query<{
-        content: string;
-        metadata: Record<string, unknown>;
-      }>(
-        `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
-         WHERE metadata->>'type' = 'opinion'
-           AND metadata->>'discussionId' = $1
-         ORDER BY created_at ASC`,
-        [discussionId]
-      );
+    const memoryResult = await this.db.query<{
+      content: string;
+      metadata: Record<string, unknown>;
+    }>(
+      `SELECT content, metadata FROM ${DATABASE_TABLES.MEMORY}
+       WHERE metadata->>'type' = 'opinion'
+         AND metadata->>'discussionId' = $1
+       ORDER BY created_at ASC`,
+      [discussionId]
+    );
 
-      for (const row of memoryResult.rows) {
-        opinions.push(this.parseOpinionContent(row.content));
-      }
-
-      const taskResult = await this.db.query<{ description: string }>(
-        `SELECT description FROM ${DATABASE_TABLES.TASKS} WHERE id = $1`,
-        [discussionId]
-      );
-
-      const taskRow = taskResult.rows[0];
-      if (taskRow?.description) {
-        const taskOpinions = this.parseOpinionsFromDescription(taskRow.description);
-        for (const opinion of taskOpinions) {
-          const exists = opinions.some(o => o.author === opinion.author);
-          if (!exists) {
-            opinions.push(opinion);
-          }
-        }
-      }
-
-      return opinions;
-    } catch (error) {
-      logger.error(`[MeetingHandler] Failed to get existing opinions for ${discussionId}:`, error);
-      return [];
-    }
-  }
-
-  private parseOpinionsFromDescription(description: string): Opinion[] {
-    const opinions: Opinion[] = [];
-    const opinionRegex = /## Opinion from (.+?)\n([\s\S]+?)(?=## Opinion from |$)/g;
-    let match;
-
-    while ((match = opinionRegex.exec(description)) !== null) {
-      const author = (match[1] || 'unknown').trim();
-      const content = match[2] || '';
-      opinions.push(this.parseOpinionContent(`## Opinion from ${author}\n${content}`));
+    for (const row of memoryResult.rows) {
+      opinions.push(this.parseOpinionContent(row.content));
     }
 
     return opinions;
@@ -149,7 +107,7 @@ export class MeetingHandler {
     const perspectiveMatch = content.match(/\*\*Perspective\*\*:\s*(.+)/);
     const reasoningMatch = content.match(/\*\*Reasoning\*\*:\s*([\s\S]+?)(?=\*\*Concerns\*\*)/);
     const concernsMatch = content.match(/\*\*Concerns\*\*:([\s\S]+?)(?=\*\*Suggestions\*\*)/);
-    const suggestionsMatch = content.match(/\*\*Suggestions\*\*:([\s\S]+?)(?=_Recorded)/);
+    const suggestionsMatch = content.match(/\*\*Suggestions\*\*:([\s\S]+?)(?=_\w+|$)/);
 
     const keyPointsMatch = content.match(/\*\*Key Points\*\*:([\s\S]+?)(?=\*\*Reasoning\*\*)/);
 
@@ -166,12 +124,12 @@ export class MeetingHandler {
         concernsMatch?.[1]
           ?.split('\n')
           .filter(l => l.startsWith('- '))
-          .map(l => l.replace(/^- \s*/, '').trim()) || [],
+          .map(l => l.replace(/^-\s*/, '').trim()) || [],
       suggestions:
         suggestionsMatch?.[1]
           ?.split('\n')
           .filter(l => l.startsWith('- '))
-          .map(l => l.replace(/^- \s*/, '').trim()) || [],
+          .map(l => l.replace(/^-\s*/, '').trim()) || [],
     };
   }
 
@@ -179,7 +137,7 @@ export class MeetingHandler {
     const opinionsSection =
       existingOpinions.length > 0
         ? `### Existing Opinions:\n${existingOpinions.map(op => `**${op.author}**: ${op.perspective}`).join('\n\n')}`
-        : '### No opinions recorded yet. Be the first to share your perspective!';
+        : '### No opinions recorded yet.';
 
     return `${task.description}
 
@@ -196,66 +154,40 @@ ${opinionsSection}
 \`\`\`markdown
 ## Opinion from [Your Agent ID]
 
-**Perspective**: [Your unique viewpoint on this topic]
+**Perspective**: [Your unique viewpoint]
 
 **Key Points**:
-1. [First key point]
-2. [Second key point]
-3. [Third key point]
+1. [First point]
+2. [Second point]
 
 **Reasoning**: [Why you think this way]
 
-**Concerns**: [Any risks or downsides - or "None"]
+**Concerns**: [Any risks - or "None"]
 
-**Suggestions**: [Specific recommendations - or "None"]
-\`\`\`
-
-3. If you agree with others, build on their ideas
-4. If you disagree, provide constructive counter-arguments`;
+**Suggestions**: [Recommendations - or "None"]
+\`\`\``;
   }
 
   private parseOpinionsFromOutput(output: string): Opinion[] {
     const opinions: Opinion[] = [];
     const opinionPattern = /## Opinion from (.+?)\n\n\*\*Perspective\*\*:\s*(.+?)(?=\n)/gs;
-    const keyPointsPattern = /\*\*Key Points\*\*:([\s\S]+?)(?=\*\*Reasoning\*\*)/g;
-    const reasoningPattern = /\*\*Reasoning\*\*:([\s\S]+?)(?=\*\*Concerns\*\*)/g;
-    const concernsPattern = /\*\*Concerns\*\*:([\s\S]+?)(?=\*\*Suggestions\*\*)/g;
-    const suggestionsPattern = /\*\*Suggestions\*\*:([\s\S]+?)(?=`{3}|$)/g;
 
     let match;
     while ((match = opinionPattern.exec(output)) !== null) {
       const author = match[1]?.trim() || Config.getInstance().getAgentId();
       const perspective = match[2]?.trim() || '';
 
-      const keyPoints = this.extractListItems(output, keyPointsPattern, opinionPattern.lastIndex);
-      const reasoning = this.extractFirstMatch(output, reasoningPattern, opinionPattern.lastIndex);
-      const concerns = this.extractListItems(output, concernsPattern, opinionPattern.lastIndex);
-      const suggestions = this.extractListItems(
-        output,
-        suggestionsPattern,
-        opinionPattern.lastIndex
-      );
-
-      opinions.push({ author, perspective, keyPoints, reasoning, concerns, suggestions });
+      opinions.push({
+        author,
+        perspective,
+        keyPoints: [],
+        reasoning: '',
+        concerns: [],
+        suggestions: [],
+      });
     }
 
     return opinions;
-  }
-
-  private extractFirstMatch(output: string, pattern: RegExp, _fromIndex: number): string {
-    const matches = [...output.matchAll(pattern)];
-    return matches[0]?.[1]?.trim() || '';
-  }
-
-  private extractListItems(output: string, pattern: RegExp, fromIndex: number): string[] {
-    const content = output.substring(fromIndex, fromIndex + 2000);
-    const match = content.match(pattern);
-    if (!match?.[1]) return [];
-    return match[1]
-      .split('\n')
-      .filter(l => l.match(/^\d+\.\s*|-\s+/))
-      .map(l => l.replace(/^\d+\.\s*|-\s+/, '').trim())
-      .filter(Boolean);
   }
 
   private async recordOpinion(discussionId: string, opinion: Opinion): Promise<void> {
@@ -278,16 +210,11 @@ ${opinion.suggestions.length > 0 ? opinion.suggestions.map(s => `- ${s}`).join('
 
 _Recorded for discussion: ${discussionId}_`;
 
-    try {
-      await this.db.query(
-        `INSERT INTO ${DATABASE_TABLES.MEMORY} (content, project_id, metadata, importance)
-         VALUES ($1, $2, $3, $4)`,
-        [content, null, JSON.stringify({ type: 'opinion', discussionId, author: agentId }), 7]
-      );
-    } catch (error) {
-      logger.error(`[MeetingHandler] Failed to record opinion for ${discussionId}:`, error);
-      throw error;
-    }
+    await this.db.query(
+      `INSERT INTO ${DATABASE_TABLES.MEMORY} (content, project_id, metadata, importance)
+       VALUES ($1, $2, $3, $4)`,
+      [content, null, JSON.stringify({ type: 'opinion', discussionId, author: agentId }), 7]
+    );
   }
 
   private detectConsensus(existing: Opinion[], newOpinions: Opinion[]): string | null {
@@ -297,18 +224,6 @@ _Recorded for discussion: ${discussionId}_`;
     const perspectives = new Set(allOpinions.map(o => o.perspective.toLowerCase().trim()));
     if (perspectives.size === 1 && allOpinions.length >= 2) {
       return allOpinions[0]?.perspective || null;
-    }
-
-    const allSuggestions = allOpinions.flatMap(o => o.suggestions.map(s => s.toLowerCase().trim()));
-    const suggestionCounts = new Map<string, number>();
-    for (const s of allSuggestions) {
-      suggestionCounts.set(s, (suggestionCounts.get(s) || 0) + 1);
-    }
-
-    for (const [suggestion, count] of suggestionCounts) {
-      if (count >= Math.ceil(allOpinions.length / 2) && suggestion !== 'none') {
-        return suggestion;
-      }
     }
 
     return null;
@@ -321,30 +236,25 @@ _Recorded for discussion: ${discussionId}_`;
     const consensusId = crypto.randomUUID();
     const agentId = Config.getInstance().getAgentId();
 
-    try {
-      await this.db.query(
-        `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, category, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          consensusId,
-          `Consensus Reached: ${originalTask.title.replace('Discussion: ', '')}`,
-          `## Consensus Reached\n\n**Agreement**: ${consensus}\n\n**Discussion**: ${originalTask.title}\n\nBased on AI discussion, this consensus was reached.`,
-          TASK_STATUS.PENDING,
-          originalTask.priority + 1,
-          'collaboration',
-          agentId,
-        ]
-      );
+    await this.db.query(
+      `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, category, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        consensusId,
+        `Consensus: ${originalTask.title.replace('Discussion: ', '')}`,
+        `## Consensus\n\n${consensus}`,
+        TASK_STATUS.PENDING,
+        originalTask.priority + 1,
+        'collaboration',
+        agentId,
+      ]
+    );
 
-      await this.db.query(
-        `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, completed_at = NOW() WHERE id = $2`,
-        [TASK_STATUS.COMPLETED, originalTask.id]
-      );
+    await this.db.query(
+      `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, completed_at = NOW() WHERE id = $2`,
+      [TASK_STATUS.COMPLETED, originalTask.id]
+    );
 
-      logger.info(`[MeetingHandler] Consensus task created: ${consensusId}`);
-    } catch (error) {
-      logger.error(`[MeetingHandler] Failed to create consensus task:`, error);
-      throw error;
-    }
+    logger.info(`[MeetingHandler] Consensus task created: ${consensusId}`);
   }
 }
