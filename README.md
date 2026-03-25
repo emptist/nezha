@@ -23,6 +23,26 @@
 
 ## 核心设计
 
+### ⚠️ AI ID 设计原则 (重要)
+
+> **错误的设计: AI ID 共享** - 已被废弃，禁止使用！
+
+**荒唐的错误**: 最初的设计将所有 AI 的 ID 存储在共享文件 `.nezha/agent-id.json` 中，导致所有 AI 实例使用相同的 ID。这完全违背了数字人身份系统的基本原则：
+
+```
+❌ 错误设计 (已废弃):
+.nezha/agent-id.json (所有 AI 共享)
+     ↓
+OpenCode AI → 读到 ID A
+Daemon AI → 读到 ID A (冲突！)
+Trae AI → 读到 ID A (冲突！)
+结果: 知识混乱，无法追踪谁做了什么
+```
+
+**正确的设计**: Agent ID 应该是幂等的、确定性的，基于上下文（项目 + Git + 时间）自动分配，确保相同上下文产生相同的数字人身份，实现知识累积和专家养成。
+
+详见: [docs/AGENT_ID_SYSTEM.md](./docs/AGENT_ID_SYSTEM.md)
+
 ### 架构概览
 
 ```
@@ -334,6 +354,7 @@ interface InterReviewService {
 **核心哲学**: Review 的输出不是反馈，而是 learnings - 帮助未来 AI 避免类似问题的提醒
 
 **AI 提供者支持**:
+
 - ✅ **OpenCode 集成** (推荐) - 使用 UnifiedAgent，无需外部 API key
 - ✅ **GLM-4-Flash** - 通过 ZHIPU_API_KEY 环境变量
 - ✅ **OpenAI** - 通过 OPENAI_API_KEY 环境变量

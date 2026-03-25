@@ -7,6 +7,44 @@
 
 ---
 
+## ⚠️ 重要：AI ID 设计原则
+
+> **🚫 已废弃的设计: AI ID 共享** - 禁止使用！
+
+### 荒唐的错误设计
+
+最初的设计将 AI ID 存储在共享文件 `.nezha/agent-id.json` 中：
+
+```javascript
+// ❌ 错误：所有 AI 共享同一个 ID
+.nezha/agent-id.json  →  { "id": "bot_xxx" }
+                              ↓
+OpenCode AI 启动  →  读到 ID A
+Daemon AI 启动   →  读到 ID A  (冲突！)
+Trae AI 启动     →  读到 ID A  (冲突！)
+```
+
+**后果**:
+
+- 无法追踪谁做了什么
+- 知识混乱，无法累积
+- 数字人身份形同虚设
+- 无法产生专家
+
+### 正确的设计
+
+**幂等性 + 确定性**:
+
+```
+相同的上下文 → 相同的 ID → 知识累积 → 专家养成
+```
+
+**ID 格式**: `{project}-{git-hash}-{timestamp}`
+
+详见: [AGENT_ID_SYSTEM.md](./AGENT_ID_SYSTEM.md)
+
+---
+
 ## 📋 目录
 
 1. [架构概览](#架构概览)
@@ -44,12 +82,12 @@ Nezha 是一个 AI 驱动的自主开发系统，支持两种任务管理模式�
 
 ### 为什么有两种模式？
 
-| 场景 | 推荐模式 | 原因 |
-|------|---------|------|
-| **Nezha 自身开发** | 文件模式 | 简单直接，Git 版本控制 |
-| **其他项目管理** | 数据库模式 | 多项目，多 AI 协作 |
-| **单一项目快速迭代** | 文件模式 | 无需数据库配置 |
-| **跨项目协调** | 数据库模式 | 集中管理，统一查询 |
+| 场景                 | 推荐模式   | 原因                   |
+| -------------------- | ---------- | ---------------------- |
+| **Nezha 自身开发**   | 文件模式   | 简单直接，Git 版本控制 |
+| **其他项目管理**     | 数据库模式 | 多项目，多 AI 协作     |
+| **单一项目快速迭代** | 文件模式   | 无需数据库配置         |
+| **跨项目协调**       | 数据库模式 | 集中管理，统一查询     |
 
 ### 模式选择决策树
 
@@ -84,21 +122,25 @@ Nezha 是一个 AI 驱动的自主开发系统，支持两种任务管理模式�
 # Nezha Development Tasks
 
 ## High Priority (8-10)
+
 - [ ] Fix critical bug in Scheduler
 - [ ] Add unit tests for Agent
 - [ ] Implement error handling for database connection
 
 ## Medium Priority (5-7)
+
 - [ ] Improve error messages
 - [ ] Update documentation
 - [ ] Add logging system
 
 ## Low Priority (1-4)
+
 - [ ] Refactor code structure
 - [ ] Add code examples
 - [ ] Improve performance
 
 ## Completed
+
 - [x] Implement heartbeat mechanism
 - [x] Add PostgreSQL support
 - [x] Create CLI interface
@@ -134,13 +176,16 @@ Nezha 是一个 AI 驱动的自主开发系统，支持两种任务管理模式�
    - 低优先级：有时间时执行
 
 2. **任务描述明确**
+
    ```markdown
    # 好的任务描述
+
    - [ ] Add type hints to Scheduler.ts
    - [ ] Fix memory leak in Agent.ts:123-145
    - [ ] Update README with installation instructions
-   
+
    # 不好的任务描述
+
    - [ ] Fix bugs
    - [ ] Improve code
    - [ ] Update docs
@@ -165,7 +210,7 @@ Nezha 是一个 AI 驱动的自主开发系统，支持两种任务管理模式�
 ### 数据库设置
 
 > ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！
-> 
+>
 > 📖 **深入了解**: 参见 [OPENCODE_INTEGRATION.md](./OPENCODE_INTEGRATION.md) 了解 CLI vs REST API 的对比
 
 #### 标准操作流程 (SOP)
@@ -374,6 +419,7 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 ### Q1: 什么时候使用文件模式？
 
 **A**: 当你：
+
 - 开发 Nezha 自身项目
 - 管理单一项目
 - 不需要数据库
@@ -382,6 +428,7 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 ### Q2: 什么时候使用数据库模式？
 
 **A**: 当你：
+
 - 管理 Nezha 之外的其他项目
 - 需要管理多个项目
 - 需要多 AI 协作
@@ -390,6 +437,7 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 ### Q3: 可以同时使用两种模式吗？
 
 **A**: 可以！
+
 - Nezha 自身使用文件模式
 - 其他项目使用数据库模式
 - 两种模式互不干扰
@@ -397,6 +445,7 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 ### Q4: 如何从文件模式迁移到数据库模式？
 
 **A**: 步骤：
+
 1. 创建数据库
 2. 运行迁移脚本
 3. 注册项目
@@ -405,7 +454,8 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 
 ### Q5: 数据库模式需要多少资源？
 
-**A**: 
+**A**:
+
 - PostgreSQL 数据库：约 100MB
 - 每个项目：约 1MB
 - 每个任务：约 1KB
@@ -413,7 +463,8 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 
 ### Q6: 如何备份任务数据？
 
-**A**: 
+**A**:
+
 ```bash
 # 备份整个数据库
 pg_dump nezha_projects > backup.sql
@@ -438,12 +489,14 @@ psql nezha_projects < backup.sql
 ### OpenCode vs Trae
 
 **OpenCode 的工作模式**:
+
 - 双 AI 协作：zen AI（调度者）+ serv AI（执行者）
 - zen AI 持续运行服务，分配任务
 - serv AI 执行任务，产生新任务
 - 形成持续工作的闭环
 
 **Trae 的限制**:
+
 - 单 AI 模式，无持续运行的服务
 - 需要用户手动触发
 - 无法自主产生任务闭环
@@ -465,13 +518,14 @@ Nezha Daemon (调度者)     Trae AI (执行者)
 **实施步骤**:
 
 1. **启动 Nezha Daemon**
+
    ```bash
    # 使用 PM2 运行 daemon
    pm2 start dist/cli/index.js --name nezha-daemon
-   
+
    # 查看状态
    pm2 status
-   
+
    # 查看日志
    pm2 logs nezha-daemon
    ```
@@ -521,6 +575,7 @@ Nezha 支持三种持续工作方法，每种方法适用于不同的场景：
 **核心机制**: 使用 `HEARTBEAT.md` 文件作为任务清单，AI 读取文件并执行任务
 
 **工作流程**:
+
 ```
 AI 读取 HEARTBEAT.md
     ↓
@@ -536,10 +591,12 @@ AI 读取 HEARTBEAT.md
 ```
 
 **示例 HEARTBEAT.md**:
+
 ```markdown
 # Nezha Development Tasks
 
 ## High Priority (8-10)
+
 - [ ] Review: 读取 src/core/, src/services/, src/cli/ 目录，分析代码质量
 - [ ] Identify: 发现 CLI help 命令为空的问题
 - [ ] Fix: 添加 CLI help 命令输出，移除未使用变量
@@ -551,16 +608,19 @@ AI 读取 HEARTBEAT.md
 - [ ] Update: 更新本清单，标记完成的任务，添加新任务
 
 ## Medium Priority (5-7)
+
 - [ ] Improve error messages
 - [ ] Update documentation
 - [ ] Add logging system
 
 ## Low Priority (1-4)
+
 - [ ] Refactor code structure
 - [ ] Add code examples
 - [ ] Improve performance
 
 ## Completed
+
 - [x] Implement heartbeat mechanism
 - [x] Add PostgreSQL support
 - [x] Create CLI interface
@@ -569,6 +629,7 @@ AI 读取 HEARTBEAT.md
 **详细 task-add 命令示例**:
 
 1. **持续改进循环任务**:
+
 ```bash
 node dist/cli/index.js task-add "Review and improve codebase" "This is a continuous improvement cycle. Steps:
 1. Read src/core/ files and identify issues or improvements
@@ -582,16 +643,19 @@ node dist/cli/index.js task-add "Review and improve codebase" "This is a continu
 ```
 
 2. **HEARTBEAT.md 执行任务**:
+
 ```bash
 node dist/cli/index.js task-add "Execute HEARTBEAT.md tasks" "Read HEARTBEAT.md in the current directory. Execute the tasks listed there following the continuous improvement cycle: Review -> Identify -> Fix -> Build -> Test -> Document -> Commit -> Push -> Update HEARTBEAT.md" 10
 ```
 
 3. **系统改进任务**:
+
 ```bash
 node dist/cli/index.js task-add "Improve nezha codebase" "Analyze the src/ directory and identify issues or improvements needed. Fix at least one bug or improve one component. Read the code first to understand the architecture." 10
 ```
 
 4. **真实代码改进任务**:
+
 ```bash
 node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 1. Delete src/tests/ directory (not needed)
@@ -601,6 +665,7 @@ node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 ```
 
 **优势**:
+
 - ✅ 简单直观，无需数据库配置
 - ✅ Git 版本控制，历史清晰
 - ✅ 适合单一项目的快速迭代
@@ -608,6 +673,7 @@ node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 - ✅ 任务描述可以非常详细和具体
 
 **劣势**:
+
 - ❌ 不支持多项目
 - ❌ 不支持多 AI 协作
 - ❌ 查询能力有限
@@ -621,6 +687,7 @@ node dist/cli/index.js task-add "Real code improvement" "Do actual work:
 **核心机制**: 使用 PostgreSQL 数据库管理任务，通过 SQL 直接插入任务
 
 **工作流程**:
+
 ```
 AI 查询数据库
     ↓
@@ -636,6 +703,7 @@ AI 查询数据库
 ```
 
 **数据库表结构**:
+
 ```sql
 -- 项目注册表
 CREATE TABLE projects (
@@ -683,6 +751,7 @@ CREATE TABLE project_communications (
 **直接插入数据库示例**:
 
 1. **注册项目**:
+
 ```sql
 INSERT INTO projects (name, description, path, language, framework, config)
 VALUES (
@@ -699,6 +768,7 @@ SELECT id, name, path, language, status FROM projects;
 ```
 
 2. **添加任务**:
+
 ```sql
 -- 添加高优先级任务
 INSERT INTO tasks (title, description, status, priority, project_id)
@@ -739,6 +809,7 @@ ORDER BY t.priority DESC, t.created_at ASC;
 ```
 
 3. **批量添加任务**:
+
 ```sql
 -- 批量添加多个任务
 INSERT INTO tasks (title, description, status, priority, project_id) VALUES
@@ -748,6 +819,7 @@ INSERT INTO tasks (title, description, status, priority, project_id) VALUES
 ```
 
 4. **AI 通信**:
+
 ```sql
 -- 发送消息
 SELECT add_project_communication(
@@ -769,6 +841,7 @@ SELECT mark_message_read('message-uuid-here');
 ```
 
 5. **项目统计**:
+
 ```sql
 -- 查看项目统计
 SELECT * FROM get_project_stats(
@@ -781,6 +854,7 @@ SELECT * FROM get_project_stats(
 ```
 
 **优势**:
+
 - ✅ 集中管理多个项目
 - ✅ 强大的查询和统计能力
 - ✅ 支持多 AI 协作
@@ -789,6 +863,7 @@ SELECT * FROM get_project_stats(
 - ✅ 并发安全（使用 SKIP LOCKED）
 
 **劣势**:
+
 - ❌ 需要数据库配置
 - ❌ 相对复杂
 - ❌ 需要维护数据库
@@ -802,6 +877,7 @@ SELECT * FROM get_project_stats(
 **核心机制**: 使用守护进程（pm2/systemd/crontab）持续运行 Nezha，自动调度大模型工作
 
 **工作流程**:
+
 ```
 守护进程启动
     ↓
@@ -848,34 +924,38 @@ pm2 save
 ```
 
 **PM2 配置文件** (ecosystem.config.js):
+
 ```javascript
 module.exports = {
-  apps: [{
-    name: 'nezha-daemon',
-    script: './dist/cli/index.js',
-    args: 'start',
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '1G',
-    env: {
-      NODE_ENV: 'production',
-      DB_HOST: 'localhost',
-      DB_PORT: 5432,
-      DB_NAME: 'nezha',
-      DB_USER: 'postgres',
-      DB_PASSWORD: 'your_password',
-      NEZHA_HEARTBEAT_INTERVAL: 30000
+  apps: [
+    {
+      name: 'nezha-daemon',
+      script: './dist/cli/index.js',
+      args: 'start',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+        DB_HOST: 'localhost',
+        DB_PORT: 5432,
+        DB_NAME: 'nezha',
+        DB_USER: 'postgres',
+        DB_PASSWORD: 'your_password',
+        NEZHA_HEARTBEAT_INTERVAL: 30000,
+      },
+      error_file: './logs/nezha-error.log',
+      out_file: './logs/nezha-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
     },
-    error_file: './logs/nezha-error.log',
-    out_file: './logs/nezha-out.log',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-    merge_logs: true
-  }]
+  ],
 };
 ```
 
 **使用配置文件启动**:
+
 ```bash
 pm2 start ecosystem.config.js
 ```
@@ -883,6 +963,7 @@ pm2 start ecosystem.config.js
 #### 方式 2: systemd（Linux）
 
 **创建服务文件** (/etc/systemd/system/nezha-daemon.service):
+
 ```ini
 [Unit]
 Description=Nezha Daemon Service
@@ -908,6 +989,7 @@ WantedBy=multi-user.target
 ```
 
 **启动服务**:
+
 ```bash
 # 重新加载 systemd
 sudo systemctl daemon-reload
@@ -934,11 +1016,13 @@ sudo systemctl enable nezha-daemon
 #### 方式 3: crontab（定时任务）
 
 **编辑 crontab**:
+
 ```bash
 crontab -e
 ```
 
 **添加定时任务**:
+
 ```bash
 # 每 30 分钟运行一次
 */30 * * * * cd /path/to/nezha && /usr/bin/node dist/cli/index.js start >> /var/log/nezha.log 2>&1
@@ -951,9 +1035,10 @@ crontab -e
 ```
 
 **Heartbeat Daemon 实现示例** (src/daemon/heartbeat.ts):
+
 ```typescript
-import { getPool, closePool } from "./db/client.js";
-import { getDbConfig } from "./db/config.js";
+import { getPool, closePool } from './db/client.js';
+import { getDbConfig } from './db/config.js';
 
 interface HeartbeatConfig {
   intervalMs: number;
@@ -965,7 +1050,7 @@ interface Task {
   id: string;
   title: string;
   description?: string;
-  status: "pending" | "completed" | "failed";
+  status: 'pending' | 'completed' | 'failed';
 }
 
 class HeartbeatDaemon {
@@ -977,17 +1062,19 @@ class HeartbeatDaemon {
     this.config = {
       intervalMs: config.intervalMs ?? 30 * 60 * 1000, // 30 minutes
       workspaceDir: config.workspaceDir ?? process.cwd(),
-      opencodeUrl: config.opencodeUrl ?? "http://127.0.0.1:4098",
+      opencodeUrl: config.opencodeUrl ?? 'http://127.0.0.1:4098',
     };
   }
 
   async start(): Promise<void> {
-    console.log(`🚀 Starting Heartbeat Daemon (interval: ${this.config.intervalMs / 1000 / 60} min)`);
+    console.log(
+      `🚀 Starting Heartbeat Daemon (interval: ${this.config.intervalMs / 1000 / 60} min)`
+    );
     console.log(`   Workspace: ${this.config.workspaceDir}`);
     console.log(`   OpenCode: ${this.config.opencodeUrl}`);
 
     this.isRunning = true;
-    
+
     // Run once immediately
     await this.runHeartbeat();
 
@@ -1004,22 +1091,22 @@ class HeartbeatDaemon {
       this.timer = null;
     }
     await closePool();
-    console.log("🛑 Heartbeat Daemon stopped");
+    console.log('🛑 Heartbeat Daemon stopped');
   }
 
   private async runHeartbeat(): Promise<void> {
     if (!this.isRunning) return;
-    
+
     const startTime = Date.now();
     console.log(`\n❤️ Heartbeat at ${new Date().toISOString()}`);
 
     try {
       // 1. Check for pending tasks
       const tasks = await this.getPendingTasks();
-      
+
       if (tasks.length === 0) {
-        console.log("   ✓ No pending tasks, heartbeat OK");
-        await this.logHeartbeat("ok", 0, Date.now() - startTime);
+        console.log('   ✓ No pending tasks, heartbeat OK');
+        await this.logHeartbeat('ok', 0, Date.now() - startTime);
         return;
       }
 
@@ -1028,22 +1115,21 @@ class HeartbeatDaemon {
       // 2. Execute first task
       const task = tasks[0];
       console.log(`   ▶ Executing: ${task.title}`);
-      
+
       const result = await this.executeTask(task);
-      
+
       if (result.success) {
         console.log(`   ✅ Task completed`);
-        await this.updateTaskStatus(task.id, "completed");
+        await this.updateTaskStatus(task.id, 'completed');
       } else {
         console.log(`   ❌ Task failed: ${result.error}`);
-        await this.updateTaskStatus(task.id, "failed");
+        await this.updateTaskStatus(task.id, 'failed');
       }
 
-      await this.logHeartbeat("executed", tasks.length, Date.now() - startTime);
-      
+      await this.logHeartbeat('executed', tasks.length, Date.now() - startTime);
     } catch (error) {
       console.error(`   ❌ Heartbeat error:`, error);
-      await this.logHeartbeat("error", 0, Date.now() - startTime, String(error));
+      await this.logHeartbeat('error', 0, Date.now() - startTime, String(error));
     }
   }
 
@@ -1062,47 +1148,41 @@ class HeartbeatDaemon {
   private async executeTask(task: Task): Promise<{ success: boolean; error?: string }> {
     // Call opencode API to execute the task
     const sessionResponse = await fetch(`${this.config.opencodeUrl}/session`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
 
     if (!sessionResponse.ok) {
-      return { success: false, error: "Failed to create session" };
+      return { success: false, error: 'Failed to create session' };
     }
 
     const session = await sessionResponse.json();
     const sessionId = session.id;
 
     // Send task as message
-    const messageResponse = await fetch(
-      `${this.config.opencodeUrl}/session/${sessionId}/message`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          parts: [{ type: "text", text: task.description || task.title }],
-        }),
-      }
-    );
+    const messageResponse = await fetch(`${this.config.opencodeUrl}/session/${sessionId}/message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parts: [{ type: 'text', text: task.description || task.title }],
+      }),
+    });
 
     if (!messageResponse.ok) {
-      return { success: false, error: "Failed to send message" };
+      return { success: false, error: 'Failed to send message' };
     }
 
     // For now, just return success - need to handle async response
     return { success: true };
   }
 
-  private async updateTaskStatus(
-    taskId: string,
-    status: "completed" | "failed"
-  ): Promise<void> {
+  private async updateTaskStatus(taskId: string, status: 'completed' | 'failed'): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [status, taskId]
-    );
+    await pool.query(`UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`, [
+      status,
+      taskId,
+    ]);
   }
 
   private async logHeartbeat(
@@ -1126,12 +1206,12 @@ async function main() {
     workspaceDir: process.cwd(),
   });
 
-  process.on("SIGINT", async () => {
+  process.on('SIGINT', async () => {
     await daemon.stop();
     process.exit(0);
   });
 
-  process.on("SIGTERM", async () => {
+  process.on('SIGTERM', async () => {
     await daemon.stop();
     process.exit(0);
   });
@@ -1143,6 +1223,7 @@ main().catch(console.error);
 ```
 
 **优势**:
+
 - ✅ 持续运行，无需人工干预
 - ✅ 自动调度大模型执行任务
 - ✅ 支持多种部署方式
@@ -1150,6 +1231,7 @@ main().catch(console.error);
 - ✅ 自动重启和故障恢复
 
 **劣势**:
+
 - ❌ 需要维护守护进程
 - ❌ 依赖外部工具（PM2/systemd/crontab）
 - ❌ 相对复杂
@@ -1163,6 +1245,7 @@ main().catch(console.error);
 **定义**: 完成工作的主体是程序代码（循环、定时器、死程序），而不是大模型
 
 **特征**:
+
 - ❌ 使用 `while (true)` 循环执行固定的程序逻辑
 - ❌ 使用 `setInterval` 定时执行预定义的代码
 - ❌ 使用 `for` 循环遍历数据并执行固定操作
@@ -1175,7 +1258,7 @@ main().catch(console.error);
 // ❌ 虚伪的持续工作 - 循环执行死程序
 while (true) {
   // 只是打印日志，没有调用大模型
-  console.log("Working...");
+  console.log('Working...');
   await sleep(1000);
 }
 
@@ -1194,6 +1277,7 @@ for (const item of items) {
 ```
 
 **问题**:
+
 - 没有真正的智能决策
 - 无法处理复杂任务
 - 无法学习和改进
@@ -1204,6 +1288,7 @@ for (const item of items) {
 **定义**: 完成工作的主体是大模型，程序代码只是调度器
 
 **特征**:
+
 - ✅ 程序代码调度大模型执行任务
 - ✅ 大模型自主决策如何完成任务
 - ✅ 大模型可以调用工具、读写文件、运行命令
@@ -1217,50 +1302,55 @@ for (const item of items) {
 while (true) {
   // 1. 从数据库获取任务
   const task = await getTaskFromDatabase();
-  
+
   if (task) {
     // 2. 调用大模型执行任务
     const result = await callLLM(task.description);
-    
+
     // 3. 更新任务状态
     await updateTaskStatus(task.id, result);
   }
-  
+
   await sleep(30000); // 30 秒后再次检查
 }
 
 // ✅ 真正的持续工作 - 定时调度大模型
-setInterval(async () => {
-  // 1. 读取 HEARTBEAT.md
-  const heartbeat = await readHeartbeatFile();
-  
-  // 2. 调用大模型执行任务
-  const result = await callLLM(heartbeat.tasks);
-  
-  // 3. 更新 HEARTBEAT.md
-  await updateHeartbeatFile(result);
-}, 30 * 60 * 1000); // 30 分钟
+setInterval(
+  async () => {
+    // 1. 读取 HEARTBEAT.md
+    const heartbeat = await readHeartbeatFile();
+
+    // 2. 调用大模型执行任务
+    const result = await callLLM(heartbeat.tasks);
+
+    // 3. 更新 HEARTBEAT.md
+    await updateHeartbeatFile(result);
+  },
+  30 * 60 * 1000
+); // 30 分钟
 ```
 
 **关键区别**:
 
-| 维度 | 虚伪的持续工作 | 真正的持续工作 |
-|------|---------------|---------------|
-| **工作主体** | 程序代码 | 大模型 |
-| **智能程度** | 无（固定逻辑） | 高（自主决策） |
-| **学习能力** | 无 | 有 |
-| **任务适应性** | 无（固定任务） | 有（灵活处理） |
-| **程序代码作用** | 执行具体工作 | 调度大模型 |
-| **大模型调用** | ❌ 不调用 | ✅ 必须调用 |
+| 维度             | 虚伪的持续工作 | 真正的持续工作 |
+| ---------------- | -------------- | -------------- |
+| **工作主体**     | 程序代码       | 大模型         |
+| **智能程度**     | 无（固定逻辑） | 高（自主决策） |
+| **学习能力**     | 无             | 有             |
+| **任务适应性**   | 无（固定任务） | 有（灵活处理） |
+| **程序代码作用** | 执行具体工作   | 调度大模型     |
+| **大模型调用**   | ❌ 不调用      | ✅ 必须调用    |
 
 ### 如何识别和排除虚伪的持续工作？
 
 **识别标准**:
+
 1. **检查是否有大模型调用**: 如果程序代码中没有调用大模型 API，就是虚伪的持续工作
 2. **检查工作主体**: 如果工作由程序代码完成，而不是大模型，就是虚伪的持续工作
 3. **检查智能决策**: 如果没有智能决策，只是执行固定逻辑，就是虚伪的持续工作
 
 **排除方法**:
+
 1. **重构代码**: 将固定逻辑改为调用大模型
 2. **添加大模型调用**: 在循环或定时器中添加大模型 API 调用
 3. **改变工作模式**: 从"程序执行工作"改为"程序调度大模型执行工作"
@@ -1296,6 +1386,7 @@ Nezha 采用**真正的持续工作**模式：
 4. **大模型**: 实际执行工作，自主决策
 
 **工作流程**:
+
 ```
 HeartbeatService 定时触发
     ↓
@@ -1315,6 +1406,7 @@ Agent 更新数据库状态
 ```
 
 **关键点**:
+
 - ✅ 程序代码只负责调度
 - ✅ 大模型负责实际工作
 - ✅ 大模型可以自主决策
@@ -1336,23 +1428,25 @@ Nezha uses a plugin system to extend functionality. Plugins hook into the task l
 
 **Important**: Plugins should **help and remind**, not **replace AI decisions**.
 
-| Correct Design | Wrong Design |
-|----------------|--------------|
-| Plugin reminds AI to commit | Plugin commits automatically |
-| AI decides when/how | Plugin decides |
-| AI writes meaningful messages | Plugin generates garbage |
-| AI is responsible | Plugin takes over |
+| Correct Design                | Wrong Design                 |
+| ----------------------------- | ---------------------------- |
+| Plugin reminds AI to commit   | Plugin commits automatically |
+| AI decides when/how           | Plugin decides               |
+| AI writes meaningful messages | Plugin generates garbage     |
+| AI is responsible             | Plugin takes over            |
 
 ### GitReminder Plugin
 
 The `GitAutoCommitPlugin` (internally named `git-reminder`) is a plugin that reminds about uncommitted changes after task completion.
 
 **What it does:**
+
 - Logs a reminder when tasks complete with uncommitted changes
 - Reports git status on startup
 - Warns about uncommitted changes on shutdown
 
 **What it does NOT do:**
+
 - ❌ Does NOT commit automatically
 - ❌ Does NOT push automatically
 - ❌ Does NOT generate commit messages
@@ -1360,11 +1454,13 @@ The `GitAutoCommitPlugin` (internally named `git-reminder`) is a plugin that rem
 **Why this design:**
 
 The previous version auto-committed after every task, which caused:
+
 - 180+ polluted commits with garbage messages like "Task completed: Test Task"
 - Violation of Nezha philosophy (replacing AI decisions)
 - History pollution that required `git filter-branch` to fix
 
 **Current behavior:**
+
 ```
 Task completes
     ↓
@@ -1378,11 +1474,12 @@ AI is responsible for committing
 ```
 
 **Configuration:**
+
 ```typescript
 new GitAutoCommitPlugin({
-  remindOnUncommitted: true,  // Log reminder for uncommitted changes
-  logGitStatus: true,         // Log git status on startup
-})
+  remindOnUncommitted: true, // Log reminder for uncommitted changes
+  logGitStatus: true, // Log git status on startup
+});
 ```
 
 ### Creating Custom Plugins
@@ -1409,12 +1506,13 @@ interface PluginHooks {
 ```
 
 **Example:**
+
 ```typescript
 export class MyPlugin implements Plugin {
   name = 'my-plugin';
   version = '1.0.0';
   description = 'My custom plugin';
-  
+
   hooks = {
     afterTask: async (context: TaskContext) => {
       if (context.status === 'COMPLETED') {
@@ -1429,6 +1527,7 @@ export class MyPlugin implements Plugin {
 ```
 
 **Best Practices:**
+
 1. Use `logger.info()` for important messages, `logger.debug()` for details
 2. Follow the naming convention: `[PluginName] Message`
 3. Don't replace AI decisions - only help/remind
