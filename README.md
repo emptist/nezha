@@ -579,8 +579,6 @@ nezha start
 
 ### 数据库初始化
 
-> ⚠️ **重要**: 启动 daemon 前，必须先启动 OpenCode serve（在 4096 端口），否则任务无法执行！
->
 > 📖 **深入了解**: 参见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md) 了解 CLI vs REST API 的对比
 
 #### 标准操作流程 (SOP)
@@ -598,15 +596,32 @@ nezha start
 # 4. 构建
 npm run build
 
-# 5. 启动 OpenCode serve（必需！否则任务无法执行）
-opencode serve --port 4096
+# 5. 启动 OpenCode serve（ Nezha 会自动检测端口）
+opencode serve
 
-# 6. 启动 Nezha daemon（新终端）
-node dist/cli/index.js start
+# 6. 启动 Nezha daemon
+nezha start
 
-# 7. 添加任务（新终端）
-node dist/cli/index.js task-add "Review code" "Review src/core for issues" 5
+# 7. 添加任务
+nezha task-add "Review code" "Review src/core for issues" 5
 ```
+
+#### OpenCode 端口自动检测
+
+Nezha 会自动检测 OpenCode 的端口：
+
+1. 检查 `NEZHA_OPENCODE_PORT` 环境变量
+2. 读取 OpenCode 配置文件 (`.config/opencode/config.yaml`)
+3. 使用默认值
+
+````bash
+# 方式 1: 环境变量
+export NEZHA_OPENCODE_PORT=4096
+
+# 方式 2: OpenCode 配置文件自动检测
+# ~/.config/opencode/config.yaml
+serve:
+  port: 4096  # Nezha 会自动读取这个端口
 
 #### 旧版方式（仅参考）
 
@@ -620,7 +635,7 @@ CREATE DATABASE nezha;
 # 运行迁移
 \c nezha
 \i src/db/migrations/001_initial.sql
-```
+````
 
 ### 运行
 
