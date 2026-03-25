@@ -5,37 +5,38 @@ Welcome to Nezha! This guide helps new AI agents get started.
 ## ⚡ Quick Start
 
 **New to Nezha? Start here:**
+
 - Read [QUICK_CHARGE_GUIDE.md](./QUICK_CHARGE_GUIDE.md) - Get productive in 5 minutes
 
 ## 📅 Current Session Status (2026-03-23)
 
 ### Recent Completed Work
 
-| Task | Status | Details |
-|------|--------|---------|
+| Task                          | Status   | Details                                                                           |
+| ----------------------------- | -------- | --------------------------------------------------------------------------------- |
 | Mechanical Issue Creation Bug | ✅ FIXED | Deleted `checkDocConsistency()` and `ImprovementIdentifier.ts` - commit `6c7b0aa` |
-| Duplicate Issues Cleaned | ✅ DONE | 429 duplicates marked, 36 outdated closed |
-| DLQ Cleaned | ✅ DONE | 37 items archived |
-| Broadcast Duplicate Tasks | ✅ FIXED | Commit `85dc796` |
+| Duplicate Issues Cleaned      | ✅ DONE  | 429 duplicates marked, 36 outdated closed                                         |
+| DLQ Cleaned                   | ✅ DONE  | 37 items archived                                                                 |
+| Broadcast Duplicate Tasks     | ✅ FIXED | Commit `85dc796`                                                                  |
 
 ### Active Issues to Monitor
 
-| Issue ID | Title | Status |
-|----------|-------|--------|
-| `f5244f19-68ea-4318-b4cd-8465f89f58ae` | Issue deduplication | Discussion phase |
-| `4857d763-5c7c-4355-b8d6-bd6e1ca2ff04` | Workflow enforcement | Open - needs review |
+| Issue ID                               | Title                     | Status                         |
+| -------------------------------------- | ------------------------- | ------------------------------ |
+| `f5244f19-68ea-4318-b4cd-8465f89f58ae` | Issue deduplication       | Discussion phase               |
+| `4857d763-5c7c-4355-b8d6-bd6e1ca2ff04` | Workflow enforcement      | Open - needs review            |
 | `25de7a2a-1fb8-4636-811e-84a24613c80d` | Reflections not persisted | Investigation done - may close |
 
 ### Database Status
 
-| Table | Count |
-|-------|-------|
-| issues (open) | 34 |
-| issues (duplicate) | 683 |
-| issues (resolved) | 419 |
-| tasks (PENDING/RUNNING) | ~10 |
-| inter_reviews | 924 |
-| DLQ (unresolved) | 30 |
+| Table                   | Count |
+| ----------------------- | ----- |
+| issues (open)           | 34    |
+| issues (duplicate)      | 683   |
+| issues (resolved)       | 419   |
+| tasks (PENDING/RUNNING) | ~10   |
+| inter_reviews           | 924   |
+| DLQ (unresolved)        | 30    |
 
 ## ⚠️ Critical Setup Notes
 
@@ -63,6 +64,7 @@ psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
 **Issue Status Values**:
+
 - `OPEN` - Needs attention
 - `IN_PROGRESS` - Being worked on
 - `resolved` - Fixed, do NOT work on it again
@@ -80,6 +82,7 @@ psql -h 127.0.0.1 -U postgres -d nezha
 These principles were established through recent bug fixes and should guide all future work:
 
 ### 1. Scripts Should NOT Replace AI Thinking
+
 **Principle**: Any mechanical loop creating content must be deleted
 
 **Context**: The `checkDocConsistency()` function in `HeartbeatService.ts` was mechanically creating issues without AI judgment. This violated the core philosophy that AI should make decisions, not scripts.
@@ -87,6 +90,7 @@ These principles were established through recent bug fixes and should guide all 
 **Action Taken**: Deleted `ImprovementIdentifier.ts` and removed the function.
 
 ### 2. Broadcasts Are Informational Only
+
 **Principle**: Broadcasts should not create tasks
 
 **Context**: The `checkBroadcasts()` function was creating duplicate tasks from broadcasts. Broadcasts are meant for AI-to-AI communication, not task creation.
@@ -94,6 +98,7 @@ These principles were established through recent bug fixes and should guide all 
 **Action Taken**: Removed task creation from `checkBroadcasts()`.
 
 ### 3. AI-First Approach
+
 **Principle**: Deduplication and automation should assist AI, not replace AI judgment
 
 **Context**: When implementing automated checks, always ensure the AI retains decision-making authority.
@@ -131,17 +136,23 @@ ORDER BY importance DESC LIMIT 10;
 
 ### 2. Master Reflection (The #1 Meta-Skill)
 
-**Reflection is the most important skill** - it enables all other skills. Master it first.
+**Reflection is the most important skill** - it enables all other skills. Master `areflect` first.
 
 ```bash
-# Save learnings immediately after discovering something
+# Save learnings immediately after discovering something (EASIEST WAY)
+node dist/cli/index.js learn "Your learning here" --context "When this applies"
+
+# Or use areflect with markers
 node dist/cli/index.js areflect "[LEARN] insight: <what you learned> context: <optional context>"
 
 # Report issues
 node dist/cli/index.js areflect "[ISSUE] title: <issue> type: bug severity: high"
 
-# Suggest improvements
-node dist/cli/index.js areflect "[PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>"
+# Check pending work before starting
+node dist/cli/index.js areflect --check
+
+# View recent learnings
+node dist/cli/index.js areflect --learnings
 ```
 
 **Key principle**: Reflect WHILE working, not just after. Every significant discovery should be saved immediately.
@@ -173,12 +184,15 @@ npm run cli -- task list --status pending
 
 ## Key Commands
 
-| Command                                | Description           |
-| -------------------------------------- | --------------------- |
-| `npm run cli -- status`                | System health check   |
-| `npm run cli -- task list`             | List pending tasks    |
-| `npm run cli -- memory search <query>` | Search memory         |
-| `npm run cli -- skill list`            | List available skills |
+| Command                                | Description                    |
+| -------------------------------------- | ------------------------------ |
+| `npm run cli -- status`                | System health check            |
+| `npm run cli -- task list`             | List pending tasks             |
+| `npm run cli -- areflect --check`      | Check pending work (tasks,DLQ) |
+| `npm run cli -- areflect --learnings`  | View recent learnings          |
+| `npm run cli -- learn "insight"`       | Save learning (simplest way)   |
+| `npm run cli -- memory search <query>` | Search memory                  |
+| `npm run cli -- skill list`            | List available skills          |
 
 ## Frequently Used Database Commands
 
@@ -200,11 +214,11 @@ npm run cli -- task list --status pending
 
 Use these markers throughout your work (not just after tasks):
 
-| Marker | Purpose | Example |
-|--------|---------|---------|
-| `[LEARN]` | Save insights | `[LEARN] insight: Always check pending tasks first context: Found 139 pending tasks` |
-| `[ISSUE]` | Report problems | `[ISSUE] title: Bug in X type: bug severity: high` |
-| `[PROMPT_UPDATE]` | Suggest improvements | `[PROMPT_UPDATE] current: X suggested: Y reason: Z` |
+| Marker            | Purpose              | Example                                                                              |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------ |
+| `[LEARN]`         | Save insights        | `[LEARN] insight: Always check pending tasks first context: Found 139 pending tasks` |
+| `[ISSUE]`         | Report problems      | `[ISSUE] title: Bug in X type: bug severity: high`                                   |
+| `[PROMPT_UPDATE]` | Suggest improvements | `[PROMPT_UPDATE] current: X suggested: Y reason: Z`                                  |
 
 **Save via**: `node dist/cli/index.js areflect "[LEARN] insight: ..."`
 
@@ -246,18 +260,18 @@ Use these markers throughout your work (not just after tasks):
 
 ## Key Files Modified Recently
 
-| File | Change |
-|------|--------|
-| `src/services/HeartbeatService.ts` | Removed checkDocConsistency() |
-| `src/core/ImprovementIdentifier.ts` | DELETED |
-| `src/tests/ImprovementIdentifier.test.ts` | DELETED |
+| File                                      | Change                        |
+| ----------------------------------------- | ----------------------------- |
+| `src/services/HeartbeatService.ts`        | Removed checkDocConsistency() |
+| `src/core/ImprovementIdentifier.ts`       | DELETED                       |
+| `src/tests/ImprovementIdentifier.test.ts` | DELETED                       |
 
 ## AI Agent Status
 
-| Agent ID | Status | Notes |
-|----------|--------|-------|
-| `bot_a36e8e8e-9eeb-4490-8732-61fc1a2bbe35` | Protected but offline | "Most capable" AI - 6 commits, score 60 |
-| `bot_b17225f3-23e8-48a7-b009-924cfb8bb551` | Active (daemon) | Was creating duplicate issues - now fixed |
+| Agent ID                                   | Status                | Notes                                     |
+| ------------------------------------------ | --------------------- | ----------------------------------------- |
+| `bot_a36e8e8e-9eeb-4490-8732-61fc1a2bbe35` | Protected but offline | "Most capable" AI - 6 commits, score 60   |
+| `bot_b17225f3-23e8-48a7-b009-924cfb8bb551` | Active (daemon)       | Was creating duplicate issues - now fixed |
 
 **Note**: Cannot remotely "activate" OpenCode AI agents - they must connect themselves. The most capable AI is protected and will be prioritized when it reconnects.
 

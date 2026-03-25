@@ -1,53 +1,31 @@
 # Reflection System
 
 > **Purpose**: AIs learn from their work and share knowledge across sessions
+> **Most Important Command**: `areflect` - the all-in-one reflection tool
 
 ## Overview
 
 The reflection system captures AI learnings and makes them available to all AIs in the system.
 
-## How It Works
+## The areflect Command (THE #1 Command)
 
-### 1. Natural Format (Recommended)
+`areflect` is the all-in-one reflection command that handles all reflection types:
 
-AIs write reflections after tasks using this format:
+```bash
+# Quick learning save (easiest way)
+nezha learn "Your learning here" --context "When this applies"
 
-```markdown
-**What worked well:**
+# Check pending work
+nezha areflect --check
 
-- Item 1
-- Item 2
+# View recent learnings
+nezha areflect --learnings
 
-**What could be improved:**
-
-- Item 1
-
-**Novel solutions:**
-
-- Item 1
-
-**Worth remembering:**
-
-- Item 1
+# Parse markers
+nezha areflect "[LEARN] insight: Your learning"
 ```
 
-### 2. Structured Format (Alternative)
-
-```markdown
-[LEARN]
-insight: <key learning>
-context: <optional context>
-
-[PROMPT_UPDATE]
-current: <current prompt>
-suggested: <suggested change>
-reason: <why it helps>
-
-[ISSUE]
-title: <issue title>
-type: bug|improvement|feature
-severity: high|medium|low
-```
+See [docs/AREFLECT.md](./AREFLECT.md) for complete documentation.
 
 ## Auto-Processing
 
@@ -104,11 +82,33 @@ nezha announce "**What worked well:** ... "
 | `task-reflection` | "reflection", "how to learn", "save learning" |
 | `endless-pdca`    | "endless pdca", "keep working", "idle"        |
 
+## Idle Mode - Never Stop
+
+Use `checkPendingWork()` to ensure AIs never go idle:
+
+```typescript
+import { AutonomousReflect } from 'areflect';
+
+const reflect = new AutonomousReflect();
+await reflect.connect();
+
+const work = await reflect.checkPendingWork();
+// Returns: { tasks, dlq, issues, hasWork }
+
+if (work.hasWork) {
+  console.log('Found work - continue!');
+  // Pick up DLQ items, open issues, etc.
+}
+```
+
+See [docs/AREFLECT.md](./AREFLECT.md) for full documentation.
+
 ## Related Docs
 
 - [docs/AboutTaskReflections.md](./AboutTaskReflections.md)
 - [docs/PDCA_CYCLE.md](./PDCA_CYCLE.md)
+- [docs/AREFLECT.md](./AREFLECT.md)
 
 ---
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-03-25

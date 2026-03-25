@@ -1784,9 +1784,34 @@ async function main(): Promise<void> {
 
       case 'areflect': {
         const text = args.slice(1).join(' ');
+        if (args.includes('--check')) {
+          const { AutonomousReflect } = await import('../../auto-reflect/dist/index.js');
+          const reflect = new AutonomousReflect();
+          await reflect.connect();
+          const work = await reflect.checkPendingWork();
+          console.log('\n📋 Pending Work Check:');
+          console.log(`   Tasks: ${work.tasks}`);
+          console.log(`   DLQ Items: ${work.dlq}`);
+          console.log(`   Open Issues: ${work.issues}`);
+          console.log(`   Has Work: ${work.hasWork ? '✅ Yes' : '❌ No'}`);
+          await reflect.disconnect();
+          process.exit(0);
+        }
+        if (args.includes('--learnings')) {
+          const { AutonomousReflect } = await import('../../auto-reflect/dist/index.js');
+          const reflect = new AutonomousReflect();
+          await reflect.connect();
+          const learnings = await reflect.getRecentLearnings(10);
+          console.log('\n📚 Recent Learnings:');
+          for (const item of learnings) {
+            console.log(`   [${item.source}] ${item.content.substring(0, 80)}...`);
+          }
+          await reflect.disconnect();
+          process.exit(0);
+        }
         if (!text || text === '--help' || text === '-h') {
           console.log(`
-Trae Reflect - Standalone reflection tool for Trae Editor AI
+areflect - All-in-One Reflection Command (THE most important command)
 
 Usage: nezha areflect <text with markers>
 
@@ -1800,6 +1825,8 @@ Markers:
   [TASK_COMPLETE] id: <uuid> result: <optional result>
   [ANNOUNCE] message: <text> priority: <low|normal|high|critical> to: <agent-id>
   [SCHEDULE] title: <title> cron: <cron-expr> description: <desc> priority: <1-10>
+  [OPINION] meetingId: <uuid> perspective: <text> reasoning: <why> position: support|oppose|neutral
+  [REVIEW_RESPONSE] reviewId: <uuid> response: <text> accepted: <suggestions>
 
 Commands:
   areflect "<text>"           Parse and save reflection markers
