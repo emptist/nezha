@@ -7,12 +7,20 @@ import {
   type IConfig,
   type TransportConfig,
 } from './types.js';
-import { DATABASE_CONFIG, TASK_CONFIG, MEMORY_CONFIG, ENV_KEYS, ENV_DEFAULT } from './constants.js';
+import {
+  DATABASE_CONFIG,
+  TASK_CONFIG,
+  MEMORY_CONFIG,
+  ENV_KEYS,
+  ENV_DEFAULT,
+  OPENCODE_API,
+} from './constants.js';
 import { loadYamlConfig, type NezhaYamlConfig } from './YamlConfigLoader.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { getCurrentSessionId } from '../services/AgentSessionService.js';
+import os from 'os';
 
 function parseIntEnv(value: string | undefined, defaultValue: number, key: string): number {
   if (!value) return defaultValue;
@@ -26,6 +34,15 @@ function parseIntEnv(value: string | undefined, defaultValue: number, key: strin
 // const AGENT_ID_FILE = '.nezha/agent-id.json'; // Reserved for future use
 
 function loadOrCreateAgentId(): { id: string; displayName?: string } {
+  const envAgentId = process.env.NEZHA_AGENT_ID;
+  if (envAgentId && envAgentId.trim()) {
+    const displayName = process.env[ENV_KEYS.AGENT_NAME];
+    return {
+      id: envAgentId.startsWith('bot_') ? envAgentId : `bot_${envAgentId}`,
+      displayName: displayName || undefined,
+    };
+  }
+
   const configDir = path.join(process.cwd(), '.nezha');
   const idFilePath = path.join(configDir, 'agent-id.json');
 
@@ -190,16 +207,67 @@ export class Config implements IConfig {
     return ENV_DEFAULT.DEVELOPMENT;
   }
 
+  private detectOpencodePort(): number {
+    const envPort = process.env[ENV_KEYS.OPENCODE_PORT];
+    if (envPort) {
+      const parsed = parseInt(envPort, 10);
+      if (!isNaN(parsed) && parsed > 0 && parsed < 65536) {
+        return parsed;
+      }
+    }
+
+    const homeDir = os.homedir();
+    const opencodeConfigPaths = [
+      path.join(homeDir, '.config', 'opencode', 'config.yaml'),
+      path.join(homeDir, '.config', 'opencode', 'config.yml'),
+      path.join(homeDir, '.opencode.yaml'),
+      path.join(homeDir, '.opencode.yml'),
+    ];
+
+    for (const configPath of opencodeConfigPaths) {
+      try {
+        if (fs.existsSync(configPath)) {
+          const content = fs.readFileSync(configPath, 'utf-8');
+          const config = content.includes('port:')
+            ? content
+            : content.replace(/serve:/, 'serve:\n  port:');
+
+          const portMatch = config.match(/port:\s*(\d+)/);
+          if (portMatch && portMatch[1]) {
+            return parseInt(portMatch[1], 10);
+          }
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    return OPENCODE_API.DEFAULT_PORT;
+  }
+
   private loadTransportConfig(yaml?: NezhaYamlConfig): TransportConfig {
-    const mode = process.env[ENV_KEYS.TRANSPORT_MODE] || yaml?.transport?.mode || 'http';
-    const validMode = mode === 'cli' ? 'cli' : 'http';
+    const envUrl = process.env[ENV_KEYS.OPENCODE_API_URL];
+    const yamlUrl = yaml?.transport?.opencodeApiUrl;
+
+    let opencodeApiUrl: string;
+    if (envUrl) {
+      const port = this.detectOpencodePort();
+      const urlObj = new URL(envUrl);
+      urlObj.port = String(port);
+      opencodeApiUrl = urlObj.toString();
+    } else if (yamlUrl) {
+      const port = this.detectOpencodePort();
+      const urlObj = new URL(yamlUrl);
+      urlObj.port = String(port);
+      opencodeApiUrl = urlObj.toString();
+    } else {
+      const port = this.detectOpencodePort();
+      opencodeApiUrl = `http://localhost:${port}`;
+    }
 
     return {
-      mode: validMode,
-      opencodeApiUrl:
-        process.env[ENV_KEYS.OPENCODE_API_URL] ||
-        yaml?.transport?.opencodeApiUrl ||
-        'http://localhost:4096',
+      mode: 'http',
+      opencodeApiUrl,
     };
   }
 
