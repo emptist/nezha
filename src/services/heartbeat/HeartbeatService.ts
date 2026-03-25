@@ -3,33 +3,47 @@ import { AIProvider, AIProviderFactory } from '../ai/index.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../../config/constants.js';
 import { logger } from '../../utils/logger.js';
 import type { DatabaseClient } from '../../db/DatabaseClient.js';
+import { ReminderService } from '../ReminderService.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
   taskTimeoutMs?: number;
+  enableReminder?: boolean;
 }
 
 export class HeartbeatService {
   private readonly scheduler: Scheduler;
   private readonly aiProvider: AIProvider;
   private readonly db: DatabaseClient;
+  private readonly reminderService: ReminderService;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
     this.db = db;
     this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
     this.aiProvider = AIProviderFactory.createFromEnv();
 
+    this.reminderService = new ReminderService(db, {
+      enableEventTriggers: true,
+      enableInterReviewCheck: true,
+      enableMemorySave: true,
+    });
+
     this.scheduler.onTaskReady = this.executeTask.bind(this);
   }
 
   async start(): Promise<void> {
     logger.info('Starting HeartbeatService...');
+
+    this.reminderService.setEventBus(this.scheduler.getEventBus());
+    this.reminderService.startBlindLoop();
+
     await this.scheduler.start();
-    logger.info('HeartbeatService started');
+    logger.info('HeartbeatService started with ReminderService');
   }
 
   async stop(): Promise<void> {
-    await this.scheduler.stop();
+    this.reminderService.stopBlindLoop();
+    this.scheduler.stop();
     logger.info('HeartbeatService stopped');
   }
 

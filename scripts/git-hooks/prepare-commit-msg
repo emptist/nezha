@@ -60,13 +60,9 @@ if [ -n "$NEZHA_CMD" ]; then
     fi
 fi
 
-AGENT_ID_FILE=".nezha/agent-id.json"
-
-if [ ! -f "$AGENT_ID_FILE" ]; then
-    exit 0
+if [ -n "$NEZHA_CMD" ]; then
+    AGENT_ID=$($NEZHA_CMD agents whoami 2>/dev/null | grep -o 'S-[^-]\+-[^-]\+-[^-]\+-[^-]\+' || grep -o 'G-[^-]\+-[^-]\+-[^-]\+-[^-]\+' || true)
 fi
-
-AGENT_ID=$(cat "$AGENT_ID_FILE" | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 
 if [ -z "$AGENT_ID" ]; then
     exit 0

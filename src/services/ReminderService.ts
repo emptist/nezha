@@ -1,21 +1,76 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { BroadcastService } from './BroadcastService.js';
+import { EventBus } from '../core/EventBus.js';
+import { SCHEDULER_EVENTS } from '../core/Scheduler.js';
+import { Config } from '../config/Config.js';
 
-const REMINDER_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between reminders
-const BLIND_LOOP_INTERVAL_MS = 5 * 60 * 1000; // Blind loop every 5 minutes
+const REMINDER_COOLDOWN_MS = 5 * 60 * 1000;
+const BLIND_LOOP_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_TASKS_TO_SHOW = 5;
+
+export interface ReminderConfig {
+  enableEventTriggers?: boolean;
+  enableInterReviewCheck?: boolean;
+  enableMemorySave?: boolean;
+}
 
 export class ReminderService {
   private readonly db: DatabaseClient;
   private readonly broadcastService: BroadcastService;
+  private readonly config: ReminderConfig;
   private lastReminderTime: number = 0;
-  private lastReminderTaskCount: number = 0;
   private blindLoopTimer: ReturnType<typeof setInterval> | null = null;
+  private eventBus: EventBus | null = null;
 
-  constructor(db: DatabaseClient) {
+  constructor(db: DatabaseClient, config: ReminderConfig = {}) {
     this.db = db;
     this.broadcastService = new BroadcastService(db);
+    this.config = {
+      enableEventTriggers: config.enableEventTriggers ?? true,
+      enableInterReviewCheck: config.enableInterReviewCheck ?? true,
+      enableMemorySave: config.enableMemorySave ?? true,
+    };
+  }
+
+  setEventBus(eventBus: EventBus): void {
+    this.eventBus = eventBus;
+    if (this.config.enableEventTriggers) {
+      this.subscribeToEvents();
+    }
+  }
+
+  private subscribeToEvents(): void {
+    if (!this.eventBus) return;
+
+    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_COMPLETED, async (data: any) => {
+      await this.onTaskCompleted(data);
+    });
+
+    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_FAILED, async (data: any) => {
+      await this.onTaskFailed(data);
+    });
+
+    logger.info('[Reminder] Subscribed to EventBus events');
+  }
+
+  private async onTaskCompleted(data: { taskId?: string; title?: string }): Promise<void> {
+    const message = `✅ **任务完成**: ${data.title || 'Unknown'}`;
+    await this.notifyAI(message, 'low');
+    await this.saveToMemory(`任务完成提醒: ${data.title || 'Unknown task'}`);
+  }
+
+  private async onTaskFailed(data: {
+    taskId?: string;
+    title?: string;
+    error?: string;
+  }): Promise<void> {
+    const message = `❌ **任务失败**: ${data.title || 'Unknown'}
+📍 请检查: ${data.error || 'Unknown error'}`;
+    await this.notifyAI(message, 'high');
+    await this.saveToMemory(
+      `任务失败提醒: ${data.title || 'Unknown'}, 错误: ${data.error || 'Unknown'}`
+    );
   }
 
   startBlindLoop(intervalMs: number = BLIND_LOOP_INTERVAL_MS): void {
@@ -27,14 +82,13 @@ export class ReminderService {
     logger.info(`[Reminder] Starting blind loop (interval: ${intervalMs / 1000}s)`);
     this.blindLoopTimer = setInterval(async () => {
       try {
-        await this.remindIfNeeded();
+        await this.periodicCheck();
       } catch (error) {
         logger.error('[Reminder] Blind loop error:', error);
       }
     }, intervalMs);
 
-    // Also run once at start
-    this.remindIfNeeded().catch(err => logger.error('[Reminder] Initial reminder failed:', err));
+    this.periodicCheck().catch(err => logger.error('[Reminder] Initial check failed:', err));
   }
 
   stopBlindLoop(): void {
@@ -45,29 +99,57 @@ export class ReminderService {
     }
   }
 
-  async remindIfNeeded(): Promise<void> {
-    const pendingCount = await this.getPendingTaskCount();
-    const pausedCount = await this.getPausedTaskCount();
+  private async periodicCheck(): Promise<void> {
     const now = Date.now();
-
     if (now - this.lastReminderTime < REMINDER_COOLDOWN_MS) {
       return;
     }
 
-    await this.sendThoughtPrompt(pendingCount, pausedCount, 0);
-    this.lastReminderTime = now;
-    this.lastReminderTaskCount = pendingCount;
-  }
+    const messages: string[] = [];
 
-  async remindNow(reason: string): Promise<void> {
-    const pendingCount = await this.getPendingTaskCount();
-    if (pendingCount === 0) {
-      return;
+    const pendingTasks = await this.getPendingTaskCount();
+    const pendingReviews = this.config.enableInterReviewCheck
+      ? await this.getPendingReviewCount()
+      : 0;
+    const failedTasks = await this.getFailedTaskCount();
+
+    if (pendingTasks > 0) {
+      messages.push(`📋 ${pendingTasks} 个待处理任务`);
+    }
+    if (pendingReviews > 0) {
+      messages.push(`🔍 ${pendingReviews} 个待处理 review`);
+    }
+    if (failedTasks > 0) {
+      messages.push(`❌ ${failedTasks} 个失败任务`);
     }
 
-    await this.sendReminder(pendingCount, 0, reason);
-    this.lastReminderTime = Date.now();
-    this.lastReminderTaskCount = pendingCount;
+    if (messages.length > 0) {
+      const message = `⏰ **哪吒提醒** (每 5 分钟)\n\n${messages.join('\n')}\n\n💡 使用 \`nezha tasks\` 查看详情`;
+      await this.notifyAI(message, 'normal');
+      await this.saveToMemory(`周期性提醒: ${messages.join(', ')}`);
+    }
+
+    this.lastReminderTime = now;
+  }
+
+  private async notifyAI(message: string, priority: 'low' | 'normal' | 'high'): Promise<void> {
+    await this.broadcastService.sendBroadcast(message, { priority });
+    logger.info(`[Reminder] Notified AI: ${message.substring(0, 50)}...`);
+  }
+
+  private async saveToMemory(content: string): Promise<void> {
+    if (!this.config.enableMemorySave) return;
+
+    try {
+      const agentId = Config.getInstance().getAgentId();
+      await this.db.query(
+        `INSERT INTO memory (content, tags, source, importance)
+         VALUES ($1, $2, $3, $4)`,
+        [content, ['reminder', 'system'], 'reminder-service', 5]
+      );
+    } catch (error) {
+      logger.debug('[Reminder] Failed to save to memory:', error);
+    }
   }
 
   private async getPendingTaskCount(): Promise<number> {
@@ -77,87 +159,30 @@ export class ReminderService {
     return parseInt(result.rows[0]?.count || '0', 10);
   }
 
-  private async getPausedTaskCount(): Promise<number> {
+  private async getPendingReviewCount(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tasks WHERE status = 'PAUSED'`
+      `SELECT COUNT(*) as count FROM inter_reviews WHERE status IN ('pending', 'in_progress')`
     );
     return parseInt(result.rows[0]?.count || '0', 10);
   }
 
-  private async getCompletedTodayCount(): Promise<number> {
+  private async getFailedTaskCount(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM tasks WHERE status = 'COMPLETED' AND completed_at >= CURRENT_DATE`
+      `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'`
     );
     return parseInt(result.rows[0]?.count || '0', 10);
-  }
-
-  private async getTopPendingTasks(): Promise<{ title: string; priority: number }[]> {
-    const result = await this.db.query<{ title: string; priority: number }>(
-      `SELECT title, priority FROM tasks 
-       WHERE status = 'PENDING' 
-       ORDER BY priority DESC, created_at ASC 
-       LIMIT $1`,
-      [MAX_TASKS_TO_SHOW]
-    );
-    return result.rows;
-  }
-
-  private async sendReminder(
-    pendingCount: number,
-    pausedCount: number = 0,
-    reason?: string
-  ): Promise<void> {
-    const tasks = await this.getTopPendingTasks();
-    const taskList = tasks
-      .map((t, i) => `${i + 1}. [P${t.priority}] ${t.title.substring(0, 50)}`)
-      .join('\n');
-
-    const reasonText = reason ? `\n📍 触发点: ${reason}` : '';
-    const message = `📋 **${pendingCount} 个待处理任务** | ${pausedCount} 个已暂停
-${reasonText}
-
-${taskList}
-${pendingCount > MAX_TASKS_TO_SHOW ? `\n... 还有 ${pendingCount - MAX_TASKS_TO_SHOW} 个` : ''}`;
-
-    await this.broadcastService.sendBroadcast(message, { priority: 'normal' });
-    logger.info(`[Reminder] Sent reminder: ${pendingCount} pending tasks`);
-  }
-
-  private async sendThoughtPrompt(
-    pendingCount: number,
-    pausedCount: number,
-    completedToday: number = 0
-  ): Promise<void> {
-    const message = `🤖 **哪吒系统提醒** ⏰ 每 5 分钟
-
-📊 当前状态: ${pendingCount} 待处理 | ${pausedCount} 已暂停 | ${completedToday} 今日完成
-
-💡 **思考题** (任选一项):
-1. 最近 2 小时有没有新的学习体会？用 \`nezha share <体会>\` 分享
-2. 有没有发现 bug 或功能需求？用 \`nezha areflect "[ISSUE]..."\` 报告
-3. 文档/知识点需要更新吗？（.memory/ 或 .tmp/nezha-memory/）
-4. 跟 ../refers/ 中的 OpenClaw/Trae/pi 对比，有哪些不足？
-5. 有没有代码可以评审？用 \`nezha review\`
-6. 系统可以如何改进？用 \`nezha areflect "[PROMPT_UPDATE]..."\`
-
-🚀 行动: 主动领取任务或创建新任务 (\`nezha areflect "[TASK]..."\`)
-
----
-*没有任务时也要保持思考*`;
-
-    await this.broadcastService.sendBroadcast(message, { priority: 'low' });
-    logger.info('[Reminder] Sent thought prompt');
   }
 
   async forceRemind(): Promise<void> {
-    const pendingCount = await this.getPendingTaskCount();
-    if (pendingCount === 0) {
-      logger.debug('[Reminder] No pending tasks to remind');
-      return;
-    }
+    await this.periodicCheck();
+  }
 
-    await this.sendReminder(pendingCount, 0, '手动触发');
-    this.lastReminderTime = Date.now();
-    this.lastReminderTaskCount = pendingCount;
+  async remindIfNeeded(): Promise<void> {
+    await this.periodicCheck();
+  }
+
+  async remindNow(reason: string): Promise<void> {
+    const message = `📍 **提醒触发**: ${reason}`;
+    await this.notifyAI(message, 'normal');
   }
 }
