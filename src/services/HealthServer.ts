@@ -158,6 +158,8 @@ export class HealthServer {
   private opencodeApiUrl?: string;
   private memoryDir: string;
   private diskWarningThreshold: number;
+  private broadcastPollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastBroadcastCheck: Date = new Date();
 
   constructor(db: DatabaseClient, port: number = 4097, config?: HealthServerConfig) {
     this.db = db;
@@ -313,34 +315,81 @@ export class HealthServer {
           logger.info(`[WS] Client disconnected (total: ${this.wsClients.size})`);
         });
 
-        ws.send(JSON.stringify({
-          type: 'connected',
-          message: 'Nezha WebSocket ready',
-          timestamp: new Date().toISOString(),
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'connected',
+            message: 'Nezha WebSocket ready',
+            timestamp: new Date().toISOString(),
+          })
+        );
       });
 
       this.server.on('upgrade', (req, socket, head) => {
         const url = new URL(req.url || '', `http://localhost:${this.port}`);
         if (url.pathname === '/ws') {
-          this.wss?.handleUpgrade(req, socket, head, (ws) => {
+          this.wss?.handleUpgrade(req, socket, head, ws => {
             this.wss?.emit('connection', ws, req);
           });
         }
       });
 
-      this.server.on('upgradeError', (err) => {
+      this.server.on('upgradeError', err => {
         logger.error('WebSocket upgrade error:', err);
       });
 
       this.server.listen(this.port, () => {
         logger.info(`Health server started on port ${this.port} with WebSocket support`);
+        this.startBroadcastPolling();
         resolve();
       });
     });
   }
 
+  private startBroadcastPolling(): void {
+    const pollIntervalMs = 5000;
+    logger.info(`[WS] Starting broadcast polling (interval: ${pollIntervalMs}ms)`);
+
+    this.broadcastPollTimer = setInterval(async () => {
+      try {
+        const result = await this.db.query<{
+          id: string;
+          from_ai: string;
+          content: string;
+          priority: string;
+          created_at: Date;
+        }>(
+          `SELECT id, from_ai, content, priority, created_at
+           FROM project_communications
+           WHERE message_type = 'broadcast'
+             AND created_at > $1
+           ORDER BY created_at ASC`,
+          [this.lastBroadcastCheck.toISOString()]
+        );
+
+        if (result.rows.length > 0) {
+          logger.debug(`[WS] Found ${result.rows.length} new broadcasts`);
+          for (const row of result.rows) {
+            this.broadcastNotification('broadcast', {
+              id: row.id,
+              from: row.from_ai,
+              content: row.content,
+              priority: row.priority,
+              timestamp: row.created_at,
+            });
+          }
+          this.lastBroadcastCheck = new Date();
+        }
+      } catch (error) {
+        logger.debug('[WS] Broadcast poll error:', error);
+      }
+    }, pollIntervalMs);
+  }
+
   async stop(): Promise<void> {
+    if (this.broadcastPollTimer) {
+      clearInterval(this.broadcastPollTimer);
+      this.broadcastPollTimer = null;
+    }
     return new Promise(resolve => {
       if (this.wss) {
         this.wss.close();
@@ -361,7 +410,7 @@ export class HealthServer {
     if (!this.wss) return;
     const message = JSON.stringify({ type, data, timestamp: new Date().toISOString() });
     let sent = 0;
-    this.wsClients.forEach((client) => {
+    this.wsClients.forEach(client => {
       if (client.readyState === WebSocket.OPEN) {
         client.send(message);
         sent++;

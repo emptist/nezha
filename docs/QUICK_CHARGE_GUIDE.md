@@ -6,7 +6,7 @@
 
 ### 1. Check Your Identity
 ```bash
-cat .env | grep NEZHA_AGENT_ID
+node dist/cli/index.js agents whoami
 ```
 
 ### 2. Check System Status

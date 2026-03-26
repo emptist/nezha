@@ -32,9 +32,9 @@ export class SoulService {
       `INSERT INTO souls (id, agent_id, name, content, traits)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (agent_id) DO UPDATE SET
-         name = COALESCE($3, souls.name),
-         content = COALESCE($4, souls.content),
-         traits = COALESCE($5, souls.traits),
+         name = COALESCE(EXCLUDED.name, souls.name),
+         content = COALESCE(EXCLUDED.content, souls.content),
+         traits = COALESCE(EXCLUDED.traits, souls.traits),
          updated_at = NOW()`,
       [id, agentId, name, content, JSON.stringify(traits || {})]
     );
@@ -76,9 +76,14 @@ export class SoulService {
   }
 
   async markViewed(table: string, id: string): Promise<void> {
-    const column = table === 'learnings' ? 'viewers' : 'viewers';
+    const validTables = ['memory', 'issues', 'skills'];
+    if (!validTables.includes(table)) {
+      logger.warn(`[Soul] Invalid table for markViewed: ${table}`);
+      return;
+    }
+
     await this.db.query(
-      `UPDATE ${table} SET ${column} = array_distinct(array_append(${column}, $1)) WHERE id = $2`,
+      `UPDATE ${table} SET viewers = array_append(viewers, $1) WHERE id = $2 AND NOT ($1 = ANY(viewers))`,
       [this.agentId, id]
     );
   }

@@ -1,6 +1,6 @@
--- Migration: 055_souls_and_privacy
--- Add souls table for AI personality/soul storage
--- Add privacy and viewers to learnings, issues, skills
+-- Migration: 055_souls_and_privacy (updated)
+-- Create souls table for AI personality/soul storage
+-- Add viewers to existing tables
 
 -- Create souls table
 CREATE TABLE IF NOT EXISTS souls (
@@ -16,25 +16,16 @@ CREATE TABLE IF NOT EXISTS souls (
 CREATE INDEX IF NOT EXISTS idx_souls_agent_id ON souls(agent_id);
 CREATE INDEX IF NOT EXISTS idx_souls_name ON souls(name);
 
--- Add privacy and viewers to learnings
-ALTER TABLE learnings 
-  ADD COLUMN IF NOT EXISTS privacy TEXT DEFAULT 'shared',
+-- Add viewers to memory
+ALTER TABLE memory 
   ADD COLUMN IF NOT EXISTS viewers TEXT[] DEFAULT '{}';
 
--- Add attribution to issues
+-- Add viewers to issues
 ALTER TABLE issues 
-  ADD COLUMN IF NOT EXISTS created_by TEXT,
   ADD COLUMN IF NOT EXISTS viewers TEXT[] DEFAULT '{}';
 
--- Add attribution to skills
+-- Add viewers to skills
 ALTER TABLE skills
-  ADD COLUMN IF NOT EXISTS created_by TEXT,
   ADD COLUMN IF NOT EXISTS viewers TEXT[] DEFAULT '{}';
-
--- Add attribution to inter_reviews
-ALTER TABLE inter_reviews
-  ADD COLUMN IF NOT EXISTS created_by TEXT;
 
 COMMENT ON TABLE souls IS 'AI soul/personality storage - inspired by SOUL.md pattern';
-COMMENT ON COLUMN learnings.privacy IS 'private: creator only, shared: viewed by others, public: everyone';
-COMMENT ON COLUMN learnings.viewers IS 'List of agent IDs who have viewed this learning';
