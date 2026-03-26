@@ -61,7 +61,7 @@ if [ -n "$NEZHA_CMD" ]; then
 fi
 
 if [ -n "$NEZHA_CMD" ]; then
-    AGENT_ID=$($NEZHA_CMD agents whoami 2>/dev/null | grep -o 'S-[^-]\+-[^-]\+-[^-]\+-[^-]\+' || grep -o 'G-[^-]\+-[^-]\+-[^-]\+-[^-]\+' || true)
+    AGENT_ID=$($NEZHA_CMD agents whoami 2>/dev/null | grep -oE 'S-[a-zA-Z0-9-]+' | head -1 || grep -oE 'G-[a-zA-Z0-9-]+' | head -1 || true)
 fi
 
 if [ -z "$AGENT_ID" ]; then
