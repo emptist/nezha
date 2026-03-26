@@ -28,9 +28,10 @@
 
 ### 1. Heartbeat-based Task Execution
 
-- Scheduler runs on interval, checks for pending tasks in database
-- On task ready: calls Agent.executeTask() which sends task to opencode CLI
+- HeartbeatService runs on interval, checks for pending tasks in database
+- On task ready: creates AI session with AIProvider, executes task
 - After completion: stores result in memory, updates task status
+- **No OpenCode HTTP API calls** - humans use OpenCode directly, Nezha manages database
 
 ### 2. Memory System
 
@@ -39,11 +40,18 @@
 - Embeddings generated via Ollama (nomic-embed-text) or Zhipu (embedding-2)
 - Vector similarity search using pgvector or cosine similarity
 
-### 3. Agent Communication
+### 3. AI Communication (Souls & Viewers)
 
-- Agent.ts communicates with opencode CLI via HTTP (port 4096)
-- Session-based communication: create session, send message, get response
-- Retry logic with exponential backoff
+- Each AI has a "soul" stored in `souls` table with identity and personality
+- `viewers[]` array tracks who has seen memory/issues/skills
+- Broadcasts via `project_communications` table
+- MCP tools for AI-to-AI communication: learn, memory_search, check_broadcasts
+
+### 4. WebSocket Real-time Updates
+
+- HealthServer polls broadcasts every 5 seconds
+- Pushes notifications to connected WebSocket clients
+- MCP server for AI tool access (nezha-learning)
 
 ## Database Schema
 
@@ -55,8 +63,9 @@
 | `memory`                 | Long-term knowledge with embeddings   |
 | `skills`                 | Skill registry with versioning        |
 | `issues`                 | Bug/feature tracking                  |
-| `project_communications` | Inter-project messages                |
+| `project_communications` | Inter-project messages & broadcasts   |
 | `prompt_suggestions`     | System prompt improvement suggestions |
+| `souls`                  | AI identity/personality (SOUL.md)     |
 
 ### Support Tables
 
@@ -67,6 +76,10 @@
 | `daily_memory`     | Ephemeral session memory  |
 | `meeting_opinions` | Meeting records           |
 | `task_audit_log`   | Operation audit trail     |
+
+### Viewers Tracking
+
+The `memory`, `issues`, and `skills` tables have a `viewers[]` array to track which AIs have seen each item. This enables privacy and prevents duplicate notifications.
 
 ## Important Lessons Learned
 
@@ -129,6 +142,21 @@ All code changes must originate from one of these three sources:
 
 ## Available Tools
 
+### MCP Tools (nezha-learning)
+
+| Tool                    | Description                               |
+| ----------------------- | ----------------------------------------- |
+| `learn`                 | Save insight/learning to memory           |
+| `memory_search`         | Search memories (marks as viewed)         |
+| `check_broadcasts`      | Get pending broadcasts (marks as read)    |
+| `respond_to_broadcast`  | Respond to a broadcast                    |
+| `get_skill`             | Load a skill (marks as viewed)            |
+| `get_soul`              | Get AI soul/personality                   |
+| `save_soul`             | Save AI soul/personality                  |
+| `get_system_info`       | Get system status (issues, tasks, skills) |
+| `suggest_prompt_update` | Suggest system prompt improvements        |
+| `whoami`                | Get current agent identity                |
+
 ### Memory Tools
 
 | Tool                     | Description                                    |
@@ -140,13 +168,11 @@ All code changes must originate from one of these three sources:
 | `memory.getByProject()`  | Get memories by project                        |
 | `memory.getById()`       | Get single memory by ID                        |
 
-### Agent Tools
+### Heartbeat Tools
 
-| Tool                             | Description                   |
-| -------------------------------- | ----------------------------- |
-| `Agent.executeTask()`            | Execute task via opencode CLI |
-| `AgentSystem.registerAgent()`    | Register agent with system    |
-| `HeartbeatService.executeTask()` | Execute task with retry logic |
+| Tool                             | Description                  |
+| -------------------------------- | ---------------------------- |
+| `HeartbeatService.executeTask()` | Execute task with AIProvider |
 
 ## Configuration
 
@@ -158,7 +184,21 @@ All code changes must originate from one of these three sources:
 
 ## Self-Improvement Guidelines
 
-After each task, reflect on:
+### Autonomous Loop (2026-03-27)
+
+Nezha 实现了完整的自主改进循环：
+
+```
+1. HeartbeatService 执行任务 → 注入广播到提示
+2. AI 完成任务 → 调用 areflect 保存学习
+3. 学习保存到 memory 表
+4. Inter-Review 评审代码变更
+5. 从评审中提取新学习 → 回到步骤 1
+```
+
+**关键**: HeartbeatService.getRecentBroadcasts() 确保 AI 看到最新广播。
+
+### After Each Task
 
 1. What worked well?
 2. What could be improved?
@@ -166,6 +206,12 @@ After each task, reflect on:
 4. Patterns worth remembering?
 
 If novel insight found, save to memory with high importance. If pattern repeats, consider suggesting system prompt updates.
+
+### Broadcast Workflow
+
+1. 发送广播: `nezha share <text>` 或 MCP `learn()`
+2. 检查广播: MCP `check_broadcasts()`
+3. 响应广播: MCP `respond_to_broadcast(broadcast_id, response)`
 
 ## Database Access
 
