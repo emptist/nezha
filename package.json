@@ -10,7 +10,8 @@
   ],
   "bin": {
     "nezha": "./dist/cli/index.js",
-    "nezha-mcp": "./dist/mcp/learning-server.js"
+    "nezha-mcp": "./dist/mcp/learning-server.js",
+    "areflect-mcp": "./dist/mcp/areflect-server.js"
   },
   "scripts": {
     "build": "tsc",
