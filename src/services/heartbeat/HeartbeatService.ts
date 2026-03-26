@@ -4,6 +4,8 @@ import { DATABASE_TABLES, TASK_STATUS } from '../../config/constants.js';
 import { logger } from '../../utils/logger.js';
 import type { DatabaseClient } from '../../db/DatabaseClient.js';
 import { ReminderService } from '../ReminderService.js';
+import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
+import { getPluginManager } from '../../core/PluginManager.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
@@ -16,11 +18,20 @@ export class HeartbeatService {
   private readonly aiProvider: AIProvider;
   private readonly db: DatabaseClient;
   private readonly reminderService: ReminderService;
+  private readonly pluginManager = getPluginManager();
+  private readonly nextStepAdvisor: NextStepAdvisor;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
     this.db = db;
     this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
     this.aiProvider = AIProviderFactory.createFromEnv();
+
+    this.nextStepAdvisor = new NextStepAdvisor({
+      enabled: true,
+      broadcastSuggestions: true,
+    });
+    this.nextStepAdvisor.setDatabaseClient(db);
+    this.pluginManager.registerPlugin(this.nextStepAdvisor);
 
     this.reminderService = new ReminderService(db, {
       enableEventTriggers: true,
@@ -90,6 +101,14 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
       );
 
       logger.info(`Task completed: ${title}`);
+
+      await this.pluginManager.executeAfterTaskWithChanges({
+        taskId,
+        title,
+        description,
+        status: 'COMPLETED',
+        result: result.content,
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error(`Task failed: ${title}`, errorMessage);

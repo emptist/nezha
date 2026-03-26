@@ -123,6 +123,22 @@ export class PluginManager {
     this.taskContexts.delete(context.taskId);
   }
 
+  async executeAfterTaskWithChanges(
+    context: TaskContext,
+    suggestions: NextStepSuggestion[] = []
+  ): Promise<void> {
+    const stored = this.taskContexts.get(context.taskId);
+    const fullContext = { ...stored, ...context, endTime: new Date() };
+
+    for (const plugin of this.plugins.values()) {
+      try {
+        await plugin.hooks.afterTaskWithChanges?.(fullContext, suggestions);
+      } catch (error) {
+        logger.error(`Plugin ${plugin.name} afterTaskWithChanges error:`, error);
+      }
+    }
+  }
+
   async executeOnError(context: TaskContext, error: Error): Promise<void> {
     const stored = this.taskContexts.get(context.taskId);
     const fullContext = { ...stored, ...context, error: error.message, endTime: new Date() };
