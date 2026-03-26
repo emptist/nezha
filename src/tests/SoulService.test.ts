@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SoulService, Soul } from '../../src/services/SoulService.js';
+import { SoulService } from '../../src/services/SoulService.js';
 
 const mockQuery = vi.fn();
 
