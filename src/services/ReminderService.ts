@@ -9,8 +9,6 @@ const REMINDER_COOLDOWN_MS = 2 * 60 * 1000;
 const BLIND_LOOP_INTERVAL_MS = 2 * 60 * 1000;
 const MAX_TASKS_TO_SHOW = 5;
 
-const ENABLE_PERIODIC_REMINDER = false;
-
 export interface ReminderConfig {
   enableEventTriggers?: boolean;
   enableInterReviewCheck?: boolean;
@@ -80,11 +78,6 @@ export class ReminderService {
   }
 
   startBlindLoop(intervalMs: number = BLIND_LOOP_INTERVAL_MS): void {
-    if (ENABLE_PERIODIC_REMINDER === false) {
-      logger.info('[Reminder] Periodic reminder disabled (handled by OpenCode plugin)');
-      return;
-    }
-
     if (this.blindLoopTimer) {
       logger.warn('[Reminder] Blind loop already running');
       return;
