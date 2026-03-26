@@ -12,6 +12,8 @@ describe('Learning MCP Server Tool Definitions', () => {
     'get_skill',
     'get_soul',
     'save_soul',
+    'get_tasks',
+    'get_inter_review_stats',
   ];
 
   const toolSchemas: Record<string, { required?: string[]; properties?: Record<string, any> }> = {
@@ -61,6 +63,15 @@ describe('Learning MCP Server Tool Definitions', () => {
         content: { type: 'string' },
         traits: { type: 'object' },
       },
+    },
+    get_tasks: {
+      properties: {
+        status: { type: 'string', enum: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED'] },
+        limit: { type: 'number' },
+      },
+    },
+    get_inter_review_stats: {
+      properties: {},
     },
   };
 
