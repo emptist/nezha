@@ -5,17 +5,29 @@ import { logger } from '../utils/logger.js';
 export interface NotificationServerOptions {
   db: DatabaseClient;
   pollIntervalMs?: number;
+  onNotification?: (notification: Notification) => void;
+}
+
+export interface Notification {
+  type: 'nezha-broadcast';
+  id: string;
+  from: string;
+  priority: string;
+  content: string;
+  timestamp: string;
 }
 
 export class NotificationServer {
   private readonly db: DatabaseClient;
   private readonly pollIntervalMs: number;
+  private readonly onNotification?: (notification: Notification) => void;
   private lastCheckedAt: Date;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: NotificationServerOptions) {
     this.db = options.db;
     this.pollIntervalMs = options.pollIntervalMs ?? 10000;
+    this.onNotification = options.onNotification;
     this.lastCheckedAt = new Date();
   }
 
@@ -72,7 +84,7 @@ export class NotificationServer {
   }): void {
     logger.info(`[NotificationServer] New broadcast: ${broadcast.content.substring(0, 50)}...`);
 
-    const notification = {
+    const notification: Notification = {
       type: 'nezha-broadcast',
       id: broadcast.id,
       from: broadcast.from_ai,
@@ -80,6 +92,10 @@ export class NotificationServer {
       content: broadcast.content,
       timestamp: new Date().toISOString(),
     };
+
+    if (this.onNotification) {
+      this.onNotification(notification);
+    }
 
     console.log(JSON.stringify(notification));
   }
