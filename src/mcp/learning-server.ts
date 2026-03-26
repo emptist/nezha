@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 const server = new Server(
   { name: 'nezha-learning', version: '1.0.0' },
@@ -196,7 +197,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'memory_search') {
       const { query, limit = 10 } = args as { query: string; limit?: number };
       const database = getDb();
-      const agentId = Config.getInstance().getAgentId();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const agentId = identity.id;
 
       const result = await database.query(
         `SELECT id, content, metadata, created_at 
@@ -265,7 +267,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'check_broadcasts') {
       const { limit = 5 } = args as { limit?: number };
       const database = getDb();
-      const agentId = Config.getInstance().getAgentId();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const agentId = identity.id;
 
       const result = await database.query(
         `SELECT id, from_ai, to_ai, message_type, content, metadata, created_at
@@ -352,10 +355,10 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     }
 
     if (name === 'whoami') {
-      const config = Config.getInstance();
-      const agentId = config.getAgentId();
-      const sessionId = config.getAgentId();
-      const configDisplayName = config.getAgentDisplayName();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const agentId = identity.id;
+      const sessionId = identity.id;
+      const configDisplayName = identity.displayName;
 
       let displayName = configDisplayName || '(not set)';
       if (!configDisplayName) {
@@ -380,7 +383,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         content: [
           {
             type: 'text',
-            text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${displayName}\n- Agent Name: ${config.getAgentName()}`,
+            text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${displayName}\n- Agent Name: ${identity.displayName || agentId}`,
           },
         ],
       };
@@ -422,8 +425,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
               .map(i => `• [${i.severity}] ${i.title} (${i.id?.substring(0, 8)})`)
               .join('\n')
           );
-          // Mark issues as viewed
-          const agentId = Config.getInstance().getAgentId();
+          const identity = await AgentIdentityService.getResolvedIdentity();
+          const agentId = identity.id;
           for (const issue of issuesResult.rows) {
             await database.query(
               `UPDATE issues SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
@@ -462,7 +465,8 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'get_skill') {
       const { name: skillName } = args as { name: string };
       const database = getDb();
-      const agentId = Config.getInstance().getAgentId();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const agentId = identity.id;
 
       const result = await database.query(
         `SELECT id, name, content, description FROM skills WHERE name = $1 AND status = 'approved'`,

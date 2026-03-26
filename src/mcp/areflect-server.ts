@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 const server = new Server({ name: 'areflect', version: '1.0.0' }, { capabilities: { tools: {} } });
 
@@ -13,10 +14,6 @@ function getDb(): DatabaseClient {
     db = new DatabaseClient(Config.getInstance());
   }
   return db;
-}
-
-function getAuthor(): string {
-  return Config.getInstance().getAgentId() || 'areflect-mcp';
 }
 
 const LEARN_PATTERN = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
@@ -67,7 +64,8 @@ async function reflect(text: string): Promise<ReflectResult> {
   };
 
   const database = getDb();
-  const author = getAuthor();
+  const identity = await AgentIdentityService.getResolvedIdentity();
+  const author = identity.id;
 
   let match;
   while ((match = LEARN_PATTERN.exec(text)) !== null) {

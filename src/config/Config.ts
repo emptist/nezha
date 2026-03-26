@@ -111,6 +111,8 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
 export class Config implements IConfig {
   private static instance: Config | null = null;
   private readonly config: NezhaConfig;
+  private static resolvedAgentId: { id: string; displayName?: string } | null = null;
+  private static resolutionPromise: Promise<{ id: string; displayName?: string }> | null = null;
 
   private constructor() {
     this.config = this.loadConfig();

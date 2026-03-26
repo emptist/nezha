@@ -3,6 +3,7 @@ import { execSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
+import { Config } from '../config/Config.js';
 
 export interface AgentContext {
   project: string;
@@ -23,9 +24,31 @@ export interface AgentIdentity {
 
 export class AgentIdentityService {
   private db: DatabaseClient;
+  private static cachedIdentity: AgentIdentity | null = null;
+  private static cachePromise: Promise<AgentIdentity> | null = null;
 
   constructor(db: DatabaseClient) {
     this.db = db;
+  }
+
+  static async getResolvedIdentity(): Promise<AgentIdentity> {
+    if (AgentIdentityService.cachedIdentity) {
+      return AgentIdentityService.cachedIdentity;
+    }
+    if (AgentIdentityService.cachePromise) {
+      return AgentIdentityService.cachePromise;
+    }
+    const db = new DatabaseClient(Config.getInstance());
+    const service = new AgentIdentityService(db);
+    AgentIdentityService.cachePromise = service.resolve().finally(() => {
+      db.close();
+    });
+    return AgentIdentityService.cachePromise;
+  }
+
+  static resetCache(): void {
+    AgentIdentityService.cachedIdentity = null;
+    AgentIdentityService.cachePromise = null;
   }
 
   async resolve(): Promise<AgentIdentity> {
@@ -33,18 +56,29 @@ export class AgentIdentityService {
 
     // Priority 1: Exact match (project + git hash)
     let identity = await this.findExactMatch(context);
-    if (identity) return identity;
+    if (identity) {
+      AgentIdentityService.cachedIdentity = identity;
+      return identity;
+    }
 
     // Priority 2: Project match
     identity = await this.findProjectMatch(context.project);
-    if (identity) return identity;
+    if (identity) {
+      AgentIdentityService.cachedIdentity = identity;
+      return identity;
+    }
 
     // Priority 3: Machine fingerprint match
     identity = await this.findMachineMatch(context.machineFingerprint);
-    if (identity) return identity;
+    if (identity) {
+      AgentIdentityService.cachedIdentity = identity;
+      return identity;
+    }
 
     // Priority 4: Create new identity
-    return this.createIdentity(context);
+    identity = await this.createIdentity(context);
+    AgentIdentityService.cachedIdentity = identity;
+    return identity;
   }
 
   detectContext(): AgentContext {
