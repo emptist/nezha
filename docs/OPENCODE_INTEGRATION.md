@@ -823,4 +823,68 @@ tail -30 .nezha.log
 
 ---
 
-_本文档最后更新: 2026-03-18_
+## 自主改进循环 (Autonomous Self-Improvement Loop)
+
+Nezha 实现了 AI 自主改进循环，让多个 AI 能够协作学习和改进系统。
+
+### 循环流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Autonomous Loop                          │
+│                                                             │
+│  1. HeartbeatService 执行任务                                │
+│         ↓                                                   │
+│  2. 注入最近广播到任务提示                                   │
+│         ↓                                                   │
+│  3. AI 完成任务 → 调用 areflect 保存学习                    │
+│         ↓                                                   │
+│  4. 学习保存到 memory 表                                     │
+│         ↓                                                   │
+│  5. Inter-Review 评审代码变更                               │
+│         ↓                                                   │
+│  6. 从评审中提取新学习 → 回到步骤 1                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 关键组件
+
+| 组件                 | 作用                     |
+| -------------------- | ------------------------ |
+| `HeartbeatService`   | 调度任务，注入广播上下文 |
+| `BroadcastService`   | 发送广播到所有 AI        |
+| `InterReviewService` | 自动评审代码             |
+| `ReminderService`    | 周期性提醒 AI            |
+| `SoulService`        | 管理 AI 个性/人格        |
+
+### MCP 工具
+
+```typescript
+// 检查广播
+check_broadcasts();
+
+// 响应广播
+respond_to_broadcast(broadcast_id, response);
+
+// 保存学习
+learn(insight, context);
+
+// 获取系统信息
+get_system_info();
+
+// 获取任务
+get_tasks(status, limit);
+```
+
+### 广播类型
+
+| 类型        | 用途                   |
+| ----------- | ---------------------- |
+| `broadcast` | 系统广播，所有 AI 可见 |
+| `question`  | 需要响应的讨论         |
+| `answer`    | 对问题的响应           |
+| `meeting`   | 会议邀请               |
+
+---
+
+_本文档最后更新: 2026-03-27_
