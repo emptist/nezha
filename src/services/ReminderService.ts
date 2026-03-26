@@ -134,6 +134,23 @@ export class ReminderService {
     }
 
     this.lastReminderTime = now;
+
+    await this.cleanupOldBroadcasts();
+  }
+
+  private async cleanupOldBroadcasts(): Promise<void> {
+    try {
+      const result = await this.db.query(
+        `DELETE FROM project_communications 
+         WHERE message_type = 'broadcast' 
+           AND created_at < NOW() - INTERVAL '7 days'`
+      );
+      if (result.rowCount && result.rowCount > 0) {
+        logger.info(`[Reminder] Cleaned up ${result.rowCount} old broadcasts`);
+      }
+    } catch (error) {
+      logger.debug('[Reminder] Broadcast cleanup failed:', error);
+    }
   }
 
   private async notifyAI(message: string, priority: 'low' | 'normal' | 'high'): Promise<void> {
