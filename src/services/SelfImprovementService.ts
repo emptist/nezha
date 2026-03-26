@@ -2,6 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES } from '../config/constants.js';
 import { logger } from '../utils/logger.js';
 import { createEmbeddingProvider, EmbeddingProvider, EmbeddingConfig } from './embedding/index.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 
 export interface LearnInput {
   insight: string;
@@ -240,6 +241,16 @@ export class SelfImprovementService {
     }
   }
 
+  private async getCurrentAgentId(): Promise<string | null> {
+    try {
+      const identityService = new AgentIdentityService(this.db);
+      const identity = await identityService.resolve();
+      return identity.id;
+    } catch {
+      return null;
+    }
+  }
+
   async learn(input: LearnInput): Promise<string> {
     const id = crypto.randomUUID();
     const importance = input.importance ?? 7;
@@ -258,9 +269,11 @@ export class SelfImprovementService {
       }
     }
 
+    const agentId = await this.getCurrentAgentId();
+
     await this.db.query(
-      `INSERT INTO ${DATABASE_TABLES.MEMORY} (id, content, metadata, tags, importance, source, embedding, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+      `INSERT INTO ${DATABASE_TABLES.MEMORY} (id, content, metadata, tags, importance, source, embedding, agent_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
       [
         id,
         content,
@@ -269,10 +282,11 @@ export class SelfImprovementService {
         importance,
         'ai',
         embeddingStr,
+        agentId,
       ]
     );
 
-    logger.info(`Insight learned and saved: ${id}`);
+    logger.info(`Insight learned and saved: ${id} by agent ${agentId}`);
     return `Learned: ${input.insight.substring(0, 100)}...`;
   }
 
