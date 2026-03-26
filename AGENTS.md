@@ -142,3 +142,18 @@ use the nezha-learning tool to learn: insight here
 ```
 
 或使用 trigger phrases: "use learn", "save learning", "memory search"
+
+### MCP 工具使用 (areflect)
+
+当需要保存反射标记时，使用 MCP 工具 "areflect":
+
+```
+use areflect: [LEARN] insight: ...
+use areflect: [ISSUE] title: ... type: bug severity: high
+use areflect: [TASK] title: ... priority: 8
+use areflect: [LEARN] insight: ... [TASK] title: ...
+```
+
+支持的标记: `[LEARN]`, `[PROMPT_UPDATE]`, `[ISSUE]`, `[TASK]`, `[ANNOUNCE]`, `[SCHEDULE]`, `[ISSUE_RESOLVE]`, `[TASK_COMPLETE]`, `[ISSUE_COMMENT]`
+
+工具: `reflect`, `check_pending_work`, `get_recent_learnings`, `parse_markers`
