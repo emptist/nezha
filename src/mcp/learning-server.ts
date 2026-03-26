@@ -325,10 +325,9 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
 
       // Mark broadcasts as viewed
       for (const row of result.rows) {
-        await database.query(
-          `UPDATE project_communications SET read_at = NOW(), read_by = $1 WHERE id = $2`,
-          [agentId, row.id]
-        );
+        await database.query(`UPDATE project_communications SET read_at = NOW() WHERE id = $1`, [
+          row.id,
+        ]);
       }
 
       const formatted = result.rows
