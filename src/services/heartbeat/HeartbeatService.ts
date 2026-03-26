@@ -66,7 +66,7 @@ export class HeartbeatService {
     taskType?: string,
     retryCount: number = 0,
     maxRetries: number = 3,
-    timeoutSeconds: number = 300
+    _timeoutSeconds: number = 300
   ): Promise<void> {
     logger.info(`Executing task: ${title}`);
 

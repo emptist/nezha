@@ -58,15 +58,31 @@ export enum InterReviewEvent {
 export class InterReviewService extends EventEmitter {
   private readonly db: DatabaseClient;
   private readonly aiProvider: AIProvider;
-  private readonly broadcastService: BroadcastService;
+  private broadcastService: BroadcastService | null = null;
   private getSessionId: () => string | null;
 
   constructor(db: DatabaseClient, aiProvider?: AIProvider, getSessionId?: () => string | null) {
     super();
     this.db = db;
     this.aiProvider = aiProvider || this.createAIProvider();
-    this.broadcastService = new BroadcastService(db);
     this.getSessionId = getSessionId || (() => null);
+  }
+
+  static async create(
+    db: DatabaseClient,
+    aiProvider?: AIProvider,
+    getSessionId?: () => string | null
+  ): Promise<InterReviewService> {
+    const service = new InterReviewService(db, aiProvider, getSessionId);
+    service.broadcastService = await BroadcastService.create(db);
+    return service;
+  }
+
+  private async ensureBroadcastService(): Promise<BroadcastService> {
+    if (!this.broadcastService) {
+      this.broadcastService = await BroadcastService.create(this.db);
+    }
+    return this.broadcastService;
   }
 
   private createAIProvider(): AIProvider {
@@ -223,7 +239,8 @@ export class InterReviewService extends EventEmitter {
         }`;
 
         try {
-          await this.broadcastService.sendBroadcast(msg, {
+          const bs = await this.ensureBroadcastService();
+          await bs.sendBroadcast(msg, {
             priority: reviewResult.overallScore < 60 ? 'high' : 'normal',
           });
           logger.info(
