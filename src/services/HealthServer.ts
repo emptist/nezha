@@ -315,6 +315,11 @@ export class HealthServer {
           logger.info(`[WS] Client disconnected (total: ${this.wsClients.size})`);
         });
 
+        ws.on('error', err => {
+          logger.warn(`[WS] Client error: ${err.message}`);
+          this.wsClients.delete(ws);
+        });
+
         ws.send(
           JSON.stringify({
             type: 'connected',
