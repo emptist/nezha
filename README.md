@@ -573,20 +573,20 @@ nezha start
 
 Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
 
-| 架构                    | 依赖 | 说明                                             |
-| ----------------------- | ---- | ------------------------------------------------ |
-| **OpenCode on Nezha**   | 无   | OpenCode 运行在 Nezha 之上，Nezha 可独立使用     |
-| **OpenCode on Nezhapi** | 无   | OpenCode 运行在 Nezhapi 之上，Nezhapi 可独立使用 |
+| 架构                  | 依赖 | 说明                                         |
+| --------------------- | ---- | -------------------------------------------- |
+| **OpenCode on Nezha** | 无   | OpenCode 运行在 Nezha 之上，Nezha 可独立使用 |
+| **OpenCode on NUPI**  | 无   | OpenCode 运行在 NUPI 之上，NUPI 可独立使用   |
 
-**核心原则**: Nezha/Nezhapi 不引入 OpenCode 依赖，各自都是独立产品
+**核心原则**: Nezha/NUPI 不引入 OpenCode 依赖，各自都是独立产品
 
 ---
 
-### Nezhapi (Nezha + Pi 集成产品)
+### NUPI (Nezha Use Pi / 牛派)
 
-> **Nezhapi = Nezha + Pi = 增强版哪吒**
+> **NUPI = Nezha Use Pi = 牛派** (谐音牛排)
 
-Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
+NUPI 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 
 - **Nezha 的增强**: 增加 pi 执行能力、REST API
 - **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
@@ -600,12 +600,12 @@ Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 | **Nezha** | 任务管理、长期记忆、多 AI 协作、调度监控 |
 | **Pi**    | 代码执行、动态工具创建、会话管理         |
 
-**成功后转向**: nezhapi 验证成功 → 主攻 nezhapi 开发
+**成功后转向**: NUPI 验证成功 → 主攻 NUPI 开发
 
 > ⚠️ **当前状态**: REST API 已可用，Pi 执行器集成开发中
 
 ```bash
-# 启动 Nezhapi 服务
+# 启动 NUPI 服务
 npm run nezhapi
 ```
 

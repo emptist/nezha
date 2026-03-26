@@ -8,18 +8,16 @@
    - 龙虾没有的功能，优先度降低
 
 2. **当前优先级**
-   - **P0: Nezhapi 开发** (Nezha + Pi 集成)
+   - **P0: NUPI 开发** (Nezha + Pi 集成)
      - 完善 REST API
      - 集成 Pi 执行器
      - 验证端到端流程
-   - P1: 提高测试覆盖率 (目标 80%)
-   - P2: 其他功能
 
 3. **产品概念 (重要!)**
    - **Nezha**: 独立产品，任务管理+记忆
-   - **Nezhapi**: 独立产品，Nezha + Pi 融合
-   - **OpenCode on Nezha/Nezhapi**: OpenCode 可以绑在上面运行
-   - **核心原则**: Nezha/Nezhapi 不依赖 OpenCode
+   - **NUPI**: 独立产品，Nezha + Pi (牛派)
+   - **OpenCode on Nezha/NUPI**: OpenCode 可以绑在上面运行
+   - **核心原则**: Nezha/NUPI 不依赖 OpenCode
 
 4. **长期记忆 (ROM)**
    - `.memory/` 目录是 Nezha 的长期记忆 (ROM)
