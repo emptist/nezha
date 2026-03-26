@@ -97,8 +97,42 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
 
 ## 相关代码
 
-- `src/config/Config.ts:36-58` - loadOrCreateAgentId()
-- `.nezha/agent-id.json` - ID 存储文件
+- `src/config/Config.ts:36-89` - loadOrCreateAgentId()
+- `src/services/AgentIdentityService.ts` - 新的 ID 解析服务
+- `.nezha/agent-id.json` - 已废弃
+
+## 修复状态
+
+✅ **已修复** - 新实现使用 PostgreSQL + 多级匹配：
+
+### ID 优先级
+
+1. **环境变量 NEZHA_AGENT_ID** - 出身门第 (可覆盖)
+2. **精确匹配** (project + git hash) - 同项目同commit
+3. **项目匹配** - 同一项目
+4. **机器指纹匹配** (hostname + username) - 同一机器
+5. **新建身份** - 以上都没有时
+
+### 语义化 ID 格式
+
+```
+S-项目名-gitHash-时间戳-短hash
+G-机器指纹-时间戳-短hash
+```
+
+- **S-** = Specific (有项目/git信息)
+- **G-** = General (无项目/git信息)
+
+示例: `S-nezha-e33f9a0-20260325-133422-64db91`
+
+### 哲学区分
+
+| 类型           | 比喻     | 说明                       |
+| -------------- | -------- | -------------------------- |
+| NEZHA_AGENT_ID | 出身门第 | 外部赋予，贵族头衔，可覆盖 |
+| PostgreSQL身份 | 自己的ID | 从上下文自然涌现           |
+
+使用 `AgentIdentityService` 替代文件系统存储。
 
 ## 讨论
 
