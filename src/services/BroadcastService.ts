@@ -122,7 +122,50 @@ export class BroadcastService {
     return this.sendBroadcast(message, { priority: 'high' });
   }
 
-  async getBroadcasts(limit: number = 20, priority?: BroadcastPriority): Promise<Broadcast[]> {
+  async endBroadcast(broadcastId: string, resolution?: string): Promise<void> {
+    await this.db.query(
+      `UPDATE project_communications 
+       SET metadata = metadata || $1::jsonb
+       WHERE id = $2`,
+      [
+        JSON.stringify({
+          ended: true,
+          endedAt: new Date().toISOString(),
+          resolution: resolution || 'resolved',
+        }),
+        broadcastId,
+      ]
+    );
+    logger.info(`[Broadcast] Ended broadcast ${broadcastId}`);
+  }
+
+  async resolveRelatedBroadcasts(contentPattern: string, resolution: string): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE project_communications 
+       SET metadata = metadata || $1::jsonb
+       WHERE message_type = 'broadcast' 
+         AND content LIKE '%' || $2 || '%'
+         AND (metadata->>'ended') IS NULL`,
+      [
+        JSON.stringify({
+          ended: true,
+          endedAt: new Date().toISOString(),
+          resolution,
+        }),
+        contentPattern,
+      ]
+    );
+    logger.info(
+      `[Broadcast] Resolved ${result.rowCount || 0} related broadcasts matching "${contentPattern}"`
+    );
+    return result.rowCount || 0;
+  }
+
+  async getBroadcasts(
+    limit: number = 20,
+    priority?: BroadcastPriority,
+    includeEnded: boolean = false
+  ): Promise<Broadcast[]> {
     let query = `SELECT id, from_ai, content, to_ai, created_at, metadata, priority, git_hash, git_branch, environment, read_at
        FROM project_communications
        WHERE message_type = 'broadcast'
@@ -132,6 +175,10 @@ export class BroadcastService {
     if (priority) {
       query += ` AND priority = $${params.length + 1}`;
       params.push(priority);
+    }
+
+    if (!includeEnded) {
+      query += ` AND (metadata->>'ended') IS NULL`;
     }
 
     query += ` ORDER BY 
