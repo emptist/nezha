@@ -780,6 +780,18 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
         continue;
       }
 
+      const recentTask = await this.db.query<{ id: string }>(
+        `SELECT id FROM tasks WHERE title = $1 AND status = 'COMPLETED' AND completed_at > NOW() - INTERVAL '7 days' LIMIT 1`,
+        [title]
+      );
+
+      if (recentTask.rows.length > 0) {
+        logger.info(
+          `[InterReview] Skipping recently completed finding (last 7 days): ${title.substring(0, 50)}`
+        );
+        continue;
+      }
+
       const description = `**Severity**: ${finding.severity}
 **Source**: Inter-Review (Score: ${result.overallScore}/100)
 ${finding.file ? `**File**: ${finding.file}${finding.line ? `:${finding.line}` : ''}` : ''}

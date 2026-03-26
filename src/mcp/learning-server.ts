@@ -4,6 +4,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { SoulService } from '../services/SoulService.js';
 
 const server = new Server(
   { name: 'nezha-learning', version: '1.0.0' },
@@ -164,6 +165,43 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['name'],
+        },
+      },
+      {
+        name: 'get_soul',
+        description:
+          "Get the soul/personality of an AI agent. Returns the agent's identity, content (SOUL.md), and traits.",
+        inputSchema: {
+          type: 'object',
+          properties: {
+            agent_id: {
+              type: 'string',
+              description: 'Agent ID to get the soul for (defaults to self)',
+            },
+          },
+        },
+      },
+      {
+        name: 'save_soul',
+        description:
+          'Save or update your soul/personality. Use this to persist your AI identity, values, and working style.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Display name for this AI',
+            },
+            content: {
+              type: 'string',
+              description:
+                'Soul content - your identity, values, working style, and SOUL.md content',
+            },
+            traits: {
+              type: 'object',
+              description: "Key traits that define this AI's personality",
+            },
+          },
         },
       },
     ],
@@ -499,6 +537,58 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `# ${skill.name}\n\n${skill.description ?? ''}\n\n---\n\n${skill.content ?? ''}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_soul') {
+      const { agent_id } = args as { agent_id?: string };
+      const database = getDb();
+      const soulService = new SoulService(database);
+      const identity = await AgentIdentityService.getResolvedIdentity();
+
+      const targetAgentId = agent_id || identity.id;
+      const soul = await soulService.getSoul(targetAgentId);
+
+      if (!soul) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `No soul found for agent "${targetAgentId}". Use save_soul to create one.`,
+            },
+          ],
+        };
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `## Soul: ${soul.name || targetAgentId}\n\n**Agent ID:** ${soul.agentId}\n\n---\n\n${soul.content || '(no content)'}\n\n---\n\n**Traits:** ${JSON.stringify(soul.traits, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'save_soul') {
+      const { name, content, traits } = args as {
+        name?: string;
+        content?: string;
+        traits?: Record<string, unknown>;
+      };
+      const database = getDb();
+      const soulService = new SoulService(database);
+      const identity = await AgentIdentityService.getResolvedIdentity();
+
+      const id = await soulService.saveSoul(identity.id, name, content, traits);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Soul saved successfully. ID: ${id}`,
           },
         ],
       };
