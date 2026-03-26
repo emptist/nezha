@@ -78,29 +78,12 @@ export class ReminderService {
   }
 
   startBlindLoop(intervalMs: number = BLIND_LOOP_INTERVAL_MS): void {
-    if (this.blindLoopTimer) {
-      logger.warn('[Reminder] Blind loop already running');
-      return;
-    }
-
-    logger.info(`[Reminder] Starting blind loop (interval: ${intervalMs / 1000}s)`);
-    this.blindLoopTimer = setInterval(async () => {
-      try {
-        await this.periodicCheck();
-      } catch (error) {
-        logger.error('[Reminder] Blind loop error:', error);
-      }
-    }, intervalMs);
-
-    this.periodicCheck().catch(err => logger.error('[Reminder] Initial check failed:', err));
+    logger.info('[Reminder] Periodic reminder disabled (handled by OpenCode plugin)');
+    return;
   }
 
   stopBlindLoop(): void {
-    if (this.blindLoopTimer) {
-      clearInterval(this.blindLoopTimer);
-      this.blindLoopTimer = null;
-      logger.info('[Reminder] Blind loop stopped');
-    }
+    logger.info('[Reminder] Periodic reminder disabled');
   }
 
   private async periodicCheck(): Promise<void> {

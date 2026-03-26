@@ -557,6 +557,7 @@ cp .env.example .env
 | NEZHA_TASK_TIMEOUT | 任务超时时间 (ms)                | 300000        |
 | NEZHA_AGENT_ID     | 手动指定身份 ID (覆盖自动)       | 自动解析      |
 | NEZHA_AGENT_NAME   | 身份显示名称                     | -             |
+| NEZHAPI_PORT       | Nezhapi 服务端口                 | 4099          |
 
 ### 启动流程
 
@@ -573,6 +574,51 @@ nezha daemon
 # 4. 启动工作
 nezha start
 ```
+
+### Nezhapi (OpenCode 集成)
+
+Nezha 提供 REST API 供 OpenCode 集成：
+
+```bash
+# 启动 Nezhapi 服务
+npm run nezhapi
+
+# 或
+node dist/api/NezhaApiServer.js
+```
+
+**API 端点** (端口 4099):
+
+| 端点         | 方法 | 功能             |
+| ------------ | ---- | ---------------- |
+| `/health`    | GET  | 健康检查         |
+| `/identity`  | GET  | 获取当前 AI 身份 |
+| `/tasks`     | GET  | 获取待处理任务   |
+| `/tasks`     | POST | 创建新任务       |
+| `/broadcast` | GET  | 获取广播列表     |
+| `/broadcast` | POST | 发送广播         |
+| `/memory`    | GET  | 搜索记忆         |
+| `/memory`    | POST | 保存记忆         |
+
+**示例**:
+
+```bash
+# 健康检查
+curl http://localhost:4099/health
+
+# 获取 AI 身份
+curl http://localhost:4099/identity
+
+# 获取待处理任务
+curl http://localhost:4099/tasks
+
+# 创建任务
+curl -X POST http://localhost:4099/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"title": "新任务", "description": "任务描述", "priority": 50}'
+```
+
+**OpenCode 集成**: 参见 [docs/OPENCODE_INTEGRATION.md](./docs/OPENCODE_INTEGRATION.md)
 
 ### 数据库初始化
 

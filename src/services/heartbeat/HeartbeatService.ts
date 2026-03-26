@@ -71,6 +71,8 @@ export class HeartbeatService {
     logger.info(`Executing task: ${title}`);
 
     const sessionId = `nezha-${Date.now()}`;
+    const recentBroadcasts = await this.getRecentBroadcasts();
+
     const prompt = `${description || title}
 
 ---
@@ -78,6 +80,9 @@ export class HeartbeatService {
 ## AGENT CONTEXT
 Agent ID: nezha-daemon
 Agent Session: ${sessionId}
+
+## RECENT BROADCASTS (check these for discussions to join)
+${recentBroadcasts}
 
 ## AUTO-EXECUTION INSTRUCTION
 When given choices:
@@ -124,6 +129,38 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
           [TASK_STATUS.FAILED, errorMessage, taskId]
         );
       }
+    }
+  }
+
+  private async getRecentBroadcasts(): Promise<string> {
+    try {
+      const result = await this.db.query<{
+        id: string;
+        from_ai: string;
+        content: string;
+        priority: string;
+        created_at: Date;
+      }>(
+        `SELECT id, from_ai, content, priority, created_at
+         FROM project_communications
+         WHERE message_type = 'broadcast'
+           AND created_at > NOW() - INTERVAL '1 hour'
+         ORDER BY created_at DESC
+         LIMIT 3`
+      );
+
+      if (result.rows.length === 0) {
+        return '(No recent broadcasts)';
+      }
+
+      return result.rows
+        .map(
+          b =>
+            `- [${b.priority || 'normal'}] ${b.from_ai}: ${b.content.substring(0, 150)}${b.content.length > 150 ? '...' : ''}`
+        )
+        .join('\n');
+    } catch {
+      return '(Unable to fetch broadcasts)';
     }
   }
 
