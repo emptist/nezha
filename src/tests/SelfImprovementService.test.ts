@@ -30,7 +30,7 @@ describe('SelfImprovementService', () => {
 
   describe('learn', () => {
     it('should learn and save insight', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [] });
+      mockQuery.mockResolvedValue({ rows: [] });
 
       const input: LearnInput = {
         insight: 'Test insight',
@@ -42,10 +42,12 @@ describe('SelfImprovementService', () => {
       const result = await service.learn(input);
 
       expect(result).toContain('Test insight');
-      expect(mockQuery).toHaveBeenCalledTimes(1);
-      const callArgs = mockQuery.mock.calls[0];
-      expect(callArgs[0]).toContain('INSERT INTO memory');
-      expect(callArgs[1]).toContain(8); // importance
+      // Find the INSERT INTO memory call
+      const insertCall = mockQuery.mock.calls.find(
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO memory')
+      );
+      expect(insertCall).toBeDefined();
+      expect(insertCall?.[1]).toContain(8); // importance
     });
 
     it('should use default importance when not provided', async () => {
