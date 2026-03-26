@@ -83,6 +83,13 @@
 - [x] AI Inter-Review 系统 (互相 Review 机制)
 - [x] 测试覆盖率提升：新增 102 个测试 (DatabaseSkillLoader, FailureAnalysisService, ContextBuilder)
 - [x] Inter-Review 集成到改进循环 (自动从 review findings 创建任务)
+- [x] pi-mono (pi coding agent) 深度研究报告 (docs/PLANS/pi-mono-research.md)
+- [x] whoami display_name bug 修复 (MCP 从数据库读取 display_name)
+- [x] YAML inline 注释解析 bug 修复 (config.yaml heartbeatIntervalMs)
+- [x] AI ID 生成机制 bug 修复 (PostgreSQL 多级匹配 + 语义化 ID S-/G- 格式)
+- [x] memory 表 agent_id 关联 (learn 现在自动记录 AI 身份)
+- [x] git hook prepare-commit-msg 正则修复 (支持 S-/G- 格式 ID)
+- [x] 创建 OpenCode+Nezha 集成架构讨论 (Meeting + Issue)
 
 ## AI 通信方法
 

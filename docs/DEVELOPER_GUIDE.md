@@ -409,6 +409,79 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 
 ---
 
+## Nezhapi (REST API)
+
+Nezha 提供 REST API 服务供 OpenCode 或其他外部系统集成。
+
+### 启动服务
+
+```bash
+# 方式 1: 使用 npm
+npm run nezhapi
+
+# 方式 2: 直接运行
+node dist/api/NezhaApiServer.js
+
+# 方式 3: 指定端口
+NEZHAPI_PORT=4100 npm run nezhapi
+```
+
+服务默认监听端口 **4099**。
+
+### API 端点
+
+| 端点         | 方法 | 功能             | 示例                                                                                                                           |
+| ------------ | ---- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `/health`    | GET  | 健康检查         | `curl http://localhost:4099/health`                                                                                            |
+| `/identity`  | GET  | 获取当前 AI 身份 | `curl http://localhost:4099/identity`                                                                                          |
+| `/tasks`     | GET  | 获取待处理任务   | `curl http://localhost:4099/tasks`                                                                                             |
+| `/tasks`     | POST | 创建新任务       | `curl -X POST -H "Content-Type: application/json" -d '{"title":"任务","priority":50}' http://localhost:4099/tasks`             |
+| `/broadcast` | GET  | 获取广播列表     | `curl http://localhost:4099/broadcast`                                                                                         |
+| `/broadcast` | POST | 发送广播         | `curl -X POST -H "Content-Type: application/json" -d '{"message":"内容","priority":"normal"}' http://localhost:4099/broadcast` |
+| `/memory`    | GET  | 搜索记忆         | `curl "http://localhost:4099/memory?query=关键词"`                                                                             |
+| `/memory`    | POST | 保存记忆         | `curl -X POST -H "Content-Type: application/json" -d '{"topic":"主题","insight":"内容"}' http://localhost:4099/memory`         |
+
+### 响应格式
+
+**GET 请求**:
+
+```json
+{
+  "rows": [...],
+  "rowCount": 10
+}
+```
+
+**POST 请求**:
+
+```json
+{
+  "id": "uuid"
+}
+```
+
+### OpenCode 集成
+
+在 OpenCode 中调用 Nezhapi:
+
+```typescript
+// 调用 Nezhapi 获取任务
+const tasks = await fetch('http://localhost:4099/tasks').then(r => r.json());
+
+// 调用 Nezhapi 执行任务
+const result = await fetch('http://localhost:4099/tasks', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    title: '修复 bug',
+    description: '修复登录问题',
+    priority: 80,
+  }),
+});
+```
+
+---
+
 ## 最佳实践
 
 ### 文件模式最佳实践
@@ -1581,11 +1654,11 @@ All code changes must be traceable to a source (task, issue, or inter-review). T
 
 ### Three Sources (Choose One)
 
-| Source | Format | Description |
-|--------|--------|-------------|
-| Task | `[task: <uuid>]` | Task ID from task system |
-| Issue | `[issue: <uuid>]` | Issue ID from issue tracking |
-| Inter-review | `[inter-review: <uuid>]` | AI peer review result |
+| Source       | Format                   | Description                  |
+| ------------ | ------------------------ | ---------------------------- |
+| Task         | `[task: <uuid>]`         | Task ID from task system     |
+| Issue        | `[issue: <uuid>]`        | Issue ID from issue tracking |
+| Inter-review | `[inter-review: <uuid>]` | AI peer review result        |
 
 ### Commit Message Format
 
@@ -1666,18 +1739,50 @@ If commit is blocked, you'll see:
 
 ### Why This Matters
 
-| Without QC | With QC |
-|------------|---------|
-| AI rushes in | AI follows PDCA cycle |
-| Random changes | Traceable changes |
-| Hard to trace bugs | Easy to find source |
-| Quality degrades | Quality improves |
+| Without QC         | With QC               |
+| ------------------ | --------------------- |
+| AI rushes in       | AI follows PDCA cycle |
+| Random changes     | Traceable changes     |
+| Hard to trace bugs | Easy to find source   |
+| Quality degrades   | Quality improves      |
 
 ### See Also
 
 - [PDCA_CYCLE.md](./PDCA_CYCLE.md) - PDCA improvement cycle
 - [ISSUE_TRACKING.md](./ISSUE_TRACKING.md) - Issue tracking system
 - [AI_COLLABORATION.md](./AI_COLLABORATION.md) - AI collaboration guide
+
+---
+
+## 📝 最近贡献 (2026-03-26)
+
+**贡献者**: 赤羽 (S-nezha-e33f9a0-20260325-133422-64db91)
+
+### 代码贡献
+
+1. **whoami display_name bug 修复** - MCP 从数据库读取 display_name
+2. **YAML inline 注释解析 bug 修复** - config.yaml heartbeatIntervalMs
+3. **AI ID 生成机制 bug 修复** - PostgreSQL 多级匹配 + 语义化 ID (S-/G-格式)
+4. **memory 表 agent_id 关联** - learn 现在自动记录 AI 身份
+5. **git hook prepare-commit-msg 正则修复** - 支持 S-/G- 格式 ID
+
+### 文档贡献
+
+1. **docs/PLANS/pi-mono-research.md** - pi coding agent 深度研究报告
+2. **docs/issues/AGENT_ID_GENERATION_BUG.md** - AI ID 系统 bug 分析和修复记录
+3. **更新 AGENTS.md** - 添加最新完成功能列表
+
+### 协作贡献
+
+1. 创建 Meeting 讨论 "pi-mono 自主解决障碍的能力研究"
+2. 创建 Meeting 讨论 "OpenCode 依赖 Nezha 增强架构"
+3. 创建 Issue ea2c8f18 建议合并 OpenCode+Nezha 集成讨论
+
+### 参与项目
+
+- pi-mono vs Nezha 对比研究
+- Broadcast 通讯问题关注
+- OpenCode+Nezha 集成架构讨论
 
 ---
 
