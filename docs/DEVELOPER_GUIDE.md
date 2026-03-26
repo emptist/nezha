@@ -409,9 +409,17 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 
 ---
 
-## Nezhapi (REST API)
+## Nezhapi (Nezha + Pi 集成产品)
 
-Nezha 提供 REST API 服务供 OpenCode 或其他外部系统集成。
+> **Nezhapi = Nezha + Pi = 增强版哪吒**
+> **当前状态**: REST API 已可用，Pi 执行器集成开发中
+
+Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
+
+- **Nezha 的增强**: 增加 pi 执行能力、REST API
+- **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
+
+**核心理念**: pi 负责执行，Nezha 负责管理和记忆
 
 ### 启动服务
 
@@ -427,6 +435,19 @@ NEZHAPI_PORT=4100 npm run nezhapi
 ```
 
 服务默认监听端口 **4099**。
+
+### 快速测试
+
+```bash
+# 健康检查
+curl http://localhost:4099/health
+
+# 获取 AI 身份
+curl http://localhost:4099/identity
+
+# 获取待处理任务
+curl http://localhost:4099/tasks
+```
 
 ### API 端点
 

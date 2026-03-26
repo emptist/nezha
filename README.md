@@ -507,7 +507,7 @@ nezha/
 │   └── opencode-coupling/     # OpenCode 耦合代码 (已移除)
 ├── conversations/             # 会话日志 (JSONL)
 ├── memory/                    # 每日记忆
-├── reviews/                    # 代码评审
+├── docs/reviews/              # 系统评审报告
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -575,16 +575,46 @@ nezha daemon
 nezha start
 ```
 
-### Nezhapi (OpenCode 集成)
+### OpenCode on Nezha / Nezhapi
 
-Nezha 提供 REST API 供 OpenCode 集成：
+> **关键**: Nezha 和 Nezhapi 是**独立产品**，不依赖 OpenCode
+
+Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
+
+| 架构                    | 依赖 | 说明                                             |
+| ----------------------- | ---- | ------------------------------------------------ |
+| **OpenCode on Nezha**   | 无   | OpenCode 运行在 Nezha 之上，Nezha 可独立使用     |
+| **OpenCode on Nezhapi** | 无   | OpenCode 运行在 Nezhapi 之上，Nezhapi 可独立使用 |
+
+**核心原则**: Nezha/Nezhapi 不引入 OpenCode 依赖，各自都是独立产品
+
+---
+
+### Nezhapi (Nezha + Pi 集成产品)
+
+> **Nezhapi = Nezha + Pi = 增强版哪吒**
+
+Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
+
+- **Nezha 的增强**: 增加 pi 执行能力、REST API
+- **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
+
+**核心理念**: pi 负责执行，Nezha 负责管理和记忆，各取所长
+
+**设计模式 4**: Nezha 使用 Pi 做事
+
+| 组件      | 职责                                     |
+| --------- | ---------------------------------------- |
+| **Nezha** | 任务管理、长期记忆、多 AI 协作、调度监控 |
+| **Pi**    | 代码执行、动态工具创建、会话管理         |
+
+**成功后转向**: nezhapi 验证成功 → 主攻 nezhapi 开发
+
+> ⚠️ **当前状态**: REST API 已可用，Pi 执行器集成开发中
 
 ```bash
 # 启动 Nezhapi 服务
 npm run nezhapi
-
-# 或
-node dist/api/NezhaApiServer.js
 ```
 
 **API 端点** (端口 4099):

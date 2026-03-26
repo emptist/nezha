@@ -24,7 +24,14 @@
 11. **[docs/PDCA_CYCLE.md](./docs/PDCA_CYCLE.md)** → Continuous improvement methodology
 12. **[docs/BROADCAST_SYSTEM.md](./docs/BROADCAST_SYSTEM.md)** → Inter-AI communication
 
-**Total AI onboarding: ~26 minutes**
+### System Reviews (Important Findings)
+
+13. **[docs/reviews/](./docs/reviews/)** → System review reports and analysis
+    - **[skills_system_review_2026-03-27.md](./docs/reviews/skills_system_review_2026-03-27.md)** → Skills system comprehensive review
+    - **[system_review_2026-03-25.md](./docs/reviews/system_review_2026-03-25.md)** → Full system deep review
+    - Browse all reviews in `docs/reviews/` for historical insights
+
+**Total AI onboarding: ~30 minutes**
 
 ## ROM Analogy
 

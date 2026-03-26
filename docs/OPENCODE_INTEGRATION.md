@@ -555,9 +555,87 @@ curl -X DELETE "http://localhost:4096/session/$SESSION_ID"
 
 ---
 
-## Nezhapi (Nezha REST API)
+## OpenCode on Nezha / Nezhapi
 
-Nezha 提供 REST API 服务，供 OpenCode 或其他外部系统集成调用。
+> **关键**: Nezha 和 Nezhapi 是**独立产品**，不依赖 OpenCode
+
+Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
+
+### 方案 1: OpenCode on Nezha
+
+OpenCode 运行在 Nezha 之上，使用 CLI 或数据库：
+
+```bash
+# 通过 CLI 调用
+nezha task-add "任务" "描述" 50
+
+# 或直接操作数据库
+psql -d nezha -c "INSERT INTO tasks ..."
+```
+
+**适用场景**：简单任务管理，无需额外服务
+
+---
+
+### 方案 2: OpenCode on Nezhapi
+
+> **Nezhapi = Nezha + Pi = 增强版哪吒**
+
+Nezhapi 是 **Nezha 与 Pi 的深度融合产品**：
+
+- **Nezha 的增强**: 增加 pi 执行能力、REST API
+- **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
+
+**设计模式 4**: Nezha 使用 Pi 做事
+
+> **核心架构**: Nezha (管理) → Pi (执行)
+
+| 组件      | 职责                                     |
+| --------- | ---------------------------------------- |
+| **Nezha** | 任务管理、长期记忆、多 AI 协作、调度监控 |
+| **Pi**    | 代码执行、动态工具创建、会话管理         |
+
+**适用场景**：需要 pi 执行能力、REST API、多 AI 协作
+
+**成功后转向**: 如果 nezhapi 验证成功，主攻 nezhapi 开发，nezha 保持维护
+
+---
+
+### 方案 2: OpenCode on Nezhapi (Nezha + Pi)
+
+> **当前状态**: REST API 已可用，Pi 执行器集成开发中
+
+通过 REST API 调用 Nezhapi：
+
+```bash
+# 启动服务
+npm run nezhapi
+
+# API 调用
+curl http://localhost:4099/tasks
+curl http://localhost:4099/broadcast
+```
+
+**优点**：
+
+- 统一 API 接口
+- 支持 Pi 执行任务 (开发中)
+- 可扩展性强
+
+**缺点**：
+
+- 需要运行额外服务
+
+---
+
+## Nezhapi (Nezha + Pi 集成)
+
+> **Nezhapi = Nezha + Pi**
+
+Nezha 与 Pi 的集成服务，同时提供：
+
+1. **REST API** - 任务/广播/记忆管理 (端口 4099)
+2. **Pi 执行器** - 调用本地 pi 执行代码任务
 
 ### 启动服务
 

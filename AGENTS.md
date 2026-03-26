@@ -8,20 +8,26 @@
    - 龙虾没有的功能，优先度降低
 
 2. **当前优先级**
-   - P0: Process Guardian 进程守护完善
-   - P0: Inter-Review 集成到改进循环
+   - **P0: Nezhapi 开发** (Nezha + Pi 集成)
+     - 完善 REST API
+     - 集成 Pi 执行器
+     - 验证端到端流程
    - P1: 提高测试覆盖率 (目标 80%)
-   - P1: 完善 Skill System 与 Agent 集成
-   - P2: 向量搜索 (pgvector)
    - P2: 其他功能
 
-3. **长期记忆 (ROM)**
+3. **产品概念 (重要!)**
+   - **Nezha**: 独立产品，任务管理+记忆
+   - **Nezhapi**: 独立产品，Nezha + Pi 融合
+   - **OpenCode on Nezha/Nezhapi**: OpenCode 可以绑在上面运行
+   - **核心原则**: Nezha/Nezhapi 不依赖 OpenCode
+
+4. **长期记忆 (ROM)**
    - `.memory/` 目录是 Nezha 的长期记忆 (ROM)
    - **启动时必须先读取** `.memory/` 下的所有 `.md` 文件
    - 包含关键知识：PostgreSQL 路径、系统配置、重要经验等
    - 例如：读取 `.memory/MEMORY.md` 和 `.memory/POSTGRESQL_PATH.md`
 
-4. **学习系统使用指南**
+5. **学习系统使用指南**
 
    **如何查看其他 AI 的反射记录 (Reflections)**
 
@@ -50,13 +56,13 @@
      2. 订阅 MCP 广播消息
      3. 或直接查询 memory 表
 
-5. **学习系统设计原则**
+6. **学习系统设计原则**
    - 不通过程序代码实现学习功能
    - 通过 Prompt 指令让 AI 自主学习
    - 参考 LEARNING_SYSTEM.md 中的 System Prompt 设计
    - 提供工具支持：memory_save, memory_search, memory_link
 
-6. **禁止**
+7. **禁止**
    - 不要盲目实现，先问"龙虾怎么做的？"
    - 不要编写复杂的 NLP 规则来提取知识
    - 不要用程序硬编码学习逻辑
@@ -90,7 +96,7 @@
 - [x] memory 表 agent_id 关联 (learn 现在自动记录 AI 身份)
 - [x] git hook prepare-commit-msg 正则修复 (支持 S-/G- 格式 ID)
 - [x] 创建 OpenCode+Nezha 集成架构讨论 (Meeting + Issue)
-- [x] **Nezhapi** - REST API 服务 (端口 4099) - 供 OpenCode 集成
+- [x] **Nezhapi** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
 - [x] **PiExecutor** - Pi 执行器 - 支持本地模型执行
 
 ## AI 通信方法

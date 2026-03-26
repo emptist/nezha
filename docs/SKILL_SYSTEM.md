@@ -1,6 +1,22 @@
 # Nezha Skill System Architecture
 
 > **Design Principle**: PostgreSQL-first. File system only when inevitable.
+> 
+> **Last Updated**: 2026-03-27 | **Status**: Production Ready | **Review**: [docs/reviews/skills_system_review_2026-03-27.md](./reviews/skills_system_review_2026-03-27.md)
+
+## Current Status ✅
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| Total Skills | 610 | ✅ Active |
+| Approved Skills | 610 (100%) | ✅ All Approved |
+| AI-Built Skills | 604 (99%) | ✅ Auto-generated |
+| Local Skills | 2 (0.3%) | ✅ Custom |
+| Average Safety Score | ~85 | ✅ High Quality |
+| Database Schema | 30 fields | ✅ Complete |
+| Vector Search | Not Implemented | ⚠️ Planned |
+
+**Recent Addition**: `network-diagnostics` skill (2026-03-27) - Comprehensive network troubleshooting
 
 ## Core Principle
 
@@ -291,14 +307,95 @@ Future tasks can recall from memory
 
 ## Future Enhancements
 
-- [ ] Skill dependency resolution
-- [ ] Skill composition (combine skills)
-- [ ] Vector search for similar skills
-- [ ] Automated skill testing
-- [ ] Skill ratings and feedback
-- [ ] SOUL.md / markdown knowledge import
+### High Priority (Planned for Next Sprint)
+
+- [ ] **CLI Tools Implementation** - Add `nezha skills create/list/show/suggest/update/version` commands
+- [ ] **Vector Search** - Integrate embedding provider for semantic skill search
+- [ ] **Documentation Update** - Add CLI usage guide and practical code examples
+
+### Medium Priority (Next Quarter)
+
+- [ ] **Version Management** - Implement skill version rollback and diff viewing
+- [ ] **Skill Dependency Resolution** - Handle skill dependencies automatically
+- [ ] **Skill Composition** - Combine multiple skills for complex tasks
+
+### Low Priority (Future)
+
+- [ ] **Vector Search Enhancement** - Improve search with pgvector optimization
+- [ ] **Automated Skill Testing** - Test skills before approval
+- [ ] **Skill Ratings and Feedback** - User feedback system
+- [ ] **SOUL.md / Markdown Knowledge Import** - Import external knowledge
+
+## Known Issues
+
+1. **CLI Tools Missing** - No CLI commands for skill management (use DatabaseSkillLoader directly)
+2. **Vector Search Not Implemented** - `embedding` field exists but not utilized
+3. **Cache Configuration Hardcoded** - 60-second cache expiry is not configurable
+4. **Low Usage Statistics** - `use_count` field underutilized
+
+## Quick Start Guide
+
+### Creating a New Skill
+
+```typescript
+import { SkillBuilder } from './src/services/SkillBuilder.js';
+
+const builder = new SkillBuilder();
+const result = await builder.buildSkill({
+  name: 'my-skill',
+  purpose: 'Description of what this skill does',
+  useCases: ['scenario 1', 'scenario 2'],
+  requiredCapabilities: ['capability 1']
+});
+
+if (result.success) {
+  console.log(`Skill created: ${result.skillId}`);
+  console.log(`Quality Score: ${result.qualityScore}/100`);
+}
+```
+
+### Using Skills in Tasks
+
+```typescript
+import { skillSystem } from './src/core/SkillSystem.js';
+
+// Get skill suggestions for a task
+const suggestions = await skillSystem.suggestSkills('network is slow, lots of packet loss');
+
+// Execute a skill
+const result = await skillSystem.executeSkill('network-diagnostics', {
+  target: '8.8.8.8',
+  testType: 'connectivity'
+});
+```
+
+### Database Queries
+
+```sql
+-- List all skills
+SELECT name, description, safety_score, use_count 
+FROM skills 
+WHERE status = 'approved' 
+ORDER BY use_count DESC;
+
+-- Search skills by trigger phrases
+SELECT name, trigger_phrases 
+FROM skills 
+WHERE trigger_phrases @> ARRAY['network slow'];
+
+-- Get skill statistics
+SELECT 
+  source,
+  COUNT(*) as total,
+  AVG(safety_score) as avg_score,
+  AVG(use_count) as avg_usage
+FROM skills 
+WHERE status = 'approved'
+GROUP BY source;
+```
 
 ---
 
-**Version:** 1.0  
-**Last Updated:** 2026-03-19
+**Version:** 2.0  
+**Last Updated:** 2026-03-27  
+**Review Report**: [docs/reviews/skills_system_review_2026-03-27.md](./reviews/skills_system_review_2026-03-27.md)

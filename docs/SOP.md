@@ -141,7 +141,7 @@ npm run start:cli -- reviews create --type peer --title "Review: feature X"
 
 ```bash
 # Read OpenClaw research
-cat reviews/openclaw_multiagent_research.md
+cat docs/reviews/openclaw_multiagent_research.md
 
 # Compare implementations
 npm run start:cli -- compare-features
@@ -323,7 +323,7 @@ npm run start:cli -- issues create "Decision: X vs Y" \
 - [docs/MEMORY_SYSTEM.md](./docs/MEMORY_SYSTEM.md) - Knowledge management
 - [docs/SKILL_SYSTEM.md](./docs/SKILL_SYSTEM.md) - Skills
 - [docs/AboutTaskReflections.md](./docs/AboutTaskReflections.md) - Reflection system
-- [reviews/openclaw_multiagent_research.md](./reviews/openclaw_multiagent_research.md) - OpenClaw reference
+- [docs/reviews/openclaw_multiagent_research.md](./reviews/openclaw_multiagent_research.md) - OpenClaw reference
 
 ---
 
