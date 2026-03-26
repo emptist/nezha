@@ -204,6 +204,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           },
         },
       },
+      {
+        name: 'get_tasks',
+        description: 'Get pending tasks from the task queue. Returns tasks ordered by priority.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            status: {
+              type: 'string',
+              enum: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED'],
+              description: 'Task status filter (default: PENDING)',
+              default: 'PENDING',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum number of tasks to return (default: 10)',
+              default: 10,
+            },
+          },
+        },
+      },
+      {
+        name: 'get_inter_review_stats',
+        description:
+          'Get Inter-Review system statistics. Shows recent reviews, scores, and pending actions.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -305,8 +334,6 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'check_broadcasts') {
       const { limit = 5 } = args as { limit?: number };
       const database = getDb();
-      const identity = await AgentIdentityService.getResolvedIdentity();
-      const agentId = identity.id;
 
       const result = await database.query(
         `SELECT id, from_ai, to_ai, message_type, content, metadata, created_at
@@ -588,6 +615,97 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `Soul saved successfully. ID: ${id}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_tasks') {
+      const { status = 'PENDING', limit = 10 } = args as {
+        status?: string;
+        limit?: number;
+      };
+      const database = getDb();
+
+      const result = await database.query(
+        `SELECT id, title, description, priority, status, created_at, retry_count
+         FROM tasks
+         WHERE status = $1
+         ORDER BY priority DESC, created_at ASC
+         LIMIT $2`,
+        [status, limit]
+      );
+
+      if (result.rows.length === 0) {
+        return {
+          content: [{ type: 'text', text: `No tasks with status: ${status}` }],
+        };
+      }
+
+      const lines = result.rows.map(
+        t => `[${t.priority}] ${t.title} (${t.id?.substring(0, 8)}) - ${t.status}`
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `## Tasks (${status})\n\n${lines.join('\n')}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_inter_review_stats') {
+      const database = getDb();
+
+      const statsResult = await database.query(`
+        SELECT 
+          COUNT(*) FILTER (WHERE status = 'completed') as completed,
+          COUNT(*) FILTER (WHERE status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE status = 'failed') as failed,
+          AVG(overall_score) FILTER (WHERE overall_score IS NOT NULL) as avg_score
+        FROM inter_reviews
+        WHERE requested_at > NOW() - INTERVAL '7 days'
+      `);
+
+      const recentResult = await database.query(`
+        SELECT id, summary, overall_score, status, requested_at
+        FROM inter_reviews
+        ORDER BY requested_at DESC
+        LIMIT 5
+      `);
+
+      const stats = statsResult.rows[0];
+      const lines = [
+        `## Inter-Review Stats (7 days)`,
+        `**Completed:** ${stats?.completed ?? 0}`,
+        `**Pending:** ${stats?.pending ?? 0}`,
+        `**Failed:** ${stats?.failed ?? 0}`,
+      ];
+
+      if (stats?.avg_score) {
+        lines.push(`**Avg Score:** ${Number(stats.avg_score).toFixed(1)}`);
+      }
+
+      lines.push('\n## Recent Reviews');
+      for (const r of recentResult.rows) {
+        const summary = r.summary?.substring(0, 40) || r.id?.substring(0, 8);
+        lines.push(`[${r.status}] ${summary} - Score: ${r.overall_score ?? 'N/A'}`);
+      }
+
+      lines.push('\n## Recent Reviews');
+      for (const r of recentResult.rows) {
+        lines.push(
+          `[${r.status}] ${r.title?.substring(0, 40) || r.id?.substring(0, 8)} - Score: ${r.overall_score ?? 'N/A'}`
+        );
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: lines.join('\n'),
           },
         ],
       };
