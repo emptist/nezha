@@ -68,9 +68,11 @@ nezha start       # 开始工作
 | 方面 | 以前                        | 现在               |
 | ---- | --------------------------- | ------------------ |
 | 启动 | 打开项目即可                | 先确保 daemon 运行 |
-| ID   | 共享 `.nezha/agent-id.json` | 幂等分配           |
+| ID   | ~~共享 `.nezha/agent-id.json`~~ (已移除) | 幂等分配（PostgreSQL） |
 | 身份 | 无追踪                      | 自动关联           |
 | 知识 | 混乱累积                    | 确定性累积         |
+
+> **清理记录**: 2026-03-27 彻底移除 `.nezha/agent-id.json` 相关代码和文档。详见 `docs/reviews/agent_id_migration_report_2026-03-27.md`
 
 ### 实现
 

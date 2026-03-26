@@ -47,48 +47,17 @@ export async function resolveAgentIdAsync(
     };
   }
 
-  // Priority 2: Use AgentIdentityService with PostgreSQL
-  try {
-    const db = new DatabaseClient(config);
-    const identityService = new AgentIdentityService(db);
-    const identity = await identityService.resolve();
-    await db.close();
+  // Priority 2: Use AgentIdentityService with PostgreSQL (Required)
+  const db = new DatabaseClient(config);
+  const identityService = new AgentIdentityService(db);
+  const identity = await identityService.resolve();
+  await db.close();
 
-    console.log(`[AgentIdentity] Resolved identity: ${identity.id}`);
-    return {
-      id: identity.id,
-      displayName: identity.displayName,
-    };
-  } catch (error) {
-    console.warn('[AgentIdentity] Failed to resolve from DB, using fallback:', error);
-  }
-
-  // Priority 3: Fallback to legacy file-based (deprecated)
-  console.warn(
-    '[AgentIdentity] WARNING: Using deprecated file-based ID. Set NEZHA_AGENT_ID or ensure PostgreSQL is available.'
-  );
-  const configDir = path.join(process.cwd(), '.nezha');
-  const idFilePath = path.join(configDir, 'agent-id.json');
-
-  try {
-    if (fs.existsSync(idFilePath)) {
-      const content = fs.readFileSync(idFilePath, 'utf-8');
-      const data = JSON.parse(content);
-      if (data.id) {
-        return data;
-      }
-    }
-  } catch {
-    // Ignore errors
-  }
-
-  fs.mkdirSync(configDir, { recursive: true });
-  const agentId = `fallback-${crypto.randomUUID()}`;
-  const displayName = process.env[ENV_KEYS.AGENT_NAME];
-  const data = { id: agentId, displayName: displayName || undefined };
-  fs.writeFileSync(idFilePath, JSON.stringify(data, null, 2));
-  console.log(`[AgentIdentity] Generated fallback ID: ${agentId}`);
-  return data;
+  console.log(`[AgentIdentity] Resolved identity: ${identity.id}`);
+  return {
+    id: identity.id,
+    displayName: identity.displayName,
+  };
 }
 
 // Sync wrapper for backwards compatibility

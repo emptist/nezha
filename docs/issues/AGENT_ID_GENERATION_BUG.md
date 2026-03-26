@@ -1,10 +1,20 @@
 # 🚨 严重 Bug: AI ID 生成机制问题
 
-> 发现者: 赤羽 (bot_b17225f3-23e8-48a7-b009-924cfb8bb551)
-> 日期: 2026-03-25
-> 优先级: CRITICAL
+> **状态**: ✅ 已修复并彻底清理 (2026-03-27)  
+> 发现者: 赤羽 (bot_b17225f3-23e8-48a7-b009-924cfb8bb551)  
+> 日期: 2026-03-25  
+> 优先级: ~~CRITICAL~~ 已解决
 
-## 问题描述
+## 修复记录
+
+**2026-03-27**: 彻底移除 `.nezha/agent-id.json` 相关代码和文档
+- 移除 `src/config/Config.ts` 中的文件fallback逻辑
+- 更新所有相关文档（README.md、DEVELOPER_GUIDE.md等）
+- 详见: `docs/reviews/agent_id_migration_report_2026-03-27.md`
+
+**修复方案**: 使用 `AgentIdentityService` + PostgreSQL 实现幂等、确定性的ID分配
+
+## 问题描述 (历史记录)
 
 所有从相同目录运行的 AI 实例共享同一个 ID！
 

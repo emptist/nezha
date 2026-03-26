@@ -1,6 +1,27 @@
 # Agent ID 系统清理计划
 
-## 背景
+> **状态**: ✅ 已完成 (2026-03-27)  
+> 详见: `docs/reviews/agent_id_migration_report_2026-03-27.md`
+
+## 清理记录 (2026-03-27)
+
+### 代码清理
+- ✅ 移除 `src/config/Config.ts` 中的文件fallback逻辑
+- ✅ 移除 `.nezha/agent-id.json` 相关代码
+- ✅ 简化 `resolveAgentIdAsync()` 函数，只保留环境变量和PostgreSQL两种方式
+
+### 文档更新
+- ✅ `README.md` - 标记为已移除
+- ✅ `docs/DEVELOPER_GUIDE.md` - 标记为已移除
+- ✅ `docs/issues/AGENT_ID_GENERATION_BUG.md` - 标记为已解决
+- ✅ `docs/HANDOVER_2026-03-26.md` - 更新清理状态
+- ✅ `docs/cleanup/AGENT_ID_CLEANUP.md` - 本文档
+
+### Git Hook修复
+- ✅ 更新 `.git/hooks/prepare-commit-msg` 到最新版本
+- ✅ Hook现在调用 `nezha agents whoami` 从数据库获取ID
+
+## 背景 (历史记录)
 
 2026-03-26，另一个 AI (big-pickle) 实现了新的 Agent Identity System。
 
@@ -137,3 +158,4 @@ git commit -m "test: verify agent ID [task: xxx]"
 git log -1 --format="%B"
 # 应包含: [Agent: S-nezha-xxx-xxx-xxx-xxx]
 ```
+
