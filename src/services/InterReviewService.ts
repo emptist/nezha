@@ -198,7 +198,12 @@ export class InterReviewService extends EventEmitter {
       this.emit(InterReviewEvent.REVIEW_COMPLETED, { reviewId, result: reviewResult });
 
       if (reviewResult.learnings.length > 0) {
-        await this.suggestPromptUpdatesFromLearnings(reviewResult, undefined);
+        logger.info(`[InterReview] Calling suggestPromptUpdatesFromLearnings...`);
+        try {
+          await this.suggestPromptUpdatesFromLearnings(reviewResult, undefined);
+        } catch (promptErr) {
+          logger.warn(`[InterReview] suggestPromptUpdatesFromLearnings failed: ${promptErr}`);
+        }
       }
 
       if (
@@ -217,12 +222,16 @@ export class InterReviewService extends EventEmitter {
             : ''
         }`;
 
-        await this.broadcastService.sendBroadcast(msg, {
-          priority: reviewResult.overallScore < 60 ? 'high' : 'normal',
-        });
-        logger.info(
-          `[InterReview] Broadcasted review findings (score: ${reviewResult.overallScore})`
-        );
+        try {
+          await this.broadcastService.sendBroadcast(msg, {
+            priority: reviewResult.overallScore < 60 ? 'high' : 'normal',
+          });
+          logger.info(
+            `[InterReview] Broadcasted review findings (score: ${reviewResult.overallScore})`
+          );
+        } catch (broadcastErr) {
+          logger.warn(`[InterReview] Broadcast failed: ${broadcastErr}`);
+        }
       }
 
       const review = await this.getReview(reviewId);
@@ -237,6 +246,7 @@ export class InterReviewService extends EventEmitter {
       return reviewResult;
     } catch (error) {
       logger.error(`[InterReview] Review failed: ${reviewId}`, error);
+      logger.error(`[InterReview] Stack trace:`, error instanceof Error ? error.stack : error);
 
       try {
         await this.db.query('ROLLBACK');
@@ -679,8 +689,12 @@ Format:
   }
 
   async saveLearningsToMemory(result: ReviewResult, taskId?: string): Promise<void> {
-    for (const learning of result.learnings) {
-      const memoryContent = `## AI Learning from Inter-Review
+    for (const [index, learning] of result.learnings.entries()) {
+      logger.info(
+        `[InterReview] Saving learning ${index + 1}/${result.learnings.length}: ${learning.topic}`
+      );
+      try {
+        const memoryContent = `## AI Learning from Inter-Review
 
 **Topic**: ${learning.topic}
 
@@ -689,24 +703,24 @@ Format:
 ---
 This is a reminder extracted from code review. Future AI should remember this when working on similar tasks.`;
 
-      await this.db.query(
-        `INSERT INTO memory (id, content, metadata, tags, importance, source, created_at, updated_at)
+        await this.db.query(
+          `INSERT INTO memory (id, content, metadata, tags, importance, source, created_at, updated_at)
          VALUES (uuid_generate_v4(), $1, $2, $3, $4, $5, NOW(), NOW())`,
-        [
-          memoryContent,
-          JSON.stringify({
-            topic: learning.topic,
-            source: 'inter-review',
-            taskId,
-            score: result.overallScore,
-          }),
-          ['learning', 'review', learning.topic, 'ai-generated'],
-          7,
-          'inter-review',
-        ]
-      );
+          [
+            memoryContent,
+            JSON.stringify({
+              topic: learning.topic,
+              source: 'inter-review',
+              taskId,
+              score: result.overallScore,
+            }),
+            ['learning', 'review', learning.topic, 'ai-generated'],
+            7,
+            'inter-review',
+          ]
+        );
 
-      const skillContent = `## AI Review Learning: ${learning.topic}
+        const skillContent = `## AI Review Learning: ${learning.topic}
 
 ### Reminder
 ${learning.reminder}
@@ -717,26 +731,29 @@ Apply this when working on tasks related to: ${learning.topic}
 ### Source
 Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScore}/100)`;
 
-      const skillName = `review-learning-${learning.topic.toLowerCase().replace(/\s+/g, '-')}`;
-      const existing = await this.db.query<{ id: string }>(
-        `SELECT id FROM skills WHERE name = $1`,
-        [skillName]
-      );
-
-      if (existing.rows.length > 0) {
-        await this.db.query(`UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`, [
-          skillName,
-          JSON.stringify({ markdown: skillContent }),
-        ]);
-      } else {
-        await this.db.query(
-          `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
-           VALUES (uuid_generate_v4(), $1, $2, '1.0', 'ai-built', NOW(), NOW())`,
-          [skillName, JSON.stringify({ markdown: skillContent })]
+        const skillName = `review-learning-${learning.topic.toLowerCase().replace(/\s+/g, '-')}`;
+        const existing = await this.db.query<{ id: string }>(
+          `SELECT id FROM skills WHERE name = $1`,
+          [skillName]
         );
-      }
 
-      logger.info(`[InterReview] Saved learning to memory and skill: ${learning.topic}`);
+        if (existing.rows.length > 0) {
+          await this.db.query(
+            `UPDATE skills SET content = $2, updated_at = NOW() WHERE name = $1`,
+            [skillName, JSON.stringify({ markdown: skillContent })]
+          );
+        } else {
+          await this.db.query(
+            `INSERT INTO skills (id, name, content, version, source, created_at, updated_at)
+           VALUES (uuid_generate_v4(), $1, $2, '1.0', 'ai-built', NOW(), NOW())`,
+            [skillName, JSON.stringify({ markdown: skillContent })]
+          );
+        }
+
+        logger.info(`[InterReview] Saved learning to memory and skill: ${learning.topic}`);
+      } catch (error) {
+        logger.error(`[InterReview] Failed to save learning ${learning.topic}:`, error);
+      }
     }
   }
 

@@ -196,6 +196,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'memory_search') {
       const { query, limit = 10 } = args as { query: string; limit?: number };
       const database = getDb();
+      const agentId = Config.getInstance().getAgentId();
 
       const result = await database.query(
         `SELECT id, content, metadata, created_at 
@@ -210,6 +211,14 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         return {
           content: [{ type: 'text', text: `No memories found for: "${query}"` }],
         };
+      }
+
+      // Mark memories as viewed
+      for (const row of result.rows) {
+        await database.query(
+          `UPDATE memory SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+          [agentId, row.id]
+        );
       }
 
       const formatted = result.rows
@@ -256,6 +265,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'check_broadcasts') {
       const { limit = 5 } = args as { limit?: number };
       const database = getDb();
+      const agentId = Config.getInstance().getAgentId();
 
       const result = await database.query(
         `SELECT id, from_ai, to_ai, message_type, content, metadata, created_at
@@ -270,6 +280,14 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         return {
           content: [{ type: 'text', text: 'No pending broadcasts or discussions.' }],
         };
+      }
+
+      // Mark broadcasts as viewed
+      for (const row of result.rows) {
+        await database.query(
+          `UPDATE project_communications SET read_at = NOW(), read_by = $1 WHERE id = $2`,
+          [agentId, row.id]
+        );
       }
 
       const formatted = result.rows
@@ -404,6 +422,14 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
               .map(i => `• [${i.severity}] ${i.title} (${i.id?.substring(0, 8)})`)
               .join('\n')
           );
+          // Mark issues as viewed
+          const agentId = Config.getInstance().getAgentId();
+          for (const issue of issuesResult.rows) {
+            await database.query(
+              `UPDATE issues SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+              [agentId, issue.id]
+            );
+          }
         } else {
           lines.push('No open issues');
         }
@@ -428,6 +454,47 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: lines.join('\n'),
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_skill') {
+      const { name: skillName } = args as { name: string };
+      const database = getDb();
+      const agentId = Config.getInstance().getAgentId();
+
+      const result = await database.query(
+        `SELECT id, name, content, description FROM skills WHERE name = $1 AND status = 'approved'`,
+        [skillName]
+      );
+
+      if (result.rows.length === 0) {
+        return {
+          content: [{ type: 'text', text: `Skill "${skillName}" not found or not approved.` }],
+          isError: true,
+        };
+      }
+
+      const skill = result.rows[0];
+      if (!skill) {
+        return {
+          content: [{ type: 'text', text: `Skill "${skillName}" not found.` }],
+          isError: true,
+        };
+      }
+
+      // Mark skill as viewed
+      await database.query(
+        `UPDATE skills SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+        [agentId, skill.id]
+      );
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `# ${skill.name}\n\n${skill.description ?? ''}\n\n---\n\n${skill.content ?? ''}`,
           },
         ],
       };

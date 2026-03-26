@@ -77,9 +77,10 @@ export class BroadcastService {
     await this.db.query(
       `INSERT INTO project_communications 
        (id, project_id, from_ai, to_ai, message_type, content, metadata, priority, git_hash, git_branch, environment)
-       VALUES ($1, NULL, $2, $3, 'broadcast', $4, $5, $6, $7, $8, $9)`,
+       VALUES ($1, $2, $3, $4, 'broadcast', $5, $6, $7, $8, $9, $10)`,
       [
         id,
+        null,
         this.agentId,
         options.targetAgent || 'all-ais',
         message,

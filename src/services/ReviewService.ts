@@ -164,9 +164,10 @@ export class ReviewService {
 
       await this.db.query(
         `INSERT INTO project_communications (id, project_id, from_ai, to_ai, message_type, content, metadata)
-         VALUES ($1, NULL, $2, $3, 'notification', $4, $5)`,
+         VALUES ($1, $2, $3, $4, 'notification', $5, $6)`,
         [
           crypto.randomUUID(),
+          null,
           reviewerId,
           review.reviewer_id,
           `Review completed: ${review.title}`,
