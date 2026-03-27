@@ -34,6 +34,29 @@ const TASK_COMPLETE_PATTERN =
 const ISSUE_COMMENT_PATTERN =
   /\[ISSUE_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)(?:\s+internal:\s*(true|false))?\s*(?=\[|$)/gis;
 
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function findSimilarIssue(database: DatabaseClient, title: string): Promise<string | null> {
+  const normalized = normalizeTitle(title);
+  const result = await database.query<{ id: string; title: string }>(
+    `SELECT id, title FROM issues 
+     WHERE status = 'open'
+     AND (
+       LOWER(REPLACE(REPLACE(REPLACE(title, '-', ' '), '/', ' '), '_', ' ')) = $1
+       OR LOWER(REPLACE(REPLACE(REPLACE(title, '-', ' '), '/', ' '), '_', ' ')) LIKE $2
+     )
+     LIMIT 1`,
+    [normalized, `%${normalized}%`]
+  );
+  return result.rows[0]?.id ?? null;
+}
+
 interface ReflectResult {
   learnings: number;
   promptUpdates: number;
@@ -103,6 +126,11 @@ async function reflect(text: string): Promise<ReflectResult> {
     const tagsStr = match[5]?.trim();
     const tags = tagsStr ? tagsStr.split(',').map((t: string) => t.trim()) : [];
     if (title) {
+      const similarId = await findSimilarIssue(database, title);
+      if (similarId) {
+        result.issues++;
+        continue;
+      }
       await database.query(
         `INSERT INTO issues (title, description, issue_type, severity, tags, discovered_by)
          VALUES ($1, $2, $3, $4, $5, $6)`,

@@ -43,7 +43,9 @@ export class BroadcastCommands {
       if (b.gitHash) {
         console.log(`  Git: ${b.gitHash} (${b.gitBranch || 'unknown'})`);
       }
-      console.log(`  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`);
+      console.log(
+        `  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`
+      );
       console.log();
     }
   }
@@ -65,7 +67,9 @@ export class BroadcastCommands {
       );
       console.log(`  ${icon} [${b.priority}]`);
       console.log(`  From: ${b.fromAgentName || b.fromAgent.substring(0, 12)}...`);
-      console.log(`  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`);
+      console.log(
+        `  Message: ${b.message.substring(0, 100)}${b.message.length > 100 ? '...' : ''}`
+      );
       console.log();
 
       await this.broadcastService.markAsRead(b.id);
@@ -79,6 +83,20 @@ export class BroadcastCommands {
     } else {
       const count = await this.broadcastService.markAllAsRead();
       console.log(`${colors.green}Marked ${count} broadcasts as read${colors.reset}`);
+    }
+  }
+
+  async resolve(pattern: string, resolution: string = 'resolved'): Promise<void> {
+    const count = await this.broadcastService.resolveRelatedBroadcasts(pattern, resolution);
+    console.log(`${colors.green}Resolved ${count} broadcasts matching "${pattern}"${colors.reset}`);
+    console.log(`  Resolution: ${resolution}`);
+  }
+
+  async end(id: string, resolution?: string): Promise<void> {
+    await this.broadcastService.endBroadcast(id, resolution);
+    console.log(`${colors.green}Ended broadcast: ${id}${colors.reset}`);
+    if (resolution) {
+      console.log(`  Resolution: ${resolution}`);
     }
   }
 

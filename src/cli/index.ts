@@ -2014,7 +2014,9 @@ Examples:
                VALUES ($1, $2, $3, $4, $5) RETURNING id`,
               [title, description, issueType, severity, tags]
             );
-            console.log(`✓ Created issue: ${title.substring(0, 50)}... (ID: ${result.rows[0]?.id})`);
+            console.log(
+              `✓ Created issue: ${title.substring(0, 50)}... (ID: ${result.rows[0]?.id})`
+            );
             count++;
           }
         }
@@ -3370,12 +3372,33 @@ Examples:
         } else if (subcommand === 'read') {
           const count = await broadcastService.markAllAsRead();
           console.log(`\n✓ Marked ${count} broadcasts as read.`);
+        } else if (subcommand === 'resolve') {
+          const pattern = args[2];
+          const resolution = args[3] || 'resolved';
+          if (!pattern) {
+            console.log('\nUsage: nezha broadcasts resolve <pattern> [resolution]');
+            console.log('  Resolves all broadcasts matching the pattern.');
+          } else {
+            const count = await broadcastService.resolveRelatedBroadcasts(pattern, resolution);
+            console.log(`\n✓ Resolved ${count} broadcasts matching "${pattern}"`);
+          }
+        } else if (subcommand === 'end') {
+          const id = args[2];
+          const resolution = args[3];
+          if (!id) {
+            console.log('\nUsage: nezha broadcasts end <id> [resolution]');
+          } else {
+            await broadcastService.endBroadcast(id, resolution);
+            console.log(`\n✓ Ended broadcast: ${id}`);
+          }
         } else {
           console.log('\nUsage: nezha broadcasts <subcommand>');
           console.log('\nSubcommands:');
-          console.log('  list    List all broadcasts');
-          console.log('  unread  List unread broadcasts');
-          console.log('  read    Mark all broadcasts as read');
+          console.log('  list       List all broadcasts');
+          console.log('  unread     List unread broadcasts');
+          console.log('  read       Mark all broadcasts as read');
+          console.log('  resolve    Resolve broadcasts matching pattern');
+          console.log('  end        End a specific broadcast by ID');
         }
         break;
       }
