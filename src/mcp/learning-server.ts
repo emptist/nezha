@@ -244,11 +244,13 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     if (name === 'learn') {
       const { insight, context } = args as { insight: string; context?: string };
       const database = getDb();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const agentId = identity.id;
 
       await database.query(
-        `INSERT INTO memory (content, tags, source, importance, metadata) 
-         VALUES ($1, ARRAY['learning', 'reflection'], 'mcp-learn', $2, $3)`,
-        [insight, context ? 5 : 3, JSON.stringify({ context })]
+        `INSERT INTO memory (agent_id, content, tags, source, importance, metadata) 
+         VALUES ($1, $2, ARRAY['learning', 'reflection'], 'mcp-learn', $3, $4)`,
+        [agentId, insight, context ? 5 : 3, JSON.stringify({ context })]
       );
 
       return {
