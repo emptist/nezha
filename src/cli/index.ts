@@ -1148,7 +1148,7 @@ async function main(): Promise<void> {
       case 'install': {
         const isInstalled = await isLaunchAgentInstalled();
         await getLaunchAgentStatus();
-        resolveLogPaths();
+        const logs = resolveLogPaths();
 
         if (isInstalled) {
           cli.info(`Nezha daemon is already installed (label: ${DAEMON_LABEL})`);
