@@ -4,7 +4,7 @@ import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { BroadcastService } from '../services/BroadcastService.js';
-import { PiExecutor } from '../services/PiExecutor.js';
+import { PiSDKExecutor } from '../services/PiSDKExecutor.js';
 
 const PORT = process.env.NEZHAPI_PORT || 4099;
 
@@ -170,7 +170,7 @@ class NezhaApiServer {
   }
 
   private async executePrompt(data: any): Promise<any> {
-    const executor = new PiExecutor({
+    const executor = new PiSDKExecutor({
       model: data.model || 'zai:glm-4.5-flash',
     });
 
