@@ -61,7 +61,10 @@ if [ -n "$NEZHA_CMD" ]; then
 fi
 
 if [ -n "$NEZHA_CMD" ]; then
-    AGENT_ID=$($NEZHA_CMD agents whoami 2>/dev/null | grep -oE 'S-[a-zA-Z0-9-]+' | head -1 || grep -oE 'G-[a-zA-Z0-9-]+' | head -1 || true)
+    # Get soul ID first (unique instance ID), fallback to whoami
+    AGENT_ID=$($NEZHA_CMD agents soul-id 2>/dev/null | grep -oE '[a-f0-9-]{36}' | head -1 || \
+              $NEZHA_CMD agents whoami 2>/dev/null | grep -oE 'S-[a-zA-Z0-9-]+' | head -1 || \
+              grep -oE 'G-[a-zA-Z0-9-]+' | head -1 || true)
 fi
 
 if [ -z "$AGENT_ID" ]; then

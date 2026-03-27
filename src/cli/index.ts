@@ -3488,6 +3488,20 @@ Examples:
           }
           console.log(`  Session: ${getCurrentSessionId() || '(none)'}`);
           console.log('');
+        } else if (subcommand === 'soul-id') {
+          const db = await cliInstance.getDb();
+          const { SoulService } = await import('../services/SoulService.js');
+          const soulService = new SoulService(db);
+          const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+          const identityService = new AgentIdentityService(db);
+          const resolved = await identityService.resolve();
+          const soul = await soulService.getSoul(resolved.id);
+          await db.close();
+          if (soul?.id) {
+            console.log(soul.id);
+          } else {
+            console.log(resolved.id);
+          }
         } else if (subcommand === 'sync') {
           console.log('\nSyncing agent scores from git commits...');
           const commitCounts = await agentScoring.syncGitCommits();
