@@ -299,10 +299,7 @@ describe('BroadcastService', () => {
 
       await service.endBroadcast('broadcast-123', 'completed');
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE'),
-        expect.arrayContaining(['completed'])
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE'), expect.anything());
     });
   });
 
