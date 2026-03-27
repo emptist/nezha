@@ -281,4 +281,50 @@ describe('BroadcastService', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('endBroadcast', () => {
+    it('should end a specific broadcast', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+
+      await service.endBroadcast('test-broadcast-id', 'resolved');
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE project_communications'),
+        expect.arrayContaining(['test-broadcast-id'])
+      );
+    });
+
+    it('should end with custom resolution', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 1 });
+
+      await service.endBroadcast('broadcast-123', 'completed');
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE'),
+        expect.arrayContaining(['completed'])
+      );
+    });
+  });
+
+  describe('resolveRelatedBroadcasts', () => {
+    it('should resolve broadcasts matching pattern', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 5 });
+
+      const count = await service.resolveRelatedBroadcasts('Agent ID 共享问题', '问题已解决');
+
+      expect(count).toBe(5);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE project_communications'),
+        expect.arrayContaining(['Agent ID 共享问题'])
+      );
+    });
+
+    it('should return 0 when no matches', async () => {
+      mockQuery.mockResolvedValueOnce({ rowCount: 0 });
+
+      const count = await service.resolveRelatedBroadcasts('nonexistent', 'not found');
+
+      expect(count).toBe(0);
+    });
+  });
 });
