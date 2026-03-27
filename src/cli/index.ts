@@ -385,7 +385,7 @@ export class Cli {
 
     const maxRetries = this.config.getTaskConfig().maxRetries;
     const taskId = crypto.randomUUID();
-    const createdBy = this.agentIdentity?.id || this.config.getAgentId();
+    const createdBy = this.agentIdentity?.id;
     const createdByIdentity = this.agentIdentity?.id || null;
 
     await db.query(
@@ -2100,6 +2100,8 @@ Examples:
           }
         }
 
+        const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
+
         while ((match = issueResolvePattern.exec(text)) !== null) {
           const id = match[1]?.trim();
           const resolution = match[2]?.trim();
@@ -2115,7 +2117,7 @@ Examples:
                 `UPDATE issues 
                  SET status = 'resolved', resolution = $2, resolved_at = NOW(), resolved_by = $3
                  WHERE id = $1`,
-                [id, resolution, Config.getInstance().getAgentId()]
+                [id, resolution, agentId]
               );
               console.log(`✓ Resolved issue: ${result.rows[0]!.title.substring(0, 50)}...`);
               count++;
@@ -2161,7 +2163,7 @@ Examples:
               await db.query(
                 `INSERT INTO issue_comments (issue_id, author, content, is_internal)
                  VALUES ($1, $2, $3, $4)`,
-                [id, Config.getInstance().getAgentId(), comment, internalStr === 'true']
+                [id, agentId, comment, internalStr === 'true']
               );
               console.log(`✓ Commented on issue: ${result.rows[0]!.title.substring(0, 50)}...`);
               count++;
@@ -2946,7 +2948,7 @@ Examples:
               posIndex !== -1
                 ? (args[posIndex + 1] as 'support' | 'oppose' | 'neutral')
                 : undefined;
-            const author = Config.getInstance().getAgentId();
+            const author = (await AgentIdentityService.getResolvedIdentity()).id;
             await dbMeeting.addOpinion(meetingId, author, perspective, undefined, position);
           } else if (dbSubcommand === 'consensus') {
             const meetingId = args[3];

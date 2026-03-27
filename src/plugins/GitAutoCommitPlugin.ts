@@ -1,7 +1,7 @@
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
 import { isGitDirty, getGitBranch } from '../utils/git.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 export interface GitReminderConfig {
   remindOnUncommitted?: boolean;
@@ -32,7 +32,7 @@ export class GitAutoCommitPlugin implements Plugin {
       }
 
       const hasChanges = isGitDirty();
-      const agentId = Config.getInstance().getAgentId();
+      const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
 
       if (hasChanges && this.remindOnUncommitted) {
         const branch = getGitBranch() || 'unknown';

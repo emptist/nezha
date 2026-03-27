@@ -1,6 +1,6 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES } from '../config/constants.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 import { logger } from '../utils/logger.js';
 
 export interface ReviewFinding {
@@ -55,7 +55,8 @@ export class ReviewService {
     description?: string
   ): Promise<string> {
     const id = crypto.randomUUID();
-    const reviewerId = Config.getInstance().getAgentId();
+    const identity = await AgentIdentityService.getResolvedIdentity();
+    const reviewerId = identity.id;
 
     await this.db.query(
       `INSERT INTO reviews (id, review_type, status, title, target_id, target_type, description, reviewer_id)
@@ -92,7 +93,8 @@ export class ReviewService {
   }
 
   async startReview(reviewId: string): Promise<void> {
-    const reviewerId = Config.getInstance().getAgentId();
+    const identity = await AgentIdentityService.getResolvedIdentity();
+    const reviewerId = identity.id;
 
     await this.db.query(
       `UPDATE reviews SET status = 'in_progress', reviewer_id = $1, updated_at = NOW() WHERE id = $2`,
@@ -160,7 +162,8 @@ export class ReviewService {
       const review = result.rows[0]!;
       if (!review.target_id) return;
 
-      const reviewerId = Config.getInstance().getAgentId();
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      const reviewerId = identity.id;
 
       await this.db.query(
         `INSERT INTO project_communications (id, project_id, from_ai, to_ai, message_type, content, metadata)
@@ -216,7 +219,8 @@ export class ReviewService {
   }
 
   async completeActionItem(reviewId: string, actionItemId: string): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
+    const identity = await AgentIdentityService.getResolvedIdentity();
+    const agentId = identity.id;
 
     await this.db.query(
       `UPDATE reviews 

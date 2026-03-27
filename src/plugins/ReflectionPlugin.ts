@@ -1,7 +1,7 @@
 import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 export interface ReflectionConfig {
   reflectOnComplete?: boolean;
@@ -141,7 +141,7 @@ export class ReflectionPlugin implements Plugin {
     }
 
     try {
-      const agentId = Config.getInstance().getAgentId();
+      const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
       const id = crypto.randomUUID();
 
       const duplicateCheck = await this.db.query(

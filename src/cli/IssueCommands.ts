@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 const C = {
   reset: '\x1b[0m',
@@ -120,7 +120,7 @@ export class IssueCommands {
       tags?: string[];
     }
   ): Promise<string> {
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
     const id = crypto.randomUUID();
 
     await this.db.query(
@@ -142,7 +142,7 @@ export class IssueCommands {
   }
 
   async resolve(id: string, notes?: string): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
 
     const result = await this.db.query<{ title: string }>(
       `SELECT title FROM issues WHERE id = $1 AND status = 'open'`,
@@ -199,7 +199,7 @@ export class IssueCommands {
   }
 
   async comment(id: string, content: string, options?: { internal?: boolean }): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
 
     const issueExists = await this.db.query<{ id: string }>(`SELECT id FROM issues WHERE id = $1`, [
       id,

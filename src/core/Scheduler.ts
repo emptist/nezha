@@ -12,6 +12,7 @@ import { logger } from '../utils/logger.js';
 import { getGitInfo } from '../utils/git.js';
 import { EventBus } from './EventBus.js';
 import { createStandardMetrics } from '../services/MetricsService.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import {
   EncryptionService,
   containsSensitiveData,
@@ -310,6 +311,11 @@ export class Scheduler {
       // Only select tasks whose dependencies are all COMPLETED
       // Also consider next_retry_at for scheduled retries
       // Priority: base priority + retry boost + aging factor + category weight
+      const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
+      const agentName = Config.getInstance().getAgentName();
+      const gitInfo = this.getGitInfo();
+      const environment = this.getEnvironment();
+      const sessionId = getCurrentSessionId();
       const result = await this.db.query<{
         id: string;
         title: string;
@@ -367,12 +373,12 @@ export class Scheduler {
           TASK_STATUS.PENDING,
           TASK_STATUS.COMPLETED,
           TASK_STATUS.RUNNING,
-          Config.getInstance().getAgentId(),
-          Config.getInstance().getAgentName(),
-          this.getGitInfo().hash,
-          this.getGitInfo().branch,
-          this.getEnvironment(),
-          getCurrentSessionId(),
+          agentId,
+          agentName,
+          gitInfo.hash,
+          gitInfo.branch,
+          environment,
+          sessionId,
         ]
       );
 

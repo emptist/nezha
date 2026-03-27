@@ -254,13 +254,13 @@ export class Agent {
 
 ---
 
-## nezha-action 插件 (OpenCode 提醒)
+## nupi-action 插件 (OpenCode 提醒)
 
-> 实现 OpenCode 依赖 Nezha 的桥梁：自动向 AI 推送待处理任务和广播
+> 实现 OpenCode 依赖 NUPI 的桥梁：自动向 AI 推送待处理任务和广播
 
 ### 概述
 
-nezha-action 插件在 OpenCode 会话中自动注入提醒，让 AI 主动检查待处理任务和广播。
+nupi-action 插件在 OpenCode 会话中自动注入提醒，让 AI 主动检查待处理任务和广播。
 
 ### 安装
 
@@ -269,7 +269,7 @@ nezha-action 插件在 OpenCode 会话中自动注入提醒，让 AI 主动检�
 mkdir -p ~/.config/opencode/plugins
 
 # 创建插件文件
-cat > ~/.config/opencode/plugins/nezha-action.ts << 'EOF'
+cat > ~/.config/opencode/plugins/nupi-action.ts << 'EOF'
 import type { Plugin } from "@opencode-ai/plugin";
 
 const LEARN_PROMPT = `
@@ -310,42 +310,42 @@ function buildBroadcastReminder(broadcastCount: number): string {
 }
 
 export const NezhaActionPlugin: Plugin = async (ctx) => {
-  console.log("[nezha-action] Plugin loaded successfully");
+  console.log("[nupi-action] Plugin loaded successfully");
 
   let lastCheckTime = Date.now();
 
   const doTaskCheck = async (taskCount: number = 0) => {
     const prompt = buildTaskReminder(taskCount);
-    console.log("[nezha-action] 固定间隔提醒：检查 pending 任务");
+    console.log("[nupi-action] 固定间隔提醒：检查 pending 任务");
     await ctx.client.tui.appendPrompt({ body: { text: prompt } });
-    console.log("[nezha-action] 任务提醒已注入");
+    console.log("[nupi-action] 任务提醒已注入");
   };
 
   const doBroadcastReminder = async (broadcastCount: number = 1) => {
     const prompt = buildBroadcastReminder(broadcastCount);
-    console.log("[nezha-action] 广播提醒：检查新讨论");
+    console.log("[nupi-action] 广播提醒：检查新讨论");
     await ctx.client.tui.appendPrompt({ body: { text: prompt } });
-    console.log("[nezha-action] 广播提醒已注入");
+    console.log("[nupi-action] 广播提醒已注入");
   };
 
   const doLearnReminder = async () => {
-    console.log("[nezha-action] 事件断点提醒：保存学习");
+    console.log("[nupi-action] 事件断点提醒：保存学习");
     await ctx.client.tui.appendPrompt({ body: { text: LEARN_PROMPT } });
-    console.log("[nezha-action] 学习提醒已注入");
+    console.log("[nupi-action] 学习提醒已注入");
   };
 
   const startIntervalReminder = () => {
     setInterval(doTaskCheck, REMINDER_INTERVAL_MS);
     setInterval(doBroadcastReminder, REMINDER_INTERVAL_MS * 2);
-    console.log(`[nezha-action] 固定间隔提醒已启动 (${REMINDER_INTERVAL_MS / 1000 / 60} 分钟)`);
+    console.log(`[nupi-action] 固定间隔提醒已启动 (${REMINDER_INTERVAL_MS / 1000 / 60} 分钟)`);
   };
 
   return {
     event: async ({ event }) => {
-      console.log("[nezha-action] Event received:", event.type);
+      console.log("[nupi-action] Event received:", event.type);
 
       if (event.type === "session.created") {
-        console.log("[nezha-action] Session created, 事件断点提醒...");
+        console.log("[nupi-action] Session created, 事件断点提醒...");
         doLearnReminder();
         doTaskCheck();
         doBroadcastReminder();
@@ -353,7 +353,7 @@ export const NezhaActionPlugin: Plugin = async (ctx) => {
       }
 
       if (event.type === "session.idle") {
-        console.log("[nezha-action] Session idle detected!");
+        console.log("[nupi-action] Session idle detected!");
         doLearnReminder();
         doTaskCheck();
         doBroadcastReminder();
@@ -390,9 +390,9 @@ EOF
 opencode --print-logs
 
 # 应该看到：
-# [nezha-action] Plugin loaded successfully
-# [nezha-action] Event received: session.created
-# [nezha-action] 任务提醒已注入
+# [nupi-action] Plugin loaded successfully
+# [nupi-action] Event received: session.created
+# [nupi-action] 任务提醒已注入
 ```
 
 ---

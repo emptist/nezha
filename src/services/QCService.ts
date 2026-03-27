@@ -1,7 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../config/constants.js';
-import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 
 export interface QCFinding {
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -119,7 +119,7 @@ export class QCService {
   }
 
   async startReview(reviewId: string): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
 
     await this.db.query(
       `UPDATE qc_reviews SET status = 'in_progress', reviewer_id = $1, started_at = NOW() WHERE id = $2`,

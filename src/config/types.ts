@@ -244,7 +244,7 @@ export interface IConfig {
   getEmbeddingConfig(): EmbeddingConfig | undefined;
   getEnv(): string;
   getTransportConfig(): TransportConfig;
-  getAgentId(): string;
+  getAgentIdAsync(): Promise<string>;
   getAgentDisplayName(): string | undefined;
   validate(): boolean;
 }

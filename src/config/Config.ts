@@ -333,58 +333,13 @@ export class Config implements IConfig {
     }
   }
 
-  getAgentId(): string {
-    const sessionId = getCurrentSessionId();
-    if (sessionId) return sessionId;
-    if (Config.resolvedAgentIdString) return Config.resolvedAgentIdString;
-    if (this.config.agentId && !this.config.agentId.startsWith('temp-')) {
-      return this.config.agentId;
-    }
-    return this.generateFallbackId();
-  }
-
-  private generateFallbackId(): string {
-    const crypto = require('crypto');
-    const os = require('os');
-    const path = require('path');
-    const { execSync } = require('child_process');
-
-    const cwd = process.cwd();
-    let project = path.basename(cwd);
-    let gitHash = '';
-
-    try {
-      const remote = execSync('git remote get-url origin 2>/dev/null || echo ""', {
-        encoding: 'utf-8',
-      }).trim();
-      if (remote) {
-        const match = remote.match(/\/([^/]+)(?:\.git)?$/);
-        if (match && match[1]) project = match[1];
-      }
-      gitHash =
-        execSync('git rev-parse --short HEAD 2>/dev/null', { encoding: 'utf-8' }).trim() || '';
-    } catch {}
-
-    const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace('T', '-').slice(0, 15);
-    const info = [project, gitHash || 'no-git', os.hostname(), os.platform(), os.arch()].join('|');
-    const hash = crypto.createHash('sha256').update(info).digest('hex').substring(0, 6);
-
-    return gitHash
-      ? `S-${project}-${gitHash}-${timestamp}-${hash}`
-      : `G-${hash}-${timestamp}-${hash}`;
-  }
-
   getAgentDisplayName(): string | undefined {
-    if (Config.resolvedAgentId?.displayName) {
-      return Config.resolvedAgentId.displayName;
-    }
     return this.config.agentDisplayName;
   }
 
   getAgentName(): string {
     const sessionId = getCurrentSessionId();
     if (sessionId) return sessionId;
-    if (Config.resolvedAgentIdString) return Config.resolvedAgentIdString;
     return this.config.agentId;
   }
 

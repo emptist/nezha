@@ -1,6 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
-import { Config } from '../config/Config.js';
 import { getGitInfo } from '../utils/git.js';
 
 export interface ActivityLogEntry {
@@ -34,13 +33,21 @@ export type ActivityType =
 
 export class ActivityLogService {
   private readonly db: DatabaseClient;
-  private readonly agentId: string;
+  private agentId: string | null;
   private readonly environment: string;
 
   constructor(db: DatabaseClient) {
     this.db = db;
-    this.agentId = Config.getInstance().getAgentId();
+    this.agentId = null;
     this.environment = process.env.NODE_ENV || 'development';
+  }
+
+  private async ensureAgentId(): Promise<void> {
+    if (!this.agentId) {
+      const { AgentIdentityService } = await import('./AgentIdentityService.js');
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      this.agentId = identity.id;
+    }
   }
 
   private getGitInfo(): { hash?: string; branch?: string } {
@@ -55,6 +62,7 @@ export class ActivityLogService {
   }
 
   async log(activity: ActivityType, context: Record<string, unknown> = {}): Promise<string> {
+    await this.ensureAgentId();
     const id = crypto.randomUUID();
     const gitInfo = this.getGitInfo();
 

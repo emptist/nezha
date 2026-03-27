@@ -1,6 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
-import { Config } from '../config/Config.js';
 
 export interface Soul {
   id: string;
@@ -13,11 +12,19 @@ export interface Soul {
 
 export class SoulService {
   private readonly db: DatabaseClient;
-  private readonly agentId: string;
+  private agentId: string | null;
 
   constructor(db: DatabaseClient) {
     this.db = db;
-    this.agentId = Config.getInstance().getAgentId();
+    this.agentId = null;
+  }
+
+  private async ensureAgentId(): Promise<void> {
+    if (!this.agentId) {
+      const { AgentIdentityService } = await import('./AgentIdentityService.js');
+      const identity = await AgentIdentityService.getResolvedIdentity();
+      this.agentId = identity.id;
+    }
   }
 
   async saveSoul(
@@ -82,6 +89,7 @@ export class SoulService {
       return;
     }
 
+    await this.ensureAgentId();
     await this.db.query(
       `UPDATE ${table} SET viewers = array_append(viewers, $1) WHERE id = $2 AND NOT ($1 = ANY(viewers))`,
       [this.agentId, id]

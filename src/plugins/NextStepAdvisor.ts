@@ -2,7 +2,7 @@ import { Plugin, TaskContext, NextStepSuggestion, CommitContext } from '../core/
 import { logger } from '../utils/logger.js';
 import { getGitDiff, isGitDirty } from '../utils/git.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 export interface NextStepAdvisorConfig {
   enabled?: boolean;
@@ -293,7 +293,10 @@ export class NextStepAdvisor implements Plugin {
       await this.db.query(
         `INSERT INTO broadcasts (id, sender_id, sender_type, priority, content, created_at)
          VALUES (uuid_generate_v4(), $1, 'system', 'normal', $2, NOW())`,
-        [Config.getInstance().getAgentId(), `## Next Steps for: ${context}\n\n${body}`]
+        [
+          (await AgentIdentityService.getResolvedIdentity()).id,
+          `## Next Steps for: ${context}\n\n${body}`,
+        ]
       );
       logger.debug('[NextStepAdvisor] Broadcasted suggestions');
     } catch (error) {

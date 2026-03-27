@@ -1,8 +1,8 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS, DATABASE_TABLES } from '../config/constants.js';
-import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
 import { AIProvider, AIProviderFactory } from './ai/index.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 
 export interface DiscussionTask {
   id: string;
@@ -34,7 +34,7 @@ export class MeetingHandler {
 
   async createMeetingFromTask(task: DiscussionTask): Promise<string> {
     const meetingId = crypto.randomUUID();
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = await AgentIdentityService.getResolvedIdentity();
 
     await this.db.query(
       `INSERT INTO meetings (id, topic, status, created_by, metadata)
@@ -55,15 +55,16 @@ export class MeetingHandler {
     logger.info(`[MeetingHandler] Processing discussion: ${task.title}`);
 
     const existingOpinions = await this.getExistingOpinions(task.id);
-    const contextPrompt = this.buildDiscussionPrompt(task, existingOpinions);
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
+    const contextPrompt = await this.buildDiscussionPrompt(task, existingOpinions, agentId);
 
     try {
       const result = await this.aiProvider.complete(contextPrompt);
 
-      const parsedOpinions = this.parseOpinionsFromOutput(result.content);
+      const parsedOpinions = await this.parseOpinionsFromOutput(result.content, agentId);
 
       for (const opinion of parsedOpinions) {
-        await this.recordOpinion(task.id, opinion);
+        await this.recordOpinion(task.id, opinion, agentId);
       }
 
       if (parsedOpinions.length > 0) {
@@ -74,7 +75,7 @@ export class MeetingHandler {
 
       const consensus = this.detectConsensus(existingOpinions, parsedOpinions);
       if (consensus) {
-        await this.createConsensusTask(task, consensus);
+        await this.createConsensusTask(task, consensus, agentId);
       }
     } catch (error) {
       logger.error('[MeetingHandler] Failed to process discussion:', error);
@@ -133,7 +134,11 @@ export class MeetingHandler {
     };
   }
 
-  private buildDiscussionPrompt(task: DiscussionTask, existingOpinions: Opinion[]): string {
+  private async buildDiscussionPrompt(
+    task: DiscussionTask,
+    existingOpinions: Opinion[],
+    agentId: string
+  ): Promise<string> {
     const opinionsSection =
       existingOpinions.length > 0
         ? `### Existing Opinions:\n${existingOpinions.map(op => `**${op.author}**: ${op.perspective}`).join('\n\n')}`
@@ -144,7 +149,7 @@ export class MeetingHandler {
 ---
 
 ## Your Task
-Participate in this discussion as AI agent: ${Config.getInstance().getAgentId()}
+Participate in this discussion as AI agent: ${agentId}
 
 ${opinionsSection}
 
@@ -168,13 +173,13 @@ ${opinionsSection}
 \`\`\``;
   }
 
-  private parseOpinionsFromOutput(output: string): Opinion[] {
+  private async parseOpinionsFromOutput(output: string, agentId: string): Promise<Opinion[]> {
     const opinions: Opinion[] = [];
     const opinionPattern = /## Opinion from (.+?)\n\n\*\*Perspective\*\*:\s*(.+?)(?=\n)/gs;
 
     let match;
     while ((match = opinionPattern.exec(output)) !== null) {
-      const author = match[1]?.trim() || Config.getInstance().getAgentId();
+      const author = match[1]?.trim() || agentId;
       const perspective = match[2]?.trim() || '';
 
       opinions.push({
@@ -190,9 +195,11 @@ ${opinionsSection}
     return opinions;
   }
 
-  private async recordOpinion(discussionId: string, opinion: Opinion): Promise<void> {
-    const agentId = Config.getInstance().getAgentId();
-
+  private async recordOpinion(
+    discussionId: string,
+    opinion: Opinion,
+    agentId: string
+  ): Promise<void> {
     const content = `## Opinion from ${agentId}
 
 **Perspective**: ${opinion.perspective}
@@ -231,10 +238,10 @@ _Recorded for discussion: ${discussionId}_`;
 
   private async createConsensusTask(
     originalTask: DiscussionTask,
-    consensus: string
+    consensus: string,
+    agentId: string
   ): Promise<void> {
     const consensusId = crypto.randomUUID();
-    const agentId = Config.getInstance().getAgentId();
 
     await this.db.query(
       `INSERT INTO ${DATABASE_TABLES.TASKS} (id, title, description, status, priority, category, created_by)

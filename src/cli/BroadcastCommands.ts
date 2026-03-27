@@ -4,16 +4,25 @@ import { ActivityLogService } from '../services/ActivityLogService.js';
 import { colors } from '../utils/cli.js';
 
 export class BroadcastCommands {
-  private readonly broadcastService: BroadcastService;
+  private broadcastService: BroadcastService | undefined;
   private readonly activityLog: ActivityLogService;
+  private readonly db: DatabaseClient;
 
   constructor(db: DatabaseClient) {
-    this.broadcastService = new BroadcastService(db);
+    this.db = db;
     this.activityLog = new ActivityLogService(db);
   }
 
+  private async getBroadcastService(): Promise<BroadcastService> {
+    if (!this.broadcastService) {
+      this.broadcastService = await BroadcastService.create(this.db);
+    }
+    return this.broadcastService;
+  }
+
   async send(message: string, target?: string, priority?: BroadcastPriority): Promise<void> {
-    const id = await this.broadcastService.sendBroadcast(message, {
+    const svc = await this.getBroadcastService();
+    const id = await svc.sendBroadcast(message, {
       targetAgent: target,
       priority: priority,
     });
@@ -25,7 +34,8 @@ export class BroadcastCommands {
   }
 
   async list(limit: number = 20): Promise<void> {
-    const broadcasts = await this.broadcastService.getBroadcasts(limit);
+    const svc = await this.getBroadcastService();
+    const broadcasts = await svc.getBroadcasts(limit);
 
     if (broadcasts.length === 0) {
       console.log('\nNo broadcasts found');
@@ -51,7 +61,8 @@ export class BroadcastCommands {
   }
 
   async unread(): Promise<void> {
-    const broadcasts = await this.broadcastService.getUnreadBroadcasts();
+    const svc = await this.getBroadcastService();
+    const broadcasts = await svc.getUnreadBroadcasts();
 
     if (broadcasts.length === 0) {
       console.log('\nNo unread broadcasts');
@@ -72,28 +83,31 @@ export class BroadcastCommands {
       );
       console.log();
 
-      await this.broadcastService.markAsRead(b.id);
+      await svc.markAsRead(b.id);
     }
   }
 
   async markRead(id?: string): Promise<void> {
+    const svc = await this.getBroadcastService();
     if (id) {
-      await this.broadcastService.markAsRead(id);
+      await svc.markAsRead(id);
       console.log(`${colors.green}Marked as read: ${id}${colors.reset}`);
     } else {
-      const count = await this.broadcastService.markAllAsRead();
+      const count = await svc.markAllAsRead();
       console.log(`${colors.green}Marked ${count} broadcasts as read${colors.reset}`);
     }
   }
 
   async resolve(pattern: string, resolution: string = 'resolved'): Promise<void> {
-    const count = await this.broadcastService.resolveRelatedBroadcasts(pattern, resolution);
+    const svc = await this.getBroadcastService();
+    const count = await svc.resolveRelatedBroadcasts(pattern, resolution);
     console.log(`${colors.green}Resolved ${count} broadcasts matching "${pattern}"${colors.reset}`);
     console.log(`  Resolution: ${resolution}`);
   }
 
   async end(id: string, resolution?: string): Promise<void> {
-    await this.broadcastService.endBroadcast(id, resolution);
+    const svc = await this.getBroadcastService();
+    await svc.endBroadcast(id, resolution);
     console.log(`${colors.green}Ended broadcast: ${id}${colors.reset}`);
     if (resolution) {
       console.log(`  Resolution: ${resolution}`);
@@ -130,40 +144,28 @@ export class BroadcastCommands {
     const stats = await this.activityLog.getActivityStats();
 
     console.log(`\n${colors.bright}Activity Statistics:${colors.reset}\n`);
-    console.log(`Total Activities: ${stats.totalActivities}`);
-    console.log(`Recent Errors (24h): ${stats.recentErrors}`);
-
-    console.log(`\n${colors.bright}By Type:${colors.reset}`);
+    console.log(`${colors.cyan}Total activities:${colors.reset} ${stats.totalActivities}`);
+    console.log(`${colors.cyan}Recent errors:${colors.reset} ${stats.recentErrors}`);
+    console.log(`${colors.cyan}Activities by type:${colors.reset}`);
     for (const [type, count] of Object.entries(stats.activitiesByType)) {
       console.log(`  ${type}: ${count}`);
-    }
-
-    console.log(`\n${colors.bright}By Agent (Top 10):${colors.reset}`);
-    for (const [agent, count] of Object.entries(stats.activitiesByAgent)) {
-      console.log(`  ${agent.substring(0, 12)}...: ${count}`);
     }
   }
 
   private getActivityColor(activity: string): string {
-    switch (activity) {
-      case 'task_started':
-        return colors.blue;
-      case 'task_completed':
-        return colors.green;
-      case 'task_failed':
-        return colors.red;
-      case 'skill_created':
-      case 'skill_used':
-        return colors.magenta;
-      case 'review_created':
-      case 'review_completed':
-        return colors.yellow;
-      case 'announcement_sent':
-        return colors.cyan;
-      case 'error_encountered':
-        return colors.red;
-      default:
-        return colors.white;
-    }
+    if (activity.includes('completed')) return colors.green;
+    if (activity.includes('failed')) return colors.red;
+    if (activity.includes('started')) return colors.cyan;
+    if (activity.includes('assigned')) return colors.yellow;
+    return C.reset;
   }
 }
+
+const C = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+};

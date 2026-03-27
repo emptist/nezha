@@ -1,11 +1,15 @@
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
-export function getCurrentAgentId(): string {
-  return Config.getInstance().getAgentId();
+export async function getCurrentAgentId(): Promise<string> {
+  const identity = await AgentIdentityService.getResolvedIdentity();
+  return identity.id;
 }
 
-export function appendAgentId(text: string, includeSignature: boolean = true): string {
-  const agentId = getCurrentAgentId();
+export async function appendAgentId(
+  text: string,
+  includeSignature: boolean = true
+): Promise<string> {
+  const agentId = await getCurrentAgentId();
 
   if (text.includes(`[${agentId}]`) || text.includes(agentId)) {
     return text;
@@ -16,8 +20,8 @@ export function appendAgentId(text: string, includeSignature: boolean = true): s
   return text + suffix;
 }
 
-export function prependAgentId(text: string): string {
-  const agentId = getCurrentAgentId();
+export async function prependAgentId(text: string): Promise<string> {
+  const agentId = await getCurrentAgentId();
 
   if (text.startsWith(`[${agentId}]`) || text.startsWith(agentId)) {
     return text;
@@ -26,6 +30,9 @@ export function prependAgentId(text: string): string {
   return `[${agentId}] ${text}`;
 }
 
-export function formatWithAgentId(text: string, position: 'prefix' | 'suffix' = 'suffix'): string {
+export async function formatWithAgentId(
+  text: string,
+  position: 'prefix' | 'suffix' = 'suffix'
+): Promise<string> {
   return position === 'prefix' ? prependAgentId(text) : appendAgentId(text);
 }

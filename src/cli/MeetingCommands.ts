@@ -1,7 +1,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { colors, cli } from '../utils/cli.js';
-import { Config } from '../config/Config.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 export interface MeetingConfig {
   db: DatabaseClient;
@@ -138,7 +138,7 @@ export class MeetingDbCommands {
   }
 
   async create(topic: string): Promise<string> {
-    const agentId = Config.getInstance().getAgentId();
+    const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
     const id = crypto.randomUUID();
 
     await this.db.query(`INSERT INTO meetings (id, topic, created_by) VALUES ($1, $2, $3)`, [
@@ -279,7 +279,7 @@ Please follow the meeting-protocol skill:
 4. **Reach Consensus** - Document agreement when reached`;
 
     const discussionId = crypto.randomUUID();
-    const createdBy = Config.getInstance().getAgentId();
+    const createdBy = (await AgentIdentityService.getResolvedIdentity()).id;
 
     try {
       await this.db.query('BEGIN');
@@ -450,7 +450,7 @@ _Reached at: ${new Date().toISOString()}_`;
       [consensusContent, null, JSON.stringify({ type: 'consensus', topic, participants }), 9]
     );
 
-    const createdBy = Config.getInstance().getAgentId();
+    const createdBy = (await AgentIdentityService.getResolvedIdentity()).id;
     await this.db.query(
       `INSERT INTO tasks (id, title, description, status, priority, category, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
