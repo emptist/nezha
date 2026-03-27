@@ -139,6 +139,12 @@ class NezhaApiServer {
       return { status: 200, body: JSON.stringify(result) };
     }
 
+    if (path[0] === 'remind' && method === 'POST') {
+      const data = JSON.parse(body);
+      const result = await this.executeReminder(data);
+      return { status: 200, body: JSON.stringify(result) };
+    }
+
     return { status: 404, body: JSON.stringify({ error: 'Not found' }) };
   }
 
@@ -181,6 +187,52 @@ class NezhaApiServer {
     );
 
     return result;
+  }
+
+  private async executeReminder(data: any): Promise<any> {
+    const interval = data.interval_ms || 3600000;
+    const count = data.count || 1;
+    const results = [];
+
+    const systemPrompt = data.system_prompt || '你是Nezha的自我提醒助手。遵循NEVER DECLARE DONE原则：1.永远不要宣布完成 2.总是以问题结尾 3.禁止Done/Completed/Finished 4.定期检查任务队列';
+
+    for (let i = 0; i < count; i++) {
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, interval));
+      }
+
+      const tasks = await this.db.query<any>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'`
+      );
+      const pendingCount = parseInt(tasks.rows[0]?.count || '0', 10);
+
+      const memories = await this.db.query<any>(
+        `SELECT content FROM memory ORDER BY created_at DESC LIMIT 3`
+      );
+      const recentInsights = memories.rows.map((r: any) => r.content).join('; ');
+
+      const task = `当前状态检查：
+- 待处理任务: ${pendingCount}个
+- 最近学习: ${recentInsights || '无'}
+
+请用一句话总结并以问号结尾提醒AI继续工作。`;
+
+      const executor = new PiSDKExecutor({ model: data.model || 'zai:glm-4.5-flash' });
+      const result = await executor.executeWithPrompt(systemPrompt, task, 60000);
+
+      results.push({
+        iteration: i + 1,
+        pendingTasks: pendingCount,
+        reminder: result.output,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return {
+      success: true,
+      reminders: results,
+      message: `完成${results.length}次提醒，间隔${interval}ms`,
+    };
   }
 
   async stop(): Promise<void> {
