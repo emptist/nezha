@@ -1,12 +1,8 @@
-import { execSync } from 'node:child_process';
 import {
   getLaunchAgentStatus,
   isLaunchAgentInstalled,
-  isLaunchAgentLoaded,
   startLaunchAgent,
-  DAEMON_LABEL,
 } from '../daemon/launchd.js';
-import { logger } from '../utils/logger.js';
 
 export interface DaemonAutoStartOptions {
   autoInstall?: boolean;

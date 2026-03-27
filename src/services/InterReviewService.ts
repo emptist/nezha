@@ -89,7 +89,7 @@ export class InterReviewService extends EventEmitter {
     try {
       return AIProviderFactory.createFromEnv();
     } catch (error) {
-      throw new Error(`[InterReview] AI provider not available: ${error}`);
+      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`);
     }
   }
 
@@ -169,8 +169,8 @@ export class InterReviewService extends EventEmitter {
 
     this.emit(InterReviewEvent.REVIEW_STARTED, { reviewId });
 
-    let reviewResult: ReviewResult | null = null;
-    let rawResponse: string | null = null;
+    let reviewResult: ReviewResult;
+    let rawResponse: string;
 
     try {
       const result = await this.executeReviewPrompt(reviewId, prompt);

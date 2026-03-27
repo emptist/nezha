@@ -3,11 +3,9 @@ import { logger } from '../utils/logger.js';
 import { BroadcastService } from './BroadcastService.js';
 import { EventBus } from '../core/EventBus.js';
 import { SCHEDULER_EVENTS } from '../core/Scheduler.js';
-import { Config } from '../config/Config.js';
 
 const REMINDER_COOLDOWN_MS = 2 * 60 * 1000;
 const BLIND_LOOP_INTERVAL_MS = 2 * 60 * 1000;
-const MAX_TASKS_TO_SHOW = 5;
 
 export interface ReminderConfig {
   enableEventTriggers?: boolean;
@@ -77,7 +75,7 @@ export class ReminderService {
     );
   }
 
-  startBlindLoop(intervalMs: number = BLIND_LOOP_INTERVAL_MS): void {
+  startBlindLoop(_intervalMs: number = BLIND_LOOP_INTERVAL_MS): void {
     logger.info('[Reminder] Periodic reminder disabled (handled by OpenCode plugin)');
     return;
   }
@@ -155,7 +153,6 @@ export class ReminderService {
     if (!this.config.enableMemorySave) return;
 
     try {
-      const agentId = Config.getInstance().getAgentId();
       await this.db.query(
         `INSERT INTO memory (content, tags, source, importance)
          VALUES ($1, $2, $3, $4)`,
