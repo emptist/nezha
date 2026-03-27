@@ -89,7 +89,7 @@ export class InterReviewService extends EventEmitter {
     try {
       return AIProviderFactory.createFromEnv();
     } catch (error) {
-      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`);
+      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`, { cause: error });
     }
   }
 

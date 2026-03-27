@@ -63,7 +63,7 @@ class NezhaApiServer {
     method: string,
     url: string,
     body: string,
-    headers: Record<string, string>
+    _headers: Record<string, string>
   ): Promise<{ status: number; body: string; headers?: Record<string, string> }> {
     const path = url.split('/').filter(Boolean);
 

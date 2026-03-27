@@ -230,8 +230,8 @@ export class Cli {
 
     const localRunning = this.heartbeatService?.isRunning() ?? false;
 
-    let daemonRunning = false;
-    let daemonHealth = false;
+    let daemonRunning: boolean;
+    let daemonHealth: boolean;
 
     try {
       const response = await fetch('http://localhost:4097/health', {
@@ -1147,8 +1147,8 @@ async function main(): Promise<void> {
 
       case 'install': {
         const isInstalled = await isLaunchAgentInstalled();
-        const status = await getLaunchAgentStatus();
-        const logs = resolveLogPaths();
+        await getLaunchAgentStatus();
+        resolveLogPaths();
 
         if (isInstalled) {
           cli.info(`Nezha daemon is already installed (label: ${DAEMON_LABEL})`);

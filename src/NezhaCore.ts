@@ -3,7 +3,6 @@
 import { DatabaseClient } from './db/DatabaseClient.js';
 import { Config } from './config/Config.js';
 import { HeartbeatService } from './services/heartbeat/index.js';
-import { EventBus } from './core/EventBus.js';
 import { Scheduler } from './core/Scheduler.js';
 import { EncryptionService } from './services/EncryptionService.js';
 

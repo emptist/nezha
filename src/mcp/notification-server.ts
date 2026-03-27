@@ -1,5 +1,4 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { BroadcastService } from '../services/BroadcastService.js';
 import { logger } from '../utils/logger.js';
 
 export interface NotificationServerOptions {

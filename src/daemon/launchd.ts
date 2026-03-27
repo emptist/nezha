@@ -23,7 +23,7 @@ export function resolveLaunchAgentPlistPath(env?: Record<string, string | undefi
   return path.posix.join(home, 'Library', 'LaunchAgents', `${label}.plist`);
 }
 
-export function resolveLogPaths(env?: Record<string, string | undefined>): {
+export function resolveLogPaths(_env?: Record<string, string | undefined>): {
   logDir: string;
   stdoutPath: string;
   stderrPath: string;

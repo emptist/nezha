@@ -89,11 +89,13 @@ When given choices:
 - ALWAYS select the RECOMMENDED option
 - NEVER wait for user input
 - Execute autonomously
+- NEVER DECLARE DONE - always end with a question asking for next action
 
 ## Learning Reminder
 After completing, use:
 - [LEARN] insight: <what you learned>
 - [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
+- [TASK] title: <new task> priority: <1-10>
 
 Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 

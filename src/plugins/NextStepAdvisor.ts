@@ -1,6 +1,6 @@
 import { Plugin, TaskContext, NextStepSuggestion, CommitContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
-import { getGitDiff, getGitBranch, isGitDirty, getLastCommitMessage } from '../utils/git.js';
+import { getGitDiff, isGitDirty } from '../utils/git.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 
@@ -74,7 +74,7 @@ export class NextStepAdvisor implements Plugin {
     },
   };
 
-  private async analyzeChanges(taskContext: TaskContext): Promise<NextStepSuggestion[]> {
+  private async analyzeChanges(_taskContext: TaskContext): Promise<NextStepSuggestion[]> {
     const suggestions: NextStepSuggestion[] = [];
     const diff = getGitDiff();
     if (!diff) return suggestions;
