@@ -111,9 +111,15 @@ export class ReminderService {
     }
 
     if (messages.length > 0) {
-      const message = `⏰ **哪吒提醒** (每 1 分钟)\n\n${messages.join('\n')}\n\n💡 使用 \`nezha tasks\` 查看详情`;
+      const reminders = this.generateNeverDoneReminders(pendingTasks);
+      const message = `⏰ **哪吒提醒** (每 1 分钟)\n\n${messages.join('\n')}\n\n💡 使用 \`nezha tasks\` 查看详情\n\n${reminders}`;
       await this.notifyAI(message, 'normal');
       await this.saveToMemory(`周期性提醒: ${messages.join(', ')}`);
+    } else {
+      const idleReminder = this.generateNeverDoneReminders(0);
+      if (idleReminder) {
+        await this.notifyAI(`💤 **持续工作提醒**\n\n${idleReminder}`, 'normal');
+      }
     }
 
     this.lastReminderTime = now;
@@ -179,6 +185,18 @@ export class ReminderService {
       `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'`
     );
     return parseInt(result.rows[0]?.count || '0', 10);
+  }
+
+  private generateNeverDoneReminders(pendingTasks: number): string {
+    const reminders = [
+      '🔄 **NEVER DECLARE DONE** - 总有更多可以改进的地方',
+      '❓ **还没完成吗？** - 检查任务队列，看看还有什么可以做的',
+      '🔍 **持续改进** - 每一行代码都可以优化',
+      '⚡ **保持动力** - 自动化任务正在等待执行',
+      '🎯 **还有任务** - 完成任务列表上还有更多工作',
+    ];
+    const index = Math.floor(Math.random() * reminders.length);
+    return pendingTasks > 0 ? (reminders[index] ?? reminders[0]!) : reminders[0]!;
   }
 
   async forceRemind(): Promise<void> {
