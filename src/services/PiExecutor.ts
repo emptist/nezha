@@ -138,6 +138,61 @@ export class PiExecutor {
     }
     return tools;
   }
+
+  async executeWithPrompt(
+    systemPrompt: string,
+    task: string,
+    timeoutMs: number = 600000
+  ): Promise<PiTaskResult> {
+    const startTime = Date.now();
+
+    try {
+      const escapedSystemPrompt = systemPrompt.replace(/"/g, '\\"');
+      const escapedTask = task.replace(/"/g, '\\"');
+
+      const command = `${this.piPath} --system-prompt "${escapedSystemPrompt}" --print "${escapedTask}"`;
+
+      logger.info(`[PiExecutor] Executing with system prompt (model: ${this.defaultModel})`);
+
+      const { stdout, stderr } = await Promise.race([
+        execAsync(command, {
+          timeout: timeoutMs,
+          env: { ...process.env, ...this.env },
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Pi execution timeout after ${timeoutMs}ms`)),
+            timeoutMs
+          )
+        ),
+      ]);
+
+      const durationMs = Date.now() - startTime;
+
+      const output = stdout || stderr;
+      const success =
+        !output.toLowerCase().includes('error') && !output.toLowerCase().includes('failed');
+
+      return {
+        success,
+        output,
+        message: success ? 'Task completed successfully with system prompt' : output.substring(0, 500),
+        durationMs,
+      };
+    } catch (error) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+      logger.error(`[PiExecutor] Failed with system prompt: ${errorMessage}`);
+
+      return {
+        success: false,
+        output: errorMessage,
+        message: errorMessage,
+        durationMs,
+      };
+    }
+  }
 }
 
 let piExecutorInstance: PiExecutor | null = null;

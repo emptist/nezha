@@ -4,6 +4,7 @@ import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { BroadcastService } from '../services/BroadcastService.js';
+import { PiExecutor } from '../services/PiExecutor.js';
 
 const PORT = process.env.NEZHAPI_PORT || 4099;
 
@@ -132,6 +133,12 @@ class NezhaApiServer {
       }
     }
 
+    if (path[0] === 'prompt' && method === 'POST') {
+      const data = JSON.parse(body);
+      const result = await this.executePrompt(data);
+      return { status: 200, body: JSON.stringify(result) };
+    }
+
     return { status: 404, body: JSON.stringify({ error: 'Not found' }) };
   }
 
@@ -160,6 +167,20 @@ class NezhaApiServer {
       [data.topic, data.insight]
     );
     return result.rows[0]?.id;
+  }
+
+  private async executePrompt(data: any): Promise<any> {
+    const executor = new PiExecutor({
+      model: data.model || 'zai:glm-4.5-flash',
+    });
+
+    const result = await executor.executeWithPrompt(
+      data.system_prompt || 'You are a helpful AI assistant.',
+      data.task || 'Hello',
+      data.timeout_ms || 600000
+    );
+
+    return result;
   }
 
   async stop(): Promise<void> {
