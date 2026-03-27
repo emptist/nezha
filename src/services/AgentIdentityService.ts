@@ -26,9 +26,20 @@ export class AgentIdentityService {
   private db: DatabaseClient;
   private static cachedIdentity: AgentIdentity | null = null;
   private static cachePromise: Promise<AgentIdentity> | null = null;
+  private static externalIdentity: AgentIdentity | null = null;
 
   constructor(db: DatabaseClient) {
     this.db = db;
+  }
+
+  static setExternalIdentity(identity: AgentIdentity): void {
+    AgentIdentityService.externalIdentity = identity;
+    AgentIdentityService.cachedIdentity = identity;
+    console.log(`[AgentIdentity] External identity set: ${identity.id}`);
+  }
+
+  static getExternalIdentity(): AgentIdentity | null {
+    return AgentIdentityService.externalIdentity;
   }
 
   static async getResolvedIdentity(): Promise<AgentIdentity> {
@@ -52,6 +63,11 @@ export class AgentIdentityService {
   }
 
   async resolve(): Promise<AgentIdentity> {
+    // Priority 0: External identity (from OpenCode integration)
+    if (AgentIdentityService.externalIdentity) {
+      return AgentIdentityService.externalIdentity;
+    }
+
     const context = this.detectContext();
 
     // Priority 1: Exact match (project + git hash)

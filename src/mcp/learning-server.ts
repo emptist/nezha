@@ -128,6 +128,25 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'set_identity',
+        description:
+          'Set the current session identity. Call this when OpenCode or external AI uses Nezha to pass the caller identity. This allows Nezha to use the caller identity instead of generating its own.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            identity: {
+              type: 'string',
+              description: 'The identity from the calling system (e.g., OpenCode session ID)',
+            },
+            displayName: {
+              type: 'string',
+              description: 'Optional display name for this identity',
+            },
+          },
+          required: ['identity'],
+        },
+      },
+      {
         name: 'get_system_info',
         description:
           'Get system information for onboarding: current session status, open issues, active tasks, and essential skills. Use this to get context when starting in Nezha.',
@@ -450,6 +469,39 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `Agent Identity:\n- Agent ID: ${agentId}\n- Session ID: ${sessionId}\n- Display Name: ${displayName}\n- Agent Name: ${identity.displayName || agentId}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'set_identity') {
+      const { identity, displayName } = args as { identity?: string; displayName?: string };
+
+      if (!identity) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Error: identity is required',
+            },
+          ],
+        };
+      }
+
+      AgentIdentityService.setExternalIdentity({
+        id: identity,
+        project: null,
+        gitHash: null,
+        machineFingerprint: null,
+        createdAt: new Date(),
+        displayName: displayName,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Identity set to: ${identity}${displayName ? ` (${displayName})` : ''}\nThis identity will be used for all Nezha operations.`,
           },
         ],
       };
