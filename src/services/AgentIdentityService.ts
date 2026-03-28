@@ -74,7 +74,7 @@ export class AgentIdentityService {
     const context = this.detectContext();
 
     // 只有有 project 信息才匹配旧的，否则直接创建新的
-    let identity = null;
+    let identity: AgentIdentity | null;
     if (context.project) {
       // 有 project：优先精确匹配 (project + git hash)
       identity = await this.findExactMatch(context);
