@@ -328,16 +328,42 @@ case "${1:-start}" in
     reset-tasks)
         reset_stuck_tasks
         ;;
+    opencode)
+        start_postgres || exit 1
+        run_migrations || exit 1
+        start_opencode || exit 1
+        echo ""
+        log_info "OpenCode server running on port $OPENCODE_PORT"
+        log_info "Logs: tail -f /tmp/opencode_server.log"
+        ;;
+    nezha)
+        start_postgres || exit 1
+        run_migrations || exit 1
+        start_nezha || exit 1
+        ;;
+    logs)
+        echo "OpenCode Server Logs:"
+        echo "====================="
+        tail -100 /tmp/opencode_server.log 2>/dev/null || echo "No logs found"
+        ;;
+    logs-follow)
+        echo "Following OpenCode Server Logs (Ctrl+C to stop)..."
+        tail -f /tmp/opencode_server.log 2>/dev/null || echo "No logs found"
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|check|reset-tasks}"
+        echo "Usage: $0 {start|stop|restart|status|check|reset-tasks|opencode|nezha|logs|logs-follow}"
         echo ""
         echo "Commands:"
-        echo "  start       Start all services (default)"
-        echo "  stop        Stop all services"
-        echo "  restart     Restart all services"
-        echo "  status      Show system status"
-        echo "  check       Check if all services are running (exit code)"
-        echo "  reset-tasks Reset stuck RUNNING tasks to PENDING"
+        echo "  start        Start all services (default)"
+        echo "  stop         Stop all services"
+        echo "  restart      Restart all services"
+        echo "  status       Show system status"
+        echo "  check        Check if all services are running (exit code)"
+        echo "  reset-tasks  Reset stuck RUNNING tasks to PENDING"
+        echo "  opencode     Start only OpenCode server (with logs visible)"
+        echo "  nezha        Start only Nezha daemon"
+        echo "  logs         Show last 100 lines of OpenCode logs"
+        echo "  logs-follow  Follow OpenCode logs in real-time"
         exit 1
         ;;
 esac

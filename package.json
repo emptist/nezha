@@ -58,6 +58,10 @@
     "nezha:stop": "bash bin/nezha-start.sh stop",
     "nezha:restart": "bash bin/nezha-start.sh restart",
     "nezha:status": "bash bin/nezha-start.sh status",
+    "nezha:opencode": "bash bin/nezha-start.sh opencode",
+    "nezha:daemon": "bash bin/nezha-start.sh nezha",
+    "nezha:logs": "bash bin/nezha-start.sh logs",
+    "nezha:logs:follow": "bash bin/nezha-start.sh logs-follow",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },
