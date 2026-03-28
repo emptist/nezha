@@ -73,23 +73,18 @@ export class AgentIdentityService {
 
     const context = this.detectContext();
 
-    // Priority 1: Exact match (project + git hash)
-    let identity = await this.findExactMatch(context);
-    if (identity) {
-      AgentIdentityService.cachedIdentity = identity;
-      return identity;
-    }
-
-    // Priority 2: Only match by machine if NO project info
-    if (!context.project) {
-      identity = await this.findMachineMatch(context.machineFingerprint);
+    // 只有有 project 信息才匹配旧的，否则直接创建新的
+    let identity = null;
+    if (context.project) {
+      // 有 project：优先精确匹配 (project + git hash)
+      identity = await this.findExactMatch(context);
       if (identity) {
         AgentIdentityService.cachedIdentity = identity;
         return identity;
       }
     }
 
-    // Priority 3: Create new identity (S if has project, G if not)
+    // 没有匹配到或有 project → 创建新 identity
     identity = await this.createIdentity(context);
     AgentIdentityService.cachedIdentity = identity;
     return identity;
