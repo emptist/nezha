@@ -80,21 +80,16 @@ export class AgentIdentityService {
       return identity;
     }
 
-    // Priority 2: Project match
-    identity = await this.findProjectMatch(context.project);
-    if (identity) {
-      AgentIdentityService.cachedIdentity = identity;
-      return identity;
+    // Priority 2: Only match by machine if NO project info
+    if (!context.project) {
+      identity = await this.findMachineMatch(context.machineFingerprint);
+      if (identity) {
+        AgentIdentityService.cachedIdentity = identity;
+        return identity;
+      }
     }
 
-    // Priority 3: Machine fingerprint match
-    identity = await this.findMachineMatch(context.machineFingerprint);
-    if (identity) {
-      AgentIdentityService.cachedIdentity = identity;
-      return identity;
-    }
-
-    // Priority 4: Create new identity
+    // Priority 3: Create new identity (S if has project, G if not)
     identity = await this.createIdentity(context);
     AgentIdentityService.cachedIdentity = identity;
     return identity;
