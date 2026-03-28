@@ -1,12 +1,16 @@
 /**
  * @layer core
  * @description 心跳服务，负责任务调度和进程监控
- * 
+ *
  * 架构说明：
  * - 这是核心层服务，Nezha 的核心功能
  * - 不依赖外部 AI 系统
  * - 可以独立运行
  * - 参考：docs/ARCHITECTURE.md
+ *
+ * Piano 集成：
+ * - 使用 TaskRouter 进行任务路由 (internal/opencode/pi)
+ * - 复杂任务发给 OpenCode，简单任务内部处理
  */
 import { Scheduler } from '../../core/Scheduler.js';
 import { AIProvider, AIProviderFactory } from '../ai/index.js';
@@ -16,6 +20,7 @@ import type { DatabaseClient } from '../../db/DatabaseClient.js';
 import { ReminderService } from '../ReminderService.js';
 import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
+import { TaskRouter, type ExecutorType } from '../../piano/router/TaskRouter.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
@@ -30,11 +35,19 @@ export class HeartbeatService {
   private readonly reminderService: ReminderService;
   private readonly pluginManager = getPluginManager();
   private readonly nextStepAdvisor: NextStepAdvisor;
+  private readonly taskRouter: TaskRouter;
+  private readonly config: HeartbeatConfig;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
     this.db = db;
+    this.config = config || {};
     this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
     this.aiProvider = AIProviderFactory.createFromEnv();
+    this.taskRouter = new TaskRouter({
+      useOpenCode: true,
+      usePi: false,
+      complexityThreshold: 30,
+    });
 
     this.nextStepAdvisor = new NextStepAdvisor({
       enabled: true,
@@ -79,6 +92,14 @@ export class HeartbeatService {
     _timeoutSeconds: number = 300
   ): Promise<void> {
     logger.info(`Executing task: ${title}`);
+
+    const executor = this.taskRouter.route(title, description);
+    logger.info(`[TaskRouter] Routing "${title}" to: ${executor}`);
+
+    if (executor === 'opencode') {
+      logger.info(`[TaskRouter] Task "${title}" routed to OpenCode - skipping internal execution`);
+      return;
+    }
 
     const sessionId = `nezha-${Date.now()}`;
     const recentBroadcasts = await this.getRecentBroadcasts();
