@@ -291,15 +291,31 @@ start_all() {
     
     start_postgres || return 1
     run_migrations || return 1
-    start_opencode || return 1
-    start_watchdog || true  # Non-fatal
-    start_nezha || return 1
+    
+    # Start Nezha daemon in background
+    if ! check_nezha; then
+        log_info "Starting Nezha daemon in background..."
+        nohup node dist/daemon/index.js > .nezha.log 2>&1 &
+        sleep 2
+        if check_nezha; then
+            log_success "Nezha daemon started"
+        else
+            log_error "Nezha daemon failed to start"
+        fi
+    else
+        log_success "Nezha daemon already running"
+    fi
     
     echo ""
-    log_success "Nezha system is fully operational!"
+    log_info "Starting OpenCode server in foreground..."
+    log_info "Press Ctrl+C to stop"
     echo ""
     
-    show_status
+    # Get agent ID
+    AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
+    
+    # Run OpenCode in foreground
+    exec env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT"
 }
 
 case "${1:-start}" in
@@ -331,10 +347,29 @@ case "${1:-start}" in
     opencode)
         start_postgres || exit 1
         run_migrations || exit 1
-        start_opencode || exit 1
+        
+        if check_opencode; then
+            log_warn "OpenCode server already running on port $OPENCODE_PORT"
+            log_info "Use 'logs-follow' to view logs"
+            exit 0
+        fi
+        
+        # Kill any existing processes
+        pkill -f "opencode serve" 2>/dev/null || true
+        sleep 1
+        
+        # Get current agent ID for external AIs
+        AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
+        
         echo ""
-        log_info "OpenCode server running on port $OPENCODE_PORT"
-        log_info "Logs: tail -f /tmp/opencode_server.log"
+        log_info "Starting OpenCode server in foreground..."
+        log_info "Port: $OPENCODE_PORT"
+        log_info "Agent ID: $AGENT_ID"
+        log_info "Press Ctrl+C to stop"
+        echo ""
+        
+        # Run in foreground
+        exec env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT"
         ;;
     nezha)
         start_postgres || exit 1
