@@ -56,7 +56,9 @@ export class TaskCoordinator {
         'Content-Type': 'application/json',
         ...this.getAuthHeader(),
       },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({
+        parts: [{ type: 'text', text: message }],
+      }),
     });
 
     if (!response.ok) {
