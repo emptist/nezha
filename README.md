@@ -560,22 +560,42 @@ cp .env.example .env
 
 在 `.env` 文件中配置：
 
-| 变量               | 说明                             | 默认值        |
-| ------------------ | -------------------------------- | ------------- |
-| DB_HOST            | PostgreSQL 主机                  | localhost     |
-| DB_PORT            | PostgreSQL 端口                  | 5432          |
-| DB_NAME            | 数据库名                         | nezha         |
-| DB_USER            | 数据库用户                       | postgres      |
-| DB_PASSWORD        | 数据库密码                       | your_password |
-| EMBEDDING_PROVIDER | 嵌入提供者 (ollama/zhipu/openai) | -             |
-| WEBHOOK_URL        | Webhook 通知 URL                 | -             |
-| NEZHA_MAX_RETRIES  | 任务最大重试次数                 | 3             |
-| NEZHA_TASK_TIMEOUT | 任务超时时间 (ms)                | 300000        |
-| NEZHA_AGENT_ID     | 手动指定身份 ID (覆盖自动)       | 自动解析      |
-| NEZHA_AGENT_NAME   | 身份显示名称                     | -             |
-| NEZHAPI_PORT       | Nezhapi 服务端口                 | 4099          |
+| 变量                  | 说明                             | 默认值        |
+| --------------------- | -------------------------------- | ------------- |
+| DB_HOST               | PostgreSQL 主机                  | localhost     |
+| DB_PORT               | PostgreSQL 端口                  | 5432          |
+| DB_NAME               | 数据库名                         | nezha         |
+| DB_USER               | 数据库用户                       | postgres      |
+| DB_PASSWORD           | 数据库密码                       | your_password |
+| EMBEDDING_PROVIDER    | 嵌入提供者 (ollama/zhipu/openai) | -             |
+| WEBHOOK_URL           | Webhook 通知 URL                 | -             |
+| NEZHA_MAX_RETRIES     | 任务最大重试次数                 | 3             |
+| NEZHA_TASK_TIMEOUT    | 任务超时时间 (ms)                | 300000        |
+| NEZHA_AGENT_ID        | 手动指定身份 ID (覆盖自动)       | 自动解析      |
+| NEZHA_AGENT_NAME      | 身份显示名称                     | -             |
+| NEZHA_OPENCODE_PORT   | OpenCode Server 端口             | 4096          |
+| NEZHA_HEALTH_PORT     | 健康检查 API 端口                | 4097          |
+| NEZHAPI_PORT          | Nezhapi 服务端口                 | 4099          |
 
 ### 启动流程
+
+#### 方式一：使用 npm scripts（推荐）
+
+```bash
+# 启动所有服务（PostgreSQL + OpenCode + Nezha Daemon）
+npm run nezha:start
+
+# 查看状态
+npm run nezha:status
+
+# 停止所有服务
+npm run nezha:stop
+
+# 重启所有服务
+npm run nezha:restart
+```
+
+#### 方式二：手动启动
 
 ```bash
 # 1. 确保 PostgreSQL 运行
@@ -589,6 +609,29 @@ nezha daemon
 
 # 4. 启动工作
 nezha start
+```
+
+### 端口配置
+
+| 服务 | 默认端口 | 环境变量 | 说明 |
+|------|----------|----------|------|
+| OpenCode Server | 4096 | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
+| OpenCode Desktop | 56795 | - | OpenCode Desktop App |
+| Nezha Health | 4097 | `NEZHA_HEALTH_PORT` | 健康检查 API |
+| Nezhapi | 4099 | `NEZHAPI_PORT` | REST API 服务 |
+
+**配置优先级**:
+1. 环境变量（最高）
+2. `config.yaml`
+3. 默认值（最低）
+
+**示例**:
+```bash
+# 使用 OpenCode Desktop App (端口 56795)
+export NEZHA_OPENCODE_PORT=56795
+
+# 使用自定义健康检查端口
+export NEZHA_HEALTH_PORT=5000
 ```
 
 ### OpenCode on Nezha / Nezhapi
