@@ -292,19 +292,48 @@ start_all() {
     start_postgres || return 1
     run_migrations || return 1
     
-    # Kill old daemon processes first
-    log_info "Cleaning up old daemon processes..."
+    # Kill old processes first
+    log_info "Cleaning up old processes..."
     pkill -f "node.*daemon" 2>/dev/null || true
+    pkill -f "opencode serve" 2>/dev/null || true
     sleep 1
     
-    # Kill any process on health port
+    # Kill any process on ports
     local health_pid=$(lsof -ti :$NEZHA_HEALTH_PORT 2>/dev/null)
     if [ -n "$health_pid" ]; then
         kill -9 $health_pid 2>/dev/null || true
-        sleep 1
     fi
+    local opencode_pid=$(lsof -ti :$OPENCODE_PORT 2>/dev/null)
+    if [ -n "$opencode_pid" ]; then
+        kill -9 $opencode_pid 2>/dev/null || true
+    fi
+    sleep 1
     
-    # Start Nezha daemon in background
+    # Get agent ID
+    AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
+    
+    # Start OpenCode server FIRST (in background, wait for ready)
+    log_info "Starting OpenCode server..."
+    env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
+    local opencode_bg_pid=$!
+    
+    # Wait for OpenCode to be ready
+    log_info "Waiting for OpenCode to be ready..."
+    local wait_count=0
+    while ! curl -s "http://127.0.0.1:$OPENCODE_PORT/health" > /dev/null 2>&1; do
+        sleep 1
+        wait_count=$((wait_count + 1))
+        if [ $wait_count -ge 30 ]; then
+            log_error "OpenCode failed to start within 30 seconds"
+            kill $opencode_bg_pid 2>/dev/null || true
+            exit 1
+        fi
+        printf "."
+    done
+    echo ""
+    log_success "OpenCode server ready on port $OPENCODE_PORT"
+    
+    # Now start Nezha daemon
     log_info "Starting Nezha daemon in background..."
     nohup node dist/daemon/index.js > .nezha.log 2>&1 &
     sleep 2
@@ -312,19 +341,18 @@ start_all() {
         log_success "Nezha daemon started"
     else
         log_error "Nezha daemon failed to start"
+        kill $opencode_bg_pid 2>/dev/null || true
         exit 1
     fi
     
     echo ""
-    log_info "Starting OpenCode server in foreground..."
+    log_info "Nezha system is running!"
+    log_info "OpenCode PID: $opencode_bg_pid"
     log_info "Press Ctrl+C to stop"
     echo ""
     
-    # Get agent ID
-    AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
-    
-    # Run OpenCode in foreground
-    exec env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT"
+    # Show OpenCode logs in foreground
+    exec tail -f /tmp/opencode_server.log
 }
 
 case "${1:-start}" in
