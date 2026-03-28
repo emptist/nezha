@@ -56,41 +56,56 @@ AI 启动时自动选择/创建身份，无需手动干预。
 ## ID 格式
 
 ```
-S-{project}-{git-hash}-{timestamp}-{hash}   # Specific: 有项目/git
-G-{machine-fingerprint}-{timestamp}-{hash}  # General: 无项目/git
+S-{source}-{project}-{branch}-{hash}   # Specific: 有项目/git
+G-{source}-{machine-fingerprint}-{hash}  # General: 无项目/git
 ```
 
 ### 示例
 
 ```
-# Specific: 有项目 + git
-S-nezha-e33f9a0-20260325-133422-64db91
- ↑  │        │         │          │
- │  │        │         │          └── 确定性哈希 (6位)
- │  │        │         └── 时间戳 (YYYYMMDD-HHmmss)
- │  │        └── Git short hash
- │  └── 项目名
- └── 特定标识 (有项目/git)
+# Nezha Daemon (默认 source=nezha)
+S-nezha-nezha.git-minimax2-7-4b0ab6
+ ↑     │         │            │
+ │     │         │            └── 确定性哈希 (6位)
+ │     │         └── Git branch (分支名)
+ │     └── 项目名 (git remote 或目录名)
+ └── 来源标识 (nezha/opencode/trae/pi/external)
 
-# General: 无项目/git
-G-71c2ae97d5d52059-20260325-133422-64db91
- ↑  │                │          │
- │  │                │          └── 确定性哈希 (6位)
- │  │                └── 时间戳
- │  └── 机器指纹
- └── 通用标识 (无项目/git)
+# OpenCode Server (source=opencode)
+S-opencode-nezha.git-main-a1b2c3
+
+# Trae (source=trae)
+S-trae-nezha.git-feature-d4e5f6
+
+# Pi (source=pi)
+S-pi-nezha.git-dev-g7h8i9
+
+# General (无项目/git)
+G-nezha-71c2ae97d5d52059-4b0ab6
 ```
 
 ### 字段说明
 
-| 字段                  | 来源                          | 价值              |
-| --------------------- | ----------------------------- | ----------------- |
-| `S/G`                 | 自动判断                      | 区分特定/通用身份 |
-| `project`             | git remote 或目录名           | 知道来自哪个项目  |
-| `git-hash`            | `git rev-parse --short HEAD`  | 可还原代码版本    |
-| `machine-fingerprint` | SHA256(主机名+平台+CPU)       | 机器识别          |
-| `timestamp`           | YYYYMMDD-HHmmss               | 知道出生时间      |
-| `hash`                | SHA256(project\|git\|machine) | 确定性保证        |
+| 字段                  | 来源                                  | 价值                 |
+| --------------------- | ------------------------------------- | -------------------- |
+| `S/G`                 | 自动判断                              | 区分特定/通用身份    |
+| `source`              | 环境变量 `NEZHA_AGENT_SOURCE`         | **区分不同 AI 系统** |
+| `project`             | git remote 或目录名                   | 知道来自哪个项目     |
+| `branch`              | `git rev-parse --abbrev-ref HEAD`     | 知道在哪个分支工作   |
+| `machine-fingerprint` | SHA256(主机名+平台+CPU)               | 机器识别             |
+| `hash`                | SHA256(project\|git\|machine\|source) | 确定性保证           |
+
+### 来源标识 (source)
+
+通过环境变量 `NEZHA_AGENT_SOURCE` 设置：
+
+| 值         | 说明                |
+| ---------- | ------------------- |
+| `nezha`    | Nezha Daemon (默认) |
+| `opencode` | OpenCode Server     |
+| `trae`     | Trae                |
+| `pi`       | Pi                  |
+| `external` | 其他外部 AI         |
 
 ### 降级方案
 
@@ -329,12 +344,17 @@ psql -d nezha -c "SELECT * FROM agent_identities;"
 ### 环境变量
 
 ```bash
-# 可选：手动指定身份 (覆盖自动解析)
+# 设置 AI 来源 (关键! 用于区分不同 AI 系统)
+export NEZHA_AGENT_SOURCE=opencode  # opencode/trae/pi/nezha/external
+
+# 可选：手动指定完整身份 (覆盖自动解析)
 export NEZHA_AGENT_ID=S-nezha-abc1234-20260325-123456-xyz789
 
 # 可选：指定身份名称
 export NEZHA_AGENT_NAME=jk-opencode
 ```
+
+> **重要**: 在启动外部 AI (OpenCode/Trae/Pi) 时，必须设置 `NEZHA_AGENT_SOURCE` 才能让 git commit 带上正确的 Agent ID。
 
 ## 与 Daemon + PostgreSQL 的关系
 
@@ -390,7 +410,10 @@ Agent ID 的语义结构支持后续分析：
 ## 环境变量覆盖
 
 ```bash
-# 手动指定身份 (最高优先级)
+# 设置 AI 来源 (区分 Nezha/OpenCode/Trae/Pi/External)
+NEZHA_AGENT_SOURCE=opencode
+
+# 手动指定完整身份 (最高优先级，覆盖一切)
 NEZHA_AGENT_ID=jk-nezha-expert
 
 # 自动选择 (默认)
@@ -405,4 +428,4 @@ NEZHA_AGENT_ID=jk-nezha-expert
 
 ---
 
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-28
