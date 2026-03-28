@@ -1,13 +1,43 @@
 #!/bin/bash
 # Start OpenCode Server with fixed password for Nezha integration
-# Usage: ./start-opencode-server.sh
+# Usage: ./start-opencode-server.sh [PORT]
 
 # Password for Nezha to connect
 export OPENCODE_SERVER_PASSWORD="nezha-secret"
 export OPENCODE_SERVER_USERNAME="opencode"
 
-# Port (same as OpenCode Desktop default)
-PORT=56795
+# Port: Use env var, then arg, then OpenCode config, then default
+detect_opencode_port() {
+    # Check NEZHA_OPENCODE_PORT env var first
+    if [ -n "$NEZHA_OPENCODE_PORT" ]; then
+        echo "$NEZHA_OPENCODE_PORT"
+        return
+    fi
+    
+    # Check OpenCode config files
+    for config_path in "$HOME/.config/opencode/config.yaml" "$HOME/.config/opencode/config.yml" "$HOME/.opencode.yaml"; do
+        if [ -f "$config_path" ]; then
+            local port=$(grep -E "port:\s*[0-9]+" "$config_path" | head -1 | grep -oE "[0-9]+")
+            if [ -n "$port" ]; then
+                echo "$port"
+                return
+            fi
+        fi
+    done
+    
+    # Default port (Nezha-managed OpenCode server)
+    echo "4096"
+}
+
+# Use provided port, or detect
+if [ -n "$1" ]; then
+    PORT="$1"
+else
+    PORT=$(detect_opencode_port)
+fi
+
+# Export for Nezha to use
+export NEZHA_OPENCODE_PORT="$PORT"
 
 echo "=========================================="
 echo "OpenCode Server Startup Script"

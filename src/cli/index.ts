@@ -1953,12 +1953,10 @@ Examples:
         const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
         const promptPattern =
           /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
-        const issuePattern =
-          /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+        const issuePattern = /\[ISSUE\]([\s\S]*?)(?=\[|$)/gi;
         const reviewResponsePattern =
           /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
-        const taskPattern =
-          /\[TASK\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?(?:\s*type:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+        const taskPattern = /\[TASK\]([\s\S]*?)(?=\[|$)/gi;
         const announcePattern =
           /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
         const schedulePattern =
@@ -2002,12 +2000,21 @@ Examples:
         }
 
         while ((match = issuePattern.exec(text)) !== null) {
-          const title = match[1]?.trim();
-          const description = match[2]?.trim() || null;
-          const issueType = match[3]?.trim() || 'bug';
-          const severity = match[4]?.trim() || 'medium';
-          const tagsStr = match[5]?.trim();
-          const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
+          const content = match[1]?.trim();
+          if (!content) continue;
+
+          const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|type|severity|tags):|$)/is);
+          const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|type|severity|tags):|$)/is);
+          const typeMatch = content.match(/type:\s*(\w+)/i);
+          const severityMatch = content.match(/severity:\s*(\w+)/i);
+          const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|type|severity):|$)/is);
+
+          const title = titleMatch?.[1]?.trim();
+          const description = descMatch?.[1]?.trim() || null;
+          const issueType = typeMatch?.[1]?.trim() || 'bug';
+          const severity = severityMatch?.[1]?.trim() || 'medium';
+          const tags = tagsMatch?.[1] ? tagsMatch[1].split(',').map(t => t.trim()) : [];
+
           if (title) {
             const result = await db.query<{ id: string }>(
               `INSERT INTO issues (title, description, issue_type, severity, tags)
@@ -2047,13 +2054,22 @@ Examples:
         }
 
         while ((match = taskPattern.exec(text)) !== null) {
-          const title = match[1]?.trim();
-          const description = match[2]?.trim() || null;
-          const priorityStr = match[3]?.trim();
-          const taskType = match[4]?.trim() || 'implementation';
-          const tagsStr = match[5]?.trim();
-          const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()) : [];
+          const content = match[1]?.trim();
+          if (!content) continue;
+
+          const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|priority|type|tags):|$)/is);
+          const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|priority|type|tags):|$)/is);
+          const priorityMatch = content.match(/priority:\s*(\d+)/i);
+          const typeMatch = content.match(/type:\s*(\w+)/i);
+          const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|priority|type):|$)/is);
+
+          const title = titleMatch?.[1]?.trim();
+          const description = descMatch?.[1]?.trim() || null;
+          const priorityStr = priorityMatch?.[1]?.trim();
+          const taskType = typeMatch?.[1]?.trim() || 'implementation';
+          const tags = tagsMatch?.[1] ? tagsMatch[1].split(',').map(t => t.trim()) : [];
           const priority = priorityStr ? parseInt(priorityStr, 10) : 5;
+
           if (title) {
             const result = await db.query<{ id: string }>(
               `INSERT INTO tasks (title, description, priority, type, tags, status)

@@ -2,6 +2,7 @@ import {
   type DbConfig,
   type TaskConfig,
   type MemoryConfig,
+  type HealthConfig,
   type EmbeddingConfig,
   type NezhaConfig,
   type IConfig,
@@ -113,6 +114,7 @@ export class Config implements IConfig {
     const dbConfig = this.loadDbConfig(yamlConfig);
     const taskConfig = this.loadTaskConfig(yamlConfig);
     const memoryConfig = this.loadMemoryConfig();
+    const healthConfig = this.loadHealthConfig(yamlConfig);
     const embeddingConfig = this.loadEmbeddingConfig(yamlConfig);
     const transportConfig = this.loadTransportConfig(yamlConfig);
     const env = this.loadEnv();
@@ -122,6 +124,7 @@ export class Config implements IConfig {
       db: dbConfig,
       task: taskConfig,
       memory: memoryConfig,
+      health: healthConfig,
       embedding: embeddingConfig,
       env,
       transport: transportConfig,
@@ -187,6 +190,17 @@ export class Config implements IConfig {
         MEMORY_CONFIG.DEFAULT_MAX_MEMORY_AGE_MS,
         ENV_KEYS.MAX_MEMORY_AGE
       ),
+    };
+  }
+
+  private loadHealthConfig(yaml?: NezhaYamlConfig): HealthConfig {
+    return {
+      port: parseIntEnv(
+        process.env.NEZHA_HEALTH_PORT,
+        yaml?.health?.port || 4097,
+        'NEZHA_HEALTH_PORT'
+      ),
+      requireAuth: yaml?.health?.requireAuth ?? false,
     };
   }
 
@@ -297,6 +311,10 @@ export class Config implements IConfig {
 
   getMemoryConfig(): MemoryConfig {
     return { ...this.config.memory };
+  }
+
+  getHealthConfig(): HealthConfig {
+    return { ...this.config.health };
   }
 
   getEmbeddingConfig(): EmbeddingConfig | undefined {

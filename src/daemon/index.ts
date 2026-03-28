@@ -37,20 +37,22 @@ async function waitForRunningTasks(db: DatabaseClient, timeoutMs: number): Promi
 async function main(): Promise<void> {
   logger.info('Starting Nezha Daemon...');
 
-  const config = Config.getInstance();
-  const db = new DatabaseClient(config);
+  const nezhaConfig = Config.getInstance();
+  const db = new DatabaseClient(nezhaConfig);
 
   const heartbeatService = new HeartbeatService(db, {
-    heartbeatIntervalMs: config.getTaskConfig().heartbeatIntervalMs,
+    heartbeatIntervalMs: nezhaConfig.getTaskConfig().heartbeatIntervalMs,
   });
 
-  const healthServer = new HealthServer(db, 4097);
+  const healthPort = nezhaConfig.getHealthConfig().port;
+  const healthServer = new HealthServer(db, healthPort);
   await healthServer.start();
 
   await heartbeatService.start();
 
+  const transportConfig = nezhaConfig.getTransportConfig();
   const opencodeReminder = new OpenCodeReminderService(db, {
-    opencodeUrl: process.env.OPENCODE_SERVER_URL || 'http://localhost:56795',
+    opencodeUrl: transportConfig.opencodeApiUrl || 'http://127.0.0.1:56795',
     username: process.env.OPENCODE_SERVER_USERNAME,
     password: process.env.OPENCODE_SERVER_PASSWORD,
     reminderIntervalMs: 2 * 60 * 1000,

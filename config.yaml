@@ -34,7 +34,9 @@ health:
 # Transport mode: http or cli (http uses opencode serve, cli uses opencode run --attach)
 transport:
   mode: http
-  opencodeApiUrl: http://localhost:4096
+  # OpenCode Desktop App uses port 56795, Nezha-managed server uses 4096
+  # Set NEZHA_OPENCODE_PORT env var to override
+  opencodeApiUrl: http://127.0.0.1:4096
 
 # Webhook notifications (optional)
 # webhook:

@@ -54,6 +54,10 @@
     "auto:reflect": "node auto-reflect/dist/cli.js",
     "trae:check": "node auto-reflect/dist/cli.js --check",
     "trae:learnings": "node auto-reflect/dist/cli.js --learnings",
+    "nezha:start": "bash bin/nezha-start.sh start",
+    "nezha:stop": "bash bin/nezha-start.sh stop",
+    "nezha:restart": "bash bin/nezha-start.sh restart",
+    "nezha:status": "bash bin/nezha-start.sh status",
     "predev": "npm run typecheck",
     "prebuild": "npm run typecheck"
   },

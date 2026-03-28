@@ -4,10 +4,10 @@
 
 set -e
 
-# Configuration
-NEZHA_DIR="/Users/jk/gits/hub/nezha"
-OPENCODE_PORT=4096
-NEZHA_PORT=4097
+# Configuration - Use environment variables or defaults
+NEZHA_DIR="${NEZHA_DIR:-/Users/jk/gits/hub/nezha}"
+OPENCODE_PORT="${NEZHA_OPENCODE_PORT:-4096}"
+NEZHA_HEALTH_PORT="${NEZHA_HEALTH_PORT:-4097}"
 PSQL_PATH="${PSQL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/psql}"
 PG_CTL_PATH="${PG_CTL_PATH:-/Applications/Postgres.app/Contents/Versions/18/bin/pg_ctl}"
 PG_DATA="${PG_DATA:-$HOME/Library/Application Support/Postgres/var-18-2}"
@@ -164,7 +164,7 @@ start_watchdog() {
 }
 
 check_nezha() {
-    if curl -s "http://localhost:$NEZHA_PORT/health" >/dev/null 2>&1; then
+    if curl -s "http://localhost:$NEZHA_HEALTH_PORT/health" >/dev/null 2>&1; then
         return 0
     else
         return 1
@@ -174,7 +174,7 @@ check_nezha() {
 start_nezha() {
     log_info "Checking Nezha daemon..."
     if check_nezha; then
-        log_success "Nezha daemon is running on port $NEZHA_PORT"
+        log_success "Nezha daemon is running on port $NEZHA_HEALTH_PORT"
         return 0
     fi
     
@@ -191,7 +191,7 @@ start_nezha() {
     for i in {1..10}; do
         sleep 1
         if check_nezha; then
-            log_success "Nezha daemon started on port $NEZHA_PORT"
+            log_success "Nezha daemon started on port $NEZHA_HEALTH_PORT"
             return 0
         fi
     done
@@ -255,7 +255,7 @@ show_status() {
     
     # Nezha
     if check_nezha; then
-        echo "Nezha Daemon:    ${GREEN}Running${NC} (port $NEZHA_PORT)"
+        echo "Nezha Daemon:    ${GREEN}Running${NC} (port $NEZHA_HEALTH_PORT)"
     else
         echo "Nezha Daemon:    ${RED}Not Running${NC}"
     fi

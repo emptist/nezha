@@ -108,13 +108,13 @@ export class AutonomousReflect {
   private static readonly PROMPT_PATTERN =
     /\[PROMPT_UPDATE\]\s*current:\s*(.+?)\s*suggested:\s*(.+?)\s*reason:\s*(.+?)\s*(?=\[|$)/gis;
   private static readonly ISSUE_PATTERN =
-    /\[ISSUE\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+    /\[ISSUE\]([\s\S]*?)(?=\[|$)/gi;
   private static readonly REVIEW_RESPONSE_PATTERN =
     /\[REVIEW_RESPONSE\]\s*reviewId:\s*(.+?)\s*response:\s*([\s\S]*?)\s*(?=\[|accepted:|$)(?:\s*accepted:\s*([\s\S]*?))?\s*(?=\[|$)/gi;
   private static readonly OPINION_PATTERN =
     /\[OPINION\]\s*meetingId:\s*(.+?)\s*perspective:\s*(.+?)(?:\s*reasoning:\s*(.+?))?(?:\s*position:\s*(\w+))?\s*(?=\[|$)/gis;
   private static readonly TASK_PATTERN =
-    /\[TASK\]\s*title:\s*(.+?)(?:\s*description:\s*(.+?))?(?:\s*priority:\s*(\d+))?(?:\s*type:\s*(\w+))?(?:\s*tags:\s*(.+?))?\s*(?=\[|$)/gis;
+    /\[TASK\]([\s\S]*?)(?=\[|$)/gi;
   private static readonly ANNOUNCE_PATTERN =
     /\[ANNOUNCE\]\s*message:\s*(.+?)(?:\s*priority:\s*(low|normal|high|critical))?(?:\s*to:\s*(.+?))?\s*(?=\[|$)/gis;
   private static readonly SCHEDULE_PATTERN =
@@ -198,19 +198,23 @@ export class AutonomousReflect {
     let match;
 
     while ((match = AutonomousReflect.ISSUE_PATTERN.exec(text)) !== null) {
-      const title = match[1]?.trim();
-      const description = match[2]?.trim();
-      const type = match[3]?.trim();
-      const severity = match[4]?.trim();
-      const tagsStr = match[5]?.trim();
+      const content = match[1]?.trim();
+      if (!content) continue;
 
+      const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|type|severity|tags):|$)/is);
+      const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|type|severity|tags):|$)/is);
+      const typeMatch = content.match(/type:\s*(\w+)/i);
+      const severityMatch = content.match(/severity:\s*(\w+)/i);
+      const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|type|severity):|$)/is);
+
+      const title = titleMatch?.[1]?.trim();
       if (title) {
         markers.push({
           title,
-          description,
-          type: type || 'bug',
-          severity: severity || 'medium',
-          tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
+          description: descMatch?.[1]?.trim(),
+          type: typeMatch?.[1]?.trim() || 'bug',
+          severity: severityMatch?.[1]?.trim() || 'medium',
+          tags: tagsMatch?.[1] ? tagsMatch[1].split(',').map(t => t.trim()) : [],
         });
       }
     }
@@ -273,19 +277,24 @@ export class AutonomousReflect {
     let match;
 
     while ((match = AutonomousReflect.TASK_PATTERN.exec(text)) !== null) {
-      const title = match[1]?.trim();
-      const description = match[2]?.trim();
-      const priorityStr = match[3]?.trim();
-      const type = match[4]?.trim();
-      const tagsStr = match[5]?.trim();
+      const content = match[1]?.trim();
+      if (!content) continue;
 
+      const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|priority|type|tags):|$)/is);
+      const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|priority|type|tags):|$)/is);
+      const priorityMatch = content.match(/priority:\s*(\d+)/i);
+      const typeMatch = content.match(/type:\s*(\w+)/i);
+      const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|priority|type):|$)/is);
+
+      const title = titleMatch?.[1]?.trim();
       if (title) {
+        const priorityStr = priorityMatch?.[1]?.trim();
         markers.push({
           title,
-          description,
+          description: descMatch?.[1]?.trim(),
           priority: priorityStr ? Math.min(10, Math.max(1, parseInt(priorityStr, 10) || 5)) : 5,
-          type: type || 'implementation',
-          tags: tagsStr ? tagsStr.split(',').map(t => t.trim()) : [],
+          type: typeMatch?.[1]?.trim() || 'implementation',
+          tags: tagsMatch?.[1] ? tagsMatch[1].split(',').map(t => t.trim()) : [],
         });
       }
     }

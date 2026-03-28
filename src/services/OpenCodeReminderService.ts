@@ -12,6 +12,7 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { ReminderTemplateService, SystemStatus } from './ReminderTemplateService.js';
+import { OPENCODE_API } from '../config/constants.js';
 
 export interface OpenCodeReminderConfig {
   opencodeUrl: string;
@@ -30,8 +31,9 @@ export class OpenCodeReminderService {
 
   constructor(db: DatabaseClient, config: OpenCodeReminderConfig) {
     this.db = db;
+    const defaultUrl = `http://${OPENCODE_API.DEFAULT_HOST}:${OPENCODE_API.DEFAULT_PORT}`;
     this.config = {
-      opencodeUrl: config.opencodeUrl || 'http://localhost:56795',
+      opencodeUrl: config.opencodeUrl || defaultUrl,
       username: config.username || process.env.OPENCODE_SERVER_USERNAME || 'opencode',
       password: config.password || process.env.OPENCODE_SERVER_PASSWORD || '',
       reminderIntervalMs: config.reminderIntervalMs || 2 * 60 * 1000,

@@ -21,6 +21,11 @@ export interface MemoryConfig {
   maxMemoryAgeMs: number;
 }
 
+export interface HealthConfig {
+  port: number;
+  requireAuth: boolean;
+}
+
 export interface EmbeddingConfig {
   provider: 'zhipu' | 'openai' | 'ollama';
   model: string;
@@ -32,6 +37,7 @@ export interface NezhaConfig {
   db: DbConfig;
   task: TaskConfig;
   memory: MemoryConfig;
+  health: HealthConfig;
   embedding?: EmbeddingConfig;
   env: 'development' | 'production' | 'test';
   transport: TransportConfig;
