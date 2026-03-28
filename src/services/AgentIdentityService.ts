@@ -172,12 +172,12 @@ export class AgentIdentityService {
     const shortHash = hash.substring(0, 6);
     const source = context.source || 'nezha';
 
-    // S = Specific: 有项目/git 信息
-    if (context.project && context.gitHash) {
-      return `S-${source}-${context.project}-${context.gitHash.substring(0, 7)}-${shortHash}`;
+    // S = Specific: 有项目信息
+    if (context.project) {
+      return `S-${source}-${context.project}-${context.gitHash ? context.gitHash.substring(0, 7) + '-' : ''}${shortHash}`;
     }
 
-    // G = General: 无项目/git 信息
+    // G = General: 无项目信息
     return `G-${source}-${context.machineFingerprint}-${shortHash}`;
   }
 
