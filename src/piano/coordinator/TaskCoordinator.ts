@@ -156,12 +156,15 @@ export class TaskCoordinator {
 1. 自主分析任务
 2. 制定执行计划
 3. 执行并完成
-4. 完成后使用以下标记：
+4. **重要：定期执行 git commit 保存进度**
+5. 完成后使用以下标记：
    - [LEARN] insight: <学到的>
    - [ISSUE] title: <问题> type: <类型> severity: <程度>
    - [TASK] title: <新任务> priority: <优先级>
 
 Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."
+
+Commit: git add -A && git commit -m "feat: ..." [issue: xxx]
 `;
   }
 
