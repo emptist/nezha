@@ -145,7 +145,7 @@ export class AgentIdentityService {
 
       if (remote) {
         // Extract project name from git URL
-        const match = remote.match(/\/([^/]+)(?:\.git)?$/);
+        const match = remote.match(/\/([^/]+?)(?:\.git)?$/);
         if (match && match[1]) return match[1];
       }
     } catch {

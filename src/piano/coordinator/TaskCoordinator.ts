@@ -85,19 +85,32 @@ export class TaskCoordinator {
 
         if (!response.ok) continue;
 
-        const data = (await response.json()) as { status?: string; result?: string };
+        const data = (await response.json()) as {
+          status?: string;
+          result?: string;
+          summary?: { additions?: number; deletions?: number; files?: number };
+          time?: { updated?: number };
+        };
 
-        if (data.status === 'completed' || data.status === 'done') {
-          console.log(`[TaskCoordinator] Session completed: ${data.status}`);
-          return data.result || 'Task completed';
+        const hasActivity =
+          data.summary && ((data.summary.additions ?? 0) > 0 || (data.summary.deletions ?? 0) > 0);
+        const lastUpdate = data.time?.updated;
+
+        if (!hasActivity && lastUpdate) {
+          const now = Date.now();
+          const idleTime = now - lastUpdate;
+          if (idleTime > 120000) {
+            console.log(
+              `[TaskCoordinator] Session idle for ${idleTime / 1000}s - treating as completed`
+            );
+            return `Task completed (idle: ${idleTime / 1000}s)`;
+          }
+          console.log(`[TaskCoordinator] Waiting... idle: ${idleTime / 1000}s`);
+        } else {
+          console.log(
+            `[TaskCoordinator] Processing... additions: ${data.summary?.additions || 0}, files: ${data.summary?.files || 0}`
+          );
         }
-
-        if (data.status === 'error' || data.status === 'failed') {
-          console.log(`[TaskCoordinator] Session failed: ${data.status}`);
-          return `Task failed: ${data.result || 'Unknown error'}`;
-        }
-
-        console.log(`[TaskCoordinator] Waiting... status: ${data.status}`);
       } catch (error) {
         console.log(`[TaskCoordinator] Poll error:`, error);
       }
