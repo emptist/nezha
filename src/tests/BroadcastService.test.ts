@@ -32,7 +32,7 @@ describe('BroadcastService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new BroadcastService(mockDb);
+    service = new BroadcastService(mockDb, 'test-agent-id', 'Test Agent');
   });
 
   describe('sendBroadcast', () => {
@@ -261,6 +261,9 @@ describe('BroadcastService', () => {
         expect.stringContaining('UPDATE project_communications'),
         expect.arrayContaining([expect.any(String)])
       );
+      const callArgs = mockQuery.mock.calls[0];
+      const query = callArgs[0] as string;
+      expect(query).toContain('from_ai = $1');
     });
   });
 

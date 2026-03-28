@@ -206,8 +206,9 @@ export class FailureAnalysisService {
       ],
       network: [
         'Check network connectivity',
-        'Retry with longer delay',
-        'Verify service endpoints',
+        'Retry with exponential backoff and jitter',
+        'Verify DNS settings and service endpoints',
+        'Handle HTTP 5xx errors with conditional retries',
       ],
       permission: [
         'Check file/directory permissions',

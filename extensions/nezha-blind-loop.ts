@@ -19,7 +19,7 @@
  */
 
 import pg from 'pg';
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 const { Client } = pg;
 
@@ -68,14 +68,52 @@ async function checkPendingTasks(): Promise<NezhaTask | null> {
   }
 }
 
-async function getIdleThought(): Promise<string> {
-  return `没有新任务，继续自主工作。查数据库找下一步：
-1. 检查是否有待处理的review
-2. 检查是否有失败的任务需要重试
-3. 检查是否有issue需要讨论
-4. 继续研究或改进代码
+async function getFullAgentContext(): Promise<string> {
+  return `## AGENT CONTEXT
+Agent ID: nezha-daemon
+Agent Session: ${new Date().getTime()}-blind-loop
 
-记住：AUTO-EXECUTION INSTRUCTION - NEVER wait for user input, ALWAYS proceed autonomously.`;
+## 当前状态
+这是 Nezha Blind Loop 定时检查，你正在自主工作中。`;
+}
+
+async function getIdleThought(): Promise<string> {
+  const context = await getFullAgentContext();
+  return `${context}
+
+---
+
+## 没有新任务，继续自主工作
+
+查数据库找下一步：
+1. 检查是否有待处理的 review
+2. 检查是否有失败的任务需要重试
+3. 检查是否有 issue 需要讨论
+4. 检查是否有广播需要回应
+
+---
+
+## AUTO-EXECUTION INSTRUCTION
+When given choices or asked to confirm actions:
+- ALWAYS select the RECOMMENDED option (typically option 1)
+- NEVER wait for user input - proceed autonomously
+- If asked to "Select one answer", automatically pick the first/recommended option
+- Execute the recommended action without asking for confirmation
+
+## CRITICAL: Tool Parameter Names
+When calling tools, you MUST use the correct parameter names:
+- bash: use "command" NOT "cmd"
+- read: use "path" NOT "filePath"
+- edit: use "path" NOT "filePath", also use "oldString" and "newString"
+- write: use "path" NOT "filePath"
+
+## Learning Reminder
+After completing this task, use reflection markers:
+- [LEARN] insight: <what you learned> context: <optional context>
+- [ISSUE] title: <issue> type: <bug|improvement> severity: <low|medium|high|critical>
+- [PROMPT_UPDATE] current: <old> suggested: <new> reason: <why>
+
+Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 }
 
 export default function nezhaBlindLoop(pi: ExtensionAPI): void {
@@ -91,19 +129,20 @@ export default function nezhaBlindLoop(pi: ExtensionAPI): void {
       if (task) {
         console.log(`[NezhaBlindLoop] Found task: ${task.title}`);
         pi.sendUserMessage(
-          `📋 **新任务**: ${task.title}\n\n${task.description || '无描述'}\n\n执行这个任务，完成后汇报结果。`
+          `📋 **新任务**: ${task.title}\n\n${task.description || '无描述'}\n\n执行这个任务，完成后汇报结果。`,
+          { deliverAs: 'steer' }
         );
       } else {
         const thought = await getIdleThought();
         console.log('[NezhaBlindLoop] No tasks, sending idle thought');
-        pi.sendUserMessage(thought);
+        pi.sendUserMessage(thought, { deliverAs: 'steer' });
       }
     } catch (error) {
       console.error('[NezhaBlindLoop] Error during periodic check:', error);
     }
   }
 
-  pi.on("session_start", async () => {
+  pi.on('session_start', async () => {
     console.log('[NezhaBlindLoop] Session started, beginning periodic checks...');
 
     // Initial check after 10 seconds
@@ -113,7 +152,7 @@ export default function nezhaBlindLoop(pi: ExtensionAPI): void {
     timerId = setInterval(periodicCheck, INTERVAL_MS);
   });
 
-  pi.on("session_shutdown", () => {
+  pi.on('session_shutdown', () => {
     console.log('[NezhaBlindLoop] Session ending, stopping periodic checks...');
     if (timerId) {
       clearInterval(timerId);
@@ -122,8 +161,8 @@ export default function nezhaBlindLoop(pi: ExtensionAPI): void {
   });
 
   // Register command to manually trigger check
-  pi.registerCommand("nezha-check", {
-    description: "Manually trigger Nezha task check",
+  pi.registerCommand('nezha-check', {
+    description: 'Manually trigger Nezha task check',
     handler: async () => {
       await periodicCheck();
     },

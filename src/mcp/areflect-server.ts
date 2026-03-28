@@ -4,16 +4,25 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { ReminderTemplateService } from '../services/ReminderTemplateService.js';
 
 const server = new Server({ name: 'areflect', version: '1.0.0' }, { capabilities: { tools: {} } });
 
 let db: DatabaseClient | null = null;
+let templateService: ReminderTemplateService | null = null;
 
 function getDb(): DatabaseClient {
   if (!db) {
     db = new DatabaseClient(Config.getInstance());
   }
   return db;
+}
+
+function getTemplateService(): ReminderTemplateService {
+  if (!templateService) {
+    templateService = new ReminderTemplateService(getDb());
+  }
+  return templateService;
 }
 
 const LEARN_PATTERN = /\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+?))?\s*(?=\[|$)/gis;
@@ -321,6 +330,98 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['text'],
         },
       },
+      {
+        name: 'list_reminder_templates',
+        description: 'List all reminder templates available in the system.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'get_reminder_template',
+        description: 'Get a specific reminder template by name.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Template name (e.g., default_reminder, urgent_reminder, learning_reminder)',
+            },
+          },
+          required: ['name'],
+        },
+      },
+      {
+        name: 'update_reminder_template',
+        description: 'Update an existing reminder template. AI can modify template content, description, priority, or enable/disable it.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Template name to update',
+            },
+            description: {
+              type: 'string',
+              description: 'New description for the template',
+            },
+            template: {
+              type: 'string',
+              description: 'New template content with Handlebars syntax. Variables: {{pendingTasks}}, {{failedTasks}}, {{openIssues}}, {{recentMemories}}, {{hasIssues}}, {{criticalTasks}}, {{recentLearnings}}, {{suggestions}}, {{totalMemories}}',
+            },
+            priority: {
+              type: 'number',
+              description: 'Template priority (1-10, higher = more important)',
+            },
+            enabled: {
+              type: 'boolean',
+              description: 'Enable or disable the template',
+            },
+          },
+          required: ['name'],
+        },
+      },
+      {
+        name: 'create_reminder_template',
+        description: 'Create a new reminder template. AI has full autonomy to create custom templates.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Unique template name',
+            },
+            description: {
+              type: 'string',
+              description: 'Template description',
+            },
+            template: {
+              type: 'string',
+              description: 'Template content with Handlebars syntax. Use {{variable}} for variables and {{#if condition}}...{{/if}} for conditionals.',
+            },
+            priority: {
+              type: 'number',
+              description: 'Template priority (1-10, default: 5)',
+            },
+          },
+          required: ['name', 'description', 'template'],
+        },
+      },
+      {
+        name: 'delete_reminder_template',
+        description: 'Delete a reminder template. Use with caution.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Template name to delete',
+            },
+          },
+          required: ['name'],
+        },
+      },
     ],
   };
 });
@@ -443,6 +544,110 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
             text: `Parsed Markers:\n${JSON.stringify(markers, null, 2)}`,
           },
         ],
+      };
+    }
+
+    if (name === 'list_reminder_templates') {
+      const templates = await getTemplateService().getAllTemplates();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Reminder Templates (${templates.length}):\n\n${templates
+              .map(
+                t =>
+                  `**${t.name}** (priority: ${t.priority}, enabled: ${t.enabled})\n${t.description}\nVariables: ${JSON.stringify(t.variables)}\n`
+              )
+              .join('\n')}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'get_reminder_template') {
+      const { name: templateName } = args as { name: string };
+      const template = await getTemplateService().getTemplate(templateName);
+      if (!template) {
+        return {
+          content: [{ type: 'text', text: `Template not found: ${templateName}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Template: ${template.name}\nDescription: ${template.description}\nPriority: ${template.priority}\nEnabled: ${template.enabled}\n\nTemplate Content:\n${template.template}\n\nVariables: ${JSON.stringify(template.variables, null, 2)}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'update_reminder_template') {
+      const { name: templateName, description, template, priority, enabled } = args as {
+        name: string;
+        description?: string;
+        template?: string;
+        priority?: number;
+        enabled?: boolean;
+      };
+      const updated = await getTemplateService().updateTemplate(templateName, {
+        description,
+        template,
+        priority,
+        enabled,
+      });
+      if (!updated) {
+        return {
+          content: [{ type: 'text', text: `Template not found: ${templateName}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Template updated: ${updated.name}\nDescription: ${updated.description}\nPriority: ${updated.priority}\nEnabled: ${updated.enabled}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'create_reminder_template') {
+      const { name: templateName, description, template, priority = 5 } = args as {
+        name: string;
+        description: string;
+        template: string;
+        priority?: number;
+      };
+      const created = await getTemplateService().createTemplate(
+        templateName,
+        description,
+        template,
+        {},
+        priority
+      );
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Template created: ${created.name}\nDescription: ${created.description}\nPriority: ${created.priority}`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'delete_reminder_template') {
+      const { name: templateName } = args as { name: string };
+      const deleted = await getTemplateService().deleteTemplate(templateName);
+      if (!deleted) {
+        return {
+          content: [{ type: 'text', text: `Template not found: ${templateName}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text', text: `Template deleted: ${templateName}` }],
       };
     }
 

@@ -157,7 +157,7 @@ export class BroadcastService {
     let query = `SELECT id, from_ai, content, to_ai, created_at, metadata, priority, git_hash, git_branch, environment, read_at
        FROM project_communications
        WHERE message_type = 'broadcast'
-         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1)`;
+         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1 OR from_ai = $1)`;
     const params: (string | number)[] = [this.agentId];
 
     if (priority) {
@@ -209,6 +209,16 @@ export class BroadcastService {
     }));
   }
 
+  async markAsRead(broadcastId: string): Promise<void> {
+    await this.db.query(
+      `UPDATE project_communications 
+       SET read_at = NOW()
+       WHERE id = $1
+         AND message_type = 'broadcast'`,
+      [broadcastId]
+    );
+  }
+
   async getUnreadBroadcasts(): Promise<Broadcast[]> {
     const result = await this.db.query<{
       id: string;
@@ -225,7 +235,7 @@ export class BroadcastService {
       `SELECT id, from_ai, content, to_ai, created_at, metadata, priority, git_hash, git_branch, environment
        FROM project_communications
        WHERE message_type = 'broadcast'
-         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1)
+         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1 OR from_ai = $1)
          AND read_at IS NULL
        ORDER BY 
          CASE priority 
@@ -252,22 +262,12 @@ export class BroadcastService {
     }));
   }
 
-  async markAsRead(broadcastId: string): Promise<void> {
-    await this.db.query(
-      `UPDATE project_communications 
-       SET read_at = NOW()
-       WHERE id = $1
-         AND message_type = 'broadcast'`,
-      [broadcastId]
-    );
-  }
-
   async markAllAsRead(): Promise<number> {
     const result = await this.db.query(
       `UPDATE project_communications
        SET read_at = NOW()
        WHERE message_type = 'broadcast'
-         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1)
+         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1 OR from_ai = $1)
          AND read_at IS NULL`,
       [this.agentId]
     );
@@ -285,7 +285,7 @@ export class BroadcastService {
        FROM project_communications
        WHERE message_type = 'broadcast'
          AND priority = 'critical'
-         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1)
+         AND (to_ai = 'all-ais' OR to_ai = 'all' OR to_ai = $1 OR from_ai = $1)
          AND read_at IS NULL`,
       [this.agentId]
     );

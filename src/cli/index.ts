@@ -317,7 +317,7 @@ export class Cli {
       }
       finalTitle = (title || template.description.split('\n')[0]) ?? template.description;
       finalDescription = description || template.description;
-      finalPriority = priority || template.priority;
+      finalPriority = priority > 0 ? priority : template.priority;
       finalTaskType = taskType || template.task_type;
       finalTimeout = timeoutSeconds || template.timeout_seconds;
       cli.info(`Using template: ${template.name}`);

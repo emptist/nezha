@@ -252,6 +252,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {},
         },
       },
+      {
+        name: 'remind_me',
+        description:
+          'Ask yourself what you learned or discovered today. Triggers self-reflection. Use this when you want to capture learnings but need a prompt to start.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            topic: {
+              type: 'string',
+              description:
+                'Optional topic to focus reflection on (e.g., "bugs fixed", "new patterns")',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -277,6 +292,29 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           {
             type: 'text',
             text: `Learning saved successfully: "${insight.substring(0, 100)}${insight.length > 100 ? '...' : ''}"`,
+          },
+        ],
+      };
+    }
+
+    if (name === 'remind_me') {
+      const { topic } = args as { topic?: string };
+
+      const prompts = [
+        '今天工作中你学到了什么值得记住的？',
+        '回顾刚才的任务，你发现了什么新模式或解决方案？',
+        '有什么错误或问题是你之前不知道的？现在理解了吗？',
+        '今天解决了什么难题？关键是什么？',
+        '有什么代码模式或技巧值得记录下来？',
+      ];
+
+      const focus = topic ? ` (聚焦于: ${topic})` : '';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `💭 ${prompts[Math.floor(Math.random() * prompts.length)]}${focus}\n\n如果你想到了什么值得记住的，可以使用 learn 工具保存它。`,
           },
         ],
       };

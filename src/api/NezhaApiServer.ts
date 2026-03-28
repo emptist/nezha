@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { BroadcastService } from '../services/BroadcastService.js';
 import { PiSDKExecutor } from '../services/PiSDKExecutor.js';
+import { AIProviderFactory } from '../services/ai/index.js';
 
 const PORT = process.env.NEZHAPI_PORT || 4099;
 
@@ -139,6 +140,12 @@ class NezhaApiServer {
       return { status: 200, body: JSON.stringify(result) };
     }
 
+    if (path[0] === 'v1' && path[1] === 'chat' && path[2] === 'completions' && method === 'POST') {
+      const data = JSON.parse(body);
+      const result = await this.executeOpenAIChat(data);
+      return { status: 200, body: JSON.stringify(result) };
+    }
+
     if (path[0] === 'remind' && method === 'POST') {
       const data = JSON.parse(body);
       const result = await this.executeReminder(data);
@@ -157,9 +164,9 @@ class NezhaApiServer {
         data.title,
         data.description || '',
         data.type || 'implementation',
-        data.priority || 50,
+        data.priority !== undefined ? data.priority : 50,
         data.category || 'general',
-        data.created_by || 'nezhapi',
+        data.created_by || 'S-nezha-e33f9a0-20260325-133422-64db91',
       ]
     );
     return result.rows[0]?.id;
@@ -176,17 +183,56 @@ class NezhaApiServer {
   }
 
   private async executePrompt(data: any): Promise<any> {
-    const executor = new PiSDKExecutor({
-      model: data.model || 'zai:glm-4.5-flash',
-    });
+    const model = data.model || 'llama3.2:3b';
+    const systemPrompt = data.system_prompt || 'You are a helpful AI assistant.';
+    const userPrompt = data.task || 'Hello';
 
-    const result = await executor.executeWithPrompt(
-      data.system_prompt || 'You are a helpful AI assistant.',
-      data.task || 'Hello',
-      data.timeout_ms || 600000
-    );
+    try {
+      const provider = AIProviderFactory.createFromEnv();
+      const result = await provider.complete(userPrompt, systemPrompt);
+      return { success: true, output: result, model };
+    } catch (error) {
+      logger.error(`[NezhaApi] AI error: ${error}`);
+      return { success: false, error: String(error), model };
+    }
+  }
 
-    return result;
+  private async executeOpenAIChat(data: any): Promise<any> {
+    const model = data.model || 'glm-4-flash';
+    const messages = data.messages || [];
+
+    const systemMessage = messages.find((m: any) => m.role === 'system')?.content || '';
+    const userMessage = messages.find((m: any) => m.role === 'user')?.content || '';
+
+    try {
+      const provider = AIProviderFactory.createFromEnv();
+      const result = await provider.complete(userMessage, systemMessage);
+
+      return {
+        id: `nezha-${Date.now()}`,
+        object: 'chat.completion',
+        created: Math.floor(Date.now() / 1000),
+        model: model,
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: result,
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+        },
+      };
+    } catch (error) {
+      logger.error(`[NezhaApi] OpenAI chat error: ${error}`);
+      return { error: { message: String(error), type: 'internal_error', code: 500 } };
+    }
   }
 
   private async executeReminder(data: any): Promise<any> {
@@ -194,7 +240,9 @@ class NezhaApiServer {
     const count = data.count || 1;
     const results = [];
 
-    const systemPrompt = data.system_prompt || '你是Nezha的自我提醒助手。遵循NEVER DECLARE DONE原则：1.永远不要宣布完成 2.总是以问题结尾 3.禁止Done/Completed/Finished 4.定期检查任务队列';
+    const systemPrompt =
+      data.system_prompt ||
+      '你是Nezha的自我提醒助手。遵循NEVER DECLARE DONE原则：1.永远不要宣布完成 2.总是以问题结尾 3.禁止Done/Completed/Finished 4.定期检查任务队列';
 
     for (let i = 0; i < count; i++) {
       if (i > 0) {

@@ -89,7 +89,9 @@ export class InterReviewService extends EventEmitter {
     try {
       return AIProviderFactory.createFromEnv();
     } catch (error) {
-      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`, { cause: error });
+      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`, {
+        cause: error,
+      });
     }
   }
 
@@ -774,20 +776,56 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
     }
   }
 
+  private normalizeTaskTitle(title: string): string {
+    return title.replace(/^\[(?:RETRY|issue|Issue|DLQ|dlq)\]\s*/gi, '').trim();
+  }
+
+  private static readonly MAX_TASKS_PER_REVIEW = 3;
+  private static readonly SYSTEM_LOAD_THRESHOLD = 20;
+
+  private async checkSystemLoad(): Promise<{ isOverloaded: boolean; pendingCount: number }> {
+    const result = await this.db.query<{ pending_count: string }>(
+      `SELECT COUNT(*) as pending_count FROM tasks WHERE status IN ('PENDING', 'RUNNING')`
+    );
+    const pendingCount = parseInt(result.rows[0]?.pending_count || '0', 10);
+    return {
+      isOverloaded: pendingCount >= InterReviewService.SYSTEM_LOAD_THRESHOLD,
+      pendingCount,
+    };
+  }
+
   private async createTasksFromFindings(result: ReviewResult, taskId?: string): Promise<number> {
     const severityPriority = { critical: 90, high: 75, medium: 50, low: 25, info: 10 };
     let createdCount = 0;
 
-    for (const finding of result.findings) {
-      if (finding.type === 'praise' || finding.type === 'question') continue;
+    const { isOverloaded, pendingCount } = await this.checkSystemLoad();
+    logger.info(
+      `[InterReview] System load check: ${pendingCount} pending tasks, overloaded=${isOverloaded}`
+    );
 
+    const eligibleFindings = result.findings.filter(f => {
+      if (f.type === 'praise' || f.type === 'question') return false;
+      if (isOverloaded && f.severity !== 'critical' && f.severity !== 'high') return false;
+      return true;
+    });
+
+    const findingsToProcess = eligibleFindings.slice(0, InterReviewService.MAX_TASKS_PER_REVIEW);
+    const skippedCount = eligibleFindings.length - findingsToProcess.length;
+    if (skippedCount > 0) {
+      logger.info(
+        `[InterReview] Skipped ${skippedCount} findings due to task limit or system load`
+      );
+    }
+
+    for (const finding of findingsToProcess) {
       const priority = severityPriority[finding.severity] || 30;
       const msg = finding.message || finding.suggestion || finding.file || 'Review finding';
       const title = `[${finding.type}] ${msg.substring(0, 100)}`;
+      const normalizedTitle = this.normalizeTaskTitle(title);
 
       const existingTask = await this.db.query<{ id: string }>(
-        `SELECT id FROM tasks WHERE title = $1 AND status IN ('PENDING', 'RUNNING') LIMIT 1`,
-        [title]
+        `SELECT id FROM tasks WHERE (title = $1 OR title ILIKE $2) AND status IN ('PENDING', 'RUNNING') LIMIT 1`,
+        [title, `%${normalizedTitle}`]
       );
 
       if (existingTask.rows.length > 0) {
@@ -798,8 +836,8 @@ Extracted from Inter-Review #${taskId || 'unknown'} (Score: ${result.overallScor
       }
 
       const recentTask = await this.db.query<{ id: string }>(
-        `SELECT id FROM tasks WHERE title = $1 AND status = 'COMPLETED' AND completed_at > NOW() - INTERVAL '7 days' LIMIT 1`,
-        [title]
+        `SELECT id FROM tasks WHERE (title = $1 OR title ILIKE $2) AND status = 'COMPLETED' AND completed_at > NOW() - INTERVAL '7 days' LIMIT 1`,
+        [title, `%${normalizedTitle}`]
       );
 
       if (recentTask.rows.length > 0) {

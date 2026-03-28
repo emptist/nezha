@@ -1,5 +1,29 @@
 # AGENTS.md - Agent 定义
 
+**重要！开始工作前请先阅读本文件，了解可用的工具和系统。**
+
+## 可用 MCP 工具 (重要!)
+
+本项目已配置以下 MCP 工具，AI 应该主动使用：
+
+### nezha-learning (学习与记忆)
+
+- `learn` - 保存有价值的洞察到数据库
+- `memory_search` - 搜索过去的记忆
+- `remind_me` - 触发自我反思，提醒你保存学习
+- `whoami` - 获取当前 AI 身份
+- `get_system_info` - 获取系统状态
+
+### nezha-areflect (反射标记解析)
+
+- `reflect` - 解析文本中的 [LEARN][ISSUE][TASK] 标记并保存
+
+**使用方式**：
+
+- 在回复中包含标记如 `[LEARN] insight: ...` 让 areflect 解析
+- 或直接调用 `learn` 工具保存
+- 或调用 `remind_me` 触发自我反思
+
 ## 核心指令
 
 1. **先研究，再实现**
@@ -14,10 +38,10 @@
      - 验证端到端流程
 
 3. **产品概念 (重要!)**
-   - **Nezha**: 独立产品，任务管理+记忆
-   - **NUPI**: 独立产品，Nezha + Pi (牛派)
-   - **OpenCode on Nezha/NUPI**: OpenCode 可以绑在上面运行
-   - **核心原则**: Nezha/NUPI 不依赖 OpenCode
+   - **Nezha**: 独立产品，任务管理+记忆 (后台服务)
+   - **NUPI**: **Nezha using Pi** (牛派)，Nezha + Pi = 二合一
+   - **NUPI 定位**: OpenCode 的一个**部件/团队成员**，提供永续工作能力
+   - **验证目标**: 如果 NUPI 验证成功，NUPI 将成为 OpenCode 的核心组件
 
 4. **长期记忆 (ROM)**
    - `.memory/` 目录是 Nezha 的长期记忆 (ROM)
@@ -26,6 +50,23 @@
    - 例如：读取 `.memory/MEMORY.md` 和 `.memory/POSTGRESQL_PATH.md`
 
 5. **学习系统使用指南**
+
+   **AI 智能学习原则 (重要!)**
+
+   学习应该由 AI 主动触发，不是定时器或脚本：
+   - 遇到有价值的技术洞察时，**主动**调用 `learn` 保存
+   - 发现新的解决方案或模式时，**主动**调用 `learn`
+   - 完成任务后回顾：有什么值得记住的？ → 调用 `learn`
+   - 遇到问题时：有什么经验教训？ → 调用 `learn`
+
+   不要等人类提醒，AI 自主决定何时保存学习。
+
+   **可用 MCP 工具**：
+   - `learn`: 保存有价值的洞察 (推荐)
+   - `reflect`: 解析 [LEARN][ISSUE][TASK] 标记并保存
+   - `memory_search`: 搜索过去的经验
+
+   ***
 
    **如何查看其他 AI 的反射记录 (Reflections)**
 
