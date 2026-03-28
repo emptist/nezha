@@ -22,6 +22,7 @@ export interface AgentIdentity {
   createdAt: Date;
   displayName?: string;
   description?: string;
+  source?: 'nezha' | 'opencode' | 'external' | 'mcp';
 }
 
 export class AgentIdentityService {
@@ -184,7 +185,7 @@ export class AgentIdentityService {
 
     // S = Specific: 有项目/git 信息
     if (context.project && context.gitHash) {
-      return `S-${source}-${context.project}-${branch}-${shortHash}`;
+      return `S-${source}-${context.project}-${context.gitHash.substring(0, 7)}-${shortHash}`;
     }
 
     // G = General: 无项目/git 信息
@@ -244,12 +245,12 @@ export class AgentIdentityService {
     const id = this.generateSemanticId(context);
 
     await this.db.query(
-      `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint)
-       VALUES ($1, $2, $3, $4)`,
-      [id, context.project, context.gitHash, context.machineFingerprint]
+      `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [id, context.project, context.gitHash, context.machineFingerprint, context.source]
     );
 
-    console.log(`[AgentIdentity] Created new identity: ${id}`);
+    console.log(`[AgentIdentity] Created new identity: ${id} (source: ${context.source})`);
 
     return {
       id,
@@ -269,6 +270,7 @@ export class AgentIdentityService {
       createdAt: row.created_at,
       displayName: row.display_name,
       description: row.description,
+      source: row.source,
     };
   }
 
