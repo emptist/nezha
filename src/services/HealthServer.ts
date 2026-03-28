@@ -190,6 +190,15 @@ export class HealthServer {
       });
       const latency = Date.now() - start;
 
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const isHtml = contentType.includes('text/html');
+        if (isHtml && response.ok) {
+          return { status: 'ok', latency_ms: latency };
+        }
+        return { status: 'error', latency_ms: latency, error: `Not API endpoint (${contentType})` };
+      }
+
       if (response.ok) {
         return { status: 'ok', latency_ms: latency };
       }
