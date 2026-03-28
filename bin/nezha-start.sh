@@ -292,18 +292,27 @@ start_all() {
     start_postgres || return 1
     run_migrations || return 1
     
+    # Kill old daemon processes first
+    log_info "Cleaning up old daemon processes..."
+    pkill -f "node.*daemon" 2>/dev/null || true
+    sleep 1
+    
+    # Kill any process on health port
+    local health_pid=$(lsof -ti :$NEZHA_HEALTH_PORT 2>/dev/null)
+    if [ -n "$health_pid" ]; then
+        kill -9 $health_pid 2>/dev/null || true
+        sleep 1
+    fi
+    
     # Start Nezha daemon in background
-    if ! check_nezha; then
-        log_info "Starting Nezha daemon in background..."
-        nohup node dist/daemon/index.js > .nezha.log 2>&1 &
-        sleep 2
-        if check_nezha; then
-            log_success "Nezha daemon started"
-        else
-            log_error "Nezha daemon failed to start"
-        fi
+    log_info "Starting Nezha daemon in background..."
+    nohup node dist/daemon/index.js > .nezha.log 2>&1 &
+    sleep 2
+    if check_nezha; then
+        log_success "Nezha daemon started"
     else
-        log_success "Nezha daemon already running"
+        log_error "Nezha daemon failed to start"
+        exit 1
     fi
     
     echo ""
