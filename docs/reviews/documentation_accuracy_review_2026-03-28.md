@@ -43,8 +43,8 @@
 | `INCIDENTS/premature-deprecation-reflect.md` | References `reflect` command which has been renamed to `share` | Update to use current command names |
 | `docs/cleanup/AGENT_ID_CLEANUP.md` | May reference old `.nezha/agent-id.json` mechanism | Verify if cleanup is complete |
 | `PLANS/rename-auto-reflect-to-atmReflect.md` | Documents rename from `AtmReflect` to `areflect`, but further renamed to `AutonomousReflect` | Mark as historical, link to `renaming_for_ai.md` |
-| `PLANS/rename-reflect-to-share.md` | Code done but database updates pending | Verify if database was updated |
-| `PLANS/opencode-identity-integration.md` | Plan for OpenCode identity integration | Check implementation status |
+| `PLANS/rename-reflect-to-share.md` | Code done, database status unknown | ✅ Verified: `reflect` command removed, `share` command works |
+| `PLANS/opencode-identity-integration.md` | Plan for OpenCode identity integration | ✅ Verified: `set_identity` MCP tool implemented in `learning-server.ts` |
 
 ### 📝 Missing Documentation
 
@@ -140,12 +140,13 @@ conversations/
 
 | Metric | Value |
 |--------|-------|
-| Total docs reviewed | 14 |
-| Accurate | 5 (36%) |
-| Needs update | 7 (50%) |
-| Missing | 2 (14%) |
+| Total docs reviewed | 17 |
+| Accurate | 5 (29%) |
+| Needs update | 7 (41%) |
+| Implemented plans | 3 (18%) |
+| Missing docs | 2 (12%) |
 | Total docs in /docs | ~90 |
-| Total review reports | ~50 |
+| Total review reports | ~51 |
 
 ---
 

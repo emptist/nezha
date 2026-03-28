@@ -21,6 +21,8 @@ import { ReminderService } from '../ReminderService.js';
 import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
 import { TaskRouter, type ExecutorType } from '../../piano/router/TaskRouter.js';
+import { TaskCoordinator } from '../../piano/coordinator/TaskCoordinator.js';
+import { Config } from '../../config/Config.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
@@ -36,6 +38,7 @@ export class HeartbeatService {
   private readonly pluginManager = getPluginManager();
   private readonly nextStepAdvisor: NextStepAdvisor;
   private readonly taskRouter: TaskRouter;
+  private readonly taskCoordinator: TaskCoordinator | null = null;
   private readonly config: HeartbeatConfig;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
@@ -48,6 +51,13 @@ export class HeartbeatService {
       usePi: false,
       complexityThreshold: 30,
     });
+
+    const opencodeUrl = Config.getInstance().getTransportConfig().opencodeApiUrl;
+    if (opencodeUrl) {
+      this.taskCoordinator = new TaskCoordinator({
+        opencodeUrl,
+      });
+    }
 
     this.nextStepAdvisor = new NextStepAdvisor({
       enabled: true,
@@ -97,7 +107,29 @@ export class HeartbeatService {
     logger.info(`[TaskRouter] Routing "${title}" to: ${executor}`);
 
     if (executor === 'opencode') {
-      logger.info(`[TaskRouter] Task "${title}" routed to OpenCode - skipping internal execution`);
+      logger.info(`[TaskRouter] Task "${title}" routed to OpenCode - sending to OpenCode...`);
+
+      if (this.taskCoordinator) {
+        try {
+          const result = await this.taskCoordinator.execute({
+            id: taskId,
+            title,
+            description: description || '',
+            priority: 5,
+          });
+          logger.info(
+            `[TaskCoordinator] Result from OpenCode: ${result.result.substring(0, 100)}...`
+          );
+
+          await this.db.query(
+            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
+            [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.result }), taskId]
+          );
+          logger.info(`[TaskRouter] Task "${title}" completed via OpenCode`);
+        } catch (error) {
+          logger.error(`[TaskCoordinator] Failed:`, error);
+        }
+      }
       return;
     }
 
