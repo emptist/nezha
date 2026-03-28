@@ -1,3 +1,14 @@
+/**
+ * @layer integration
+ * @integration OpenCode
+ * @description 向 OpenCode AI 发送提醒消息，引导 AI 持续改进项目
+ * 
+ * 架构说明：
+ * - 这是集成层服务，不是核心功能
+ * - 失败不影响 Nezha 核心功能
+ * - 可以替换为其他 AI 集成（Trae、Cursor 等）
+ * - 参考：docs/INTEGRATION_ARCHITECTURE.md
+ */
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { ReminderTemplateService, SystemStatus } from './ReminderTemplateService.js';

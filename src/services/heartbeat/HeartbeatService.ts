@@ -1,3 +1,13 @@
+/**
+ * @layer core
+ * @description 心跳服务，负责任务调度和进程监控
+ * 
+ * 架构说明：
+ * - 这是核心层服务，Nezha 的核心功能
+ * - 不依赖外部 AI 系统
+ * - 可以独立运行
+ * - 参考：docs/ARCHITECTURE.md
+ */
 import { Scheduler } from '../../core/Scheduler.js';
 import { AIProvider, AIProviderFactory } from '../ai/index.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../../config/constants.js';

@@ -1,3 +1,13 @@
+/**
+ * @layer support
+ * @description AI 提供者抽象层，支持 OpenAI、Anthropic、Ollama 等
+ * 
+ * 架构说明：
+ * - 这是支持层服务，为核心层和集成层提供 AI 能力
+ * - 不依赖特定 AI 系统，通过抽象接口支持多种 AI
+ * - 可以被核心层和集成层使用
+ * - 参考：docs/ARCHITECTURE.md
+ */
 export interface AIProviderConfig {
   provider: 'openai' | 'anthropic' | 'ollama';
   model?: string;

@@ -23,6 +23,30 @@
 
 ## 核心设计
 
+### ⚠️ 架构分层原则 (重要)
+
+> **核心原则**: 集成不应该破坏独立性
+
+Nezha 采用三层架构设计：
+
+| 层级 | 说明 | 独立性 | 示例服务 |
+|------|------|--------|----------|
+| **核心层** | Nezha 的核心功能 | ✅ 可以独立运行 | HeartbeatService, MemoryService, Scheduler |
+| **集成层** | 与外部 AI 系统的集成 | ⚠️ 可选部署 | OpenCodeReminderService, TraeSkillSyncService |
+| **支持层** | 支持核心层和集成层 | ✅ 通用服务 | AIProvider, CacheService, EncryptionService |
+
+**核心原则**:
+- ✅ 核心层不依赖集成层
+- ✅ 集成层失败不影响核心功能
+- ✅ 集成层可以替换为其他 AI 系统
+
+**详细文档**:
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - 架构设计文档
+- [docs/SERVICE_CATALOG.md](./docs/SERVICE_CATALOG.md) - 服务目录
+- [docs/INTEGRATION_ARCHITECTURE.md](./docs/INTEGRATION_ARCHITECTURE.md) - 集成架构原则
+
+---
+
 ### ⚠️ AI ID 设计原则 (重要)
 
 > **🚫 已移除的设计: AI ID 共享** - 代码已彻底清理！
