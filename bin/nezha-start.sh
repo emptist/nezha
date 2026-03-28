@@ -122,11 +122,11 @@ start_opencode() {
     pkill -f "opencode serve" 2>/dev/null || true
     sleep 1
     
-    # Get current agent ID for external AIs
+    # Get current agent ID for external AIs and set source
     AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
     
-    # Start with limits and agent ID env var
-    nohup env NEZHA_AGENT_ID="$AGENT_ID" "$NEZHA_DIR/bin/opencode-limited.sh" serve --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
+    # Start with limits, agent ID and source env vars
+    nohup env NEZHA_AGENT_ID="$AGENT_ID" NEZHA_AGENT_SOURCE=opencode "$NEZHA_DIR/bin/opencode-limited.sh" serve --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
     
     # Wait for startup
     for i in {1..10}; do
@@ -182,10 +182,11 @@ start_nezha() {
     
     # Kill any existing processes
     pkill -f "node dist/cli/index.js start" 2>/dev/null || true
+    pkill -f "node dist/daemon" 2>/dev/null || true
     sleep 1
     
     cd "$NEZHA_DIR"
-    nohup node dist/cli/index.js start > .nezha.log 2>&1 &
+    nohup env NEZHA_AGENT_SOURCE=nezha node dist/daemon/index.js > .nezha.log 2>&1 &
     
     # Wait for startup
     for i in {1..10}; do
@@ -309,12 +310,12 @@ start_all() {
     fi
     sleep 1
     
-    # Get agent ID
+    # Get agent ID and set source for OpenCode
     AGENT_ID=$(node -e "console.log(require('./dist/config/Config.js').Config.getInstance().getAgentId())" 2>/dev/null || echo "server-ai")
     
     # Start OpenCode server FIRST (in background, wait for ready)
     log_info "Starting OpenCode server..."
-    env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
+    env NEZHA_AGENT_ID="$AGENT_ID" NEZHA_AGENT_SOURCE=opencode opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT" > /tmp/opencode_server.log 2>&1 &
     local opencode_bg_pid=$!
     
     # Wait for OpenCode to be ready
@@ -333,9 +334,9 @@ start_all() {
     echo ""
     log_success "OpenCode server ready on port $OPENCODE_PORT"
     
-    # Now start Nezha daemon
+    # Now start Nezha daemon (source = nezha)
     log_info "Starting Nezha daemon in background..."
-    nohup node dist/daemon/index.js > .nezha.log 2>&1 &
+    nohup env NEZHA_AGENT_SOURCE=nezha node dist/daemon/index.js > .nezha.log 2>&1 &
     sleep 2
     if check_nezha; then
         log_success "Nezha daemon started"
@@ -405,8 +406,8 @@ case "${1:-start}" in
         log_info "Press Ctrl+C to stop"
         echo ""
         
-        # Run in foreground
-        exec env NEZHA_AGENT_ID="$AGENT_ID" opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT"
+        # Run in foreground with source
+        exec env NEZHA_AGENT_ID="$AGENT_ID" NEZHA_AGENT_SOURCE=opencode opencode serve --hostname 127.0.0.1 --port "$OPENCODE_PORT"
         ;;
     nezha)
         start_postgres || exit 1

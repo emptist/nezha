@@ -59,7 +59,7 @@ fi
 # Start daemon
 echo ""
 echo -e "${GREEN}🚀 Starting Nezha Daemon...${NC}"
-nohup node dist/daemon/index.js > "$LOG_FILE" 2>&1 &
+nohup env NEZHA_AGENT_SOURCE=nezha node dist/daemon/index.js > "$LOG_FILE" 2>&1 &
 DAEMON_PID=$!
 
 echo -e "${GREEN}✓ Daemon started (PID: $DAEMON_PID)${NC}"

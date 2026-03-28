@@ -93,5 +93,5 @@ echo "Starting server..."
 echo "=========================================="
 echo ""
 
-# Start OpenCode Server
-exec opencode serve --hostname 127.0.0.1 --port $PORT
+# Start OpenCode Server with agent source
+exec env NEZHA_AGENT_SOURCE=opencode opencode serve --hostname 127.0.0.1 --port $PORT

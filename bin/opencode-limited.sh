@@ -4,4 +4,6 @@
 
 ulimit -u 50   # Max 50 processes (including children)
 ulimit -t 600  # Max 10 min CPU time per command
-exec opencode "$@"
+
+# Set agent source for OpenCode server
+exec env NEZHA_AGENT_SOURCE=opencode opencode "$@"
