@@ -6,15 +6,28 @@ import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { BroadcastService } from '../services/BroadcastService.js';
 import { PiSDKExecutor } from '../services/PiSDKExecutor.js';
 import { AIProviderFactory } from '../services/ai/index.js';
+import { UserService } from '../services/UserService.js';
+import { JwtAuthMiddleware } from '../services/JwtAuthMiddleware.js';
+import { jwtService } from '../services/JwtService.js';
 
 const PORT = process.env.NEZHAPI_PORT || 4099;
 
 class NezhaApiServer {
   private server: http.Server | null = null;
   private db: DatabaseClient;
+  private userService: UserService | null = null;
+  private jwtAuth: JwtAuthMiddleware;
 
   constructor() {
     this.db = new DatabaseClient(Config.getInstance());
+    this.jwtAuth = new JwtAuthMiddleware(this.db);
+  }
+
+  private async getUserService(): Promise<UserService> {
+    if (!this.userService) {
+      this.userService = await UserService.create(this.db);
+    }
+    return this.userService;
   }
 
   async start(): Promise<void> {
@@ -70,6 +83,10 @@ class NezhaApiServer {
 
     if (path[0] === 'health') {
       return { status: 200, body: JSON.stringify({ status: 'ok', service: 'nezhapi' }) };
+    }
+
+    if (path[0] === 'api' && path[1] === 'users') {
+      return await this.handleUserRequest(method, path, body);
     }
 
     if (path[0] === 'identity' && method === 'GET') {
@@ -164,6 +181,129 @@ class NezhaApiServer {
     }
 
     return { status: 404, body: JSON.stringify({ error: 'Not found' }) };
+  }
+
+  private async handleUserRequest(
+    method: string,
+    path: string[],
+    body: string
+  ): Promise<{ status: number; body: string }> {
+    const userService = await this.getUserService();
+    const action = path[2];
+
+    try {
+      if (action === 'register' && method === 'POST') {
+        const data = JSON.parse(body);
+        const result = await userService.register({
+          email: data.email,
+          username: data.username,
+          password: data.password,
+          display_name: data.display_name,
+        });
+        return {
+          status: 201,
+          body: JSON.stringify({ user: result.user, accessToken: result.tokens.accessToken }),
+        };
+      }
+
+      if (action === 'login' && method === 'POST') {
+        const data = JSON.parse(body);
+        const result = await userService.login({
+          email: data.email,
+          username: data.username,
+          password: data.password,
+        });
+        return {
+          status: 200,
+          body: JSON.stringify({ user: result.user, accessToken: result.tokens.accessToken }),
+        };
+      }
+
+      if (action === 'refresh' && method === 'POST') {
+        const data = JSON.parse(body);
+        const tokens = await userService.refreshToken(data.refresh_token);
+        return { status: 200, body: JSON.stringify(tokens) };
+      }
+
+      if (action === 'logout' && method === 'POST') {
+        const authHeader = path[3];
+        const token = authHeader?.replace('Bearer ', '') || '';
+        const payload = jwtService.verifyToken(token);
+        if (payload) {
+          await userService.logout(payload.sub, body ? JSON.parse(body).refresh_token : undefined);
+        }
+        return { status: 200, body: JSON.stringify({ message: 'Logged out' }) };
+      }
+
+      if (action === 'password-reset' && method === 'POST') {
+        const data = JSON.parse(body);
+        const token = await userService.requestPasswordReset(data.email);
+        return {
+          status: 200,
+          body: JSON.stringify({
+            token: token || null,
+            message: token ? 'Password reset token sent' : 'If email exists, reset token sent',
+          }),
+        };
+      }
+
+      if (action === 'reset-password' && method === 'POST') {
+        const data = JSON.parse(body);
+        await userService.resetPassword(data.token, data.password);
+        return { status: 200, body: JSON.stringify({ message: 'Password reset successful' }) };
+      }
+
+      if (action === 'profile') {
+        const authResult = await this.jwtAuth.authenticate(
+          new Request(`http://localhost${path.join('/')}`, { method })
+        );
+
+        if (!authResult.authorized || !authResult.user) {
+          return {
+            status: 401,
+            body: JSON.stringify({ error: authResult.error || 'Unauthorized' }),
+          };
+        }
+
+        if (method === 'GET') {
+          const profile = await userService.getProfile(authResult.user.id);
+          return { status: 200, body: JSON.stringify(profile) };
+        }
+
+        if (method === 'PUT') {
+          const data = JSON.parse(body);
+          const updated = await userService.updateProfile(authResult.user.id, data);
+          return { status: 200, body: JSON.stringify(updated) };
+        }
+      }
+
+      if (action === 'change-password' && method === 'POST') {
+        const authResult = await this.jwtAuth.authenticate(
+          new Request(`http://localhost${path.join('/')}`, { method })
+        );
+
+        if (!authResult.authorized || !authResult.user) {
+          return {
+            status: 401,
+            body: JSON.stringify({ error: authResult.error || 'Unauthorized' }),
+          };
+        }
+
+        const data = JSON.parse(body);
+        await userService.changePassword(
+          authResult.user.id,
+          data.current_password,
+          data.new_password
+        );
+        return { status: 200, body: JSON.stringify({ message: 'Password changed successfully' }) };
+      }
+
+      return { status: 404, body: JSON.stringify({ error: 'User endpoint not found' }) };
+    } catch (error: any) {
+      const status =
+        error.message.includes('exists') || error.message.includes('Invalid') ? 400 : 500;
+      return { status, body: JSON.stringify({ error: error.message }) };
+    }
   }
 
   private async createTask(data: any): Promise<string> {

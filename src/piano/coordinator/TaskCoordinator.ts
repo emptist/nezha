@@ -65,8 +65,45 @@ export class TaskCoordinator {
       throw new Error(`OpenCode message failed: ${response.status}`);
     }
 
-    const data = (await response.json()) as { message?: { content?: string } };
-    return data.message?.content || 'Task sent to OpenCode';
+    console.log(`[TaskCoordinator] Task sent to OpenCode, waiting for completion...`);
+
+    const result = await this.waitForCompletion(300000);
+    return result;
+  }
+
+  private async waitForCompletion(timeoutMs: number = 300000): Promise<string> {
+    const pollInterval = 5000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
+
+      try {
+        const response = await fetch(`${this.config.opencodeUrl}/session/${this.sessionId}`, {
+          headers: this.getAuthHeader(),
+        });
+
+        if (!response.ok) continue;
+
+        const data = (await response.json()) as { status?: string; result?: string };
+
+        if (data.status === 'completed' || data.status === 'done') {
+          console.log(`[TaskCoordinator] Session completed: ${data.status}`);
+          return data.result || 'Task completed';
+        }
+
+        if (data.status === 'error' || data.status === 'failed') {
+          console.log(`[TaskCoordinator] Session failed: ${data.status}`);
+          return `Task failed: ${data.result || 'Unknown error'}`;
+        }
+
+        console.log(`[TaskCoordinator] Waiting... status: ${data.status}`);
+      } catch (error) {
+        console.log(`[TaskCoordinator] Poll error:`, error);
+      }
+    }
+
+    return 'Task timeout - still processing';
   }
 
   private async createSession(): Promise<void> {
