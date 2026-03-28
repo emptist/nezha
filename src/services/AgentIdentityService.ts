@@ -181,7 +181,6 @@ export class AgentIdentityService {
     const hash = this.generateDeterministicHash(context);
     const shortHash = hash.substring(0, 6);
     const source = context.source || 'nezha';
-    const branch = context.branch || 'main';
 
     // S = Specific: 有项目/git 信息
     if (context.project && context.gitHash) {

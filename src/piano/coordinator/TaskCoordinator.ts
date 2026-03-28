@@ -109,6 +109,14 @@ export class TaskCoordinator {
           const idleTime = now - lastActivityTime;
 
           if (idleTime > 60000) {
+            if (!hadActivity || (additions === 0 && deletions === 0 && files === 0)) {
+              console.log(
+                `[TaskCoordinator] VERIFICATION FAILED: No actual changes made - possible fake completion`
+              );
+              throw new Error(
+                'Verification failed: No code changes detected. Task not actually completed.'
+              );
+            }
             console.log(
               `[TaskCoordinator] Session idle for ${idleTime / 1000}s after activity - completed`
             );

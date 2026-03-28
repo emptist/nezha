@@ -10,8 +10,15 @@ vi.mock('../db/DatabaseClient.js', () => ({
 vi.mock('../config/Config.js', () => ({
   Config: {
     getInstance: () => ({
+      getDbConfig: () => ({}),
       getAgentId: () => 'test-agent-id',
     }),
+  },
+}));
+
+vi.mock('../services/AgentIdentityService.js', () => ({
+  AgentIdentityService: {
+    getResolvedIdentity: vi.fn().mockResolvedValue({ id: 'test-agent-id', name: 'Test Agent' }),
   },
 }));
 

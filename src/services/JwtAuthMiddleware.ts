@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../db/DatabaseClient.js';
-import { jwtService, JwtPayload } from './JwtService.js';
+import { jwtService } from './JwtService.js';
 
 export interface JwtAuthResult {
   authorized: boolean;

@@ -216,10 +216,11 @@ function generateDeterministicId(context: AgentContext): string {
 ```sql
 -- Agent 身份注册表
 CREATE TABLE agent_identities (
-  id VARCHAR(100) PRIMARY KEY,           -- 语义 ID
+  id VARCHAR(100) PRIMARY KEY,           -- 语义 ID (S-/G- 格式)
   project VARCHAR(255),                   -- 项目名
   git_hash VARCHAR(20),                   -- Git short hash
-  machine_fingerprint VARCHAR(64),         -- 机器指纹
+  machine_fingerprint VARCHAR(64),        -- 机器指纹
+  source VARCHAR(50) DEFAULT 'nezha',     -- AI 来源 (nezha/opencode/external/mcp)
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
 
@@ -428,4 +429,4 @@ NEZHA_AGENT_ID=jk-nezha-expert
 
 ---
 
-**Last Updated**: 2026-03-28
+**Last Updated**: 2026-03-29

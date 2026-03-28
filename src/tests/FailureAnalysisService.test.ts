@@ -175,7 +175,7 @@ describe('FailureAnalysisService', () => {
       const result = service.generateFixes('network', [], []);
 
       expect(result).toContain('Check network connectivity');
-      expect(result).toContain('Retry with longer delay');
+      expect(result).toContain('Retry with exponential backoff and jitter');
     });
 
     it('should generate fixes for permission errors', () => {
@@ -197,7 +197,7 @@ describe('FailureAnalysisService', () => {
         createMockFailurePattern({ commonFix: 'Clear cache' }),
       ];
 
-      const result = service.generateFixes('network', patterns, []);
+      const result = service.generateFixes('validation', patterns, []);
 
       expect(result).toContain('Historical fix: Restart the service');
       expect(result).toContain('Historical fix: Clear cache');

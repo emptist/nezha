@@ -20,7 +20,7 @@ import type { DatabaseClient } from '../../db/DatabaseClient.js';
 import { ReminderService } from '../ReminderService.js';
 import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
-import { TaskRouter, type ExecutorType } from '../../piano/router/TaskRouter.js';
+import { TaskRouter } from '../../piano/router/TaskRouter.js';
 import { TaskCoordinator } from '../../piano/coordinator/TaskCoordinator.js';
 import { Config } from '../../config/Config.js';
 
@@ -106,6 +106,8 @@ export class HeartbeatService {
     const executor = this.taskRouter.route(title, description);
     logger.info(`[TaskRouter] Routing "${title}" to: ${executor}`);
 
+    let opencodeFailed = false;
+
     if (executor === 'opencode') {
       logger.info(`[TaskRouter] Task "${title}" routed to OpenCode - sending to OpenCode...`);
 
@@ -126,17 +128,24 @@ export class HeartbeatService {
             [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.result }), taskId]
           );
           logger.info(`[TaskRouter] Task "${title}" completed via OpenCode`);
+          return;
         } catch (error) {
           logger.error(`[TaskCoordinator] Failed:`, error);
+          logger.info(`[TaskRouter] Falling back to internal AI for task "${title}"...`);
+          opencodeFailed = true;
         }
+      } else {
+        opencodeFailed = true;
       }
-      return;
     }
 
-    const sessionId = `nezha-${Date.now()}`;
-    const recentBroadcasts = await this.getRecentBroadcasts();
+    if (executor !== 'opencode' || opencodeFailed) {
+      logger.info(`[TaskRouter] Executing task "${title}" with internal AI...`);
 
-    const prompt = `${description || title}
+      const sessionId = `nezha-${Date.now()}`;
+      const recentBroadcasts = await this.getRecentBroadcasts();
+
+      const prompt = `${description || title}
 
 ---
 
@@ -162,37 +171,38 @@ After completing, use:
 
 Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 
-    try {
-      const result = await this.aiProvider.complete(prompt);
+      try {
+        const result = await this.aiProvider.complete(prompt);
 
-      await this.db.query(
-        `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
-        [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.content }), taskId]
-      );
-
-      logger.info(`Task completed: ${title}`);
-
-      await this.pluginManager.executeAfterTaskWithChanges({
-        taskId,
-        title,
-        description,
-        status: 'COMPLETED',
-        result: result.content,
-      });
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error(`Task failed: ${title}`, errorMessage);
-
-      if (retryCount < maxRetries) {
         await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
-          [TASK_STATUS.PENDING, errorMessage, retryCount + 1, taskId]
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
+          [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.content }), taskId]
         );
-      } else {
-        await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
-          [TASK_STATUS.FAILED, errorMessage, taskId]
-        );
+
+        logger.info(`Task completed: ${title}`);
+
+        await this.pluginManager.executeAfterTaskWithChanges({
+          taskId,
+          title,
+          description,
+          status: 'COMPLETED',
+          result: result.content,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.error(`Task failed: ${title}`, errorMessage);
+
+        if (retryCount < maxRetries) {
+          await this.db.query(
+            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
+            [TASK_STATUS.PENDING, errorMessage, retryCount + 1, taskId]
+          );
+        } else {
+          await this.db.query(
+            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
+            [TASK_STATUS.FAILED, errorMessage, taskId]
+          );
+        }
       }
     }
   }

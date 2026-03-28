@@ -316,7 +316,8 @@ export class UserService {
   }
 
   private toPublicUser(user: User): PublicUser {
-    const { password_hash: _, ...publicUser } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password_hash: _unused, ...publicUser } = user;
     return publicUser as PublicUser;
   }
 
