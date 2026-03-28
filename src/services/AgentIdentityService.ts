@@ -10,6 +10,8 @@ export interface AgentContext {
   gitHash: string | null;
   machineFingerprint: string;
   cwd: string;
+  source?: 'nezha' | 'opencode' | 'external' | 'mcp';
+  branch?: string;
 }
 
 export interface AgentIdentity {
@@ -98,12 +100,39 @@ export class AgentIdentityService {
   }
 
   detectContext(): AgentContext {
+    // Priority: Environment variable > Auto-detect
+    const source = this.detectSource();
+    const branch = this.getGitBranch();
+
     return {
       project: this.getProjectName(),
       gitHash: this.getGitHash(),
       machineFingerprint: this.getMachineFingerprint(),
       cwd: process.cwd(),
+      source,
+      branch,
     };
+  }
+
+  private detectSource(): 'nezha' | 'opencode' | 'external' | 'mcp' {
+    // Check environment variable first
+    const envSource = process.env.NEZHA_AGENT_SOURCE;
+    if (envSource === 'opencode' || envSource === 'external' || envSource === 'mcp') {
+      return envSource;
+    }
+    return 'nezha';
+  }
+
+  private getGitBranch(): string {
+    try {
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        encoding: 'utf-8',
+        cwd: process.cwd(),
+      }).trim();
+      return branch || 'main';
+    } catch {
+      return 'main';
+    }
   }
 
   private getProjectName(): string {
@@ -149,16 +178,17 @@ export class AgentIdentityService {
 
   generateSemanticId(context: AgentContext): string {
     const hash = this.generateDeterministicHash(context);
-    const timestamp = new Date().toISOString().replace(/[:-]/g, '').replace('T', '-').slice(0, 15);
     const shortHash = hash.substring(0, 6);
+    const source = context.source || 'nezha';
+    const branch = context.branch || 'main';
 
     // S = Specific: 有项目/git 信息
     if (context.project && context.gitHash) {
-      return `S-${context.project}-${context.gitHash}-${timestamp}-${shortHash}`;
+      return `S-${source}-${context.project}-${branch}-${shortHash}`;
     }
 
     // G = General: 无项目/git 信息
-    return `G-${context.machineFingerprint}-${timestamp}-${shortHash}`;
+    return `G-${source}-${context.machineFingerprint}-${shortHash}`;
   }
 
   generateDeterministicHash(context: AgentContext): string {
