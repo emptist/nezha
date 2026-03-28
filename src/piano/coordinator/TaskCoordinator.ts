@@ -138,7 +138,7 @@ export class TaskCoordinator {
 
     if (response.ok) {
       const data = (await response.json()) as { id: string };
-      this.sessionId = data.id;
+      this.sessionId = data.id.startsWith('ses_') ? data.id : `ses_${data.id}`;
       console.log(`[TaskCoordinator] Created session: ${this.sessionId}`);
     }
   }
