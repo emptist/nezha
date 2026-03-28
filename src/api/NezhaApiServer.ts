@@ -79,11 +79,13 @@ class NezhaApiServer {
 
     if (path[0] === 'tasks') {
       if (method === 'GET') {
-        const limit = parseInt(path[1] || '10', 10);
+        const queryParams = new URLSearchParams(url.split('?')[1] || '');
+        const status = queryParams.get('status') || 'PENDING';
+        const limit = parseInt(queryParams.get('limit') || '10', 10);
         const result = await this.db.query<any>(
           `SELECT id, title, description, priority, status, category, type, created_at 
-           FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC, created_at ASC LIMIT $1`,
-          [limit]
+           FROM tasks WHERE status = $1 ORDER BY priority DESC, created_at ASC LIMIT $2`,
+          [status, limit]
         );
         return { status: 200, body: JSON.stringify(result) };
       }
@@ -118,19 +120,28 @@ class NezhaApiServer {
     if (path[0] === 'memory') {
       if (method === 'GET') {
         const query = path[1] || '';
+        const limit = parseInt(
+          new URLSearchParams(url.split('?')[1] || '').get('limit') || '20',
+          10
+        );
         const result = await this.db.query<any>(
-          `SELECT id, topic, insight, source, created_at 
-           FROM memory WHERE topic ILIKE $1 OR insight ILIKE $1 
-           ORDER BY created_at DESC LIMIT 20`,
-          [`%${query}%`]
+          `SELECT id, content, source, tags, created_at 
+           FROM memory WHERE content ILIKE $1 
+           ORDER BY created_at DESC LIMIT $2`,
+          [`%${query}%`, limit]
         );
         return { status: 200, body: JSON.stringify(result) };
       }
 
       if (method === 'POST') {
         const data = JSON.parse(body);
-        const id = await this.saveMemory(data);
-        return { status: 201, body: JSON.stringify({ id }) };
+        const result = await this.db.query<any>(
+          `INSERT INTO memory (content, source, tags)
+           VALUES ($1, $2, $3)
+           RETURNING id`,
+          [data.content || data.insight || '', data.source || 'nezhapi', data.tags || []]
+        );
+        return { status: 201, body: JSON.stringify({ id: result.rows[0]?.id }) };
       }
     }
 

@@ -24,6 +24,14 @@ export interface SystemStatus {
   recentLearnings?: Array<{ content: string; tags: string[] }>;
   suggestions?: string[];
   totalMemories?: number;
+  openIssuesList?: Array<{
+    id: string;
+    title: string;
+    severity?: string;
+    issueType?: string;
+    priority?: number;
+    status: string;
+  }>;
 }
 
 export class ReminderTemplateService {
@@ -56,9 +64,11 @@ export class ReminderTemplateService {
       if (!context || context.length === 0) {
         return options.inverse({});
       }
-      return context.map((item: any, index: number) => {
-        return options.fn(item, { data: { index, key: index } });
-      }).join('');
+      return context
+        .map((item: any, index: number) => {
+          return options.fn(item, { data: { index, key: index } });
+        })
+        .join('');
     });
   }
 
@@ -122,20 +132,22 @@ export class ReminderTemplateService {
        RETURNING *`,
       [name, description, template, JSON.stringify(variables), priority]
     );
-    
+
     this.templateCache.delete(template);
-    
+
     if (!result.rows[0]) {
       throw new Error(`Failed to create template: ${name}`);
     }
-    
+
     logger.info(`[ReminderTemplate] Created template: ${name}`);
     return result.rows[0];
   }
 
   async updateTemplate(
     name: string,
-    updates: Partial<Pick<ReminderTemplate, 'description' | 'template' | 'variables' | 'priority' | 'enabled'>>
+    updates: Partial<
+      Pick<ReminderTemplate, 'description' | 'template' | 'variables' | 'priority' | 'enabled'>
+    >
   ): Promise<ReminderTemplate | null> {
     const setClauses: string[] = [];
     const values: any[] = [];
@@ -184,11 +196,8 @@ export class ReminderTemplateService {
   }
 
   async deleteTemplate(name: string): Promise<boolean> {
-    const result = await this.db.query(
-      `DELETE FROM reminder_templates WHERE name = $1`,
-      [name]
-    );
-    
+    const result = await this.db.query(`DELETE FROM reminder_templates WHERE name = $1`, [name]);
+
     const deleted = result.rowCount > 0;
     if (deleted) {
       logger.info(`[ReminderTemplate] Deleted template: ${name}`);

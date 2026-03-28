@@ -42,6 +42,8 @@ const TASK_COMPLETE_PATTERN =
   /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
 const ISSUE_COMMENT_PATTERN =
   /\[ISSUE_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)(?:\s+internal:\s*(true|false))?\s*(?=\[|$)/gis;
+const TASK_COMMENT_PATTERN =
+  /\[TASK_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)\s*(?=\[|$)/gis;
 
 function normalizeTitle(title: string): string {
   return title
@@ -260,6 +262,27 @@ async function reflect(text: string): Promise<ReflectResult> {
     }
   }
 
+  let taskComments = 0;
+  while ((match = TASK_COMMENT_PATTERN.exec(text)) !== null) {
+    const id = match[1]?.trim();
+    const comment = match[2]?.trim();
+    if (id && comment) {
+      const resultCheck = await database.query<{ title: string }>(
+        `SELECT title FROM tasks WHERE id = $1`,
+        [id]
+      );
+      if (resultCheck.rows.length > 0) {
+        await database.query(
+          `INSERT INTO task_comments (task_id, author, content)
+           VALUES ($1, $2, $3)`,
+          [id, author, comment]
+        );
+        taskComments++;
+      }
+    }
+  }
+  result.tasksCompleted += taskComments;
+
   result.total =
     result.learnings +
     result.promptUpdates +
@@ -281,7 +304,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'reflect',
         description:
-          'Parse and save reflection markers from text. Supports: LEARN, PROMPT_UPDATE, ISSUE, TASK, ANNOUNCE, SCHEDULE, ISSUE_RESOLVE, TASK_COMPLETE, ISSUE_COMMENT',
+          'Parse and save reflection markers from text. Supports: LEARN, PROMPT_UPDATE, ISSUE, TASK, ANNOUNCE, SCHEDULE, ISSUE_RESOLVE, TASK_COMPLETE, ISSUE_COMMENT, TASK_COMMENT',
         inputSchema: {
           type: 'object',
           properties: {
@@ -346,7 +369,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           properties: {
             name: {
               type: 'string',
-              description: 'Template name (e.g., default_reminder, urgent_reminder, learning_reminder)',
+              description:
+                'Template name (e.g., default_reminder, urgent_reminder, learning_reminder)',
             },
           },
           required: ['name'],
@@ -354,7 +378,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'update_reminder_template',
-        description: 'Update an existing reminder template. AI can modify template content, description, priority, or enable/disable it.',
+        description:
+          'Update an existing reminder template. AI can modify template content, description, priority, or enable/disable it.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -368,7 +393,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             template: {
               type: 'string',
-              description: 'New template content with Handlebars syntax. Variables: {{pendingTasks}}, {{failedTasks}}, {{openIssues}}, {{recentMemories}}, {{hasIssues}}, {{criticalTasks}}, {{recentLearnings}}, {{suggestions}}, {{totalMemories}}',
+              description:
+                'New template content with Handlebars syntax. Variables: {{pendingTasks}}, {{failedTasks}}, {{openIssues}}, {{recentMemories}}, {{hasIssues}}, {{criticalTasks}}, {{recentLearnings}}, {{suggestions}}, {{totalMemories}}',
             },
             priority: {
               type: 'number',
@@ -384,7 +410,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'create_reminder_template',
-        description: 'Create a new reminder template. AI has full autonomy to create custom templates.',
+        description:
+          'Create a new reminder template. AI has full autonomy to create custom templates.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -398,7 +425,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             template: {
               type: 'string',
-              description: 'Template content with Handlebars syntax. Use {{variable}} for variables and {{#if condition}}...{{/if}} for conditionals.',
+              description:
+                'Template content with Handlebars syntax. Use {{variable}} for variables and {{#if condition}}...{{/if}} for conditionals.',
             },
             priority: {
               type: 'number',
@@ -584,7 +612,13 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     }
 
     if (name === 'update_reminder_template') {
-      const { name: templateName, description, template, priority, enabled } = args as {
+      const {
+        name: templateName,
+        description,
+        template,
+        priority,
+        enabled,
+      } = args as {
         name: string;
         description?: string;
         template?: string;
@@ -614,7 +648,12 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
     }
 
     if (name === 'create_reminder_template') {
-      const { name: templateName, description, template, priority = 5 } = args as {
+      const {
+        name: templateName,
+        description,
+        template,
+        priority = 5,
+      } = args as {
         name: string;
         description: string;
         template: string;

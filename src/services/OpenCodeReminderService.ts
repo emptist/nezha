@@ -2,7 +2,7 @@
  * @layer integration
  * @integration OpenCode
  * @description 向 OpenCode AI 发送提醒消息，引导 AI 持续改进项目
- * 
+ *
  * 架构说明：
  * - 这是集成层服务，不是核心功能
  * - 失败不影响 Nezha 核心功能
@@ -53,15 +53,15 @@ export class OpenCodeReminderService {
 
     try {
       await this.createSession();
-      
+
       this.timer = setInterval(async () => {
         await this.sendReminder();
       }, this.config.reminderIntervalMs);
-      
+
       this.isRunning = true;
-      
+
       await this.sendReminder();
-      
+
       logger.info('[OpenCodeReminder] Service started successfully');
     } catch (error) {
       logger.error('[OpenCodeReminder] Failed to start service:', error);
@@ -91,7 +91,9 @@ export class OpenCodeReminderService {
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`Failed to create session: ${response.status} ${response.statusText} - ${text}`);
+        throw new Error(
+          `Failed to create session: ${response.status} ${response.statusText} - ${text}`
+        );
       }
 
       const data = (await response.json()) as { id: string };
@@ -111,18 +113,18 @@ export class OpenCodeReminderService {
 
     try {
       const status = await this.collectSystemStatus();
-      
+
       if (this.shouldSkipReminder(status)) {
         logger.debug('[OpenCodeReminder] Skipping reminder - nothing actionable');
         return;
       }
-      
+
       const message = await this.generateReminderMessage(status);
-      
+
       await this.sendMessage(message);
     } catch (error) {
       logger.error('[OpenCodeReminder] Failed to send reminder:', error);
-      
+
       if (error instanceof Error && error.message.includes('session')) {
         this.sessionId = null;
       }
@@ -162,6 +164,18 @@ export class OpenCodeReminderService {
       `SELECT content, tags FROM memory WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY importance DESC LIMIT 5`
     );
 
+    const openIssuesList = await this.db.query<{
+      id: string;
+      title: string;
+      severity: string;
+      issue_type: string;
+      status: string;
+    }>(
+      `SELECT id, title, severity, issue_type, status FROM issues WHERE status = 'open' 
+       ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END, 
+       created_at DESC LIMIT 10`
+    );
+
     const pending = parseInt(pendingTasks.rows[0]?.count || '0', 10);
     const failed = parseInt(failedTasks.rows[0]?.count || '0', 10);
     const issues = parseInt(openIssues.rows[0]?.count || '0', 10);
@@ -176,15 +190,22 @@ export class OpenCodeReminderService {
       criticalTasks: criticalTasks.rows,
       recentLearnings: recentLearnings.rows.map(r => ({
         content: r.content,
-        tags: r.tags || []
+        tags: r.tags || [],
       })),
       suggestions: [
         'Review recent code changes',
         'Optimize slow queries',
         'Update documentation',
-        'Run comprehensive tests'
+        'Run comprehensive tests',
       ],
       totalMemories: parseInt(totalMemories.rows[0]?.count || '0', 10),
+      openIssuesList: openIssuesList.rows.map(i => ({
+        id: i.id,
+        title: i.title,
+        severity: i.severity,
+        issueType: i.issue_type,
+        status: i.status,
+      })),
     };
   }
 
@@ -195,7 +216,10 @@ export class OpenCodeReminderService {
       logger.debug(`[OpenCodeReminder] Using template: ${template.name}`);
       return message;
     } catch (error) {
-      logger.warn('[OpenCodeReminder] Failed to load template from database, using fallback:', error);
+      logger.warn(
+        '[OpenCodeReminder] Failed to load template from database, using fallback:',
+        error
+      );
       return this.generateFallbackMessage(status);
     }
   }
@@ -214,6 +238,12 @@ export class OpenCodeReminderService {
     }
     if (status.openIssues > 0) {
       parts.push(`- 🐛 ${status.openIssues} 个开放问题`);
+      if (status.openIssuesList && status.openIssuesList.length > 0) {
+        parts.push('  具体问题:');
+        status.openIssuesList.forEach((issue, idx) => {
+          parts.push(`    ${idx + 1}. [${issue.severity}] ${issue.title} (${issue.id})`);
+        });
+      }
     }
     if (status.recentMemories > 0) {
       parts.push(`- 📚 ${status.recentMemories} 条新学习`);
@@ -248,23 +278,22 @@ export class OpenCodeReminderService {
     }
 
     try {
-      const response = await fetch(
-        `${this.config.opencodeUrl}/session/${this.sessionId}/message`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...this.getAuthHeader(),
-          },
-          body: JSON.stringify({
-            parts: [{ type: 'text', text: message }],
-          }),
-        }
-      );
+      const response = await fetch(`${this.config.opencodeUrl}/session/${this.sessionId}/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeader(),
+        },
+        body: JSON.stringify({
+          parts: [{ type: 'text', text: message }],
+        }),
+      });
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`Failed to send message: ${response.status} ${response.statusText} - ${text}`);
+        throw new Error(
+          `Failed to send message: ${response.status} ${response.statusText} - ${text}`
+        );
       }
 
       logger.info('[OpenCodeReminder] Reminder sent successfully');
@@ -276,9 +305,9 @@ export class OpenCodeReminderService {
 
   private getAuthHeader(): Record<string, string> {
     if (this.config.username && this.config.password) {
-      const credentials = Buffer.from(
-        `${this.config.username}:${this.config.password}`
-      ).toString('base64');
+      const credentials = Buffer.from(`${this.config.username}:${this.config.password}`).toString(
+        'base64'
+      );
       return { Authorization: `Basic ${credentials}` };
     }
     return {};

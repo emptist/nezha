@@ -344,7 +344,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
       // Mark memories as viewed
       for (const row of result.rows) {
         await database.query(
-          `UPDATE memory SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+          `UPDATE memory SET viewers = ARRAY(SELECT DISTINCT unnest(viewers || $1)) WHERE id = $2`,
           [agentId, row.id]
         );
       }
@@ -585,7 +585,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           const agentId = identity.id;
           for (const issue of issuesResult.rows) {
             await database.query(
-              `UPDATE issues SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+              `UPDATE issues SET viewers = ARRAY(SELECT DISTINCT unnest(viewers || $1)) WHERE id = $2`,
               [agentId, issue.id]
             );
           }
@@ -646,7 +646,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
 
       // Mark skill as viewed
       await database.query(
-        `UPDATE skills SET viewers = array_distinct(viewers || $1) WHERE id = $2`,
+        `UPDATE skills SET viewers = ARRAY(SELECT DISTINCT unnest(viewers || $1)) WHERE id = $2`,
         [agentId, skill.id]
       );
 
