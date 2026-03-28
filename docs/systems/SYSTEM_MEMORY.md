@@ -1,27 +1,32 @@
-# Nezha 系统记忆
+# System Memory - Environment Configuration
 
-**创建日期**: 2026-03-17  
-**目的**: 存储关键配置信息，避免重复询问用户
+**Created**: 2026-03-17  
+**Updated**: 2026-03-29  
+**Purpose**: Store critical configuration information to avoid repeated user queries
 
 ---
 
-## 🗄️ 数据库配置
+## PostgreSQL Configuration
 
-### PostgreSQL 安装信息
+### Installation Information
 
-- **安装方式**: macOS Application (Postgres.app)
-- **版本**: 18
-- **二进制路径**: `/Applications/Postgres.app/Contents/Versions/18/bin/`
-- **数据目录**: `~/Library/Application Support/Postgres/var-18/`
-- **配置文件**: `~/Library/Application Support/Postgres/var-18/pg_hba.conf`
+| Item | Value |
+|------|-------|
+| **Method** | macOS Application (Postgres.app) |
+| **Version** | 18 |
+| **Binary Path** | `/Applications/Postgres.app/Contents/Versions/18/bin/` |
+| **Data Directory** | `~/Library/Application Support/Postgres/var-18/` |
+| **Config File** | `~/Library/Application Support/Postgres/var-18/pg_hba.conf` |
 
-### 认证方式
+### Authentication
 
-- **当前**: Keychain 认证
-- **问题**: 命令行工具和 Node.js 不支持
-- **解决**: 需要修改 pg_hba.conf 为 trust 认证
+| Item | Value |
+|------|-------|
+| **Current** | Keychain authentication |
+| **Issue** | CLI tools and Node.js don't support it |
+| **Solution** | Modify pg_hba.conf to use trust authentication |
 
-### 连接配置
+### Connection Configuration
 
 ```bash
 # .env
@@ -29,31 +34,52 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=nezha
 DB_USER=postgres
-DB_PASSWORD=  # 留空，使用 trust 认证
+DB_PASSWORD=  # Empty, use trust authentication
+```
+
+### How to Fix Authentication
+
+**Step 1**: Update .env file
+```bash
+NEZHA_DB_PASSWORD=
+```
+
+**Step 2**: Verify pg_hba.conf
+```bash
+# Should have:
+local   all             all                                     trust
+host    all             all             127.0.0.1/32            trust
+```
+
+**Step 3**: Test connection
+```bash
+psql -U postgres -d nezha -c "SELECT version();"
 ```
 
 ---
 
-## 🤖 OpenCode 配置
+## OpenCode Configuration
 
-### API 信息
+### API Information
 
-- **Provider ID**: opencode
-- **Model ID**: big-pickle
-- **Agent**: build
-- **Mode**: build
+| Item | Value |
+|------|-------|
+| **Provider ID** | opencode |
+| **Model ID** | big-pickle |
+| **Agent** | build |
+| **Mode** | build |
 
-### 会话文件
+### Session Files
 
-- **位置**: `.tmp/nezha_session_*.json`
-- **格式**: JSON
-- **用途**: 存储对话历史和任务执行记录
+| Item | Value |
+|------|-------|
+| **Location** | `.tmp/nezha_session_*.json` |
+| **Format** | JSON |
+| **Purpose** | Store conversation history and task execution records |
 
 ---
 
-## 📁 项目结构
-
-### 关键目录
+## Project Structure
 
 ```
 nezha/
@@ -70,11 +96,9 @@ nezha/
 │   └── config/
 │       └── Config.ts
 ├── docs/
-│   ├── IMPROVEMENT_PLAN.md
-│   ├── DUAL_MODE_MEMORY_DESIGN.md
-│   ├── DUAL_MODE_CONVERSATION_DESIGN.md
-│   ├── CONTINUOUS_IMPROVEMENT_SYSTEM.md
-│   └── POSTGRESQL_CONFIG_GUIDE.md
+│   ├── systems/
+│   ├── guides/
+│   └── ...
 ├── conversations/
 │   ├── YYYY-MM-DD/
 │   │   └── session-*.jsonl
@@ -88,94 +112,73 @@ nezha/
 
 ---
 
-## 🔧 已知问题
+## Key Decisions
 
-### 1. 数据库连接
+### 1. Dual Mode Design
 
-- **问题**: PostgreSQL 认证配置不正确
-- **影响**: 无法使用数据库功能
-- **解决**: 修改 pg_hba.conf 为 trust 认证
-- **优先级**: HIGH
+| Mode | Storage | Reason |
+|------|---------|--------|
+| **Development** | File system | May not connect to database |
+| **Production** | Database only | Data isolation, multi-project support |
 
-### 2. OpenCode API
+### 2. Continuous Improvement Mode
 
-- **问题**: API 未配置
-- **影响**: 无法使用 OpenCode 集成
-- **解决**: 配置 API URL 和认证
-- **优先级**: HIGH
+- **Choice**: Continuous improvement mode
+- **Reason**: Best suited for Nezha's autonomous work goal
+- **Features**: AI self-identifies, executes, reviews, learns
 
-### 3. 持续工作
+### 3. Conversation Recording
 
-- **问题**: HeartbeatService 未运行
-- **影响**: 无法持续工作
-- **解决**: 修复数据库后启动
-- **优先级**: HIGH
+- **Format**: JSONL
+- **Location**: conversations/YYYY-MM-DD/session-*.jsonl
+- **Index**: conversations/index.json
 
----
+### 4. npm Mirror
 
-## 💡 关键决策
-
-### 1. 双模式设计
-
-- **开发模式**: 使用文件系统
-  - 原因: 可能连数据库都连不上
-  - 优势: 不依赖数据库，随时可用
-  
-- **产品模式**: 仅使用数据库
-  - 原因: 不能污染客户项目
-  - 优势: 数据隔离，多项目支持
-
-### 2. 持续改进模式
-
-- **选择**: 持续改进模式
-- **原因**: 最适合 Nezha 的自主工作目标
-- **特点**: AI 自主识别、执行、评审、学习
-
-### 3. 对话记录
-
-- **格式**: JSONL
-- **位置**: conversations/YYYY-MM-DD/session-*.jsonl
-- **索引**: conversations/index.json
-
-### 4. npm 镜像
-
-- **推荐**: 使用 cnpm 从镜像安装
-- **原因**: 国内访问 npm 官方源较慢
-- **命令**: `cnpm install`
+- **Recommendation**: Use cnpm to install from mirror
+- **Reason**: Slow access to official npm in China
+- **Command**: `cnpm install`
 
 ---
 
-## 📊 进度跟踪
+## Known Issues
 
-### 已完成
-
-- [x] 对话记录系统
-- [x] OpenCode 客户端
-- [x] 双模式记忆设计
-- [x] 双模式对话设计
-- [x] 持续改进系统设计
-
-### 进行中
-
-- [ ] PostgreSQL 配置修改
-- [ ] 数据库连接测试
-- [ ] OpenCode API 配置
-
-### 待开始
-
-- [ ] 持续工作启动
-- [ ] 初始任务添加
-- [ ] 自主学习实现
+| Issue | Impact | Solution | Priority |
+|-------|--------|----------|----------|
+| PostgreSQL auth config | Cannot use database | Modify pg_hba.conf to trust | HIGH |
+| OpenCode API not configured | Cannot use OpenCode integration | Configure API URL and auth | HIGH |
+| HeartbeatService not running | Cannot work continuously | Start after database fix | HIGH |
 
 ---
 
-## 🎯 下一步行动
+## Progress Tracking
 
-1. **用户操作**: 修改 pg_hba.conf 为 trust 认证
-2. **AI 操作**: 测试数据库连接
-3. **AI 操作**: 配置 OpenCode API
-4. **AI 操作**: 启动持续工作模式
+### Completed
+- [x] Conversation recording system
+- [x] OpenCode client
+- [x] Dual mode memory design
+- [x] Dual mode conversation design
+- [x] Continuous improvement system design
+
+### In Progress
+- [ ] PostgreSQL configuration modification
+- [ ] Database connection test
+- [ ] OpenCode API configuration
+
+### Pending
+- [ ] Continuous work startup
+- [ ] Initial task addition
+- [ ] Autonomous learning implementation
 
 ---
 
-**重要**: 此文件记录关键信息，避免重复询问用户。每次遇到问题，先查看此文件。
+## Next Steps
+
+1. **User Action**: Modify pg_hba.conf to trust authentication
+2. **AI Action**: Test database connection
+3. **AI Action**: Configure OpenCode API
+4. **AI Action**: Start continuous work mode
+
+---
+
+**Important**: This file records critical information to avoid repeated user queries. Check this file first when encountering issues.

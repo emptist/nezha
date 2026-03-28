@@ -29,12 +29,9 @@
 | [DEVELOPER_GUIDE.md](guides/DEVELOPER_GUIDE.md) | 开发者指南 |
 | [USER_GUIDE.md](guides/USER_GUIDE.md) | 用户指南 |
 | [SOP.md](guides/SOP.md) | 标准操作流程 |
-| [AI_COLLABORATION.md](guides/AI_COLLABORATION.md) | AI 协作指南 |
-| [AI_COLLABORATION_GUIDE.md](guides/AI_COLLABORATION_GUIDE.md) | AI 协作详细指南 |
-| [AI_COLLABORATION_TUTORIAL.md](guides/AI_COLLABORATION_TUTORIAL.md) | AI 协作教程 |
-| [AI_COMMUNICATION_GUIDE.md](guides/AI_COMMUNICATION_GUIDE.md) | AI 通信指南 |
+| [AI_COLLABORATION_COMPREHENSIVE.md](guides/AI_COLLABORATION_COMPREHENSIVE.md) | AI 协作完整指南 (合并版) |
+| [AI_COMMUNICATION_AND_COLLABORATION.md](guides/AI_COMMUNICATION_AND_COLLABORATION.md) | AI 通信与协作指南 (合并版) |
 | [PRODUCT_TUTORIAL.md](guides/PRODUCT_TUTORIAL.md) | 产品教程 |
-| [collaboration_pattern.md](guides/collaboration_pattern.md) | 协作模式 |
 | [issue_usage_guide.md](guides/issue_usage_guide.md) | Issue 使用指南 |
 
 ## Systems / 系统
@@ -52,7 +49,7 @@
 | [REFLECTION_TEMPLATES.md](systems/REFLECTION_TEMPLATES.md) | 反思模板 |
 | [OPENCODE_REMINDER_SYSTEM.md](systems/OPENCODE_REMINDER_SYSTEM.md) | OpenCode 提醒系统 |
 | [KNOWLEDGE_MANAGEMENT_SYSTEM.md](systems/KNOWLEDGE_MANAGEMENT_SYSTEM.md) | 知识管理系统 |
-| [SYSTEM_MEMORY.md](systems/SYSTEM_MEMORY.md) | 系统记忆 |
+| [SYSTEM_MEMORY.md](systems/SYSTEM_MEMORY.md) | 系统记忆与环境配置 (合并版) |
 
 ## Integrations / 集成
 
@@ -159,8 +156,8 @@ archive/
 |------|--------|
 | getting-started/ | 3 |
 | architecture/ | 5 |
-| guides/ | 10 |
-| systems/ | 21 |
+| guides/ | 7 |
+| systems/ | 20 |
 | integrations/ | 22 |
 | reference/ | 29 |
 | features/ | 2 |
@@ -169,8 +166,8 @@ archive/
 | archive/2026-03/plans/ | 3 |
 | archive/2026-03/incidents/ | 1 |
 | issues/ | 3 |
-| **总计** | **~150** |
+| **总计** | **~145** |
 
 ---
 
-*Last updated: 2026-03-28*
+*Last updated: 2026-03-29*

@@ -1,7 +1,8 @@
 # Learning Memory Metabolism - 学习记忆新陈代谢
 
-> **灵感来源**: OpenClaw `src/memory/temporal-decay.ts`
+> **灵感来源**: OpenClaw, CoffeeClaw, Everything-Claude-Code
 > **创建日期**: 2026-03-28
+> **更新日期**: 2026-03-29
 > **状态**: 提案
 
 ## 问题
@@ -277,8 +278,120 @@ memory:
 ## 参考
 
 - OpenClaw `src/memory/temporal-decay.ts` - 时间衰减实现
-- OpenClaw `src/memory/mmr.ts` - 多样性重排序
-- Nezha `docs/MEMORY_SYSTEM.md` - 当前记忆系统设计
+- OpenClaw `src/memory/mmr.ts` - 多样性重排序 (MMR)
+- CoffeeClaw `skills/memory-enhancer/SKILL.md` - 记忆增强器
+- Everything-Claude-Code `skills/continuous-learning-v2/SKILL.md` - 持续学习系统
+- Nezha `docs/systems/MEMORY_SYSTEM.md` - 当前记忆系统设计
+
+---
+
+## 参考项目详细分析
+
+### 1. OpenClaw 记忆管理
+
+**核心机制**：
+
+| 功能 | 实现 | 文件 |
+|------|------|------|
+| MMR 重排序 | Jaccard 相似度 + λ 权衡 | `src/memory/mmr.ts` |
+| 时间衰减 | 指数衰减函数 | `src/memory/temporal-decay.ts` |
+| 混合搜索 | SQLite + 向量嵌入 | `src/memory/hybrid.ts` |
+
+**MMR 算法核心**：
+```typescript
+// MMR = λ * relevance - (1-λ) * max_similarity_to_selected
+function computeMMRScore(relevance, maxSimilarity, lambda) {
+  return lambda * relevance - (1 - lambda) * maxSimilarity;
+}
+```
+
+**关键参数**：
+- `lambda: 0.7` - 平衡相关性与多样性
+- `enabled: false` - 默认关闭，需显式启用
+
+### 2. CoffeeClaw 记忆增强器
+
+**核心功能**：
+
+| 功能 | 说明 |
+|------|------|
+| 自动标签分类 | 技术/业务/类型/优先级标签 |
+| 关键信息提取 | 决策点、待办、问题、经验 |
+| 语义搜索 | 关键词、语义、时间、标签组合 |
+| 记忆关联 | 相关决策、依赖关系、主题聚类 |
+| 记忆摘要 | 每日、每周、项目摘要 |
+
+**记忆文件类型**：
+- `CONTEXT.md` - 当前上下文
+- `DECISIONS.md` - 决策记录
+- `MEMORY.md` - 项目记忆
+- `PROGRESS.md` - 进度追踪
+- `TODO.md` - 待办事项
+
+**索引结构**：
+```json
+{
+  "entries": [{
+    "id": "uuid",
+    "type": "decision",
+    "tags": ["#architecture"],
+    "timestamp": "2026-03-10T15:30:00Z",
+    "related": ["uuid1", "uuid2"]
+  }]
+}
+```
+
+**更新策略**：
+- 实时更新 - 记忆文件变化时
+- 定时更新 - 每小时完整重建
+- 手动更新 - 用户触发
+
+### 3. Everything-Claude-Code 持续学习 v2.1
+
+**核心概念：Instinct (本能)**
+
+```yaml
+id: prefer-functional-style
+trigger: "when writing new functions"
+confidence: 0.7
+domain: "code-style"
+scope: project  # 或 global
+```
+
+**置信度演化**：
+
+| 分数 | 含义 | 行为 |
+|------|------|------|
+| 0.3 | 试探性 | 建议但不强制 |
+| 0.5 | 中等 | 相关时应用 |
+| 0.7 | 强 | 自动批准应用 |
+| 0.9 | 近确定 | 核心行为 |
+
+**作用域决策**：
+
+| 模式类型 | 作用域 | 示例 |
+|----------|--------|------|
+| 语言/框架约定 | project | "Use React hooks" |
+| 文件结构偏好 | project | "Tests in __tests__/" |
+| 安全实践 | global | "Validate user input" |
+| 工具工作流 | global | "Grep before Edit" |
+
+**晋升机制**：
+- 同一本能在 2+ 项目出现
+- 平均置信度 >= 0.8
+- 自动晋升为全局
+
+### 4. 综合对比
+
+| 特性 | OpenClaw | CoffeeClaw | ECC v2.1 | Nezha 建议 |
+|------|----------|------------|----------|------------|
+| 时间衰减 | ✅ 指数 | ❌ | ❌ | ✅ 采用 |
+| 置信度 | ❌ | ❌ | ✅ 0.3-0.9 | ✅ 采用 |
+| 作用域 | ❌ | ❌ | ✅ project/global | ✅ 采用 |
+| MMR 多样性 | ✅ | ❌ | ❌ | ✅ 可选 |
+| 自动标签 | ❌ | ✅ | ✅ domain | ✅ 采用 |
+| 访问计数 | ❌ | ❌ | ❌ | ✅ 采用 |
+| 晋升机制 | ❌ | ❌ | ✅ | ✅ 采用 |
 
 ---
 
