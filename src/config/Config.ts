@@ -297,7 +297,7 @@ export class Config implements IConfig {
 
     return {
       mode: 'http',
-      opencodeApiUrl,
+      opencodeApiUrl: opencodeApiUrl.replace(/\/+$/, ''),
     };
   }
 
