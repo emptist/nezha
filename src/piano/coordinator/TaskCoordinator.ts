@@ -74,6 +74,8 @@ export class TaskCoordinator {
   private async waitForCompletion(timeoutMs: number = 300000): Promise<string> {
     const pollInterval = 5000;
     const startTime = Date.now();
+    let lastActivityTime = Date.now();
+    let hadActivity = false;
 
     while (Date.now() - startTime < timeoutMs) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
@@ -92,24 +94,29 @@ export class TaskCoordinator {
           time?: { updated?: number };
         };
 
-        const hasActivity =
-          data.summary && ((data.summary.additions ?? 0) > 0 || (data.summary.deletions ?? 0) > 0);
+        const additions = data.summary?.additions ?? 0;
+        const deletions = data.summary?.deletions ?? 0;
+        const files = data.summary?.files ?? 0;
+        const hasActivity = additions > 0 || deletions > 0;
         const lastUpdate = data.time?.updated;
 
-        if (!hasActivity && lastUpdate) {
+        if (hasActivity) {
+          lastActivityTime = Date.now();
+          hadActivity = true;
+          console.log(`[TaskCoordinator] Processing... additions: ${additions}, files: ${files}`);
+        } else if (hadActivity && lastUpdate) {
           const now = Date.now();
-          const idleTime = now - lastUpdate;
-          if (idleTime > 120000) {
+          const idleTime = now - lastActivityTime;
+
+          if (idleTime > 60000) {
             console.log(
-              `[TaskCoordinator] Session idle for ${idleTime / 1000}s - treating as completed`
+              `[TaskCoordinator] Session idle for ${idleTime / 1000}s after activity - completed`
             );
-            return `Task completed (idle: ${idleTime / 1000}s)`;
+            return `Task completed (additions: ${additions}, deletions: ${deletions}, files: ${files})`;
           }
           console.log(`[TaskCoordinator] Waiting... idle: ${idleTime / 1000}s`);
-        } else {
-          console.log(
-            `[TaskCoordinator] Processing... additions: ${data.summary?.additions || 0}, files: ${data.summary?.files || 0}`
-          );
+        } else if (!hadActivity) {
+          console.log(`[TaskCoordinator] Waiting for session to start...`);
         }
       } catch (error) {
         console.log(`[TaskCoordinator] Poll error:`, error);
