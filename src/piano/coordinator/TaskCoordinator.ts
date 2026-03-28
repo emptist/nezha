@@ -10,6 +10,7 @@ export interface TaskContext {
 export interface CoordinatorConfig {
   opencodeUrl: string;
   opencodeAuth?: { username: string; password: string };
+  useAuth?: boolean;
 }
 
 export class TaskCoordinator {
@@ -19,22 +20,22 @@ export class TaskCoordinator {
 
   constructor(config: CoordinatorConfig) {
     this.router = new TaskRouter();
-    this.config = config;
+    this.config = {
+      useAuth: true,
+      ...config,
+    };
   }
 
   async execute(task: TaskContext): Promise<{ executor: ExecutorType; result: string }> {
-    const executor = this.router.route(task.title, task.description);
+    console.log(`[TaskCoordinator] Executing task "${task.title}" on OpenCode...`);
 
-    console.log(`[TaskCoordinator] Routing task "${task.title}" to: ${executor}`);
-
-    switch (executor) {
-      case 'opencode':
-        return { executor, result: await this.executeOnOpenCode(task) };
-      case 'pi':
-        return { executor, result: 'Pi execution not implemented yet' };
-      case 'internal':
-      default:
-        return { executor, result: 'Use internal AI (current behavior)' };
+    try {
+      const result = await this.executeOnOpenCode(task);
+      return { executor: 'opencode', result };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[TaskCoordinator] Failed to execute on OpenCode:`, errorMsg);
+      return { executor: 'opencode', result: `Failed: ${errorMsg}` };
     }
   }
 
@@ -106,13 +107,15 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."
   }
 
   private getAuthHeader(): Record<string, string> {
-    if (this.config.opencodeAuth) {
-      const credentials = Buffer.from(
-        `${this.config.opencodeAuth.username}:${this.config.opencodeAuth.password}`
-      ).toString('base64');
-      return { Authorization: `Basic ${credentials}` };
-    }
-    return {};
+    if (!this.config.useAuth) return {};
+
+    const username =
+      this.config.opencodeAuth?.username || process.env.OPENCODE_SERVER_USERNAME || 'opencode';
+    const password =
+      this.config.opencodeAuth?.password || process.env.OPENCODE_SERVER_PASSWORD || 'nezha-secret';
+
+    const credentials = Buffer.from(`${username}:${password}`).toString('base64');
+    return { Authorization: `Basic ${credentials}` };
   }
 
   setRouterConfig(config: Partial<TaskRouter['config']>) {
