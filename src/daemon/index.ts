@@ -45,12 +45,14 @@ async function main(): Promise<void> {
   });
 
   const healthPort = nezhaConfig.getHealthConfig().port;
-  const healthServer = new HealthServer(db, healthPort);
+  const transportConfig = nezhaConfig.getTransportConfig();
+  const healthServer = new HealthServer(db, healthPort, {
+    opencodeApiUrl: transportConfig.opencodeApiUrl,
+  });
   await healthServer.start();
 
   await heartbeatService.start();
 
-  const transportConfig = nezhaConfig.getTransportConfig();
   const opencodeReminder = new OpenCodeReminderService(db, {
     opencodeUrl: transportConfig.opencodeApiUrl || 'http://127.0.0.1:56795',
     username: process.env.OPENCODE_SERVER_USERNAME,
