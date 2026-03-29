@@ -106,7 +106,10 @@ export class OpenCodeReminderService {
   }
 
   private async sendReminder(): Promise<void> {
-    if (!this.sessionId) {
+    if (!this.sessionId || !(await this.isSessionAlive())) {
+      if (this.sessionId) {
+        logger.info('[OpenCodeReminder] Session dead, recreating...');
+      }
       await this.createSession();
       if (!this.sessionId) return;
     }
@@ -311,5 +314,18 @@ export class OpenCodeReminderService {
       return { Authorization: `Basic ${credentials}` };
     }
     return {};
+  }
+
+  private async isSessionAlive(): Promise<boolean> {
+    if (!this.sessionId) return false;
+
+    try {
+      const response = await fetch(`${this.config.opencodeUrl}/session/${this.sessionId}`, {
+        headers: this.getAuthHeader(),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
   }
 }

@@ -22,12 +22,14 @@ import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
 import { TaskRouter } from '../../piano/router/TaskRouter.js';
 import { TaskCoordinator } from '../../piano/coordinator/TaskCoordinator.js';
+import { PiExecutorWrapper } from '../../piano/executor/PiExecutorWrapper.js';
 import { Config } from '../../config/Config.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
   taskTimeoutMs?: number;
   enableReminder?: boolean;
+  enablePi?: boolean;
 }
 
 export class HeartbeatService {
@@ -39,6 +41,7 @@ export class HeartbeatService {
   private readonly nextStepAdvisor: NextStepAdvisor;
   private readonly taskRouter: TaskRouter;
   private readonly taskCoordinator: TaskCoordinator | null = null;
+  private readonly piExecutor: PiExecutorWrapper | null = null;
   private readonly config: HeartbeatConfig;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
@@ -46,10 +49,11 @@ export class HeartbeatService {
     this.config = config || {};
     this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
     this.aiProvider = AIProviderFactory.createFromEnv();
+    const enablePi = config?.enablePi ?? false;
     this.taskRouter = new TaskRouter({
       useOpenCode: true,
-      usePi: false,
-      complexityThreshold: 30,
+      usePi: enablePi,
+      complexityThreshold: 999, // Disable complexity routing - Pi only for simple tasks
     });
 
     const opencodeUrl = Config.getInstance().getTransportConfig().opencodeApiUrl;
@@ -57,6 +61,10 @@ export class HeartbeatService {
       this.taskCoordinator = new TaskCoordinator({
         opencodeUrl,
       });
+    }
+
+    if (enablePi) {
+      this.piExecutor = new PiExecutorWrapper();
     }
 
     this.nextStepAdvisor = new NextStepAdvisor({
@@ -136,6 +144,31 @@ export class HeartbeatService {
         }
       } else {
         opencodeFailed = true;
+      }
+    }
+
+    if (executor === 'pi' && this.piExecutor) {
+      logger.info(`[TaskRouter] Task "${title}" routed to Pi - executing...`);
+
+      try {
+        const result = await this.piExecutor.execute(description || title);
+        logger.info(`[PiExecutor] Result: ${result.message.substring(0, 100)}...`);
+
+        await this.db.query(
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
+          [
+            TASK_STATUS.COMPLETED,
+            JSON.stringify({ message: result.message, output: result.output }),
+            taskId,
+          ]
+        );
+
+        await this.extractAndCreateTasks(result.output, title);
+        logger.info(`[TaskRouter] Task "${title}" completed via Pi`);
+        return;
+      } catch (error) {
+        logger.error(`[PiExecutor] Failed:`, error);
+        logger.info(`[TaskRouter] Falling back to internal AI for task "${title}"...`);
       }
     }
 
@@ -245,5 +278,34 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 
   isRunning(): boolean {
     return this.scheduler.getEventBus() !== null;
+  }
+
+  private async extractAndCreateTasks(piOutput: string, sourceTask: string): Promise<void> {
+    const lines = piOutput.split('\n');
+    const taskPattern = /^[-*]\s*(?:task|todo|任务)[:\s]+(.+)/i;
+    let createdCount = 0;
+
+    for (const line of lines) {
+      const match = line.match(taskPattern);
+      if (match && match[1]) {
+        const taskTitle = match[1].trim();
+        if (taskTitle.length > 3) {
+          try {
+            await this.db.query(
+              `INSERT INTO tasks (title, description, priority, source) VALUES ($1, $2, $3, $4)`,
+              [taskTitle, `From Pi planning: ${sourceTask}`, 5, 'pi-planner']
+            );
+            createdCount++;
+            logger.info(`[PiPlanner] Created task: ${taskTitle}`);
+          } catch (error) {
+            logger.warn(`[PiPlanner] Failed to create task: ${taskTitle}`, error);
+          }
+        }
+      }
+    }
+
+    if (createdCount > 0) {
+      logger.info(`[PiPlanner] Created ${createdCount} tasks from Pi output`);
+    }
   }
 }

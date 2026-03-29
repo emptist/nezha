@@ -1,4 +1,5 @@
 import { TaskRouter, ExecutorType } from '../router/TaskRouter.js';
+import { PiExecutorWrapper } from '../executor/PiExecutorWrapper.js';
 
 export interface TaskContext {
   id: string;
@@ -11,22 +12,47 @@ export interface CoordinatorConfig {
   opencodeUrl: string;
   opencodeAuth?: { username: string; password: string };
   useAuth?: boolean;
+  usePi?: boolean;
+  piModel?: string;
 }
 
 export class TaskCoordinator {
   private router: TaskRouter;
   private config: CoordinatorConfig;
   private sessionId: string | null = null;
+  private piExecutor: PiExecutorWrapper | null = null;
 
   constructor(config: CoordinatorConfig) {
     this.router = new TaskRouter();
     this.config = {
       useAuth: true,
+      usePi: config.usePi ?? false,
       ...config,
     };
+
+    if (this.config.usePi) {
+      this.piExecutor = new PiExecutorWrapper({ model: this.config.piModel });
+    }
   }
 
   async execute(task: TaskContext): Promise<{ executor: ExecutorType; result: string }> {
+    const executorType = this.router.route(task.title, task.description, task.priority);
+
+    if (executorType === 'pi' && this.piExecutor) {
+      console.log(`[TaskCoordinator] Executing task "${task.title}" on Pi...`);
+      try {
+        const piResult = await this.piExecutor.execute(task.title);
+        return {
+          executor: 'pi',
+          result: piResult.success ? piResult.output : `Failed: ${piResult.message}`,
+        };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[TaskCoordinator] Failed to execute on Pi:`, errorMsg);
+        return { executor: 'pi', result: `Failed: ${errorMsg}` };
+      }
+    }
+
     console.log(`[TaskCoordinator] Executing task "${task.title}" on OpenCode...`);
 
     try {
@@ -40,7 +66,10 @@ export class TaskCoordinator {
   }
 
   private async executeOnOpenCode(task: TaskContext): Promise<string> {
-    if (!this.sessionId) {
+    if (!this.sessionId || !(await this.isSessionAlive())) {
+      if (this.sessionId) {
+        console.log(`[TaskCoordinator] Session ${this.sessionId} dead, recreating...`);
+      }
       await this.createSession();
     }
 
@@ -183,6 +212,31 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."
 
     const credentials = Buffer.from(`${username}:${password}`).toString('base64');
     return { Authorization: `Basic ${credentials}` };
+  }
+
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
+  async isSessionAlive(): Promise<boolean> {
+    if (!this.sessionId) return false;
+
+    try {
+      const response = await fetch(`${this.config.opencodeUrl}/session/${this.sessionId}`, {
+        headers: this.getAuthHeader(),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async reuseSession(sessionId: string) {
+    this.sessionId = sessionId;
+    if (!(await this.isSessionAlive())) {
+      this.sessionId = null;
+      await this.createSession();
+    }
   }
 
   setRouterConfig(config: Partial<TaskRouter['config']>) {

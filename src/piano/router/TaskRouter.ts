@@ -17,16 +17,26 @@ export class TaskRouter {
     };
   }
 
-  route(taskTitle: string, taskDescription?: string): ExecutorType {
-    const combined = `${taskTitle} ${taskDescription || ''}`;
-    const complexity = this.estimateComplexity(combined);
-
-    if (complexity >= this.config.complexityThreshold && this.config.useOpenCode) {
+  route(taskTitle: string, taskDescription?: string, priority: number = 0): ExecutorType {
+    if (priority >= 50 && this.config.useOpenCode) {
       return 'opencode';
     }
 
-    if (this.config.usePi) {
+    const text = `${taskTitle} ${taskDescription || ''}`.toLowerCase();
+    const isPiTask =
+      text.includes('remind') ||
+      text.includes('check') ||
+      text.includes('plan') ||
+      text.includes('arrange') ||
+      text.includes('create task') ||
+      text.includes('分解');
+
+    if (isPiTask && this.config.usePi) {
       return 'pi';
+    }
+
+    if (this.config.useOpenCode) {
+      return 'opencode';
     }
 
     return 'internal';
