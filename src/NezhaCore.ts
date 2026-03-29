@@ -9,6 +9,7 @@ import { EncryptionService } from './services/EncryptionService.js';
 export interface NezhaCoreConfig {
   heartbeatIntervalMs?: number;
   workspaceDir?: string;
+  enablePi?: boolean;
 }
 
 export class NezhaCore {
@@ -29,6 +30,7 @@ export class NezhaCore {
     this.scheduler = new Scheduler(this.db, config?.heartbeatIntervalMs);
     this.heartbeatService = new HeartbeatService(this.db, {
       heartbeatIntervalMs: config?.heartbeatIntervalMs,
+      enablePi: config?.enablePi ?? false,
     });
   }
 

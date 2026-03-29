@@ -42,6 +42,7 @@ async function main(): Promise<void> {
 
   const heartbeatService = new HeartbeatService(db, {
     heartbeatIntervalMs: nezhaConfig.getTaskConfig().heartbeatIntervalMs,
+    enablePi: process.env.ENABLE_PI === 'true',
   });
 
   const healthPort = nezhaConfig.getHealthConfig().port;

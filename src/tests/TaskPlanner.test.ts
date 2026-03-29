@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TaskPlanner } from '../piano/planner/TaskPlanner.js';
+import { TaskRouter } from '../piano/router/TaskRouter.js';
 
 describe('TaskPlanner', () => {
   const planner = new TaskPlanner();
@@ -86,6 +87,34 @@ describe('TaskPlanner', () => {
       const complexPlan = planner.plan(complexTask, 'pi');
 
       expect(complexPlan.complexity!).toBeGreaterThan(simplePlan.complexity!);
+    });
+  });
+
+  describe('full delegation flow', () => {
+    it('should route to pi then delegate complex to opencode', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      const planner = new TaskPlanner();
+
+      const executor = router.route('Check logs and refactor database', 'Complex reminder task');
+      expect(executor).toBe('pi');
+
+      const plan = planner.plan(
+        { id: '1', title: 'Check logs and refactor database', priority: 5 },
+        'pi'
+      );
+      expect(plan.shouldDelegate).toBe(true);
+      expect(plan.delegateTo).toBe('opencode');
+    });
+
+    it('should route to pi and not delegate simple tasks', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      const planner = new TaskPlanner();
+
+      const executor = router.route('Check logs', 'Simple task');
+      expect(executor).toBe('pi');
+
+      const plan = planner.plan({ id: '1', title: 'Check logs', priority: 5 }, 'pi');
+      expect(plan.shouldDelegate).toBe(false);
     });
   });
 });
