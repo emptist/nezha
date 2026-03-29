@@ -37,4 +37,27 @@ describe('TaskRouter', () => {
     const result = router.route('remind me something');
     expect(result).toBe('pi');
   });
+
+  describe('delegation', () => {
+    it('should not delegate when complexity is low', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      expect(router.shouldDelegate(20)).toBe(false);
+    });
+
+    it('should delegate when complexity exceeds capability', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      expect(router.shouldDelegate(80)).toBe(true);
+    });
+
+    it('should return opencode as delegation target for pi', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      expect(router.getDelegationTarget()).toBe('opencode');
+    });
+
+    it('should delegate to specified capability', () => {
+      const router = new TaskRouter({ useOpenCode: true, usePi: true, selfCapability: 'pi' });
+      const result = router.route('any task', undefined, 0, 'opencode');
+      expect(result).toBe('opencode');
+    });
+  });
 });

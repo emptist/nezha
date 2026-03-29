@@ -52,4 +52,40 @@ describe('TaskPlanner', () => {
 
     expect(planner.shouldParallelize(subtasks)).toBe(false);
   });
+
+  describe('delegation', () => {
+    it('should not delegate simple tasks for pi', () => {
+      const task = { id: '1', title: 'Check logs', priority: 5 };
+      const plan = planner.plan(task, 'pi');
+
+      expect(plan.shouldDelegate).toBe(false);
+      expect(plan.delegateTo).toBeUndefined();
+    });
+
+    it('should delegate complex tasks for pi', () => {
+      const task = { id: '2', title: 'Refactor database architecture', priority: 8 };
+      const plan = planner.plan(task, 'pi');
+
+      expect(plan.shouldDelegate).toBe(true);
+      expect(plan.delegateTo).toBe('opencode');
+      expect(plan.complexity).toBeGreaterThanOrEqual(4);
+    });
+
+    it('should not delegate for opencode', () => {
+      const task = { id: '3', title: 'Refactor database architecture', priority: 8 };
+      const plan = planner.plan(task, 'opencode');
+
+      expect(plan.shouldDelegate).toBe(false);
+    });
+
+    it('should set complexity based on task content', () => {
+      const simpleTask = { id: '1', title: 'List files', priority: 5 };
+      const complexTask = { id: '2', title: 'Security migration', priority: 8 };
+
+      const simplePlan = planner.plan(simpleTask, 'pi');
+      const complexPlan = planner.plan(complexTask, 'pi');
+
+      expect(complexPlan.complexity!).toBeGreaterThan(simplePlan.complexity!);
+    });
+  });
 });
