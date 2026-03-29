@@ -260,16 +260,49 @@ export class AgentIdentityService {
     return this.rowToIdentity(result.rows[0]);
   }
 
+  private async findExistingIdentity(
+    project: string,
+    gitHash: string
+  ): Promise<AgentIdentity | null> {
+    const sources = ['nezha', 'opencode', 'mcp', 'external'];
+    for (const source of sources) {
+      const existing = await this.findKeyMatch(project, gitHash, source);
+      if (existing) {
+        return existing;
+      }
+    }
+    return null;
+  }
+
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
+    const gitHash = context.gitHash ?? '';
+    const source = context.source ?? 'nezha';
+
+    const existing = await this.findExistingIdentity(context.project, gitHash);
+    if (existing) {
+      console.log(`[AgentIdentity] Found existing identity: ${existing.id}`);
+      return existing;
+    }
+
     const id = this.generateSemanticId(context);
 
-    await this.db.query(
-      `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [id, context.project, context.gitHash, context.machineFingerprint, context.source]
-    );
-
-    console.log(`[AgentIdentity] Created new identity: ${id} (source: ${context.source})`);
+    try {
+      await this.db.query(
+        `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, context.project, context.gitHash, context.machineFingerprint, source]
+      );
+      console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
+    } catch (error: any) {
+      if (error.code === '23505' && error.constraint === 'agent_identities_project_git_hash_key') {
+        const retry = await this.findExistingIdentity(context.project, gitHash);
+        if (retry) {
+          console.log(`[AgentIdentity] Found existing identity after conflict: ${retry.id}`);
+          return retry;
+        }
+      }
+      throw error;
+    }
 
     return {
       id,
