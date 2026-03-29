@@ -78,7 +78,7 @@ export class TaskPlanner {
   }
 
   private estimateComplexity(task: TaskContext): number {
-    let score = 3;
+    let score = 1;
     const text = `${task.title} ${task.description || ''}`.toLowerCase();
 
     const complexKeywords = [
@@ -88,17 +88,22 @@ export class TaskPlanner {
       'migration',
       'architecture',
       'design system',
+      'implement',
+      'create',
+      'build',
+      'api',
+      'database',
     ];
-    const mediumKeywords = ['api', 'database', 'test', 'integration', 'performance'];
+    const mediumKeywords = ['test', 'integration', 'performance', 'optimize', 'fix'];
 
     for (const kw of complexKeywords) {
-      if (text.includes(kw)) score += 2;
-    }
-    for (const kw of mediumKeywords) {
       if (text.includes(kw)) score += 1;
     }
+    for (const kw of mediumKeywords) {
+      if (text.includes(kw)) score += 0.5;
+    }
 
-    return Math.min(5, score);
+    return Math.min(5, Math.max(1, Math.floor(score)));
   }
 
   private needsDelegation(complexity: number, selfCapability: AICapability): boolean {
