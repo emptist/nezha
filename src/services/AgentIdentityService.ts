@@ -12,6 +12,7 @@ export interface AgentContext {
   cwd: string;
   source?: 'nezha' | 'opencode' | 'external' | 'mcp';
   branch?: string;
+  sessionId?: string;
 }
 
 export interface AgentIdentity {
@@ -82,6 +83,12 @@ export class AgentIdentityService {
         AgentIdentityService.cachedIdentity = identity;
         return identity;
       }
+      // 次选：只匹配 project（不管 git hash）
+      identity = await this.findProjectMatch(context.project);
+      if (identity) {
+        AgentIdentityService.cachedIdentity = identity;
+        return identity;
+      }
     }
 
     // 没有匹配到或有 project → 创建新 identity
@@ -94,6 +101,7 @@ export class AgentIdentityService {
     // Priority: Environment variable > Auto-detect
     const source = this.detectSource();
     const branch = this.getGitBranch();
+    const sessionId = process.env.NEZHA_SESSION_ID || process.env.OPENCODE_SESSION_ID || undefined;
 
     return {
       project: this.getProjectName(),
@@ -102,6 +110,7 @@ export class AgentIdentityService {
       cwd: process.cwd(),
       source,
       branch,
+      sessionId,
     };
   }
 
@@ -174,7 +183,8 @@ export class AgentIdentityService {
 
     // S = Specific: 有项目信息
     if (context.project) {
-      return `S-${source}-${context.project}-${context.gitHash ? context.gitHash.substring(0, 7) + '-' : ''}${shortHash}`;
+      const sessionPart = context.sessionId ? context.sessionId.substring(0, 6) + '-' : '';
+      return `S-${source}-${context.project}-${context.gitHash ? context.gitHash.substring(0, 7) + '-' : ''}${sessionPart}${shortHash}`;
     }
 
     // G = General: 无项目信息
