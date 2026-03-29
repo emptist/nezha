@@ -22,6 +22,7 @@ import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
 import { TaskRouter } from '../../piano/router/TaskRouter.js';
 import { TaskCoordinator } from '../../piano/coordinator/TaskCoordinator.js';
+import { TaskPlanner } from '../../piano/planner/TaskPlanner.js';
 import { PiExecutorWrapper } from '../../piano/executor/PiExecutorWrapper.js';
 import { Config } from '../../config/Config.js';
 
@@ -40,6 +41,7 @@ export class HeartbeatService {
   private readonly pluginManager = getPluginManager();
   private readonly nextStepAdvisor: NextStepAdvisor;
   private readonly taskRouter: TaskRouter;
+  private readonly taskPlanner: TaskPlanner;
   private readonly taskCoordinator: TaskCoordinator | null = null;
   private readonly piExecutor: PiExecutorWrapper | null = null;
   private readonly config: HeartbeatConfig;
@@ -53,8 +55,11 @@ export class HeartbeatService {
     this.taskRouter = new TaskRouter({
       useOpenCode: true,
       usePi: enablePi,
-      complexityThreshold: 999, // Disable complexity routing - Pi only for simple tasks
+      complexityThreshold: 999,
+      selfCapability: 'pi',
     });
+
+    this.taskPlanner = new TaskPlanner();
 
     const opencodeUrl = Config.getInstance().getTransportConfig().opencodeApiUrl;
     if (opencodeUrl) {
@@ -148,7 +153,23 @@ export class HeartbeatService {
     }
 
     if (executor === 'pi' && this.piExecutor) {
-      logger.info(`[TaskRouter] Task "${title}" routed to Pi - executing...`);
+      logger.info(`[TaskRouter] Task "${title}" routed to Pi - checking delegation...`);
+
+      const planned = this.taskPlanner.plan({
+        id: taskId,
+        title,
+        description,
+        priority: 5,
+      });
+
+      if (planned.shouldDelegate && planned.delegateTo) {
+        logger.info(`[TaskPlanner] Task too complex for Pi, delegating to ${planned.delegateTo}`);
+        await this.db.query(
+          `UPDATE ${DATABASE_TABLES.TASKS} SET delegate_to = $1, complexity = $2 WHERE id = $3`,
+          [planned.delegateTo, planned.complexity, taskId]
+        );
+        return;
+      }
 
       const systemStatus = await this.getSystemStatus();
       const essentialKnowledge = await this.getEssentialKnowledge();
@@ -159,15 +180,18 @@ export class HeartbeatService {
         logger.info(`[PiExecutor] Result: ${result.message.substring(0, 100)}...`);
 
         await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0, complexity = $3 WHERE id = $4`,
           [
             TASK_STATUS.COMPLETED,
             JSON.stringify({ message: result.message, output: result.output }),
+            planned.complexity,
             taskId,
           ]
         );
 
-        await this.extractAndCreateTasks(result.output, title);
+        await this.extractAndCreateTasks(result.output, title, {
+          complexity: planned.complexity,
+        });
         logger.info(`[TaskRouter] Task "${title}" completed via Pi`);
         return;
       } catch (error) {
