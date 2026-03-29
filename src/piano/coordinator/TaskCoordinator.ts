@@ -6,6 +6,8 @@ export interface TaskContext {
   title: string;
   description?: string;
   priority: number;
+  complexity?: number;
+  delegateTo?: string;
 }
 
 export interface CoordinatorConfig {

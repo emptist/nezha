@@ -67,6 +67,8 @@ export enum TaskStatus {
   FAKE_COMPLETE = 'FAKE_COMPLETE',
 }
 
+export type AICapability = 'pi' | 'internal' | 'opencode' | 'human';
+
 export interface Task {
   id: string;
   projectId?: string;
@@ -77,6 +79,9 @@ export interface Task {
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
+  delegateTo?: AICapability;
+  complexity?: number;
+  delegatedFrom?: AICapability;
 }
 
 export interface TaskFilter {

@@ -1,8 +1,11 @@
 import type { TaskContext } from '../coordinator/TaskCoordinator.js';
+import type { AICapability } from '../../config/types.js';
 
 export interface PlannedTask extends TaskContext {
   subtasks: SubTask[];
   estimatedDuration: number;
+  shouldDelegate?: boolean;
+  delegateTo?: AICapability;
 }
 
 export interface SubTask {
@@ -10,17 +13,23 @@ export interface SubTask {
   description: string;
   priority: number;
   dependsOn?: string[];
+  complexity?: number;
 }
 
 export class TaskPlanner {
-  plan(task: TaskContext): PlannedTask {
+  plan(task: TaskContext, selfCapability: AICapability = 'pi'): PlannedTask {
     const subtasks = this.decompose(task);
     const estimatedDuration = this.estimateDuration(subtasks);
+    const complexity = this.estimateComplexity(task);
+    const shouldDelegate = this.needsDelegation(complexity, selfCapability);
 
     return {
       ...task,
       subtasks,
       estimatedDuration,
+      complexity,
+      shouldDelegate,
+      delegateTo: shouldDelegate ? this.getDelegationTarget(selfCapability) : undefined,
     };
   }
 
@@ -33,6 +42,7 @@ export class TaskPlanner {
         title: `分析: ${task.title}`,
         description: '分析需求和技术方案',
         priority: task.priority,
+        complexity: 3,
       });
     }
 
@@ -41,6 +51,7 @@ export class TaskPlanner {
         title: `设计: ${task.title}`,
         description: '设计接口和数据模型',
         priority: task.priority,
+        complexity: 4,
         dependsOn: ['analysis'],
       });
     }
@@ -50,6 +61,7 @@ export class TaskPlanner {
         title: `实现: ${task.title}`,
         description: '编写测试用例',
         priority: task.priority,
+        complexity: 2,
       });
     }
 
@@ -58,10 +70,49 @@ export class TaskPlanner {
         title: `执行: ${task.title}`,
         description: task.description || '执行任务',
         priority: task.priority,
+        complexity: 2,
       });
     }
 
     return subtasks;
+  }
+
+  private estimateComplexity(task: TaskContext): number {
+    let score = 3;
+    const text = `${task.title} ${task.description || ''}`.toLowerCase();
+
+    const complexKeywords = [
+      'refactor',
+      'debug',
+      'security',
+      'migration',
+      'architecture',
+      'design system',
+    ];
+    const mediumKeywords = ['api', 'database', 'test', 'integration', 'performance'];
+
+    for (const kw of complexKeywords) {
+      if (text.includes(kw)) score += 2;
+    }
+    for (const kw of mediumKeywords) {
+      if (text.includes(kw)) score += 1;
+    }
+
+    return Math.min(5, score);
+  }
+
+  private needsDelegation(complexity: number, selfCapability: AICapability): boolean {
+    const levels: Record<AICapability, number> = { pi: 1, internal: 2, opencode: 3, human: 4 };
+    const requiredLevel = complexity >= 4 ? 3 : complexity >= 3 ? 2 : 1;
+    return requiredLevel > levels[selfCapability];
+  }
+
+  private getDelegationTarget(selfCapability: AICapability): AICapability {
+    const levels: Record<AICapability, number> = { pi: 1, internal: 2, opencode: 3, human: 4 };
+    if (levels[selfCapability] < 3) {
+      return 'opencode';
+    }
+    return 'human';
   }
 
   private estimateDuration(subtasks: SubTask[]): number {

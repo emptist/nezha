@@ -1,9 +1,19 @@
+import { AICapability } from '../../config/types.js';
+
 export type ExecutorType = 'internal' | 'opencode' | 'pi' | 'hybrid';
+
+export const AI_CAPABILITY_LEVELS: Record<AICapability, number> = {
+  pi: 1,
+  internal: 2,
+  opencode: 3,
+  human: 4,
+};
 
 export interface TaskRouterConfig {
   useOpenCode: boolean;
   usePi: boolean;
   complexityThreshold: number;
+  selfCapability: AICapability;
 }
 
 export class TaskRouter {
@@ -14,10 +24,34 @@ export class TaskRouter {
       useOpenCode: config.useOpenCode ?? true,
       usePi: config.usePi ?? false,
       complexityThreshold: config.complexityThreshold ?? 50,
+      selfCapability: config.selfCapability ?? 'internal',
     };
   }
 
-  route(taskTitle: string, taskDescription?: string, priority: number = 0): ExecutorType {
+  shouldDelegate(complexity: number): boolean {
+    const selfLevel = AI_CAPABILITY_LEVELS[this.config.selfCapability];
+    const requiredLevel = complexity > 70 ? 3 : complexity > 40 ? 2 : 1;
+    return requiredLevel > selfLevel;
+  }
+
+  getDelegationTarget(): AICapability | null {
+    const selfLevel = AI_CAPABILITY_LEVELS[this.config.selfCapability];
+    if (selfLevel < 3 && this.config.useOpenCode) {
+      return 'opencode';
+    }
+    return null;
+  }
+
+  route(
+    taskTitle: string,
+    taskDescription?: string,
+    priority: number = 0,
+    delegateTo?: AICapability
+  ): ExecutorType {
+    if (delegateTo && delegateTo !== this.config.selfCapability) {
+      return this.executorForCapability(delegateTo);
+    }
+
     if (priority >= 50 && this.config.useOpenCode) {
       return 'opencode';
     }
@@ -40,6 +74,19 @@ export class TaskRouter {
     }
 
     return 'internal';
+  }
+
+  private executorForCapability(capability: AICapability): ExecutorType {
+    switch (capability) {
+      case 'opencode':
+        return 'opencode';
+      case 'pi':
+        return 'pi';
+      case 'internal':
+      case 'human':
+      default:
+        return 'internal';
+    }
   }
 
   private estimateComplexity(text: string): number {

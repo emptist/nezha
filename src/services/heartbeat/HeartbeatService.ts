@@ -359,7 +359,11 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
     return this.scheduler.getEventBus() !== null;
   }
 
-  private async extractAndCreateTasks(piOutput: string, sourceTask: string): Promise<void> {
+  private async extractAndCreateTasks(
+    piOutput: string,
+    sourceTask: string,
+    options?: { delegateTo?: string; complexity?: number }
+  ): Promise<void> {
     const lines = piOutput.split('\n');
     const taskPattern = /^[-*]\s*(?:task|todo|任务)[:\s]+(.+)/i;
     let createdCount = 0;
@@ -371,8 +375,16 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
         if (taskTitle.length > 3) {
           try {
             await this.db.query(
-              `INSERT INTO tasks (title, description, priority, source) VALUES ($1, $2, $3, $4)`,
-              [taskTitle, `From Pi planning: ${sourceTask}`, 5, 'pi-planner']
+              `INSERT INTO tasks (title, description, priority, source, delegate_to, complexity) 
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                taskTitle,
+                `From Pi planning: ${sourceTask}`,
+                5,
+                'pi-planner',
+                options?.delegateTo || null,
+                options?.complexity || 3,
+              ]
             );
             createdCount++;
             logger.info(`[PiPlanner] Created task: ${taskTitle}`);
