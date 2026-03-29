@@ -207,12 +207,29 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
       try {
         const result = await this.aiProvider.complete(prompt);
 
+        const hasAction = await this.verifyTaskCompletion(result.content);
+        if (!hasAction) {
+          logger.warn(
+            `[TaskRouter] Verification FAILED: No action detected for task "${title}" - marking as FAILED`
+          );
+          await this.db.query(
+            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
+            [
+              TASK_STATUS.FAILED,
+              'Verification failed: No tasks/issues/learnings created',
+              retryCount + 1,
+              taskId,
+            ]
+          );
+          return;
+        }
+
         await this.db.query(
           `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
           [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.content }), taskId]
         );
 
-        logger.info(`Task completed: ${title}`);
+        logger.info(`Task completed: ${title} (verified)`);
 
         await this.pluginManager.executeAfterTaskWithChanges({
           taskId,
@@ -307,5 +324,43 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
     if (createdCount > 0) {
       logger.info(`[PiPlanner] Created ${createdCount} tasks from Pi output`);
     }
+  }
+
+  private async verifyTaskCompletion(aiResponse: string): Promise<boolean> {
+    const text = aiResponse.toLowerCase();
+
+    const hasTask = text.includes('[task]') || text.includes('[task]:') || text.includes('task:');
+    const hasIssue =
+      text.includes('[issue]') || text.includes('[issue]:') || text.includes('issue:');
+    const hasLearn =
+      text.includes('[learn]') || text.includes('[learn]:') || text.includes('learn:');
+    const hasPromptUpdate = text.includes('[prompt_update]') || text.includes('[propose]');
+
+    if (hasTask || hasIssue || hasLearn || hasPromptUpdate) {
+      logger.info(
+        `[Verification] Action detected - Task: ${hasTask}, Issue: ${hasIssue}, Learn: ${hasLearn}`
+      );
+      return true;
+    }
+
+    const actionKeywords = [
+      'created',
+      'updated',
+      'fixed',
+      'implemented',
+      'added',
+      'modified',
+      'deleted',
+      'refactored',
+    ];
+    const hasAction = actionKeywords.some(kw => text.includes(kw) && text.includes('success'));
+
+    if (hasAction) {
+      logger.info(`[Verification] Action keyword detected`);
+      return true;
+    }
+
+    logger.warn(`[Verification] No action detected in AI response`);
+    return false;
   }
 }
