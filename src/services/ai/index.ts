@@ -1,6 +1,7 @@
 import { AIProvider, AIProviderConfig } from './AIProvider.js';
 import { OpenAIProvider } from './OpenAIProvider.js';
 import { AnthropicProvider } from './AnthropicProvider.js';
+import { OllamaProvider } from './OllamaProvider.js';
 
 export class AIProviderFactory {
   private static instance: AIProvider | null = null;
@@ -13,10 +14,17 @@ export class AIProviderFactory {
     const openaiKey = process.env.OPENAI_API_KEY;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const zhipuKey = process.env.ZHIPU_API_KEY;
+    const ollamaEnabled = process.env.OLLAMA_ENABLED === 'true' || process.env.OLLAMA_MODEL;
 
     let config: AIProviderConfig;
 
-    if (zhipuKey && !openaiKey && !anthropicKey) {
+    if (ollamaEnabled && !openaiKey && !anthropicKey && !zhipuKey) {
+      config = {
+        provider: 'ollama',
+        model: process.env.OLLAMA_MODEL || 'mistral:7b',
+        baseUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+      };
+    } else if (zhipuKey && !openaiKey && !anthropicKey) {
       config = {
         provider: 'openai',
         model: process.env.ZHIPU_MODEL || 'glm-4-flash',
@@ -36,7 +44,11 @@ export class AIProviderFactory {
         apiKey: anthropicKey,
       };
     } else {
-      throw new Error('No valid AI API key found in environment (OPENAI_API_KEY, ANTHROPIC_API_KEY, or ZHIPU_API_KEY)');
+      config = {
+        provider: 'ollama',
+        model: process.env.OLLAMA_MODEL || 'mistral:7b',
+        baseUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
+      };
     }
 
     this.instance = this.create(config);
@@ -49,6 +61,8 @@ export class AIProviderFactory {
         return new OpenAIProvider(config);
       case 'anthropic':
         return new AnthropicProvider(config);
+      case 'ollama':
+        return new OllamaProvider(config);
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
     }
@@ -62,3 +76,4 @@ export class AIProviderFactory {
 export type { AIProvider, AIProviderConfig, AICompletionResponse } from './AIProvider.js';
 export { OpenAIProvider } from './OpenAIProvider.js';
 export { AnthropicProvider } from './AnthropicProvider.js';
+export { OllamaProvider } from './OllamaProvider.js';
