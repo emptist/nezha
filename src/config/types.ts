@@ -64,6 +64,7 @@ export enum TaskStatus {
   RUNNING = 'RUNNING',
   COMPLETED = 'COMPLETED',
   FAILED = 'FAILED',
+  FAKE_COMPLETE = 'FAKE_COMPLETE',
 }
 
 export interface Task {

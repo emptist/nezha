@@ -5,6 +5,7 @@ export const TASK_STATUS = {
   RUNNING: 'RUNNING' as const,
   COMPLETED: 'COMPLETED' as const,
   FAILED: 'FAILED' as const,
+  FAKE_COMPLETE: 'FAKE_COMPLETE' as const,
 } satisfies Record<TaskStatus, string>;
 
 export const TASK_TYPE = {

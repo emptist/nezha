@@ -209,15 +209,12 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 
         const hasAction = await this.verifyTaskCompletion(result.content);
         if (!hasAction) {
-          logger.warn(
-            `[TaskRouter] Verification FAILED: No action detected for task "${title}" - marking as FAILED`
-          );
+          logger.warn(`[TaskRouter] FAKE COMPLETE: No action detected for task "${title}"`);
           await this.db.query(
-            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
+            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
             [
-              TASK_STATUS.FAILED,
-              'Verification failed: No tasks/issues/learnings created',
-              retryCount + 1,
+              TASK_STATUS.FAKE_COMPLETE,
+              'Fake complete: No [TASK]/[ISSUE]/[LEARN]/[PROMPT_UPDATE] markers found',
               taskId,
             ]
           );
