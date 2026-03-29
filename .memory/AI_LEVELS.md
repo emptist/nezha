@@ -29,6 +29,33 @@ ai_levels:
 - Task complexity estimated (1-5), if > AI level → delegate
 - Levels can be adjusted at any time by updating this file
 
+## Education ABCs
+
+### A - Always Made Available
+
+Education means knowledge is **systematically prepared**, not learned by chance. All knowledge AIs need should be made available upfront.
+
+### B - Basic Before Advanced
+
+Start with surviving skills (how to check/create/comment/close issues, use memory/skills/learnings/reminders) before complex tasks.
+
+### C - Continuous Feedback Loop
+
+```
+AI fails → Identify gap → Add to education → All AIs educated
+```
+
+This is **proactive**, not reactive. Each failure is an opportunity to improve education.
+
+### D - Different Mechanisms
+
+Different content needs different delivery:
+
+- Memory: long-term knowledge
+- Skills: actionable procedures
+- Learnings: insights from experience
+- Reminders: periodic checks
+
 ## Education Standardization
 
 When teaching an AI, consider what should be known at each level:
