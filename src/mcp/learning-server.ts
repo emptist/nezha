@@ -487,10 +487,9 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
       if (!configDisplayName) {
         try {
           const db = getDb();
-          const result = await db.query(
-            'SELECT display_name FROM agent_identity WHERE agent_name = $1',
-            [agentId.replace('bot_', '')]
-          );
+          const result = await db.query('SELECT display_name FROM agent_identities WHERE id = $1', [
+            agentId,
+          ]);
           if (result.rows.length > 0) {
             const row = result.rows[0];
             if (row && row.display_name) {
