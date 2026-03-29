@@ -10,7 +10,7 @@ export interface AgentContext {
   gitHash: string | null;
   machineFingerprint: string;
   cwd: string;
-  source?: 'nezha' | 'opencode' | 'external' | 'mcp';
+  source?: string;
   branch?: string;
   sessionId?: string;
 }
@@ -23,7 +23,7 @@ export interface AgentIdentity {
   createdAt: Date;
   displayName?: string;
   description?: string;
-  source?: 'nezha' | 'opencode' | 'external' | 'mcp';
+  source?: string;
 }
 
 export class AgentIdentityService {
@@ -67,39 +67,43 @@ export class AgentIdentityService {
   }
 
   async resolve(): Promise<AgentIdentity> {
-    // Priority 0: External identity (from OpenCode integration)
     if (AgentIdentityService.externalIdentity) {
       return AgentIdentityService.externalIdentity;
     }
 
     const context = this.detectContext();
+    const source = context.source || 'nezha';
 
-    // 只有有 project 信息才匹配旧的，否则直接创建新的
-    let identity: AgentIdentity | null;
+    let identity: AgentIdentity | null = null;
+
     if (context.project) {
-      // 有 sessionId 用 sessionId，无则用 git hash
-      const matchKey = context.sessionId || context.gitHash || null;
-      if (matchKey) {
-        // 精确匹配: source + project + (sessionId/gitHash)
-        identity = await this.findKeyMatch(context.project, matchKey, context.source || 'nezha');
-        if (identity) {
-          AgentIdentityService.cachedIdentity = identity;
-          return identity;
-        }
+      if (context.sessionId) {
+        identity = await this.findKeyMatch(context.project, context.sessionId, source, true);
+      } else if (context.gitHash) {
+        identity = await this.findKeyMatch(context.project, context.gitHash, source, false);
       }
+    } else {
+      identity = await this.findMachineMatch(context.machineFingerprint, source);
     }
 
-    // 没有匹配到 → 创建新 identity
+    if (identity) {
+      AgentIdentityService.cachedIdentity = identity;
+      return identity;
+    }
+
     identity = await this.createIdentity(context);
     AgentIdentityService.cachedIdentity = identity;
     return identity;
   }
 
   detectContext(): AgentContext {
-    // Priority: Environment variable > Auto-detect
-    const source = this.detectSource();
+    // TRAE-specific: check if running in Trae
+    const traeEnv = this.detectTraeEnv();
+
+    const source = traeEnv.source || this.detectSource();
     const branch = this.getGitBranch();
-    const sessionId = process.env.NEZHA_SESSION_ID || process.env.OPENCODE_SESSION_ID || undefined;
+    const sessionId =
+      traeEnv.sessionId || process.env.NEZHA_SESSION_ID || process.env.OPENCODE_SESSION_ID || undefined;
 
     return {
       project: this.getProjectName(),
@@ -119,6 +123,15 @@ export class AgentIdentityService {
       return envSource;
     }
     return 'nezha';
+  }
+
+  private detectTraeEnv(): { source: string | null; sessionId: string | null } {
+    if (process.env.AI_AGENT !== 'TRAE') {
+      return { source: null, sessionId: null };
+    }
+    const logDir = process.env.TRAE_SANDBOX_LOG_DIR;
+    const sessionId = logDir?.match(/\/logs\/(\d{8}T\d{6})\//)?.[1] || null;
+    return { source: 'TRAE', sessionId };
   }
 
   private getGitBranch(): string {
@@ -233,76 +246,58 @@ export class AgentIdentityService {
   private async findKeyMatch(
     project: string,
     key: string,
+    source: string,
+    isSessionId: boolean = false
+  ): Promise<AgentIdentity | null> {
+    let result;
+    if (isSessionId) {
+      result = await this.db.query(
+        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
+         FROM agent_identities 
+         WHERE project = $1 AND session_id = $2 AND source = $3
+         ORDER BY created_at DESC LIMIT 1`,
+        [project, key, source]
+      );
+    } else {
+      result = await this.db.query(
+        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
+         FROM agent_identities 
+         WHERE project = $1 AND git_hash = $2 AND source = $3
+         ORDER BY created_at DESC LIMIT 1`,
+        [project, key.substring(0, 7), source]
+      );
+    }
+
+    if (result.rows.length === 0) return null;
+    return this.rowToIdentity(result.rows[0]);
+  }
+
+  private async findMachineMatch(
+    machineFingerprint: string,
     source: string
   ): Promise<AgentIdentity | null> {
     const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
+      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
        FROM agent_identities 
-       WHERE project = $1 AND (git_hash = $2 OR git_hash IS NULL) AND source = $3
+       WHERE machine_fingerprint = $1 AND source = $2
        ORDER BY created_at DESC LIMIT 1`,
-      [project, key.substring(0, 7), source]
+      [machineFingerprint, source]
     );
 
     if (result.rows.length === 0) return null;
     return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findMachineMatch(machineFingerprint: string): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description
-       FROM agent_identities 
-       WHERE machine_fingerprint = $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [machineFingerprint]
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findExistingIdentity(
-    project: string,
-    gitHash: string
-  ): Promise<AgentIdentity | null> {
-    const sources = ['nezha', 'opencode', 'mcp', 'external'];
-    for (const source of sources) {
-      const existing = await this.findKeyMatch(project, gitHash, source);
-      if (existing) {
-        return existing;
-      }
-    }
-    return null;
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
-    const gitHash = context.gitHash ?? '';
     const source = context.source ?? 'nezha';
-
-    const existing = await this.findExistingIdentity(context.project, gitHash);
-    if (existing) {
-      console.log(`[AgentIdentity] Found existing identity: ${existing.id}`);
-      return existing;
-    }
-
     const id = this.generateSemanticId(context);
 
-    try {
-      await this.db.query(
-        `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [id, context.project, context.gitHash, context.machineFingerprint, source]
-      );
-      console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
-    } catch (error: any) {
-      if (error.code === '23505' && error.constraint === 'agent_identities_project_git_hash_key') {
-        const retry = await this.findExistingIdentity(context.project, gitHash);
-        if (retry) {
-          console.log(`[AgentIdentity] Found existing identity after conflict: ${retry.id}`);
-          return retry;
-        }
-      }
-      throw error;
-    }
+    await this.db.query(
+      `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source, session_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [id, context.project, context.gitHash, context.machineFingerprint, source, context.sessionId || null]
+    );
+    console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
 
     return {
       id,
@@ -310,6 +305,7 @@ export class AgentIdentityService {
       gitHash: context.gitHash,
       machineFingerprint: context.machineFingerprint,
       createdAt: new Date(),
+      source,
     };
   }
 
