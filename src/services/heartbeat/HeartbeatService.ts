@@ -218,6 +218,13 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
               taskId,
             ]
           );
+          await this.pluginManager.executeAfterTaskWithChanges({
+            taskId,
+            title,
+            description,
+            status: 'FAKE_COMPLETE',
+            result: 'Fake complete: AI claimed done without action',
+          });
           return;
         }
 

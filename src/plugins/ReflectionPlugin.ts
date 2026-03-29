@@ -6,6 +6,7 @@ import { AgentIdentityService } from '../services/AgentIdentityService.js';
 export interface ReflectionConfig {
   reflectOnComplete?: boolean;
   reflectOnFail?: boolean;
+  reflectOnFakeComplete?: boolean;
   minDurationForReflection?: number;
   createIssueOnPattern?: boolean;
   db?: DatabaseClient;
@@ -29,6 +30,7 @@ export class ReflectionPlugin implements Plugin {
     this.config = {
       reflectOnComplete: config.reflectOnComplete ?? true,
       reflectOnFail: config.reflectOnFail ?? true,
+      reflectOnFakeComplete: config.reflectOnFakeComplete ?? true,
       minDurationForReflection: config.minDurationForReflection ?? 10000,
       createIssueOnPattern: config.createIssueOnPattern ?? true,
     };
@@ -71,6 +73,7 @@ export class ReflectionPlugin implements Plugin {
   private shouldReflect(context: TaskContext): boolean {
     if (context.status === 'COMPLETED' && !this.config.reflectOnComplete) return false;
     if (context.status === 'FAILED' && !this.config.reflectOnFail) return false;
+    if (context.status === 'FAKE_COMPLETE' && !this.config.reflectOnFakeComplete) return false;
 
     if (context.startTime && context.endTime) {
       const duration = context.endTime.getTime() - context.startTime.getTime();
