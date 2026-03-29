@@ -150,8 +150,12 @@ export class HeartbeatService {
     if (executor === 'pi' && this.piExecutor) {
       logger.info(`[TaskRouter] Task "${title}" routed to Pi - executing...`);
 
+      const systemStatus = await this.getSystemStatus();
+      const essentialKnowledge = await this.getEssentialKnowledge();
+      const piPrompt = `## SYSTEM STATUS\n${systemStatus}\n\n## ESSENTIAL KNOWLEDGE\n${essentialKnowledge}\n\n## TASK\n${title}\n${description || ''}\n\nAfter completing, create subtasks in format: - task: <title>`;
+
       try {
-        const result = await this.piExecutor.execute(description || title);
+        const result = await this.piExecutor.execute(piPrompt);
         logger.info(`[PiExecutor] Result: ${result.message.substring(0, 100)}...`);
 
         await this.db.query(
@@ -177,6 +181,8 @@ export class HeartbeatService {
 
       const sessionId = `nezha-${Date.now()}`;
       const recentBroadcasts = await this.getRecentBroadcasts();
+      const essentialKnowledge = await this.getEssentialKnowledge();
+      const systemStatus = await this.getSystemStatus();
 
       const prompt = `${description || title}
 
@@ -185,6 +191,12 @@ export class HeartbeatService {
 ## AGENT CONTEXT
 Agent ID: nezha-daemon
 Agent Session: ${sessionId}
+
+## SYSTEM STATUS
+${systemStatus}
+
+## ESSENTIAL KNOWLEDGE (must remember)
+${essentialKnowledge}
 
 ## RECENT BROADCASTS (check these for discussions to join)
 ${recentBroadcasts}
@@ -290,6 +302,52 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
         .join('\n');
     } catch {
       return '(Unable to fetch broadcasts)';
+    }
+  }
+
+  private async getSystemStatus(): Promise<string> {
+    try {
+      const pending = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'`
+      );
+      const failed = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'`
+      );
+      const openIssues = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM issues WHERE status = 'open'`
+      );
+      const fakeComplete = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAKE_COMPLETE'`
+      );
+
+      const parts = [];
+      const p = parseInt(pending.rows[0]?.count || '0', 10);
+      const f = parseInt(failed.rows[0]?.count || '0', 10);
+      const i = parseInt(openIssues.rows[0]?.count || '0', 10);
+      const fc = parseInt(fakeComplete.rows[0]?.count || '0', 10);
+
+      if (p > 0) parts.push(`- ${p} pending tasks`);
+      if (f > 0) parts.push(`- ${f} failed tasks (24h)`);
+      if (i > 0) parts.push(`- ${i} open issues`);
+      if (fc > 0) parts.push(`- ${fc} fake completions (AI lied)`);
+
+      return parts.length > 0 ? parts.join('\n') : '- System healthy';
+    } catch {
+      return '- Unable to fetch status';
+    }
+  }
+
+  private async getEssentialKnowledge(): Promise<string> {
+    try {
+      const learnings = await this.db.query<{ content: string }>(
+        `SELECT content FROM memory WHERE tags ? 'essential' ORDER BY importance DESC LIMIT 3`
+      );
+      if (learnings.rows.length > 0) {
+        return learnings.rows.map(r => `- ${r.content.substring(0, 200)}`).join('\n');
+      }
+      return `- No essential knowledge recorded yet`;
+    } catch {
+      return `- Memory system unavailable`;
     }
   }
 
