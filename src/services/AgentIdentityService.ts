@@ -77,21 +77,19 @@ export class AgentIdentityService {
     // 只有有 project 信息才匹配旧的，否则直接创建新的
     let identity: AgentIdentity | null;
     if (context.project) {
-      // 有 project：优先精确匹配 (project + git hash)
-      identity = await this.findExactMatch(context);
-      if (identity) {
-        AgentIdentityService.cachedIdentity = identity;
-        return identity;
-      }
-      // 次选：只匹配 project（不管 git hash）
-      identity = await this.findProjectMatch(context.project);
-      if (identity) {
-        AgentIdentityService.cachedIdentity = identity;
-        return identity;
+      // 有 sessionId 用 sessionId，无则用 git hash
+      const matchKey = context.sessionId || context.gitHash || null;
+      if (matchKey) {
+        // 精确匹配: source + project + (sessionId/gitHash)
+        identity = await this.findKeyMatch(context.project, matchKey, context.source || 'nezha');
+        if (identity) {
+          AgentIdentityService.cachedIdentity = identity;
+          return identity;
+        }
       }
     }
 
-    // 没有匹配到或有 project → 创建新 identity
+    // 没有匹配到 → 创建新 identity
     identity = await this.createIdentity(context);
     AgentIdentityService.cachedIdentity = identity;
     return identity;
@@ -183,8 +181,13 @@ export class AgentIdentityService {
 
     // S = Specific: 有项目信息
     if (context.project) {
-      const sessionPart = context.sessionId ? context.sessionId.substring(0, 6) + '-' : '';
-      return `S-${source}-${context.project}-${context.gitHash ? context.gitHash.substring(0, 7) + '-' : ''}${sessionPart}${shortHash}`;
+      // 有 sessionId 用 sessionId，无则用 git hash
+      const keyPart = context.sessionId
+        ? context.sessionId.substring(0, 6)
+        : context.gitHash
+          ? context.gitHash.substring(0, 7)
+          : '';
+      return `S-${source}-${context.project}-${keyPart ? keyPart + '-' : ''}${shortHash}`;
     }
 
     // G = General: 无项目信息
@@ -203,11 +206,11 @@ export class AgentIdentityService {
     if (!context.gitHash) return null;
 
     const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description
+      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
        FROM agent_identities 
-       WHERE project = $1 AND git_hash = $2
+       WHERE project = $1 AND git_hash = $2 AND source = $3
        ORDER BY created_at DESC LIMIT 1`,
-      [context.project, context.gitHash]
+      [context.project, context.gitHash, context.source || 'nezha']
     );
 
     if (result.rows.length === 0) return null;
@@ -216,11 +219,28 @@ export class AgentIdentityService {
 
   private async findProjectMatch(project: string): Promise<AgentIdentity | null> {
     const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description
+      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
        FROM agent_identities 
        WHERE project = $1
        ORDER BY created_at DESC LIMIT 1`,
       [project]
+    );
+
+    if (result.rows.length === 0) return null;
+    return this.rowToIdentity(result.rows[0]);
+  }
+
+  private async findKeyMatch(
+    project: string,
+    key: string,
+    source: string
+  ): Promise<AgentIdentity | null> {
+    const result = await this.db.query(
+      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
+       FROM agent_identities 
+       WHERE project = $1 AND (git_hash = $2 OR git_hash IS NULL) AND source = $3
+       ORDER BY created_at DESC LIMIT 1`,
+      [project, key.substring(0, 7), source]
     );
 
     if (result.rows.length === 0) return null;
