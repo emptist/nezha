@@ -1,0 +1,30 @@
+{
+  "name": "@nezha/nupi",
+  "version": "0.1.0",
+  "description": "NuPI - Nezha united with PI (牛派)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "nezha",
+    "nupi",
+    "pi-coding-agent"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": ">=0.63.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.10.0",
+    "typescript": "^5.0.0"
+  }
+}
