@@ -1,8 +1,8 @@
 /**
- * Nezha Tools Extension for Pi
+ * NuPI Tools Extension for Pi
  *
- * Provides direct access to Nezha database and CLI tools.
- * Uses hybrid approach: direct SQL for CRUD + CLI for complex operations.
+ * Provides direct access to NuPI (Nezha united with PI) database.
+ * Uses direct SQL - no MCP needed!
  *
  * Installation:
  * 1. Copy to ~/.pi/agent/extensions/nezha-tools.ts
@@ -10,167 +10,183 @@
  * 3. Restart Pi session
  */
 
-import pg from "pg";
-import { execSync } from "child_process";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import pg from 'pg';
+import { execSync } from 'child_process';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 const { Client } = pg;
 
+const DEFAULT_WORKDIR = '/Users/jk/gits/hub/nezha';
+
 function getDbConfig() {
   return {
-    host: process.env.NEZHA_DB_HOST || "localhost",
-    port: parseInt(process.env.NEZHA_DB_PORT || "5432", 10),
-    database: process.env.NEZHA_DB_NAME || "nezha",
-    user: process.env.NEZHA_DB_USER || "postgres",
-    password: process.env.NEZHA_DB_PASSWORD || "postgres",
+    host: process.env.NEZHA_DB_HOST || 'localhost',
+    port: parseInt(process.env.NEZHA_DB_PORT || '5432', 10),
+    database: process.env.NEZHA_DB_NAME || 'nezha',
+    user: process.env.NEZHA_DB_USER || 'postgres',
+    password: process.env.NEZHA_DB_PASSWORD || 'postgres',
   };
 }
 
-async function query(sql: string, params?: unknown[]): Promise<unknown[]> {
+function getWorkDir(): string {
+  return process.env.NEZHA_WORKDIR || DEFAULT_WORKDIR;
+}
+
+async function dbQuery(sql: string, params?: unknown[]): Promise<unknown[]> {
   const client = new Client(getDbConfig());
   try {
     await client.connect();
     const result = await client.query(sql, params);
     return result.rows;
+  } catch (e: any) {
+    return [{ error: e.message }];
   } finally {
     await client.end();
   }
 }
 
-function runCli(command: string): string {
+function runCli(command: string, cwd?: string): string {
   try {
-    return execSync(command, { encoding: "utf-8", timeout: 30000 });
-  } catch (e) {
-    return `Error: ${e}`;
+    return execSync(command, {
+      encoding: 'utf-8',
+      timeout: 30000,
+      cwd: cwd || getWorkDir(),
+    });
+  } catch (e: any) {
+    return `Error: ${e.message}`;
   }
 }
 
 export default function nezhaTools(pi: ExtensionAPI): void {
-  // Get pending tasks
-  pi.registerCommand("nezha-tasks", {
-    description: "Get pending tasks from Nezha database",
+  // ===== TASKS =====
+
+  pi.registerCommand('nupi-tasks', {
+    description: 'List pending tasks (NuPI)',
     handler: async () => {
-      const tasks = await query(
-        `SELECT id, title, description, priority FROM tasks 
-         WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 10`,
+      const tasks = await dbQuery(
+        `SELECT id, title, priority, created_by FROM tasks 
+         WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 10`
       );
-      if (tasks.length === 0) return "No pending tasks.";
-      return tasks
-        .map((t: any) => `[${t.priority}] ${t.title} (${t.id})`)
-        .join("\n");
+      if (!tasks.length || (tasks[0] as any).error) return 'No tasks or error';
+      return tasks.map((t: any) => `[P${t.priority}] ${t.title}`).join('\n');
     },
   });
 
-  // Get task details
-  pi.registerCommand("nezha-task-detail", {
-    description: "Get task details by ID",
+  pi.registerCommand('nupi-task-take', {
+    description: 'Take a task by ID',
     handler: async (id: string) => {
-      const tasks = await query("SELECT * FROM tasks WHERE id = $1", [
-        id.trim(),
-      ]);
-      if (tasks.length === 0) return "Task not found.";
-      return JSON.stringify(tasks[0], null, 2);
-    },
-  });
-
-  // Update task status
-  pi.registerCommand("nezha-task-update", {
-    description: "Update task status (id,status)",
-    handler: async (args: string) => {
-      const [id, status] = args.split(",").map((s) => s.trim());
-      await query(
-        "UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2",
-        [status, id],
+      await dbQuery(
+        "UPDATE tasks SET status = 'RUNNING', assigned_to = 'nupi', updated_at = NOW() WHERE id = $1",
+        [id.trim()]
       );
-      return `Task ${id} updated to ${status}`;
+      return `Task ${id} taken`;
     },
   });
 
-  // Get open issues
-  pi.registerCommand("nezha-issues", {
-    description: "Get open issues from Nezha",
+  pi.registerCommand('nupi-task-done', {
+    description: 'Complete a task by ID',
+    handler: async (taskId: string) => {
+      await dbQuery(
+        "UPDATE tasks SET status = 'COMPLETED', completed_at = NOW(), updated_at = NOW() WHERE id = $1",
+        [taskId.trim()]
+      );
+      return `Task ${taskId} completed`;
+    },
+  });
+
+  // ===== ISSUES =====
+
+  pi.registerCommand('nupi-issues', {
+    description: 'List open issues',
     handler: async () => {
-      const issues = await query(
-        `SELECT id, title, severity, status FROM issues 
-         WHERE status NOT IN ('resolved', 'closed') ORDER BY severity DESC LIMIT 10`,
+      const issues = await dbQuery(
+        `SELECT id, title, severity FROM issues 
+         WHERE status NOT IN ('resolved', 'closed') ORDER BY severity DESC LIMIT 10`
       );
-      if (issues.length === 0) return "No open issues.";
-      return issues.map((i: any) => `[${i.severity}] ${i.title}`).join("\n");
+      if (!issues.length || (issues[0] as any).error) return 'No issues';
+      return issues.map((i: any) => `[${i.severity}] ${i.title}`).join('\n');
     },
   });
 
-  // Save learning using CLI
-  pi.registerCommand("nezha-learn", {
-    description: "Save learning to Nezha memory",
+  // ===== MEMORY =====
+
+  pi.registerCommand('nupi-learn', {
+    description: 'Save learning insight',
     handler: async (insight: string) => {
       const result = runCli(
-        `cd /Users/jk/gits/hub/nezha && node dist/cli/index.js areflect "[LEARN] insight: ${insight}"`,
+        `node dist/cli/index.js areflect "[LEARN] insight: ${insight.trim()}"`,
+        getWorkDir()
       );
-      return result || "Learning saved.";
+      return result.includes('saved') ? 'Saved!' : result.substring(0, 100);
     },
   });
 
-  // Search memory
-  pi.registerCommand("nezha-search", {
-    description: "Search Nezha memory",
+  pi.registerCommand('nupi-search', {
+    description: 'Search memory',
     handler: async (queryStr: string) => {
-      const results = await query(
+      const results = await dbQuery(
         `SELECT content, created_at FROM memory 
          WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT 5`,
-        [`%${queryStr}%`],
+        [`%${queryStr.trim()}%`]
       );
-      if (results.length === 0) return "No memories found.";
+      if (!results.length || (results[0] as any).error) return 'No results';
       return results
-        .map((r: any) => `[${r.created_at}] ${r.content.substring(0, 100)}...`)
-        .join("\n");
+        .map((r: any) => `${r.created_at}: ${r.content.substring(0, 80)}...`)
+        .join('\n');
     },
   });
 
-  // Get table documentation (essential for AI)
-  pi.registerCommand("nezha-docs", {
-    description: "Get table documentation (AI tools index)",
-    handler: async () => {
-      const docs = await query(
-        `SELECT table_name, purpose, mcp_tools FROM table_documentation 
-         WHERE ai_can_modify = true ORDER BY table_name`,
-      );
-      return docs
-        .map((d: any) => `**${d.table_name}**: ${d.purpose}`)
-        .join("\n");
-    },
-  });
+  // ===== SYSTEM =====
 
-  // Check broadcasts using CLI
-  pi.registerCommand("nezha-broadcasts", {
-    description: "Check recent broadcasts",
-    handler: async () => {
-      const result = runCli(
-        `cd /Users/jk/gits/hub/nezha && node dist/cli/index.js areflect --check`,
-      );
-      return result || "No broadcasts.";
-    },
-  });
-
-  // Get system info
-  pi.registerCommand("nezha-status", {
-    description: "Get Nezha system status",
+  pi.registerCommand('nupi-status', {
+    description: 'Get NuPI system status',
     handler: async () => {
       const [tasks, issues, memories] = await Promise.all([
-        query("SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'"),
-        query(
-          "SELECT COUNT(*) as count FROM issues WHERE status NOT IN ('resolved', 'closed')",
-        ),
-        query("SELECT COUNT(*) as count FROM memory"),
+        dbQuery("SELECT COUNT(*) as c FROM tasks WHERE status = 'PENDING'"),
+        dbQuery("SELECT COUNT(*) as c FROM issues WHERE status NOT IN ('resolved', 'closed')"),
+        dbQuery('SELECT COUNT(*) as c FROM memory'),
       ]);
-      return [
-        `Pending tasks: ${(tasks[0] as any).count}`,
-        `Open issues: ${(issues[0] as any).count}`,
-        `Total memories: ${(memories[0] as any).count}`,
-      ].join("\n");
+      const t = (tasks[0] as any)?.c || 0;
+      const i = (issues[0] as any)?.c || 0;
+      const m = (memories[0] as any)?.c || 0;
+      return `📋 Tasks: ${t} | 🔴 Issues: ${i} | 🧠 Memory: ${m}`;
+    },
+  });
+
+  pi.registerCommand('nupi-docs', {
+    description: 'Get table documentation',
+    handler: async () => {
+      const docs = await dbQuery(
+        `SELECT table_name, purpose FROM table_documentation 
+         WHERE ai_can_modify = true ORDER BY table_name`
+      );
+      if (!docs.length) return 'No docs';
+      return docs.map((d: any) => `• ${d.table_name}: ${d.purpose}`).join('\n');
+    },
+  });
+
+  // ===== AUTONOMOUS WORK =====
+
+  pi.registerCommand('nupi-work', {
+    description: 'Start autonomous work mode',
+    handler: async () => {
+      const tasks = await dbQuery(
+        `SELECT id, title, priority FROM tasks 
+         WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 3`
+      );
+      if (!tasks.length) return 'No tasks. Check issues instead.';
+      const t = tasks[0] as any;
+      return `Next task [P${t.priority}]: ${t.title}
+ID: ${t.id}
+
+Actions:
+1. nupi-task-take ${t.id}
+2. Do the work  
+3. nupi-task-done ${t.id}`;
     },
   });
 
   console.log(
-    "[NezhaTools] Extension loaded. Commands: nezha-tasks, nezha-issues, nezha-learn, nezha-search, nezha-docs, nezha-broadcasts, nezha-status",
+    '[NuPI] Tools loaded: nupi-tasks, nupi-task-take, nupi-task-done, nupi-issues, nupi-learn, nupi-search, nupi-status, nupi-docs, nupi-work'
   );
 }
