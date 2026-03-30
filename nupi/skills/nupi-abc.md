@@ -1,20 +1,28 @@
 ---
-name: nezha-abc
-description: 'Nezha System ABC - 必读文档，了解数据库、MCP工具、AI协作系统'
+name: nupi-abc
+description: 'NuPI System ABC - Nezha united with PI (独立二合一AI系统，不依赖OpenCode)'
 triggers:
   - nezha
+  - nupi
   - database
   - memory
   - task
   - issue
   - learn
-version: 1.1.0
+version: 1.3.0
 priority: high
 ---
 
-# Nezha System ABC
+# NuPI System ABC
 
 **每次新会话开始时，首先阅读本文件了解系统全貌。**
+
+> **NuPI** (牛派) = Nezha united with **PI**
+>
+> - **独立系统**，完全不依赖 OpenCode
+> - Pi (TUI前端) + Nezha (后端服务) = 二合一
+> - 本地运行，零API成本
+> - "牛" = awesome! 🐂
 
 ## 🎯 策略声明：本地永续AI
 
@@ -29,7 +37,7 @@ priority: high
 
 ## 系统概述
 
-Nezha 是一个 AI 协作系统，提供：
+NuPI (Nezha united with Pi) 是一个**独立的本地AI协作系统**，提供：
 
 - **记忆系统**: 长期记忆存储和语义搜索
 - **任务系统**: AI自主领取和执行任务

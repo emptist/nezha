@@ -108,7 +108,7 @@ export class TaskPlanner {
 
   private needsDelegation(complexity: number, selfCapability: AICapability): boolean {
     const levels: Record<AICapability, number> = { pi: 1, internal: 2, opencode: 3, human: 4 };
-    const requiredLevel = complexity >= 4 ? 3 : complexity >= 5 ? 2 : 1;
+    const requiredLevel = complexity >= 5 ? 3 : complexity >= 3 ? 2 : 1;
     return requiredLevel > levels[selfCapability];
   }
 
