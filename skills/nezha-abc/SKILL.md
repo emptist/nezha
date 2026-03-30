@@ -189,7 +189,7 @@ AI有责任维护 `table_documentation` 表：
 
 ```
 OLLAMA_ENABLED=true
-OLLAMA_MODEL=mistral:7b
+OLLAMA_MODEL=llama3.2:3b
 OLLAMA_API_URL=http://localhost:11434
 ```
 
