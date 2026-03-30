@@ -49,6 +49,5 @@ coverage/
 .secrets/
 AI_providers.md
 !AI_providers.md.example
-.secretes/conversations/
-conversations/
+# conversations/ operational data in PostgreSQL
 data.db
