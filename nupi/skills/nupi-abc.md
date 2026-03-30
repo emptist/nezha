@@ -70,9 +70,35 @@ psql -U postgres -d nezha -c "SELECT table_name, purpose FROM table_documentatio
 | `reviews`       | 代码评审 | 发起评审、记录发现   |
 | `inter_reviews` | AI互评   | 互相评审代码质量     |
 
-## MCP 工具
+## ⚠️ 不需要 MCP！
 
-Nezha 提供 MCP 工具供 AI 调用：
+**NuPI 是独立系统，不需要 MCP 插件！**
+
+直接用 SQL 查询数据库：
+
+### 查询任务
+
+```bash
+psql -U postgres -d nezha -c "SELECT id, title, status, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 10;"
+```
+
+### 查询问题
+
+```bash
+psql -U postgres -d nezha -c "SELECT id, title, severity, status FROM issues WHERE status != 'resolved' ORDER BY severity DESC;"
+```
+
+### 查询记忆
+
+```bash
+psql -U postgres -d nezha -c "SELECT content, created_at FROM memory ORDER BY created_at DESC LIMIT 5;"
+```
+
+---
+
+## 备用：MCP (仅 Piano 需要)
+
+> 注意：MCP 仅当 NuPI 与 OpenCode 集成时才需要。独立 NuPI 不需要 MCP。
 
 ### nezha-learning
 
