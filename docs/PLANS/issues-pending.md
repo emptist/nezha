@@ -63,6 +63,7 @@
 
 - [x] 删除 sync-mcp-config.ts
 - [x] 创建依赖检查文档
-- [ ] 修复 Piano-NuPI 依赖（待处理）
-- [ ] 移动服务到子系统（待处理）
-- [ ] 确认 auto-reflect 归属（待处理）
+- [x] 移动 OpenCode 服务到 piano/src/services/
+- [x] 移动 Pi/Trae 服务到 nupi/src/services/
+- [x] 确认 auto-reflect 无外部依赖
+- [ ] 修复 Piano-NuPI 依赖（待处理）- 需要通过接口解耦
