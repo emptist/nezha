@@ -66,6 +66,8 @@
 
    **记住**: "Nezha 监控 X 文件" ≠ "Nezha 依赖 X"
 
+   > 详细说明见 `docs/reference/AGENT_ID_SYSTEM.md` - 包含环境检测 vs 安装检测的区别
+
 5. **长期记忆 (ROM)**
    - `.memory/` 目录是 Nezha 的长期记忆 (ROM)
    - **启动时必须先读取** `.memory/` 下的所有 `.md` 文件
