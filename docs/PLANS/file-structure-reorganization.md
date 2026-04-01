@@ -262,4 +262,13 @@ nezha/
 ├── scripts/                      # 工具脚本
 │
 └── docs/PLANS/                   # 规划文档
+
+---
+
+## 已知问题（需后续修复）
+
+1. **Piano 依赖 NuPI** - src/piano/executor/PiExecutorWrapper.ts 直接导入 NuPI 的 PiExecutor
+2. **服务未完全归位** - src/services/ 中仍有 OpenCode/Pi 相关服务
+
+详见: `docs/PLANS/dependency-check.md`
 ```
