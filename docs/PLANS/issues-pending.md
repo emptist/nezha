@@ -4,7 +4,37 @@
 
 ---
 
-## Issue 1: Piano 依赖 NuPI
+## Issue 1: 核心 HeartbeatService 依赖 Piano 子系统
+
+**严重程度**: 高
+
+**问题根源**: TaskRouter/TaskCoordinator/TaskPlanner 是 Piano 的任务路由决策，不应该出现在核心 HeartbeatService 中。
+
+**引入时间线**:
+
+| 提交       | 说明                                        |
+| ---------- | ------------------------------------------- |
+| `9234709d` | 创建 Piano 子系统（正确）                   |
+| `f124bdb5` | 错误：把 TaskRouter 集成进 HeartbeatService |
+| `7644bf35` | 把 TaskCoordinator 集成进 HeartbeatService  |
+| `0cc3e720` | 添加 Pi planner 集成                        |
+| `2a731acd` | 添加 TaskPlanner delegation                 |
+
+**错误原因**:
+
+- 核心 vs 子系统边界不清
+- 把"功能集成"当成"依赖引入"
+
+**正确做法**:
+
+- HeartbeatService 不应该直接使用 TaskRouter/TaskCoordinator/TaskPlanner
+- 应该是可选的插件式集成，或完全解耦通过消息队列
+
+**数据库 Issue**: `c7e9f2a1-3b4d-5c6e-9f8a-1b2c3d4e5f6a`
+
+---
+
+## Issue 2: Piano 依赖 NuPI
 
 **严重程度**: 中
 
