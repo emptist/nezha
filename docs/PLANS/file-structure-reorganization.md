@@ -177,11 +177,89 @@ nezha/
 
 ### 第二步：检查依赖
 
-- [ ] 逐个检查服务依赖
-- [ ] 标记问题服务
+- [x] 逐个检查服务依赖
+- [x] 标记问题服务
+
+#### 依赖检查结果
+
+**无 import 外部库** - 所有服务都是通过知识检测（环境变量/文件存在/进程检查），没有 import 外部软件库
+
+| 服务                       | 依赖类型                     | 归属  |
+| -------------------------- | ---------------------------- | ----- |
+| AgentIdentityService.ts    | 环境变量检测 (AI_AGENT)      | Core  |
+| BroadcastService.ts        | 无                           | Core  |
+| OpenCodeReminderService.ts | 依赖 OpenCode URL (知识检测) | Piano |
+| OpenCodeSessionManager.ts  | 依赖 OpenCode API (知识检测) | Piano |
+| PiExecutor.ts              | 执行 pi 命令 (检测是否存在)  | NuPI  |
+| PiSDKExecutor.ts           | 执行 pi 命令 (检测是否存在)  | NuPI  |
+| TraeSkillSyncService.ts    | 检查 .trae/ 目录             | NuPI  |
+| TraeAutoRecoveryService.ts | 数据库标签检查               | NuPI  |
+| HealthServer.ts            | OpenCode URL 检查            | Core  |
+| HeartbeatService.ts        | 无                           | Core  |
+
+**结论**: 没有服务真正依赖外部软件，都是"知识运用"型的检测。这是正确的。
 
 ### 第三步：子系统归位
 
-- [ ] 移动 Piano 相关到 piano/
-- [ ] 移动 NuPI 相关到 nupi/
-- [ ] 清理重复目录
+- [x] 移动 Piano 相关到 piano/
+  - 复制 src/piano/\* → piano/src/
+  - 复制 OpenCodeReminderService.ts, OpenCodeSessionManager.ts → piano/src/services/
+- [x] 移动 NuPI 相关到 nupi/
+  - 复制 PiExecutor.ts, PiSDKExecutor.ts → nupi/src/services/
+  - 复制 TraeSkillSyncService.ts, TraeAutoRecoveryService.ts → nupi/src/services/
+  - 已移动 nezha-blind-loop.ts, extensions/trae/ → nupi/
+- [x] 清理重复目录
+  - [x] 删除 src/piano/, src/NuPi/
+  - [x] 删除空目录 extensions/, microservices/, deprecated/
+
+---
+
+## ✅ 完成
+
+文件结构重组已完成：
+
+1. **归拢** - 散落的文件移到正确位置
+2. **依赖检查** - 所有服务都是知识检测，无真正依赖外部软件
+3. **子系统归位** - Piano 和 NuPI 服务已移动到对应子系统
+4. **清理** - 删除重复目录和空目录
+
+最终结构已验证。
+
+---
+
+## 最终目标结构
+
+```
+nezha/
+├── src/                          # Nezha Core
+│   ├── services/                 # Core 服务 (保留)
+│   ├── core/                     # 核心功能
+│   ├── cli/                      # CLI
+│   ├── db/                       # 数据库
+│   ├── mcp/                      # MCP 工具
+│   └── benchmarks/               # 测试代码
+│
+├── piano/                        # Piano 子系统
+│   ├── src/
+│   │   ├── coordinator/
+│   │   ├── router/
+│   │   ├── executor/
+│   │   ├── engine/
+│   │   ├── planner/
+│   │   └── services/             # OpenCode 服务
+│   └── deprecated/
+│
+├── nupi/                         # NuPI 子系统
+│   ├── src/
+│   │   ├── services/              # Pi, Trae 服务
+│   │   └── NuPi/
+│   ├── extensions/
+│   └── skills/
+│
+├── examples/                     # 示例代码
+│   └── microservices/
+│
+├── scripts/                      # 工具脚本
+│
+└── docs/PLANS/                   # 规划文档
+```
