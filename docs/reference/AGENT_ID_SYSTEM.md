@@ -63,11 +63,10 @@ G-{source}-{machine-fingerprint}                      # General: 无项目/git
 ### 规则说明
 
 - **有 session_id** → 直接使用（同一 session 只有一个 AI）
-- **有 branch** → 直接使用（DB 查询会匹配 machine）
-- **有 gitHash** → 直接使用（DB 查询会匹配 machine）
-- **无 project** → 用 machine fingerprint（DB 查询会匹配已有身份）
+- **有 branch** → 直接使用（同一 branch 保持相同 ID）
+- **无 project** → 用 machine fingerprint
 
-> **注意**: 末尾不需要 hash，因为 DB 查询的目的是让相同上下文（machine/project/session）的请求匹配已有身份，hash 反而会破坏这个匹配。
+> **核心**: ID 由 `generateSemanticId()` 直接生成（single source of truth），不是从 DB 查询出来的。DB 只用于存储/获取 metadata（display_name 等），首次运行时 INSERT。
 
 ### 示例
 
@@ -96,21 +95,17 @@ G-unknown-abcd1234efgh5678
 | 2      | 无 session_id，有 branch | `S-{source}-{project}-{branch}`     |
 | 3      | 无 session_id，无 branch | `S-{source}-{project}`              |
 
-> **注意**: 不使用 gitHash，同一 branch 下 ID 保持稳定。身份连续性由 DB 查询保证。
+> **注意**: 不使用 gitHash，同一 branch 下 ID 保持稳定。DB 只存储 metadata，不用于 ID 生成。
 
 ### 字段说明
 
-| 字段                  | 来源                              | 价值                 |
-| --------------------- | --------------------------------- | -------------------- |
-| `S/G`                 | 自动判断                          | 区分特定/通用身份    |
-| `source`              | 环境变量 `NEZHA_AGENT_SOURCE`     | **区分不同 AI 系统** |
-| `project`             | git remote 或目录名               | 知道来自哪个项目     |
-| `session_id`          | 外部传入或环境变量                | 同一 session 唯一    |
-| `branch`              | `git rev-parse --abbrev-ref HEAD` | 知道在哪个分支工作   |
-| `gitHash`             | `git rev-parse --short HEAD`      | 代码版本             |
-| `machine-fingerprint` | SHA256(主机名+平台+CPU)           | 机器识别             |
-
-> **注意**: 末尾不再需要 hash，DB 查询会匹配相同上下文的已有身份
+| 字段         | 来源                              | 价值                 |
+| ------------ | --------------------------------- | -------------------- |
+| `S/G`        | 自动判断                          | 区分特定/通用身份    |
+| `source`     | 环境变量 `NEZHA_AGENT_SOURCE`     | **区分不同 AI 系统** |
+| `project`    | git remote 或目录名               | 知道来自哪个项目     |
+| `session_id` | 外部传入或环境变量                | 同一 session 唯一    |
+| `branch`     | `git rev-parse --abbrev-ref HEAD` | 知道在哪个分支工作   |
 
 ### 来源标识 (source)
 
