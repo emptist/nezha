@@ -28,8 +28,7 @@ export interface AgentIdentity {
 
 export class AgentIdentityService {
   private db: DatabaseClient;
-  private static cachedIdentity: AgentIdentity | null = null;
-  private static cachePromise: Promise<AgentIdentity> | null = null;
+  private static currentIdentity: AgentIdentity | null = null;
   private static externalIdentity: AgentIdentity | null = null;
 
   constructor(db: DatabaseClient) {
@@ -38,7 +37,7 @@ export class AgentIdentityService {
 
   static setExternalIdentity(identity: AgentIdentity): void {
     AgentIdentityService.externalIdentity = identity;
-    AgentIdentityService.cachedIdentity = identity;
+    AgentIdentityService.currentIdentity = identity;
     console.log(`[AgentIdentity] External identity set: ${identity.id}`);
   }
 
@@ -47,23 +46,14 @@ export class AgentIdentityService {
   }
 
   static async getResolvedIdentity(): Promise<AgentIdentity> {
-    if (AgentIdentityService.cachedIdentity) {
-      return AgentIdentityService.cachedIdentity;
-    }
-    if (AgentIdentityService.cachePromise) {
-      return AgentIdentityService.cachePromise;
+    if (AgentIdentityService.currentIdentity) {
+      return AgentIdentityService.currentIdentity;
     }
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
-    AgentIdentityService.cachePromise = service.resolve().finally(() => {
-      db.close();
-    });
-    return AgentIdentityService.cachePromise;
-  }
-
-  static resetCache(): void {
-    AgentIdentityService.cachedIdentity = null;
-    AgentIdentityService.cachePromise = null;
+    const identity = await service.resolve();
+    await db.close();
+    return identity;
   }
 
   async resolve(): Promise<AgentIdentity> {
@@ -72,27 +62,16 @@ export class AgentIdentityService {
     }
 
     const context = this.detectContext();
-    const source = context.source || 'unknown';
+    const id = this.generateSemanticId(context);
 
-    let identity: AgentIdentity | null = null;
-
-    if (context.project) {
-      if (context.sessionId) {
-        identity = await this.findKeyMatch(context.project, context.sessionId, source, true);
-      } else if (context.gitHash) {
-        identity = await this.findKeyMatch(context.project, context.gitHash, source, false);
-      }
-    } else {
-      identity = await this.findMachineMatch(context.machineFingerprint, source);
+    const existing = await this.getById(id);
+    if (existing) {
+      AgentIdentityService.currentIdentity = existing;
+      return existing;
     }
 
-    if (identity) {
-      AgentIdentityService.cachedIdentity = identity;
-      return identity;
-    }
-
-    identity = await this.createIdentity(context);
-    AgentIdentityService.cachedIdentity = identity;
+    const identity = await this.createIdentity(context);
+    AgentIdentityService.currentIdentity = identity;
     return identity;
   }
 
@@ -193,98 +172,17 @@ export class AgentIdentityService {
   generateSemanticId(context: AgentContext): string {
     const source = context.source || 'unknown';
 
-    // S = Specific: 有项目信息
     if (context.project) {
-      // 优先级: session_id > branch (不用 gitHash，同一 branch 保持相同 ID)
       if (context.sessionId) {
-        // 有 session_id 直接用
         return `S-${source}-${context.project}-${context.sessionId}`;
       }
-
-      // 用 branch 不用 gitHash，同一 branch 保持相同 ID
       if (context.branch) {
         return `S-${source}-${context.project}-${context.branch}`;
       }
-
-      // 兜底：只用 project
       return `S-${source}-${context.project}`;
     }
 
-    // G = General: 无项目信息，用 machine fingerprint
     return `G-${source}-${context.machineFingerprint}`;
-  }
-
-  private async findExactMatch(context: AgentContext): Promise<AgentIdentity | null> {
-    if (!context.gitHash) return null;
-
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
-       FROM agent_identities 
-       WHERE project = $1 AND git_hash = $2 AND source = $3
-       ORDER BY created_at DESC LIMIT 1`,
-      [context.project, context.gitHash, context.source || 'unknown']
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findProjectMatch(project: string): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
-       FROM agent_identities 
-       WHERE project = $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [project]
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findKeyMatch(
-    project: string,
-    key: string,
-    source: string,
-    isSessionId: boolean = false
-  ): Promise<AgentIdentity | null> {
-    let result;
-    if (isSessionId) {
-      result = await this.db.query(
-        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-         FROM agent_identities 
-         WHERE project = $1 AND session_id = $2 AND source = $3
-         ORDER BY created_at DESC LIMIT 1`,
-        [project, key, source]
-      );
-    } else {
-      result = await this.db.query(
-        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-         FROM agent_identities 
-         WHERE project = $1 AND git_hash = $2 AND source = $3
-         ORDER BY created_at DESC LIMIT 1`,
-        [project, key.substring(0, 7), source]
-      );
-    }
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findMachineMatch(
-    machineFingerprint: string,
-    source: string
-  ): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-       FROM agent_identities 
-       WHERE machine_fingerprint = $1 AND source = $2
-       ORDER BY created_at DESC LIMIT 1`,
-      [machineFingerprint, source]
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
