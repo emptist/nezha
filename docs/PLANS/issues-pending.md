@@ -66,4 +66,5 @@
 - [x] 移动 OpenCode 服务到 piano/src/services/
 - [x] 移动 Pi/Trae 服务到 nupi/src/services/
 - [x] 确认 auto-reflect 无外部依赖
-- [ ] 修复 Piano-NuPI 依赖（待处理）- 需要通过接口解耦
+- [x] 修复 test mock - 添加 AgentIdentityService mock 到 SoulService.test.ts
+- [x] 确认 Piano-NuPI 依赖问题 - 实际是导入 src/services (共享核心服务)，非跨子系统依赖
