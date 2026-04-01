@@ -72,7 +72,7 @@ export class AgentIdentityService {
     }
 
     const context = this.detectContext();
-    const source = context.source || 'nezha';
+    const source = context.source || 'unknown';
 
     let identity: AgentIdentity | null = null;
 
@@ -103,7 +103,10 @@ export class AgentIdentityService {
     const source = traeEnv.source || this.detectSource();
     const branch = this.getGitBranch();
     const sessionId =
-      traeEnv.sessionId || process.env.NEZHA_SESSION_ID || process.env.OPENCODE_SESSION_ID || undefined;
+      traeEnv.sessionId ||
+      process.env.NEZHA_SESSION_ID ||
+      process.env.OPENCODE_SESSION_ID ||
+      undefined;
 
     return {
       project: this.getProjectName(),
@@ -188,31 +191,32 @@ export class AgentIdentityService {
   }
 
   generateSemanticId(context: AgentContext): string {
-    const hash = this.generateDeterministicHash(context);
-    const shortHash = hash.substring(0, 6);
-    const source = context.source || 'nezha';
+    const source = context.source || 'unknown';
 
     // S = Specific: 有项目信息
     if (context.project) {
-      // 有 sessionId 用 sessionId，无则用 git hash
-      const keyPart = context.sessionId
-        ? context.sessionId.substring(0, 6)
-        : context.gitHash
-          ? context.gitHash.substring(0, 7)
-          : '';
-      return `S-${source}-${context.project}-${keyPart ? keyPart + '-' : ''}${shortHash}`;
+      // 优先级: session_id > branch > gitHash
+      // 有 session_id 或 branch 都不需要 hash
+      if (context.sessionId) {
+        // 有 session_id 直接用
+        return `S-${source}-${context.project}-${context.sessionId}`;
+      }
+
+      // 无 session_id，用 branch 或 git hash（仍然不需要额外 hash，DB 查询会匹配）
+      if (context.branch) {
+        return `S-${source}-${context.project}-${context.branch}`;
+      }
+
+      if (context.gitHash) {
+        return `S-${source}-${context.project}-${context.gitHash.substring(0, 7)}`;
+      }
+
+      // 兜底：只用 project
+      return `S-${source}-${context.project}`;
     }
 
-    // G = General: 无项目信息
-    return `G-${source}-${context.machineFingerprint}-${shortHash}`;
-  }
-
-  generateDeterministicHash(context: AgentContext): string {
-    const data = [context.project, context.gitHash || 'no-git', context.machineFingerprint].join(
-      '|'
-    );
-
-    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
+    // G = General: 无项目信息，用 machine fingerprint
+    return `G-${source}-${context.machineFingerprint}`;
   }
 
   private async findExactMatch(context: AgentContext): Promise<AgentIdentity | null> {
@@ -223,7 +227,7 @@ export class AgentIdentityService {
        FROM agent_identities 
        WHERE project = $1 AND git_hash = $2 AND source = $3
        ORDER BY created_at DESC LIMIT 1`,
-      [context.project, context.gitHash, context.source || 'nezha']
+      [context.project, context.gitHash, context.source || 'unknown']
     );
 
     if (result.rows.length === 0) return null;
@@ -289,13 +293,20 @@ export class AgentIdentityService {
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
-    const source = context.source ?? 'nezha';
+    const source = context.source ?? 'unknown';
     const id = this.generateSemanticId(context);
 
     await this.db.query(
       `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source, session_id)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, context.project, context.gitHash, context.machineFingerprint, source, context.sessionId || null]
+      [
+        id,
+        context.project,
+        context.gitHash,
+        context.machineFingerprint,
+        source,
+        context.sessionId || null,
+      ]
     );
     console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
 

@@ -56,56 +56,72 @@ AI 启动时自动选择/创建身份，无需手动干预。
 ## ID 格式
 
 ```
-S-{source}-{project}-{branch}-{hash}   # Specific: 有项目/git
-G-{source}-{machine-fingerprint}-{hash}  # General: 无项目/git
+S-{source}-{project}-{session_id | branch | gitHash}   # Specific: 有项目/git
+G-{source}-{machine-fingerprint}                      # General: 无项目/git
 ```
+
+### 规则说明
+
+- **有 session_id** → 直接使用（同一 session 只有一个 AI）
+- **有 branch** → 直接使用（DB 查询会匹配 machine）
+- **有 gitHash** → 直接使用（DB 查询会匹配 machine）
+- **无 project** → 用 machine fingerprint（DB 查询会匹配已有身份）
+
+> **注意**: 末尾不需要 hash，因为 DB 查询的目的是让相同上下文（machine/project/session）的请求匹配已有身份，hash 反而会破坏这个匹配。
 
 ### 示例
 
 ```
-# Nezha Daemon (默认 source=nezha)
-S-nezha-nezha.git-minimax2-7-4b0ab6
- ↑     │         │            │
- │     │         │            └── 确定性哈希 (6位)
- │     │         └── Git branch (分支名)
- │     └── 项目名 (git remote 或目录名)
- └── 来源标识 (nezha/opencode/trae/pi/external)
+# 从 OpenCode 运行 (有 session_id)
+S-opencode-nezha-abc123def456
 
-# OpenCode Server (source=opencode)
-S-opencode-nezha.git-main-a1b2c3
+# 从 OpenCode 运行 (无 session_id，有 branch)
+S-opencode-nezha-git-fix_main
 
-# Trae (source=trae)
-S-trae-nezha.git-feature-d4e5f6
+# 从 Trae 运行 (有 session_id)
+S-trae-nezha-20260325T123456
 
-# Pi (source=pi)
-S-pi-nezha.git-dev-g7h8i9
+# 未识别来源，有 project 和 git
+S-unknown-nezha-git-6245053
 
-# General (无项目/git)
-G-nezha-71c2ae97d5d52059-4b0ab6
+# 未识别来源，无 project (用 machine fingerprint)
+G-unknown-abcd1234efgh5678
 ```
+
+### 优先级
+
+| 优先级 | 条件                                 | 格式                                |
+| ------ | ------------------------------------ | ----------------------------------- |
+| 1      | 有 session_id                        | `S-{source}-{project}-{session_id}` |
+| 2      | 无 session_id，有 branch             | `S-{source}-{project}-{branch}`     |
+| 3      | 无 session_id，无 branch，有 gitHash | `S-{source}-{project}-{gitHash}`    |
 
 ### 字段说明
 
-| 字段                  | 来源                                  | 价值                 |
-| --------------------- | ------------------------------------- | -------------------- |
-| `S/G`                 | 自动判断                              | 区分特定/通用身份    |
-| `source`              | 环境变量 `NEZHA_AGENT_SOURCE`         | **区分不同 AI 系统** |
-| `project`             | git remote 或目录名                   | 知道来自哪个项目     |
-| `branch`              | `git rev-parse --abbrev-ref HEAD`     | 知道在哪个分支工作   |
-| `machine-fingerprint` | SHA256(主机名+平台+CPU)               | 机器识别             |
-| `hash`                | SHA256(project\|git\|machine\|source) | 确定性保证           |
+| 字段                  | 来源                              | 价值                 |
+| --------------------- | --------------------------------- | -------------------- |
+| `S/G`                 | 自动判断                          | 区分特定/通用身份    |
+| `source`              | 环境变量 `NEZHA_AGENT_SOURCE`     | **区分不同 AI 系统** |
+| `project`             | git remote 或目录名               | 知道来自哪个项目     |
+| `session_id`          | 外部传入或环境变量                | 同一 session 唯一    |
+| `branch`              | `git rev-parse --abbrev-ref HEAD` | 知道在哪个分支工作   |
+| `gitHash`             | `git rev-parse --short HEAD`      | 代码版本             |
+| `machine-fingerprint` | SHA256(主机名+平台+CPU)           | 机器识别             |
+
+> **注意**: 末尾不再需要 hash，DB 查询会匹配相同上下文的已有身份
 
 ### 来源标识 (source)
 
 通过环境变量 `NEZHA_AGENT_SOURCE` 设置：
 
-| 值         | 说明                |
-| ---------- | ------------------- |
-| `nezha`    | Nezha Daemon (默认) |
-| `opencode` | OpenCode Server     |
-| `trae`     | Trae                |
-| `pi`       | Pi                  |
-| `external` | 其他外部 AI         |
+| 值         | 说明            |
+| ---------- | --------------- |
+| `unknown`  | 未知来源 (默认) |
+| `nezha`    | Nezha Daemon    |
+| `opencode` | OpenCode Server |
+| `trae`     | Trae            |
+| `pi`       | Pi              |
+| `external` | 其他外部 AI     |
 
 ### 环境检测 vs 安装检测
 
