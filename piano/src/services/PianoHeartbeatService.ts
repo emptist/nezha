@@ -3,20 +3,19 @@
  *
  * 架构说明：
  * - 继承核心 HeartbeatService，添加 Piano 功能
- * - 当前因为 tsconfig rootDir 限制，无法直接 import 核心
- * - 等 Nezha 变成 npm 包后，此文件可直接使用
- *
- * 需要 import 的模块（未来）：
- * - import { HeartbeatService, type HeartbeatConfig } from 'nezha';
- * - import { TaskRouter } from './TaskRouter.js';
- * - import { TaskCoordinator } from './TaskCoordinator.js';
- * - import { TaskPlanner } from './TaskPlanner.js';
- * - import { PiExecutorWrapper } from './PiExecutorWrapper.js';
- *
- * 当前状态：代码已写好，待 rootDir 限制解除后启用
+ * - 使用 workspaces，但需要等根 nezha 构建后才能 import 'nezha'
+ * - 当前先用相对路径（无法编译），等 npm publish 后改用 'nezha'
  */
 
-import { DatabaseClient } from '../../src/db/DatabaseClient.js';
+// TODO: 等 nezha npm 包可用后，改为:
+// import { HeartbeatService, type HeartbeatConfig } from 'nezha';
+// import { DatabaseClient } from 'nezha';
+// import { Config } from 'nezha';
+// import { logger } from 'nezha';
+// import { TASK_STATUS, DATABASE_TABLES } from 'nezha';
+
+// 当前：workspaces 未完全生效，暂时用相对路径（无法编译）
+import type { DatabaseClient } from '../../src/db/DatabaseClient.js';
 import {
   HeartbeatService,
   type HeartbeatConfig,
