@@ -41,6 +41,8 @@ WHERE ai_can_modify = true;
 
 This table is the **AI's tool index** - tells AI what database capabilities are available, what each table does, and what CLI commands can be used.
 
+**AI's Responsibility:** Maintain and grow this table! When adding new tables, features, or capabilities, update `table_documentation` so future AIs can discover and use them. This is the source of truth for AI autonomy.
+
 ## How Nezha Works
 
 ### 1. Heartbeat-based Task Execution
