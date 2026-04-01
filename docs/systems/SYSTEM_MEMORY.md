@@ -1,7 +1,7 @@
 # System Memory - Environment Configuration
 
 **Created**: 2026-03-17  
-**Updated**: 2026-03-29  
+**Updated**: 2026-04-01  
 **Purpose**: Store critical configuration information to avoid repeated user queries
 
 ---
@@ -10,20 +10,21 @@
 
 ### Installation Information
 
-| Item | Value |
-|------|-------|
-| **Method** | macOS Application (Postgres.app) |
-| **Version** | 18 |
-| **Binary Path** | `/Applications/Postgres.app/Contents/Versions/18/bin/` |
-| **Data Directory** | `~/Library/Application Support/Postgres/var-18/` |
-| **Config File** | `~/Library/Application Support/Postgres/var-18/pg_hba.conf` |
+| Item               | Value                                                       |
+| ------------------ | ----------------------------------------------------------- |
+| **Method**         | macOS Application (Postgres.app)                            |
+| **Version**        | 18                                                          |
+| **Binary Path**    | `/Applications/Postgres.app/Contents/Versions/18/bin/`      |
+| **psql Access**    | ✅ Works directly (as of 2026-04-01) - no full path needed  |
+| **Data Directory** | `~/Library/Application Support/Postgres/var-18/`            |
+| **Config File**    | `~/Library/Application Support/Postgres/var-18/pg_hba.conf` |
 
 ### Authentication
 
-| Item | Value |
-|------|-------|
-| **Current** | Keychain authentication |
-| **Issue** | CLI tools and Node.js don't support it |
+| Item         | Value                                          |
+| ------------ | ---------------------------------------------- |
+| **Current**  | Keychain authentication                        |
+| **Issue**    | CLI tools and Node.js don't support it         |
 | **Solution** | Modify pg_hba.conf to use trust authentication |
 
 ### Connection Configuration
@@ -40,11 +41,13 @@ DB_PASSWORD=  # Empty, use trust authentication
 ### How to Fix Authentication
 
 **Step 1**: Update .env file
+
 ```bash
 NEZHA_DB_PASSWORD=
 ```
 
 **Step 2**: Verify pg_hba.conf
+
 ```bash
 # Should have:
 local   all             all                                     trust
@@ -52,6 +55,7 @@ host    all             all             127.0.0.1/32            trust
 ```
 
 **Step 3**: Test connection
+
 ```bash
 psql -U postgres -d nezha -c "SELECT version();"
 ```
@@ -62,20 +66,20 @@ psql -U postgres -d nezha -c "SELECT version();"
 
 ### API Information
 
-| Item | Value |
-|------|-------|
-| **Provider ID** | opencode |
-| **Model ID** | big-pickle |
-| **Agent** | build |
-| **Mode** | build |
+| Item            | Value      |
+| --------------- | ---------- |
+| **Provider ID** | opencode   |
+| **Model ID**    | big-pickle |
+| **Agent**       | build      |
+| **Mode**        | build      |
 
 ### Session Files
 
-| Item | Value |
-|------|-------|
-| **Location** | `.tmp/nezha_session_*.json` |
-| **Format** | JSON |
-| **Purpose** | Store conversation history and task execution records |
+| Item         | Value                                                 |
+| ------------ | ----------------------------------------------------- |
+| **Location** | `.tmp/nezha_session_*.json`                           |
+| **Format**   | JSON                                                  |
+| **Purpose**  | Store conversation history and task execution records |
 
 ---
 
@@ -116,10 +120,10 @@ nezha/
 
 ### 1. Dual Mode Design
 
-| Mode | Storage | Reason |
-|------|---------|--------|
-| **Development** | File system | May not connect to database |
-| **Production** | Database only | Data isolation, multi-project support |
+| Mode            | Storage       | Reason                                |
+| --------------- | ------------- | ------------------------------------- |
+| **Development** | File system   | May not connect to database           |
+| **Production**  | Database only | Data isolation, multi-project support |
 
 ### 2. Continuous Improvement Mode
 
@@ -130,7 +134,7 @@ nezha/
 ### 3. Conversation Recording
 
 - **Format**: JSONL
-- **Location**: conversations/YYYY-MM-DD/session-*.jsonl
+- **Location**: conversations/YYYY-MM-DD/session-\*.jsonl
 - **Index**: conversations/index.json
 
 ### 4. npm Mirror
@@ -143,17 +147,18 @@ nezha/
 
 ## Known Issues
 
-| Issue | Impact | Solution | Priority |
-|-------|--------|----------|----------|
-| PostgreSQL auth config | Cannot use database | Modify pg_hba.conf to trust | HIGH |
-| OpenCode API not configured | Cannot use OpenCode integration | Configure API URL and auth | HIGH |
-| HeartbeatService not running | Cannot work continuously | Start after database fix | HIGH |
+| Issue                        | Impact                          | Solution                    | Priority |
+| ---------------------------- | ------------------------------- | --------------------------- | -------- |
+| PostgreSQL auth config       | Cannot use database             | Modify pg_hba.conf to trust | HIGH     |
+| OpenCode API not configured  | Cannot use OpenCode integration | Configure API URL and auth  | HIGH     |
+| HeartbeatService not running | Cannot work continuously        | Start after database fix    | HIGH     |
 
 ---
 
 ## Progress Tracking
 
 ### Completed
+
 - [x] Conversation recording system
 - [x] OpenCode client
 - [x] Dual mode memory design
@@ -161,11 +166,13 @@ nezha/
 - [x] Continuous improvement system design
 
 ### In Progress
+
 - [ ] PostgreSQL configuration modification
 - [ ] Database connection test
 - [ ] OpenCode API configuration
 
 ### Pending
+
 - [ ] Continuous work startup
 - [ ] Initial task addition
 - [ ] Autonomous learning implementation

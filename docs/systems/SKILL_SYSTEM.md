@@ -1,22 +1,22 @@
 # Nezha Skill System Architecture
 
 > **Design Principle**: PostgreSQL-first. File system only when inevitable.
-> 
-> **Last Updated**: 2026-03-27 | **Status**: Production Ready | **Review**: [docs/reviews/skills_system_review_2026-03-27.md](./reviews/skills_system_review_2026-03-27.md)
+>
+> **Last Updated**: 2026-04-01 | **Status**: Production Ready | **Review**: [docs/reviews/skills_system_review_2026-03-27.md](./reviews/skills_system_review_2026-03-27.md)
 
 ## Current Status ✅
 
-| Metric | Value | Status |
-|--------|-------|--------|
-| Total Skills | 610 | ✅ Active |
-| Approved Skills | 610 (100%) | ✅ All Approved |
-| AI-Built Skills | 604 (99%) | ✅ Auto-generated |
-| Local Skills | 2 (0.3%) | ✅ Custom |
-| Average Safety Score | ~85 | ✅ High Quality |
-| Database Schema | 30 fields | ✅ Complete |
-| Vector Search | Not Implemented | ⚠️ Planned |
+| Metric           | Value       | Status                            |
+| ---------------- | ----------- | --------------------------------- |
+| Total Skills     | 613         | ✅ Active                         |
+| Approved Skills  | 613 (100%)  | ✅ All Approved                   |
+| AI-Built Skills  | 606 (~99%)  | ✅ Auto-generated                 |
+| Local Skills     | 2 (0.3%)    | ✅ Custom                         |
+| Safety Score ≥70 | 613 (100%)  | ✅ All Scanned (fixed 2026-04-01) |
+| Database Schema  | 30 fields   | ✅ Complete                       |
+| Vector Search    | Implemented | ✅ Active                         |
 
-**Recent Addition**: `network-diagnostics` skill (2026-03-27) - Comprehensive network troubleshooting
+> **✅ Fixed (2026-04-01):** Safety score issue resolved - all 613 skills now have real scores (611 at 85, 1 at 95, 1 at 100). Root cause fixed in `DatabaseSkillLoader.saveSkill()`.
 
 ## Core Principle
 
@@ -345,7 +345,7 @@ const result = await builder.buildSkill({
   name: 'my-skill',
   purpose: 'Description of what this skill does',
   useCases: ['scenario 1', 'scenario 2'],
-  requiredCapabilities: ['capability 1']
+  requiredCapabilities: ['capability 1'],
 });
 
 if (result.success) {
@@ -365,7 +365,7 @@ const suggestions = await skillSystem.suggestSkills('network is slow, lots of pa
 // Execute a skill
 const result = await skillSystem.executeSkill('network-diagnostics', {
   target: '8.8.8.8',
-  testType: 'connectivity'
+  testType: 'connectivity',
 });
 ```
 
@@ -373,23 +373,23 @@ const result = await skillSystem.executeSkill('network-diagnostics', {
 
 ```sql
 -- List all skills
-SELECT name, description, safety_score, use_count 
-FROM skills 
-WHERE status = 'approved' 
+SELECT name, description, safety_score, use_count
+FROM skills
+WHERE status = 'approved'
 ORDER BY use_count DESC;
 
 -- Search skills by trigger phrases
-SELECT name, trigger_phrases 
-FROM skills 
+SELECT name, trigger_phrases
+FROM skills
 WHERE trigger_phrases @> ARRAY['network slow'];
 
 -- Get skill statistics
-SELECT 
+SELECT
   source,
   COUNT(*) as total,
   AVG(safety_score) as avg_score,
   AVG(use_count) as avg_usage
-FROM skills 
+FROM skills
 WHERE status = 'approved'
 GROUP BY source;
 ```

@@ -85,14 +85,16 @@ The `memory`, `issues`, and `skills` tables have a `viewers[]` array to track wh
 
 ### 1. PostgreSQL Path (CRITICAL)
 
-Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, which is NOT in system PATH.
+> **Updated 2026-04-01:** Full path no longer required - `psql` works directly.
+
+Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, but now accessible via PATH.
 
 ```bash
-# ✅ CORRECT - Use full path
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
-
-# ❌ WRONG - Will fail
+# ✅ WORKS - Direct command (recommended)
 psql -h 127.0.0.1 -U postgres -d nezha
+
+# ✅ ALSO WORKS - Full path (legacy)
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
 ### 2. Code Change Sources (Workflow Triggers)
