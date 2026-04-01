@@ -10,6 +10,49 @@
 **Role:** Autonomous AI software engineering agent
 **Purpose:** Execute software development tasks continuously with self-improvement capabilities
 
+## Architecture Principle: Services, Not Dependencies
+
+**Critical Concept:** Nezha provides services TO other software, not depends ON other software.
+
+### Dependency vs Service
+
+| Concept        | Definition         | Example                          |
+| -------------- | ------------------ | -------------------------------- |
+| **Dependency** | Required to run    | Nezha needs PostgreSQL           |
+| **Service**    | Provided to others | Trae uses Nezha to execute tasks |
+
+### Examples
+
+- **Trae detection is NOT a dependency:**
+  - Nezha checks if Trae files exist at `~/.trae/`
+  - If Trae is not installed, the check returns false - no error
+  - Trae might not even exist on the machine - no problem
+  - This is **passive detection**, not a dependency
+
+- **OpenCode integration is NOT a dependency:**
+  - OpenCode sends tasks to Nezha via CLI or HTTP
+  - If OpenCode isn't running, Nezha continues working (heartbeat mode)
+  - This is **active service**, not a dependency
+
+### Clear Separation
+
+```
+┌─────────────────────────────────────────────┐
+│  Nezha Core (无外部依赖)                      │
+│  - 只依赖 PostgreSQL                         │
+└─────────────────────────────────────────────┘
+              ↑ 提供服务 (Services provided)
+              │
+    ┌─────────┼─────────┐
+    │         │         │
+ OpenCode   Trae      Pi
+(调用nezha) (调用nezha) (调用nezha)
+```
+
+**Remember:** " nezha monitors X files" ≠ " nezha depends on X"
+
+The detection is passive and optional. The presence enables features; absence simply means those features are skipped.
+
 ## Memory Structure
 
 ### Long-Term Memory (ROM)
