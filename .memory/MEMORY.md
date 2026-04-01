@@ -43,6 +43,30 @@ This table is the **AI's tool index** - tells AI what database capabilities are 
 
 **AI's Responsibility:** Maintain and grow this table! When adding new tables, features, or capabilities, update `table_documentation` so future AIs can discover and use them. This is the source of truth for AI autonomy.
 
+## Self-Driven Workflow (Startup + After Each Task)
+
+AI should check for pending work at two points:
+
+### 1. At Startup
+
+Before doing anything else, check for pending tasks and issues:
+
+```sql
+-- Check pending tasks
+SELECT id, title, priority, status FROM tasks
+WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 5;
+
+-- Check open issues
+SELECT id, title, severity, status FROM issues
+WHERE status = 'OPEN' ORDER BY severity DESC LIMIT 5;
+```
+
+### 2. After Completing Each Task
+
+After finishing work, check again to pick up new tasks. This creates a continuous self-driven workflow.
+
+**Tools Available:** Use MCP tools or CLI commands (see `table_documentation`) to query and work with tasks/issues. The system is designed for AI to operate autonomously - check, work, learn, repeat.
+
 ## How Nezha Works
 
 ### 1. Heartbeat-based Task Execution
