@@ -51,6 +51,39 @@
 
 **Remember:** " nezha monitors X files" ≠ " nezha depends on X"
 
+### The Deeper Truth: Knowledge, Not Dependency
+
+**核心洞察**: Nezha 不是依赖外部软件的存在，而是依赖**对外部世界的知识**。
+
+- 我们利用 Pi、OpenCode、Trae 的**特性**
+- 我们利用**对这些特性的知识**来形成我们的服务
+- 我们依赖的是**知识**，而不是**外部世界的存在**
+- 这是**服务**，不是**依赖**
+
+**示例**:
+
+- "Nezha 知道 Trae 会在 ~/.trae/ 留下文件" → 知识
+- "Nezha 检查这些文件是否存在" → 利用知识提供服务
+- "如果 Trae 不存在，检查返回 false，跳过" → 不影响运行
+
+这就是**被动检测 (Passive Detection)** vs **依赖 (Dependency)** 的区别。
+
+### Two Types of External Integration
+
+| Type                   | Description                       | Example                     |
+| ---------------------- | --------------------------------- | --------------------------- |
+| **Passive Detection**  | Check if files exist, skip if not | Trae file check             |
+| **Active Cooperation** | Requires external to pass info    | OpenCode passing session_id |
+
+**Active Cooperation IS Interdependency:**
+
+当 OpenCode 需要**主动传递**信息给 Nezha 时（如 session_id、source），这是协作关系，不是单向依赖：
+
+- 如果 OpenCode 传递正确的 env vars → ID 正确（利用知识提供服务）
+- 如果 OpenCode 不传递 → ID 退回到 git hash（降级运行，不影响核心功能）
+
+**关键区别**: 即使不传递信息，Nezha 仍然可以工作（heartbeat 模式），只是降级而已。
+
 The detection is passive and optional. The presence enables features; absence simply means those features are skipped.
 
 ## Memory Structure
