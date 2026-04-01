@@ -15,7 +15,7 @@
 ### Long-Term Memory (ROM)
 
 - **Location:** `.memory/` (root directory)
-- **Files:** `MEMORY.md`, `POSTGRESQL_PATH.md`, `reflections.md`
+- **Files:** `MEMORY.md`, `POSTGRESQL_PATH.md`, `reflections.md`, `AI_LEVELS.md`
 - **Purpose:** Critical system knowledge that AI must read on startup
 
 ### Short-Term Memory
@@ -23,6 +23,23 @@
 - **Location:** `.tmp/nezha-memory/` (daily append)
 - **Files:** `YYYY-MM-DD.md` (daily logs)
 - **Purpose:** Session handoffs, working notes
+
+## Database Schema (AI Tool Index)
+
+On startup, also read the `table_documentation` table - it contains:
+
+```sql
+-- Query all table documentation
+SELECT table_name, purpose, key_columns, cli_commands
+FROM table_documentation
+ORDER BY table_name;
+
+-- Tables AI can modify
+SELECT table_name, purpose FROM table_documentation
+WHERE ai_can_modify = true;
+```
+
+This table is the **AI's tool index** - tells AI what database capabilities are available, what each table does, and what CLI commands can be used.
 
 ## How Nezha Works
 
