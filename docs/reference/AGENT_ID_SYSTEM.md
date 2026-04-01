@@ -90,11 +90,13 @@ G-unknown-abcd1234efgh5678
 
 ### 优先级
 
-| 优先级 | 条件                                 | 格式                                |
-| ------ | ------------------------------------ | ----------------------------------- |
-| 1      | 有 session_id                        | `S-{source}-{project}-{session_id}` |
-| 2      | 无 session_id，有 branch             | `S-{source}-{project}-{branch}`     |
-| 3      | 无 session_id，无 branch，有 gitHash | `S-{source}-{project}-{gitHash}`    |
+| 优先级 | 条件                     | 格式                                |
+| ------ | ------------------------ | ----------------------------------- |
+| 1      | 有 session_id            | `S-{source}-{project}-{session_id}` |
+| 2      | 无 session_id，有 branch | `S-{source}-{project}-{branch}`     |
+| 3      | 无 session_id，无 branch | `S-{source}-{project}`              |
+
+> **注意**: 不使用 gitHash，同一 branch 下 ID 保持稳定。身份连续性由 DB 查询保证。
 
 ### 字段说明
 

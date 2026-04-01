@@ -195,20 +195,15 @@ export class AgentIdentityService {
 
     // S = Specific: 有项目信息
     if (context.project) {
-      // 优先级: session_id > branch > gitHash
-      // 有 session_id 或 branch 都不需要 hash
+      // 优先级: session_id > branch (不用 gitHash，同一 branch 保持相同 ID)
       if (context.sessionId) {
         // 有 session_id 直接用
         return `S-${source}-${context.project}-${context.sessionId}`;
       }
 
-      // 无 session_id，用 branch 或 git hash（仍然不需要额外 hash，DB 查询会匹配）
+      // 用 branch 不用 gitHash，同一 branch 保持相同 ID
       if (context.branch) {
         return `S-${source}-${context.project}-${context.branch}`;
-      }
-
-      if (context.gitHash) {
-        return `S-${source}-${context.project}-${context.gitHash.substring(0, 7)}`;
       }
 
       // 兜底：只用 project
