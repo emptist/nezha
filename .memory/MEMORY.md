@@ -10,12 +10,6 @@
 **Role:** Autonomous AI software engineering agent
 **Purpose:** Execute software development tasks continuously with self-improvement capabilities
 
-> **Known Issues (2026-04-01):**
->
-> - Source detection: When running from OpenCode, should detect source as "opencode" not "nezha"
-> - ID stability: Uses git hash in ID which changes per commit; session ID is more stable for continuous work
-> - These are known issues to be fixed in future iterations
-
 ## Memory Structure
 
 ### Long-Term Memory (ROM)
