@@ -5,12 +5,13 @@
  * 架构说明：
  * - 这是核心层服务，Nezha 的核心功能
  * - 不依赖外部 AI 系统
- * - 可以独立运行
+ * - 可以独立运行（只执行内部 AI）
  * - 参考：docs/ARCHITECTURE.md
  *
- * Piano 集成：
- * - 使用 TaskRouter 进行任务路由 (internal/opencode/pi)
- * - 复杂任务发给 OpenCode，简单任务内部处理
+ * Piano 扩展：
+ * - Piano 需要继承此类，添加任务路由功能
+ * - 见 piano/src/services/PianoHeartbeatService.ts
+ * - 需要将 executeTask 改为 protected 或提供扩展点
  */
 import { Scheduler } from '../../core/Scheduler.js';
 import { AIProvider, AIProviderFactory } from '../ai/index.js';
@@ -20,10 +21,6 @@ import type { DatabaseClient } from '../../db/DatabaseClient.js';
 import { ReminderService } from '../ReminderService.js';
 import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
-import { TaskRouter } from '../../piano/router/TaskRouter.js';
-import { TaskCoordinator } from '../../piano/coordinator/TaskCoordinator.js';
-import { TaskPlanner } from '../../piano/planner/TaskPlanner.js';
-import { PiExecutorWrapper } from '../../piano/executor/PiExecutorWrapper.js';
 import { Config } from '../../config/Config.js';
 
 export interface HeartbeatConfig {
@@ -31,46 +28,25 @@ export interface HeartbeatConfig {
   taskTimeoutMs?: number;
   enableReminder?: boolean;
   enablePi?: boolean;
+  // TODO: Piano 使用以下配置（未来通过子类扩展）
+  // opencodeUrl?: string;
+  // opencodeAuth?: { username: string; password: string };
 }
 
 export class HeartbeatService {
-  private readonly scheduler: Scheduler;
-  private readonly aiProvider: AIProvider;
-  private readonly db: DatabaseClient;
-  private readonly reminderService: ReminderService;
-  private readonly pluginManager = getPluginManager();
-  private readonly nextStepAdvisor: NextStepAdvisor;
-  private readonly taskRouter: TaskRouter;
-  private readonly taskPlanner: TaskPlanner;
-  private readonly taskCoordinator: TaskCoordinator | null = null;
-  private readonly piExecutor: PiExecutorWrapper | null = null;
-  private readonly config: HeartbeatConfig;
+  protected readonly scheduler: Scheduler;
+  protected readonly aiProvider: AIProvider;
+  protected readonly db: DatabaseClient;
+  protected readonly reminderService: ReminderService;
+  protected readonly pluginManager = getPluginManager();
+  protected readonly nextStepAdvisor: NextStepAdvisor;
+  protected readonly config: HeartbeatConfig;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
     this.db = db;
     this.config = config || {};
     this.scheduler = new Scheduler(db, config?.heartbeatIntervalMs);
     this.aiProvider = AIProviderFactory.createFromEnv();
-    const enablePi = config?.enablePi ?? false;
-    this.taskRouter = new TaskRouter({
-      useOpenCode: true,
-      usePi: enablePi,
-      complexityThreshold: 999,
-      selfCapability: 'pi',
-    });
-
-    this.taskPlanner = new TaskPlanner();
-
-    const opencodeUrl = Config.getInstance().getTransportConfig().opencodeApiUrl;
-    if (opencodeUrl) {
-      this.taskCoordinator = new TaskCoordinator({
-        opencodeUrl,
-      });
-    }
-
-    if (enablePi) {
-      this.piExecutor = new PiExecutorWrapper();
-    }
 
     this.nextStepAdvisor = new NextStepAdvisor({
       enabled: true,
@@ -105,7 +81,25 @@ export class HeartbeatService {
     logger.info('HeartbeatService stopped');
   }
 
-  private async executeTask(
+  isRunning(): boolean {
+    return this.scheduler.isActive();
+  }
+
+  /**
+   * 核心任务执行 - 仅内部 AI
+   *
+   * TODO: Piano 子类需要扩展此逻辑
+   * - 使用 TaskRouter 决定执行器 (internal/opencode/pi)
+   * - opencode → TaskCoordinator.execute()
+   * - pi → TaskPlanner.plan() + PiExecutor.execute()
+   * - internal → 此处的默认逻辑
+   *
+   * 建议扩展方式：
+   * 1. 将 executeTask 改为 protected
+   * 2. 子类 override 并在调用前插入 Piano 逻辑
+   * 3. 或提供 beforeExecuteTask(task) 钩子
+   */
+  protected async executeTask(
     taskId: string,
     title: string,
     description?: string,
@@ -116,99 +110,34 @@ export class HeartbeatService {
   ): Promise<void> {
     logger.info(`Executing task: ${title}`);
 
-    const executor = this.taskRouter.route(title, description);
-    logger.info(`[TaskRouter] Routing "${title}" to: ${executor}`);
+    // TODO: Piano 子类在这里插入路由逻辑
+    // const executor = this.taskRouter?.route(title, description);
+    // if (executor === 'opencode') { ... }
+    // if (executor === 'pi') { ... }
 
-    let opencodeFailed = false;
+    // 核心逻辑：仅内部 AI 执行
+    await this.executeInternalAI(taskId, title, description, retryCount, maxRetries);
+  }
 
-    if (executor === 'opencode') {
-      logger.info(`[TaskRouter] Task "${title}" routed to OpenCode - sending to OpenCode...`);
+  /**
+   * 内部 AI 执行逻辑
+   * 提取为 protected 方法供子类在需要时调用
+   */
+  protected async executeInternalAI(
+    taskId: string,
+    title: string,
+    description?: string,
+    retryCount: number = 0,
+    maxRetries: number = 3
+  ): Promise<void> {
+    logger.info(`Executing task "${title}" with internal AI...`);
 
-      if (this.taskCoordinator) {
-        try {
-          const result = await this.taskCoordinator.execute({
-            id: taskId,
-            title,
-            description: description || '',
-            priority: 5,
-          });
-          logger.info(
-            `[TaskCoordinator] Result from OpenCode: ${result.result.substring(0, 100)}...`
-          );
+    const sessionId = `nezha-${Date.now()}`;
+    const recentBroadcasts = await this.getRecentBroadcasts();
+    const essentialKnowledge = await this.getEssentialKnowledge();
+    const systemStatus = await this.getSystemStatus();
 
-          await this.db.query(
-            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
-            [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.result }), taskId]
-          );
-          logger.info(`[TaskRouter] Task "${title}" completed via OpenCode`);
-          return;
-        } catch (error) {
-          logger.error(`[TaskCoordinator] Failed:`, error);
-          logger.info(`[TaskRouter] Falling back to internal AI for task "${title}"...`);
-          opencodeFailed = true;
-        }
-      } else {
-        opencodeFailed = true;
-      }
-    }
-
-    if (executor === 'pi' && this.piExecutor) {
-      logger.info(`[TaskRouter] Task "${title}" routed to Pi - checking delegation...`);
-
-      const planned = this.taskPlanner.plan({
-        id: taskId,
-        title,
-        description,
-        priority: 5,
-      });
-
-      if (planned.shouldDelegate && planned.delegateTo) {
-        logger.info(`[TaskPlanner] Task too complex for Pi, delegating to ${planned.delegateTo}`);
-        await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET delegate_to = $1, complexity = $2 WHERE id = $3`,
-          [planned.delegateTo, planned.complexity, taskId]
-        );
-        return;
-      }
-
-      const systemStatus = await this.getSystemStatus();
-      const essentialKnowledge = await this.getEssentialKnowledge();
-      const piPrompt = `## SYSTEM STATUS\n${systemStatus}\n\n## ESSENTIAL KNOWLEDGE\n${essentialKnowledge}\n\n## TASK\n${title}\n${description || ''}\n\nAfter completing, create subtasks in format: - task: <title>`;
-
-      try {
-        const result = await this.piExecutor.execute(piPrompt);
-        logger.info(`[PiExecutor] Result: ${result.message.substring(0, 100)}...`);
-
-        await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0, complexity = $3 WHERE id = $4`,
-          [
-            TASK_STATUS.COMPLETED,
-            JSON.stringify({ message: result.message, output: result.output }),
-            planned.complexity,
-            taskId,
-          ]
-        );
-
-        await this.extractAndCreateTasks(result.output, title, {
-          complexity: planned.complexity,
-        });
-        logger.info(`[TaskRouter] Task "${title}" completed via Pi`);
-        return;
-      } catch (error) {
-        logger.error(`[PiExecutor] Failed:`, error);
-        logger.info(`[TaskRouter] Falling back to internal AI for task "${title}"...`);
-      }
-    }
-
-    if (executor !== 'opencode' || opencodeFailed) {
-      logger.info(`[TaskRouter] Executing task "${title}" with internal AI...`);
-
-      const sessionId = `nezha-${Date.now()}`;
-      const recentBroadcasts = await this.getRecentBroadcasts();
-      const essentialKnowledge = await this.getEssentialKnowledge();
-      const systemStatus = await this.getSystemStatus();
-
-      const prompt = `${description || title}
+    const prompt = `${description || title}
 
 ---
 
@@ -240,62 +169,63 @@ After completing, use:
 
 Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 
-      try {
-        const result = await this.aiProvider.complete(prompt);
+    try {
+      const result = await this.aiProvider.complete(prompt);
 
-        const hasAction = await this.verifyTaskCompletion(result.content);
-        if (!hasAction) {
-          logger.warn(`[TaskRouter] FAKE COMPLETE: No action detected for task "${title}"`);
-          await this.db.query(
-            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
-            [
-              TASK_STATUS.FAKE_COMPLETE,
-              'Fake complete: No [TASK]/[ISSUE]/[LEARN]/[PROMPT_UPDATE] markers found',
-              taskId,
-            ]
-          );
-          await this.pluginManager.executeAfterTaskWithChanges({
-            taskId,
-            title,
-            description,
-            status: 'FAKE_COMPLETE',
-            result: 'Fake complete: AI claimed done without action',
-          });
-          return;
-        }
-
+      const hasAction = await this.verifyTaskCompletion(result.content);
+      if (!hasAction) {
+        logger.warn(`FAKE COMPLETE: No action detected for task "${title}"`);
         await this.db.query(
-          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
-          [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.content }), taskId]
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
+          [
+            TASK_STATUS.FAKE_COMPLETE,
+            'Fake complete: No [TASK]/[ISSUE]/[LEARN]/[PROMPT_UPDATE] markers found',
+            taskId,
+          ]
         );
-
-        logger.info(`Task completed: ${title} (verified)`);
-
         await this.pluginManager.executeAfterTaskWithChanges({
           taskId,
           title,
           description,
-          status: 'COMPLETED',
-          result: result.content,
+          status: 'FAKE_COMPLETE',
+          result: 'Fake complete: AI claimed done without action',
         });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.error(`Task failed: ${title}`, errorMessage);
+        return;
+      }
 
-        if (retryCount < maxRetries) {
-          await this.db.query(
-            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
-            [TASK_STATUS.PENDING, errorMessage, retryCount + 1, taskId]
-          );
-        } else {
-          await this.db.query(
-            `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
-            [TASK_STATUS.FAILED, errorMessage, taskId]
-          );
-        }
+      await this.db.query(
+        `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, result = $2, completed_at = NOW(), retry_count = 0 WHERE id = $3`,
+        [TASK_STATUS.COMPLETED, JSON.stringify({ message: result.content }), taskId]
+      );
+
+      logger.info(`Task completed: ${title} (verified)`);
+
+      await this.pluginManager.executeAfterTaskWithChanges({
+        taskId,
+        title,
+        description,
+        status: 'COMPLETED',
+        result: result.content,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Task failed: ${title}`, errorMessage);
+
+      if (retryCount < maxRetries) {
+        await this.db.query(
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2, retry_count = $3 WHERE id = $4`,
+          [TASK_STATUS.PENDING, errorMessage, retryCount + 1, taskId]
+        );
+      } else {
+        await this.db.query(
+          `UPDATE ${DATABASE_TABLES.TASKS} SET status = $1, error = $2 WHERE id = $3`,
+          [TASK_STATUS.FAILED, errorMessage, taskId]
+        );
       }
     }
   }
+
+  // 以下是辅助方法，保留供核心和子类使用
 
   private async getRecentBroadcasts(): Promise<string> {
     try {
@@ -329,136 +259,40 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
     }
   }
 
-  private async getSystemStatus(): Promise<string> {
+  protected async getEssentialKnowledge(): Promise<string> {
     try {
-      const pending = await this.db.query<{ count: string }>(
+      const result = await this.db.query<{ content: string }>(
+        `SELECT content FROM agent_memories 
+         WHERE agent_id = 'system' AND content_type = 'essential'
+         ORDER BY importance DESC LIMIT 5`
+      );
+      return result.rows.map(r => r.content).join('\n\n');
+    } catch {
+      return '(No essential knowledge available)';
+    }
+  }
+
+  protected async getSystemStatus(): Promise<string> {
+    try {
+      const tasksResult = await this.db.query<{ count: string }>(
         `SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'`
       );
-      const failed = await this.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'`
+      const runningResult = await this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM tasks WHERE status = 'RUNNING'`
       );
-      const openIssues = await this.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM issues WHERE status = 'open'`
-      );
-      const fakeComplete = await this.db.query<{ count: string }>(
-        `SELECT COUNT(*) as count FROM tasks WHERE status = 'FAKE_COMPLETE'`
-      );
-
-      const parts = [];
-      const p = parseInt(pending.rows[0]?.count || '0', 10);
-      const f = parseInt(failed.rows[0]?.count || '0', 10);
-      const i = parseInt(openIssues.rows[0]?.count || '0', 10);
-      const fc = parseInt(fakeComplete.rows[0]?.count || '0', 10);
-
-      if (p > 0) parts.push(`- ${p} pending tasks`);
-      if (f > 0) parts.push(`- ${f} failed tasks (24h)`);
-      if (i > 0) parts.push(`- ${i} open issues`);
-      if (fc > 0) parts.push(`- ${fc} fake completions (AI lied)`);
-
-      return parts.length > 0 ? parts.join('\n') : '- System healthy';
+      return `Pending tasks: ${tasksResult.rows[0]?.count || 0}, Running: ${runningResult.rows[0]?.count || 0}`;
     } catch {
-      return '- Unable to fetch status';
+      return 'System status unavailable';
     }
   }
 
-  private async getEssentialKnowledge(): Promise<string> {
-    try {
-      const learnings = await this.db.query<{ content: string }>(
-        `SELECT content FROM memory WHERE tags ? 'essential' ORDER BY importance DESC LIMIT 3`
-      );
-      if (learnings.rows.length > 0) {
-        return learnings.rows.map(r => `- ${r.content.substring(0, 200)}`).join('\n');
-      }
-      return `- No essential knowledge recorded yet`;
-    } catch {
-      return `- Memory system unavailable`;
-    }
+  private async verifyTaskCompletion(content: string): Promise<boolean> {
+    const markers = ['[TASK]', '[ISSUE]', '[LEARN]', '[PROMPT_UPDATE]', '[ANNOUNCE]'];
+    return markers.some(marker => content.includes(marker));
   }
 
-  getScheduler(): Scheduler {
-    return this.scheduler;
-  }
-
-  isRunning(): boolean {
-    return this.scheduler.getEventBus() !== null;
-  }
-
-  private async extractAndCreateTasks(
-    piOutput: string,
-    sourceTask: string,
-    options?: { delegateTo?: string; complexity?: number }
-  ): Promise<void> {
-    const lines = piOutput.split('\n');
-    const taskPattern = /^[-*]\s*(?:task|todo|任务)[:\s]+(.+)/i;
-    let createdCount = 0;
-
-    for (const line of lines) {
-      const match = line.match(taskPattern);
-      if (match && match[1]) {
-        const taskTitle = match[1].trim();
-        if (taskTitle.length > 3) {
-          try {
-            await this.db.query(
-              `INSERT INTO tasks (title, description, priority, source, delegate_to, complexity) 
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [
-                taskTitle,
-                `From Pi planning: ${sourceTask}`,
-                5,
-                'pi-planner',
-                options?.delegateTo || null,
-                options?.complexity || 3,
-              ]
-            );
-            createdCount++;
-            logger.info(`[PiPlanner] Created task: ${taskTitle}`);
-          } catch (error) {
-            logger.warn(`[PiPlanner] Failed to create task: ${taskTitle}`, error);
-          }
-        }
-      }
-    }
-
-    if (createdCount > 0) {
-      logger.info(`[PiPlanner] Created ${createdCount} tasks from Pi output`);
-    }
-  }
-
-  private async verifyTaskCompletion(aiResponse: string): Promise<boolean> {
-    const text = aiResponse.toLowerCase();
-
-    const hasTask = text.includes('[task]') || text.includes('[task]:') || text.includes('task:');
-    const hasIssue =
-      text.includes('[issue]') || text.includes('[issue]:') || text.includes('issue:');
-    const hasLearn =
-      text.includes('[learn]') || text.includes('[learn]:') || text.includes('learn:');
-    const hasPromptUpdate = text.includes('[prompt_update]') || text.includes('[propose]');
-
-    if (hasTask || hasIssue || hasLearn || hasPromptUpdate) {
-      logger.info(
-        `[Verification] Action detected - Task: ${hasTask}, Issue: ${hasIssue}, Learn: ${hasLearn}`
-      );
-      return true;
-    }
-
-    const actionKeywords = [
-      'created',
-      'updated',
-      'fixed',
-      'implemented',
-      'added',
-      'modified',
-      'deleted',
-      'refactored',
-    ];
-    const hasAction = actionKeywords.some(kw => text.includes(kw) && text.includes('success'));
-
-    if (hasAction) {
-      logger.info(`[Verification] Action keyword detected`);
-      return true;
-    }
-
-    logger.warn(`[Verification] No action detected in AI response`);
-    return false;
-  }
+  // TODO: 提取方法供 Piano 子类调用
+  // protected async extractAndCreateTasks(output: string, parentTitle: string, options: { complexity: number }): Promise<void> {
+  //   // 从 Pi 输出中解析子任务并创建
+  // }
 }
