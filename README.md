@@ -27,20 +27,28 @@
 
 > **核心原则**: 集成不应该破坏独立性
 
-Nezha 采用三层架构设计：
+Nezha 采用四层架构设计：
 
-| 层级 | 说明 | 独立性 | 示例服务 |
-|------|------|--------|----------|
-| **核心层** | Nezha 的核心功能 | ✅ 可以独立运行 | HeartbeatService, MemoryService, Scheduler |
-| **集成层** | 与外部 AI 系统的集成 | ⚠️ 可选部署 | OpenCodeReminderService, TraeSkillSyncService |
-| **支持层** | 支持核心层和集成层 | ✅ 通用服务 | AIProvider, CacheService, EncryptionService |
+| 层级         | 说明                         | 独立性  | 示例服务                                      |
+| ------------ | ---------------------------- | ------- | --------------------------------------------- |
+| **核心层**   | Nezha 的核心功能，可独立运行 | ✅      | HeartbeatService, MemoryService, Scheduler    |
+| **子系统层** | 扩展核心功能，独立 npm 包    | ✅      | Piano (任务路由), NuPI (Pi执行)               |
+| **集成层**   | 与外部 AI 系统的集成         | ⚠️ 可选 | OpenCodeReminderService, TraeSkillSyncService |
+| **支持层**   | 通用服务                     | ✅      | AIProvider, CacheService, EncryptionService   |
 
 **核心原则**:
-- ✅ 核心层不依赖集成层
-- ✅ 集成层失败不影响核心功能
-- ✅ 集成层可以替换为其他 AI 系统
+
+- ✅ 核心层不依赖子系统/集成层
+- ✅ 子系统/集成层失败不影响核心功能
+- ✅ 核心层 → 子系统 → 集成层（单向依赖）
+
+**子系统**:
+
+- **Piano** (`piano/`) - 任务路由和协调，extends HeartbeatService
+- **NuPI** (`nupi/`) - Pi 执行器，独立执行 Pi 任务
 
 **详细文档**:
+
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - 架构设计文档
 - [docs/SERVICE_CATALOG.md](./docs/SERVICE_CATALOG.md) - 服务目录
 - [docs/INTEGRATION_ARCHITECTURE.md](./docs/INTEGRATION_ARCHITECTURE.md) - 集成架构原则
@@ -560,22 +568,22 @@ cp .env.example .env
 
 在 `.env` 文件中配置：
 
-| 变量                  | 说明                             | 默认值        |
-| --------------------- | -------------------------------- | ------------- |
-| DB_HOST               | PostgreSQL 主机                  | localhost     |
-| DB_PORT               | PostgreSQL 端口                  | 5432          |
-| DB_NAME               | 数据库名                         | nezha         |
-| DB_USER               | 数据库用户                       | postgres      |
-| DB_PASSWORD           | 数据库密码                       | your_password |
-| EMBEDDING_PROVIDER    | 嵌入提供者 (ollama/zhipu/openai) | -             |
-| WEBHOOK_URL           | Webhook 通知 URL                 | -             |
-| NEZHA_MAX_RETRIES     | 任务最大重试次数                 | 3             |
-| NEZHA_TASK_TIMEOUT    | 任务超时时间 (ms)                | 300000        |
-| NEZHA_AGENT_ID        | 手动指定身份 ID (覆盖自动)       | 自动解析      |
-| NEZHA_AGENT_NAME      | 身份显示名称                     | -             |
-| NEZHA_OPENCODE_PORT   | OpenCode Server 端口             | 4096          |
-| NEZHA_HEALTH_PORT     | 健康检查 API 端口                | 4097          |
-| NEZHAPI_PORT          | Nezhapi 服务端口                 | 4099          |
+| 变量                | 说明                             | 默认值        |
+| ------------------- | -------------------------------- | ------------- |
+| DB_HOST             | PostgreSQL 主机                  | localhost     |
+| DB_PORT             | PostgreSQL 端口                  | 5432          |
+| DB_NAME             | 数据库名                         | nezha         |
+| DB_USER             | 数据库用户                       | postgres      |
+| DB_PASSWORD         | 数据库密码                       | your_password |
+| EMBEDDING_PROVIDER  | 嵌入提供者 (ollama/zhipu/openai) | -             |
+| WEBHOOK_URL         | Webhook 通知 URL                 | -             |
+| NEZHA_MAX_RETRIES   | 任务最大重试次数                 | 3             |
+| NEZHA_TASK_TIMEOUT  | 任务超时时间 (ms)                | 300000        |
+| NEZHA_AGENT_ID      | 手动指定身份 ID (覆盖自动)       | 自动解析      |
+| NEZHA_AGENT_NAME    | 身份显示名称                     | -             |
+| NEZHA_OPENCODE_PORT | OpenCode Server 端口             | 4096          |
+| NEZHA_HEALTH_PORT   | 健康检查 API 端口                | 4097          |
+| NEZHAPI_PORT        | Nezhapi 服务端口                 | 4099          |
 
 ### 启动流程
 
@@ -613,19 +621,21 @@ nezha start
 
 ### 端口配置
 
-| 服务 | 默认端口 | 环境变量 | 说明 |
-|------|----------|----------|------|
-| OpenCode Server | 4096 | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
-| OpenCode Desktop | 56795 | - | OpenCode Desktop App |
-| Nezha Health | 4097 | `NEZHA_HEALTH_PORT` | 健康检查 API |
-| Nezhapi | 4099 | `NEZHAPI_PORT` | REST API 服务 |
+| 服务             | 默认端口 | 环境变量              | 说明                  |
+| ---------------- | -------- | --------------------- | --------------------- |
+| OpenCode Server  | 4096     | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
+| OpenCode Desktop | 56795    | -                     | OpenCode Desktop App  |
+| Nezha Health     | 4097     | `NEZHA_HEALTH_PORT`   | 健康检查 API          |
+| Nezhapi          | 4099     | `NEZHAPI_PORT`        | REST API 服务         |
 
 **配置优先级**:
+
 1. 环境变量（最高）
 2. `config.yaml`
 3. 默认值（最低）
 
 **示例**:
+
 ```bash
 # 使用 OpenCode Desktop App (端口 56795)
 export NEZHA_OPENCODE_PORT=56795

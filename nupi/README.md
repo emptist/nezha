@@ -4,6 +4,27 @@
 
 **独立系统**，完全不依赖 OpenCode。
 
+## Workspace
+
+NuPI 是 Nezha monorepo 的子系统：
+
+```json
+{
+  "name": "@nezha/nupi",
+  "dependencies": { "nezha": "^0.1.0" }
+}
+```
+
+### 未来：独立 npm 包
+
+搬出 monorepo 后：
+
+```bash
+npm install @nezha/nupi
+```
+
+---
+
 ## 架构
 
 ```

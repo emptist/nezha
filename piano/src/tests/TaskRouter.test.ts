@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TaskRouter } from '../piano/router/TaskRouter.js';
+import { TaskRouter } from '../router/TaskRouter.js';
 
 describe('TaskRouter', () => {
   it('should route high priority to opencode', () => {

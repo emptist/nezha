@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { TaskPlanner } from '../piano/planner/TaskPlanner.js';
-import { TaskRouter } from '../piano/router/TaskRouter.js';
+import { TaskPlanner } from '../planner/TaskPlanner.js';
+import { TaskRouter } from '../router/TaskRouter.js';
 
 describe('TaskPlanner', () => {
   const planner = new TaskPlanner();
