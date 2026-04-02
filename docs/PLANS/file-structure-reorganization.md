@@ -1,5 +1,7 @@
 # 文件结构分析 - 待整理
 
+> **状态 (2026-04-02)**: 已完成整理。Piano/NuPI 已迁移到外部仓库 `/Users/jk/gits/hub/tools_ai/piano` 和 `/Users/jk/gits/hub/tools_ai/nupi`。
+
 ## 整理目标
 
 1. **归拢**: 把散落在各处的 TypeScript 文件集中到合理位置

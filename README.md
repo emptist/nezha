@@ -44,8 +44,8 @@ Nezha 采用四层架构设计：
 
 **子系统**:
 
-- **Piano** (`piano/`) - 任务路由和协调，extends HeartbeatService
-- **NuPI** (`nupi/`) - Pi 执行器，独立执行 Pi 任务
+- **Piano** (`/Users/jk/gits/hub/tools_ai/piano`) - 任务路由和协调，extends HeartbeatService
+- **NuPI** (/Users/jk/gits/hub/tools_ai/nupi`) - Pi 执行器，独立执行 Pi 任务
 
 **详细文档**:
 

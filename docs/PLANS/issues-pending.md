@@ -1,10 +1,12 @@
 # 待处理 Issue 清单
 
-本文档记录文件结构重组过程中发现的问题，需要后续处理。
+> **状态 (2026-04-02)**: Piano 和 NuPI 已迁移到外部仓库 `/Users/jk/gits/hub/tools_ai/piano` 和 `/Users/jk/gits/hub/tools_ai/nupi`，通过 npm link 使用 nezha。
 
 ---
 
 ## Issue 1: 核心 HeartbeatService 依赖 Piano 子系统
+
+**状态**: ✅ 已解决 (2026-04-02)
 
 **严重程度**: 高
 
@@ -55,20 +57,9 @@
 
 ## Issue 2: 服务未完全移动到子系统
 
-**严重程度**: 低
+**状态**: ✅ 已解决 (2026-04-02)
 
-**描述**: `src/services/` 中仍有 OpenCode/Pi 相关服务，应该移动到对应子系统。
-
-**位置**:
-
-- `src/services/OpenCodeSessionManager.ts` → 应移至 `piano/src/services/`
-- `src/services/OpenCodeReminderService.ts` → 应移至 `piano/src/services/`
-- `src/services/PiExecutor.ts` → 应移至 `nupi/src/services/`
-- `src/services/PiSDKExecutor.ts` → 应移至 `nupi/src/services/`
-- `src/services/TraeSkillSyncService.ts` → 应移至 `nupi/src/services/`
-- `src/services/TraeAutoRecoveryService.ts` → 应移至 `nupi/src/services/`
-
-**说明**: 目前这些服务在 src/services/ 中也可以工作（通过复制到子系统），但从架构角度看应该归位。
+**说明**: 服务已移动到外部 piano/nupi 仓库。Nezha 核心中不再有 piano/nupi 目录。
 
 ---
 
