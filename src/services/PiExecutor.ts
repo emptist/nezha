@@ -1,8 +1,5 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { logger } from '../utils/logger.js';
-
-const execAsync = promisify(exec);
 
 export interface PiTaskResult {
   success: boolean;
@@ -16,6 +13,42 @@ export interface PiConfig {
   piPath?: string;
   model?: string;
   env?: Record<string, string>;
+}
+
+function execSafe(
+  command: string,
+  args: string[],
+  options: { timeout: number; env: Record<string, string> },
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      shell: false,
+      timeout: options.timeout,
+      env: options.env,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error(`Pi execution timeout after ${options.timeout}ms`));
+    }, options.timeout);
+
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0 || code === null) {
+        resolve({ stdout, stderr });
+      } else {
+        reject(new Error(`Process exited with code ${code}: ${stderr}`));
+      }
+    });
+
+    child.on('error', reject);
+  });
 }
 
 export class PiExecutor {
@@ -33,24 +66,13 @@ export class PiExecutor {
     const startTime = Date.now();
 
     try {
-      const escapedDescription = taskDescription.replace(/"/g, '\\"');
-
-      const command = `${this.piPath} execute --model ${this.defaultModel} --print "${escapedDescription}"`;
-
       logger.info(`[PiExecutor] Executing task (model: ${this.defaultModel})`);
 
-      const { stdout, stderr } = await Promise.race([
-        execAsync(command, {
-          timeout: timeoutMs,
-          env: { ...process.env, ...this.env },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Pi execution timeout after ${timeoutMs}ms`)),
-            timeoutMs
-          )
-        ),
-      ]);
+      const { stdout, stderr } = await execSafe(
+        this.piPath,
+        ['execute', '--model', this.defaultModel, '--print', taskDescription],
+        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -83,24 +105,13 @@ export class PiExecutor {
     const startTime = Date.now();
 
     try {
-      const escapedDescription = taskDescription.replace(/"/g, '\\"');
-
-      const command = `${this.piPath} execute --model ${this.defaultModel} --mode json "${escapedDescription}"`;
-
       logger.info(`[PiExecutor] Executing JSON task (model: ${this.defaultModel})`);
 
-      const { stdout, stderr } = await Promise.race([
-        execAsync(command, {
-          timeout: timeoutMs,
-          env: { ...process.env, ...this.env },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Pi execution timeout after ${timeoutMs}ms`)),
-            timeoutMs
-          )
-        ),
-      ]);
+      const { stdout, stderr } = await execSafe(
+        this.piPath,
+        ['execute', '--model', this.defaultModel, '--mode', 'json', taskDescription],
+        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+      );
 
       const durationMs = Date.now() - startTime;
 
@@ -147,25 +158,13 @@ export class PiExecutor {
     const startTime = Date.now();
 
     try {
-      const escapedSystemPrompt = systemPrompt.replace(/"/g, '\\"');
-      const escapedTask = task.replace(/"/g, '\\"');
-
-      const command = `${this.piPath} --system-prompt "${escapedSystemPrompt}" --print "${escapedTask}"`;
-
       logger.info(`[PiExecutor] Executing with system prompt (model: ${this.defaultModel})`);
 
-      const { stdout, stderr } = await Promise.race([
-        execAsync(command, {
-          timeout: timeoutMs,
-          env: { ...process.env, ...this.env },
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Pi execution timeout after ${timeoutMs}ms`)),
-            timeoutMs
-          )
-        ),
-      ]);
+      const { stdout, stderr } = await execSafe(
+        this.piPath,
+        ['--system-prompt', systemPrompt, '--print', task],
+        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+      );
 
       const durationMs = Date.now() - startTime;
 
