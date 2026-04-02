@@ -390,7 +390,10 @@ export class IssueCommands {
       ]
     );
 
-    await this.db.query(`UPDATE issues SET status = 'in_progress' WHERE id = $1`, [id]);
+    await this.db.query(`UPDATE issues SET status = 'in_progress', task_id = $1 WHERE id = $2`, [
+      taskId,
+      id,
+    ]);
 
     console.log(`${C.green}Created task from issue #${id.slice(0, 8)}${C.reset}`);
     console.log(`  Task ID: ${taskId.slice(0, 8)}`);
