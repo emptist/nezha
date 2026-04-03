@@ -1,12 +1,14 @@
 import http from 'http';
 import { logger } from '../utils/logger.js';
 import { getPluginManager, type WebhookContext } from '../core/PluginManager.js';
+import { gitHubWebhookHandler } from './GitHubWebhookHandler.js';
 
 export interface WebhookServerConfig {
   port: number;
   path: string;
   token?: string;
-  enabled: boolean;
+  enabled?: boolean;
+  githubEnabled?: boolean;
 }
 
 export interface WebhookMapping {
@@ -20,7 +22,10 @@ const DEFAULT_CONFIG: WebhookServerConfig = {
   port: 8789,
   path: '/webhook',
   enabled: true,
+  githubEnabled: true,
 };
+
+const GITHUB_WEBHOOK_PATH = '/github';
 
 const DEFAULT_MAPPINGS: WebhookMapping[] = [
   { path: 'wake', action: 'wake' },
@@ -126,9 +131,15 @@ export class WebhookServer {
           return;
         }
 
+        const webhookPath = url.pathname.slice(this.config.path.length) || '/';
+
+        if (this.config.githubEnabled && webhookPath === GITHUB_WEBHOOK_PATH) {
+          await this.handleGitHubWebhook(req, res);
+          return;
+        }
+
         try {
           const body = await this.parseBody(req);
-          const webhookPath = url.pathname.slice(this.config.path.length) || '/';
           const mapping = this.mappings.find(m => webhookPath.endsWith(m.path));
 
           const ctx: WebhookContext = {
@@ -176,6 +187,52 @@ export class WebhookServer {
         logger.info(`WebhookServer listening on ${this.config.port}${this.config.path}`);
         resolve();
       });
+    });
+  }
+
+  private async handleGitHubWebhook(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+    if (req.method !== 'POST') {
+      res.writeHead(405);
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
+      return;
+    }
+
+    const rawBody = await this.readRawBody(req);
+    const signature = req.headers['x-hub-signature-256'] as string | undefined;
+
+    if (!gitHubWebhookHandler.verifySignature(rawBody, signature)) {
+      logger.warn('[WebhookServer] GitHub webhook signature verification failed');
+      res.writeHead(401);
+      res.end(JSON.stringify({ error: 'Invalid signature' }));
+      return;
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
+      return;
+    }
+
+    try {
+      await gitHubWebhookHandler.handleWebhook(payload as Parameters<typeof gitHubWebhookHandler.handleWebhook>[0]);
+      res.writeHead(200);
+      res.end(JSON.stringify({ status: 'ok', message: 'GitHub webhook processed' }));
+    } catch (error) {
+      logger.error('[WebhookServer] GitHub webhook handler error:', error);
+      res.writeHead(500);
+      res.end(JSON.stringify({ error: 'Processing failed' }));
+    }
+  }
+
+  private readRawBody(req: http.IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+      req.on('error', reject);
     });
   }
 

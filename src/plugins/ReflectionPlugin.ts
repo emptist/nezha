@@ -2,6 +2,7 @@ import { Plugin, TaskContext } from '../core/PluginManager.js';
 import { logger } from '../utils/logger.js';
 import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { gitHubService } from '../services/GitHubService.js';
 
 export interface ReflectionConfig {
   reflectOnComplete?: boolean;
@@ -9,6 +10,8 @@ export interface ReflectionConfig {
   reflectOnFakeComplete?: boolean;
   minDurationForReflection?: number;
   createIssueOnPattern?: boolean;
+  syncToGitHub?: boolean;
+  githubRepo?: string;
   db?: DatabaseClient;
 }
 
@@ -33,6 +36,8 @@ export class ReflectionPlugin implements Plugin {
       reflectOnFakeComplete: config.reflectOnFakeComplete ?? true,
       minDurationForReflection: config.minDurationForReflection ?? 10000,
       createIssueOnPattern: config.createIssueOnPattern ?? true,
+      syncToGitHub: config.syncToGitHub ?? true,
+      githubRepo: config.githubRepo ?? 'emptist/nezha',
     };
     this.db = config.db ?? null;
   }
@@ -159,15 +164,17 @@ export class ReflectionPlugin implements Plugin {
         return;
       }
 
+      const description = extra?.errorMessage
+        ? `Error: ${extra.errorMessage}\n\nContext:\nTask: ${context.title}\nID: ${context.taskId}`
+        : `Task: ${context.title}\nID: ${context.taskId}`;
+
       await this.db.query(
         `INSERT INTO issues (id, title, description, issue_type, severity, status, discovered_by, tags, metadata)
          VALUES ($1, $2, $3, $4, $5, 'open', $6, $7, $8)`,
         [
           id,
           title,
-          extra?.errorMessage
-            ? `Error: ${extra.errorMessage}\n\nContext:\nTask: ${context.title}\nID: ${context.taskId}`
-            : `Task: ${context.title}\nID: ${context.taskId}`,
+          description,
           'bug',
           severity,
           agentId,
@@ -180,7 +187,33 @@ export class ReflectionPlugin implements Plugin {
         ]
       );
 
-      logger.info(`[Reflection] Created issue: ${title.substring(0, 50)}`);
+      logger.info(`[Reflection] Created DB issue: ${title.substring(0, 50)}`);
+
+      if (this.config.syncToGitHub && gitHubService.isEnabled()) {
+        const shouldSyncToGitHub = ['critical', 'high'].includes(severity);
+        if (shouldSyncToGitHub) {
+          const parts = this.config.githubRepo.split('/');
+          const owner = parts[0] ?? 'emptist';
+          const repo = parts[1] ?? 'nezha';
+          const body = `${description}\n\n---\n*Auto-created by Nezha AI from task: ${context.taskId}*`;
+          try {
+            const githubIssue = await gitHubService.createIssue({
+              owner,
+              repo,
+              title: `[AI] ${title}`,
+              body,
+              labels: ['nezha-ai', severity],
+            });
+            await this.db.query(
+              `UPDATE issues SET metadata = jsonb_set(metadata, '{github_url}', $1) WHERE id = $2`,
+              [JSON.stringify(githubIssue.html_url), id]
+            );
+            logger.info(`[Reflection] Synced to GitHub: ${githubIssue.html_url}`);
+          } catch (err) {
+            logger.error('[Reflection] Failed to sync to GitHub:', err);
+          }
+        }
+      }
     } catch (error) {
       logger.error('[Reflection] Failed to create issue:', error);
     }

@@ -51,6 +51,16 @@ function execSafe(
   });
 }
 
+function mergeEnv(overrides?: Record<string, string>): Record<string, string> {
+  const base = { ...process.env };
+  if (overrides) {
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v !== undefined) base[k] = v;
+    }
+  }
+  return base as Record<string, string>;
+}
+
 export class PiExecutor {
   private readonly piPath: string;
   private readonly defaultModel: string;
@@ -71,7 +81,7 @@ export class PiExecutor {
       const { stdout, stderr } = await execSafe(
         this.piPath,
         ['execute', '--model', this.defaultModel, '--print', taskDescription],
-        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+        { timeout: timeoutMs, env: mergeEnv(this.env) },
       );
 
       const durationMs = Date.now() - startTime;
@@ -110,7 +120,7 @@ export class PiExecutor {
       const { stdout, stderr } = await execSafe(
         this.piPath,
         ['execute', '--model', this.defaultModel, '--mode', 'json', taskDescription],
-        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+        { timeout: timeoutMs, env: mergeEnv(this.env) },
       );
 
       const durationMs = Date.now() - startTime;
@@ -163,7 +173,7 @@ export class PiExecutor {
       const { stdout, stderr } = await execSafe(
         this.piPath,
         ['--system-prompt', systemPrompt, '--print', task],
-        { timeout: timeoutMs, env: { ...process.env, ...this.env } },
+        { timeout: timeoutMs, env: mergeEnv(this.env) },
       );
 
       const durationMs = Date.now() - startTime;

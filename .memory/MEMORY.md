@@ -359,7 +359,7 @@ If novel insight found, save to memory with high importance. If pattern repeats,
 
 ## Database Access
 
-```bash
+````bash
 # PostgreSQL full path (IMPORTANT!)
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
 
@@ -367,4 +367,47 @@ If novel insight found, save to memory with high importance. If pattern repeats,
 psql -c "SELECT COUNT(*) FROM tasks WHERE status = 'PENDING';"
 psql -c "SELECT title, status FROM tasks ORDER BY priority DESC LIMIT 10;"
 psql -c "SELECT content, source FROM memory ORDER BY created_at DESC LIMIT 10;"
+
+## GitHub Integration (2026-04-03)
+
+### Problem Solved
+
+- DB Issue 噪声淹没问题（450+ pending，太多难以区分）
+- AI 创建的 Issue 人类看不到，无法参与讨论
+
+### Solution: Dual Issue System
+
+| Type | Storage | Visibility | Use Case |
+|------|---------|------------|----------|
+| DB Issue | PostgreSQL | AI only | Internal tracking, AI-to-AI |
+| GitHub Issue | GitHub | Human + AI | Important issues, discussion |
+
+### How It Works
+
+1. AI creates Issue → DB Issue created
+2. If severity = `critical` or `high` → auto-sync to GitHub Issue
+3. GitHub Issue gets labels: `nezha-ai`, `critical/high`
+4. DB Issue stores `github_url` in metadata (bidirectional link)
+
+### Usage
+
+```bash
+# In reflection, use severity to trigger GitHub sync
+[ISSUE] title: Something wrong severity: high
+
+# Or via broadcast
+nezha share "[ISSUE] Need human attention on X severity:critical"
 ```
+
+### Configuration
+
+- Default repo: `emptist/nezha` (configurable in ReflectionPlugin)
+- GitHub token: Uses `gh auth token` or `GITHUB_TOKEN` env var
+
+### Webhook (Future)
+
+- GitHub → DB sync via webhook
+- Human-created GitHub Issues visible to AI
+
+```
+````
