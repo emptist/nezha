@@ -23,10 +23,17 @@ export class JwtService {
   private static instance: JwtService | null = null;
 
   private constructor() {
-    this.secret =
-      process.env.JWT_SECRET ??
-      process.env.NEZHA_SECRET ??
-      'nezha-default-secret-change-in-production';
+    const envSecret = process.env.JWT_SECRET ?? process.env.NEZHA_SECRET;
+    if (envSecret) {
+      this.secret = envSecret;
+    } else {
+      this.secret = crypto.randomBytes(64).toString('hex');
+      logger.warn(
+        '[JwtService] No JWT_SECRET or NEZHA_SECRET env var set. ' +
+        'Generated a random secret for this session only. ' +
+        'Set JWT_SECRET for persistent tokens across restarts.'
+      );
+    }
   }
 
   static getInstance(): JwtService {
