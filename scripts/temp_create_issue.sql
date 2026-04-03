@@ -52,7 +52,7 @@ async resolve(sessionId?: string): Promise<AgentIdentity> {
   return this.resolveOriginal();
 }
 
-#### 3. Nezhapi 集成
+#### 3. NuPI 集成
 
 - 从 HTTP header 读取
 const sessionId = req.headers[''x-session-id''];
@@ -62,13 +62,13 @@ const sessionId = process.env.NEZHA_SESSION_ID;
 
 #### 4. OpenCode 插件
 
-在调用 nezhapi 前设置：
+在调用 nupi 前设置：
 process.env.NEZHA_SESSION_ID = opencodeSessionId;
 
 ### 测试步骤
 
 1. 设置环境变量 NEZHA_SESSION_ID=session-test1
-2. 调用 nezhapi /identity 接口
+2. 调用 nupi /identity 接口
 3. 验证返回 ID 包含 session
 4. 测试不同 session 的知识是否累积到同一语义 ID
 

@@ -583,7 +583,7 @@ cp .env.example .env
 | NEZHA_AGENT_NAME    | 身份显示名称                     | -             |
 | NEZHA_OPENCODE_PORT | OpenCode Server 端口             | 4096          |
 | NEZHA_HEALTH_PORT   | 健康检查 API 端口                | 4097          |
-| NEZHAPI_PORT        | Nezhapi 服务端口                 | 4099          |
+| NUPI_PORT        | NuPI 服务端口                 | 4099          |
 
 ### 启动流程
 
@@ -626,7 +626,7 @@ nezha start
 | OpenCode Server  | 4096     | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
 | OpenCode Desktop | 56795    | -                     | OpenCode Desktop App  |
 | Nezha Health     | 4097     | `NEZHA_HEALTH_PORT`   | 健康检查 API          |
-| Nezhapi          | 4099     | `NEZHAPI_PORT`        | REST API 服务         |
+| NuPI          | 4099     | `NUPI_PORT`        | REST API 服务         |
 
 **配置优先级**:
 
@@ -644,9 +644,9 @@ export NEZHA_OPENCODE_PORT=56795
 export NEZHA_HEALTH_PORT=5000
 ```
 
-### OpenCode on Nezha / Nezhapi
+### OpenCode on Nezha / NuPI
 
-> **关键**: Nezha 和 Nezhapi 是**独立产品**，不依赖 OpenCode
+> **关键**: Nezha 和 NuPI 是**独立产品**，不依赖 OpenCode
 
 Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
 
@@ -683,7 +683,7 @@ NUPI 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 
 ```bash
 # 启动 NUPI 服务
-npm run nezhapi
+npm run nupi
 ```
 
 **API 端点** (端口 4099):

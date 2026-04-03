@@ -82,7 +82,7 @@ NUPI = Nezha + Pi
 ```bash
 # 健康检查
 $ curl http://localhost:4099/health
-{"status":"ok","service":"nezhapi"} ✅
+{"status":"ok","service":"nupi"} ✅
 
 # 获取AI身份
 $ curl http://localhost:4099/identity

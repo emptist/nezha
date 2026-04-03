@@ -435,12 +435,12 @@ node /Users/jk/gits/hub/nezha/dist/cli/index.js status
 
 ---
 
-## Nezhapi (Nezha + Pi 集成产品)
+## NuPI (Nezha + Pi 集成产品)
 
-> **Nezhapi = Nezha + Pi = 增强版哪吒**
+> **NuPI = Nezha + Pi = 增强版哪吒**
 > **当前状态**: REST API 已可用，Pi 执行器集成开发中
 
-Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
+NuPI 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 
 - **Nezha 的增强**: 增加 pi 执行能力、REST API
 - **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
@@ -451,13 +451,13 @@ Nezhapi 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 
 ```bash
 # 方式 1: 使用 npm
-npm run nezhapi
+npm run nupi
 
 # 方式 2: 直接运行
 node dist/api/NezhaApiServer.js
 
 # 方式 3: 指定端口
-NEZHAPI_PORT=4100 npm run nezhapi
+NUPI_PORT=4100 npm run nupi
 ```
 
 服务默认监听端口 **4099**。
@@ -509,13 +509,13 @@ curl http://localhost:4099/tasks
 
 ### OpenCode 集成
 
-在 OpenCode 中调用 Nezhapi:
+在 OpenCode 中调用 NuPI:
 
 ```typescript
-// 调用 Nezhapi 获取任务
+// 调用 NuPI 获取任务
 const tasks = await fetch('http://localhost:4099/tasks').then(r => r.json());
 
-// 调用 Nezhapi 执行任务
+// 调用 NuPI 执行任务
 const result = await fetch('http://localhost:4099/tasks', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },

@@ -160,7 +160,7 @@
 - [x] memory 表 agent_id 关联 (learn 现在自动记录 AI 身份)
 - [x] git hook prepare-commit-msg 正则修复 (支持 S-/G- 格式 ID)
 - [x] 创建 OpenCode+Nezha 集成架构讨论 (Meeting + Issue)
-- [x] **Nezhapi** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
+- [x] **NuPI** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
 - [x] **PiExecutor** - Pi 执行器 - 支持本地模型执行
 
 ## AI 通信方法

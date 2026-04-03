@@ -10,7 +10,7 @@ import { UserService } from '../services/UserService.js';
 import { JwtAuthMiddleware } from '../services/JwtAuthMiddleware.js';
 import { jwtService } from '../services/JwtService.js';
 
-const PORT = process.env.NEZHAPI_PORT || 4099;
+const PORT = process.env.NUPI_PORT || 4099;
 
 class NezhaApiServer {
   private server: http.Server | null = null;
@@ -82,7 +82,7 @@ class NezhaApiServer {
     const path = url.split('/').filter(Boolean);
 
     if (path[0] === 'health') {
-      return { status: 200, body: JSON.stringify({ status: 'ok', service: 'nezhapi' }) };
+      return { status: 200, body: JSON.stringify({ status: 'ok', service: 'nupi' }) };
     }
 
     if (path[0] === 'api' && path[1] === 'users') {
@@ -156,7 +156,7 @@ class NezhaApiServer {
           `INSERT INTO memory (content, source, tags)
            VALUES ($1, $2, $3)
            RETURNING id`,
-          [data.content || data.insight || '', data.source || 'nezhapi', data.tags || []]
+          [data.content || data.insight || '', data.source || 'nupi', data.tags || []]
         );
         return { status: 201, body: JSON.stringify({ id: result.rows[0]?.id }) };
       }
@@ -326,7 +326,7 @@ class NezhaApiServer {
   private async saveMemory(data: any): Promise<string> {
     const result = await this.db.query<any>(
       `INSERT INTO memory (topic, insight, source)
-       VALUES ($1, $2, 'nezhapi')
+       VALUES ($1, $2, 'nupi')
        RETURNING id`,
       [data.topic, data.insight]
     );
