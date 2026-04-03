@@ -6,6 +6,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/heartbeat/index.js';
 import { HealthServer } from '../services/HealthServer.js';
 import { OpenCodeReminderService } from '../services/OpenCodeReminderService.js';
+import '../api/NezhaApiServer.js';
 import { logger } from '../utils/logger.js';
 
 const TASK_WAIT_TIMEOUT_MS = 20000;
