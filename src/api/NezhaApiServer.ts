@@ -198,6 +198,77 @@ class NuPIServer {
       return await this.handleRecoveryRequest(method, path, body);
     }
 
+    if (path[0] === 'tasks' && path[2] === 'status' && method === 'PUT') {
+      const taskId = path[1];
+      const data = JSON.parse(body || '{}');
+      await this.db.query(
+        `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`,
+        [data.status, taskId]
+      );
+      return { status: 200, body: JSON.stringify({ id: taskId, status: data.status }) };
+    }
+
+    if (path[0] === 'tasks' && path[2] === 'result' && method === 'PUT') {
+      const taskId = path[1];
+      const data = JSON.parse(body || '{}');
+      await this.db.query(
+        `UPDATE tasks SET result = $1, completed_at = NOW() WHERE id = $2`,
+        [JSON.stringify(data.result), taskId]
+      );
+      return { status: 200, body: JSON.stringify({ id: taskId }) };
+    }
+
+    if (path[0] === 'tasks' && path[2] === 'error' && method === 'PUT') {
+      const taskId = path[1];
+      const data = JSON.parse(body || '{}');
+      await this.db.query(
+        `UPDATE tasks SET error = $1, updated_at = NOW() WHERE id = $2`,
+        [data.error, taskId]
+      );
+      return { status: 200, body: JSON.stringify({ id: taskId }) };
+    }
+
+    if (path[0] === 'issues' && method === 'GET') {
+      const limit = parseInt(
+        new URLSearchParams(url.split('?')[1] || '').get('limit') || '10', 10
+      );
+      const result = await this.db.query<any>(
+        `SELECT id, title, severity, status FROM issues
+         WHERE status NOT IN ('resolved', 'closed')
+         ORDER BY severity DESC LIMIT $1`,
+        [limit]
+      );
+      return { status: 200, body: JSON.stringify(result) };
+    }
+
+    if (path[0] === 'memory' && path[1] === 'search' && method === 'GET') {
+      const query = new URLSearchParams(url.split('?')[1] || '');
+      const q = query.get('q') || '';
+      const limit = parseInt(query.get('limit') || '5', 10);
+      const result = await this.db.query<any>(
+        `SELECT content, created_at FROM memory
+         WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT $2`,
+        [`%${q}%`, limit]
+      );
+      return { status: 200, body: JSON.stringify(result) };
+    }
+
+    if (path[0] === 'status' && method === 'GET') {
+      const [tasks, issues, memories] = await Promise.all([
+        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'"),
+        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM issues WHERE status NOT IN ('resolved', 'closed')"),
+        this.db.query<{ count: string }>('SELECT COUNT(*) as count FROM memory'),
+      ]);
+      return {
+        status: 200,
+        body: JSON.stringify({
+          pendingTasks: parseInt(tasks.rows[0]?.count || '0', 10),
+          openIssues: parseInt(issues.rows[0]?.count || '0', 10),
+          memoryCount: parseInt(memories.rows[0]?.count || '0', 10),
+        }),
+      };
+    }
+
     return { status: 404, body: JSON.stringify({ error: 'Not found' }) };
   }
 
