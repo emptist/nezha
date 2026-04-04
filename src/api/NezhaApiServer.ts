@@ -1,4 +1,5 @@
 import http from 'http';
+import crypto from 'node:crypto';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
@@ -400,19 +401,33 @@ class NuPIServer {
   }
 
   private async createTask(data: any): Promise<string> {
+    const identity = await AgentIdentityService.getResolvedIdentity();
+    const taskId = crypto.randomUUID();
+    const maxRetries = data.max_retries ?? 3;
+    const timeoutSeconds = data.timeout_seconds ?? 300;
+    const isLongRunning = timeoutSeconds > 600;
+
     const result = await this.db.query<any>(
-      `INSERT INTO tasks (title, description, type, priority, status, category)
-       VALUES ($1, $2, $3, $4, 'PENDING', $5)
+      `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by, created_by_identity)
+       VALUES ($1, $2::uuid, $3, $4, 'PENDING', $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING id`,
       [
+        taskId,
+        data.project_id || null,
         data.title,
         data.description || '',
-        data.type || 'implementation',
         data.priority !== undefined ? data.priority : 50,
-        data.category || 'general'
+        data.depends_on || null,
+        maxRetries,
+        timeoutSeconds,
+        isLongRunning,
+        data.assigned_to || null,
+        data.category || 'general',
+        identity.id,
+        identity.id,
       ]
     );
-    return result.rows[0]?.id;
+    return result.rows[0]?.id || taskId;
   }
 
   private async saveMemory(data: any): Promise<string> {
