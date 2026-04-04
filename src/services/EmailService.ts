@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { Pool } from 'pg';
+import { logger } from '../utils/logger.js';
 
 export interface EmailConfig {
   host: string;
@@ -47,10 +48,10 @@ export class EmailService {
         subject: `Nezha 每日报告 - ${report.date}`,
         html,
       });
-      console.log('[EmailService] Daily report sent successfully');
+      logger.info('[EmailService] Daily report sent successfully');
       return true;
     } catch (error) {
-      console.error('[EmailService] Failed to send email:', error);
+      logger.error('[EmailService] Failed to send email:', error);
       return false;
     }
   }

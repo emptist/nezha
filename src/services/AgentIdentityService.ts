@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import { logger } from '../utils/logger.js';
 
 export interface AgentContext {
   project: string;
@@ -38,7 +39,7 @@ export class AgentIdentityService {
   static setExternalIdentity(identity: AgentIdentity): void {
     AgentIdentityService.externalIdentity = identity;
     AgentIdentityService.currentIdentity = identity;
-    console.log(`[AgentIdentity] External identity set: ${identity.id}`);
+    logger.info(`[AgentIdentity] External identity set: ${identity.id}`);
   }
 
   static getExternalIdentity(): AgentIdentity | null {
@@ -201,7 +202,7 @@ export class AgentIdentityService {
         context.sessionId || null,
       ]
     );
-    console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
+    logger.info(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
 
     return {
       id,
