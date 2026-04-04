@@ -11,6 +11,7 @@ import { JwtAuthMiddleware } from '../services/JwtAuthMiddleware.js';
 import { jwtService } from '../services/JwtService.js';
 
 const PORT = process.env.NUPI_PORT || 4099;
+const DEFAULT_MODEL = 'zai:glm-4.5-flash';
 
 class NuPIServer {
   private server: http.Server | null = null;
@@ -51,7 +52,8 @@ class NuPIServer {
         return;
       }
 
-      const url = req.url?.split('?')[0] ?? '';
+      const rawUrl = req.url ?? '';
+      const url = rawUrl.split('?')[0] ?? '';
       const method = req.method ?? 'GET';
 
       try {
@@ -64,7 +66,7 @@ class NuPIServer {
           });
         }
 
-        const response = await this.handleRequest(method, url, body, headers, req);
+        const response = await this.handleRequest(method, url, rawUrl, body, headers, req);
         res.writeHead(response.status, { ...headers, ...response.headers });
         res.end(response.body);
       } catch (error) {
@@ -82,6 +84,7 @@ class NuPIServer {
   private async handleRequest(
     method: string,
     url: string,
+    rawUrl: string,
     body: string,
     _headers: Record<string, string>,
     req: http.IncomingMessage
@@ -110,7 +113,7 @@ class NuPIServer {
 
     if (path[0] === 'tasks') {
       if (method === 'GET') {
-        const queryParams = new URLSearchParams(url.split('?')[1] || '');
+        const queryParams = new URLSearchParams(rawUrl.split('?')[1] || '');
         const status = queryParams.get('status') || 'PENDING';
         const limit = parseInt(queryParams.get('limit') || '10', 10);
         const result = await this.db.query<any>(
@@ -152,7 +155,7 @@ class NuPIServer {
       if (method === 'GET') {
         const query = path[1] || '';
         const limit = parseInt(
-          new URLSearchParams(url.split('?')[1] || '').get('limit') || '20',
+          new URLSearchParams(rawUrl.split('?')[1] || '').get('limit') || '20',
           10
         );
         const result = await this.db.query<any>(
@@ -201,8 +204,9 @@ class NuPIServer {
     if (path[0] === 'tasks' && path[2] === 'status' && method === 'PUT') {
       const taskId = path[1];
       const data = JSON.parse(body || '{}');
+      const isCompleted = data.status === 'COMPLETED';
       await this.db.query(
-        `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`,
+        `UPDATE tasks SET status = $1, updated_at = NOW()${isCompleted ? ', completed_at = NOW()' : ''} WHERE id = $2`,
         [data.status, taskId]
       );
       return { status: 200, body: JSON.stringify({ id: taskId, status: data.status }) };
@@ -230,7 +234,7 @@ class NuPIServer {
 
     if (path[0] === 'issues' && method === 'GET') {
       const limit = parseInt(
-        new URLSearchParams(url.split('?')[1] || '').get('limit') || '10', 10
+        new URLSearchParams(rawUrl.split('?')[1] || '').get('limit') || '10', 10
       );
       const result = await this.db.query<any>(
         `SELECT id, title, severity, status FROM issues
@@ -242,7 +246,7 @@ class NuPIServer {
     }
 
     if (path[0] === 'memory' && path[1] === 'search' && method === 'GET') {
-      const query = new URLSearchParams(url.split('?')[1] || '');
+      const query = new URLSearchParams(rawUrl.split('?')[1] || '');
       const q = query.get('q') || '';
       const limit = parseInt(query.get('limit') || '5', 10);
       const result = await this.db.query<any>(
@@ -547,7 +551,7 @@ class NuPIServer {
   }
 
   private async executePrompt(data: any): Promise<any> {
-    const model = data.model || 'llama3.2:3b';
+    const model = data.model || DEFAULT_MODEL;
     const systemPrompt = data.system_prompt || 'You are a helpful AI assistant.';
     const userPrompt = data.task || 'Hello';
 
@@ -562,7 +566,7 @@ class NuPIServer {
   }
 
   private async executeOpenAIChat(data: any): Promise<any> {
-    const model = data.model || 'glm-4-flash';
+    const model = data.model || DEFAULT_MODEL;
     const messages = data.messages || [];
 
     const systemMessage = messages.find((m: any) => m.role === 'system')?.content || '';
@@ -629,7 +633,7 @@ class NuPIServer {
 
 请用一句话总结并以问号结尾提醒AI继续工作。`;
 
-      const executor = new PiSDKExecutor({ model: data.model || 'zai:glm-4.5-flash' });
+      const executor = new PiSDKExecutor({ model: data.model || DEFAULT_MODEL });
       const result = await executor.executeWithPrompt(systemPrompt, task, 60000);
 
       results.push({
