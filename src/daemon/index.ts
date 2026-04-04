@@ -6,8 +6,9 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { HeartbeatService } from '../services/heartbeat/index.js';
 import { HealthServer } from '../services/HealthServer.js';
 import { OpenCodeReminderService } from '../services/OpenCodeReminderService.js';
-import '../api/NezhaApiServer.js';
 import { logger } from '../utils/logger.js';
+
+let apiServerStop: (() => Promise<void>) | null = null;
 
 const TASK_WAIT_TIMEOUT_MS = 20000;
 
@@ -53,6 +54,15 @@ async function main(): Promise<void> {
   });
   await healthServer.start();
 
+  try {
+    const { server: apiServer } = await import('../api/NezhaApiServer.js');
+    apiServerStop = apiServer.stop.bind(apiServer);
+    logger.info('[Daemon] NuPI API server loaded successfully');
+  } catch (err) {
+    logger.error(`[Daemon] Failed to load NuPI API server: ${err instanceof Error ? err.message : err}`);
+    logger.warn('[Daemon] Continuing without NuPI API — task creation via HTTP will be unavailable');
+  }
+
   await heartbeatService.start();
 
   const opencodeReminder = new OpenCodeReminderService(db, {
@@ -77,6 +87,10 @@ async function main(): Promise<void> {
 
     opencodeReminder.stop();
     await heartbeatService.stop();
+    if (apiServerStop) {
+      await apiServerStop();
+      logger.info('[Daemon] NuPI API server stopped');
+    }
     await healthServer.stop();
     await db.close();
 

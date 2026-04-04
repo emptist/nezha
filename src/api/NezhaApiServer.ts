@@ -12,7 +12,7 @@ import { jwtService } from '../services/JwtService.js';
 
 const PORT = process.env.NUPI_PORT || 4099;
 
-class NezhaApiServer {
+class NuPIServer {
   private server: http.Server | null = null;
   private db: DatabaseClient;
   private userService: UserService | null = null;
@@ -28,6 +28,12 @@ class NezhaApiServer {
       this.userService = await UserService.create(this.db);
     }
     return this.userService;
+  }
+
+  private isLocalhost(req: http.IncomingMessage): boolean {
+    const remote = req.socket.remoteAddress;
+    if (!remote) return false;
+    return remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
   }
 
   async start(): Promise<void> {
@@ -58,18 +64,18 @@ class NezhaApiServer {
           });
         }
 
-        const response = await this.handleRequest(method, url, body, headers);
+        const response = await this.handleRequest(method, url, body, headers, req);
         res.writeHead(response.status, { ...headers, ...response.headers });
         res.end(response.body);
       } catch (error) {
-        logger.error(`[NezhaApi] Error: ${error}`);
+        logger.error(`[NuPI] Error: ${error}`);
         res.writeHead(500, headers);
         res.end(JSON.stringify({ error: 'Internal server error' }));
       }
     });
 
     this.server.listen(PORT, () => {
-      logger.info(`[NezhaApi] Server running on port ${PORT}`);
+      logger.info(`[NuPI] Server running on port ${PORT}`);
     });
   }
 
@@ -77,12 +83,20 @@ class NezhaApiServer {
     method: string,
     url: string,
     body: string,
-    _headers: Record<string, string>
+    _headers: Record<string, string>,
+    req: http.IncomingMessage
   ): Promise<{ status: number; body: string; headers?: Record<string, string> }> {
     const path = url.split('/').filter(Boolean);
 
     if (path[0] === 'health') {
       return { status: 200, body: JSON.stringify({ status: 'ok', service: 'nupi' }) };
+    }
+
+    const SENSITIVE_PATHS = ['tasks', 'memory', 'broadcast', 'prompt', 'v1'];
+    if (path[0] && SENSITIVE_PATHS.includes(path[0]) && !this.isLocalhost(req)) {
+      const addr = String(req.socket.remoteAddress || 'unknown');
+      logger.warn(`[NuPI] Rejected non-localhost request to /${path[0]} from ${addr}`);
+      return { status: 403, body: JSON.stringify({ error: 'Forbidden: local access only' }) };
     }
 
     if (path[0] === 'api' && path[1] === 'users') {
@@ -308,16 +322,15 @@ class NezhaApiServer {
 
   private async createTask(data: any): Promise<string> {
     const result = await this.db.query<any>(
-      `INSERT INTO tasks (title, description, type, priority, status, category, created_by_identity)
-       VALUES ($1, $2, $3, $4, 'PENDING', $5, $6)
+      `INSERT INTO tasks (title, description, type, priority, status, category)
+       VALUES ($1, $2, $3, $4, 'PENDING', $5)
        RETURNING id`,
       [
         data.title,
         data.description || '',
         data.type || 'implementation',
         data.priority !== undefined ? data.priority : 50,
-        data.category || 'general',
-        data.created_by || 'S-nezha-e33f9a0-20260325-133422-64db91',
+        data.category || 'general'
       ]
     );
     return result.rows[0]?.id;
@@ -343,7 +356,7 @@ class NezhaApiServer {
       const result = await provider.complete(userPrompt, systemPrompt);
       return { success: true, output: result, model };
     } catch (error) {
-      logger.error(`[NezhaApi] AI error: ${error}`);
+      logger.error(`[NuPI] AI error: ${error}`);
       return { success: false, error: String(error), model };
     }
   }
@@ -381,7 +394,7 @@ class NezhaApiServer {
         },
       };
     } catch (error) {
-      logger.error(`[NezhaApi] OpenAI chat error: ${error}`);
+      logger.error(`[NuPI] OpenAI chat error: ${error}`);
       return { error: { message: String(error), type: 'internal_error', code: 500 } };
     }
   }
@@ -437,18 +450,13 @@ class NezhaApiServer {
   async stop(): Promise<void> {
     if (this.server) {
       this.server.close();
-      logger.info('[NezhaApi] Server stopped');
+      logger.info('[NuPI] Server stopped');
     }
   }
 }
 
-const server = new NezhaApiServer();
+export const server = new NuPIServer();
 server.start().catch(err => {
-  logger.error(`[NezhaApi] Failed to start: ${err}`);
+  logger.error(`[NuPI] Failed to start: ${err}`);
   process.exit(1);
-});
-
-process.on('SIGINT', async () => {
-  await server.stop();
-  process.exit(0);
 });
