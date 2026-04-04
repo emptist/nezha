@@ -13,6 +13,19 @@ import { jwtService } from '../services/JwtService.js';
 
 const PORT = process.env.NUPI_PORT || 4099;
 const DEFAULT_MODEL = 'zai:glm-4.5-flash';
+const MAX_BODY_SIZE = 1024 * 1024;
+
+function safeJsonParse(body: string): any {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
+}
+
+function validateBodySize(body: string, maxBytes: number = MAX_BODY_SIZE): boolean {
+  return Buffer.byteLength(body, 'utf-8') <= maxBytes;
+}
 
 class NuPIServer {
   private server: http.Server | null = null;
@@ -61,7 +74,16 @@ class NuPIServer {
         let body = '';
         if (method === 'POST' || method === 'PUT') {
           body = await new Promise<string>((resolve, reject) => {
-            req.on('data', chunk => (body += chunk));
+            let size = 0;
+            req.on('data', (chunk: Buffer) => {
+              size += chunk.length;
+              if (size > MAX_BODY_SIZE) {
+                req.destroy();
+                reject(new Error(`Request body too large: ${size} bytes exceeds ${MAX_BODY_SIZE}`));
+                return;
+              }
+              body += chunk.toString('utf-8');
+            });
             req.on('end', () => resolve(body));
             req.on('error', reject);
           });
@@ -108,6 +130,9 @@ class NuPIServer {
     }
 
     if (path[0] === 'identity' && method === 'GET') {
+      if (!this.isLocalhost(req)) {
+        return { status: 403, body: JSON.stringify({ error: 'Forbidden: local access only' }) };
+      }
       const identity = await AgentIdentityService.getResolvedIdentity();
       return { status: 200, body: JSON.stringify(identity) };
     }
@@ -126,7 +151,10 @@ class NuPIServer {
       }
 
       if (method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data || !data.title) {
+          return { status: 400, body: JSON.stringify({ error: 'Invalid request: title is required' }) };
+        }
         const id = await this.createTask(data);
         return { status: 201, body: JSON.stringify({ id }) };
       }
@@ -143,7 +171,10 @@ class NuPIServer {
     }
 
     if (path[0] === 'broadcast' && method === 'POST') {
-      const data = JSON.parse(body);
+      const data = safeJsonParse(body);
+      if (!data || !data.message) {
+        return { status: 400, body: JSON.stringify({ error: 'Invalid request: message is required' }) };
+      }
       const broadcastService = await BroadcastService.create(this.db);
       const id = await broadcastService.sendBroadcast(data.message, {
         targetAgent: data.to,
@@ -169,7 +200,10 @@ class NuPIServer {
       }
 
       if (method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) {
+          return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+        }
         const result = await this.db.query<any>(
           `INSERT INTO memory (content, source, tags)
            VALUES ($1, $2, $3)
@@ -181,19 +215,22 @@ class NuPIServer {
     }
 
     if (path[0] === 'prompt' && method === 'POST') {
-      const data = JSON.parse(body);
+      const data = safeJsonParse(body);
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       const result = await this.executePrompt(data);
       return { status: 200, body: JSON.stringify(result) };
     }
 
     if (path[0] === 'v1' && path[1] === 'chat' && path[2] === 'completions' && method === 'POST') {
-      const data = JSON.parse(body);
+      const data = safeJsonParse(body);
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       const result = await this.executeOpenAIChat(data);
       return { status: 200, body: JSON.stringify(result) };
     }
 
     if (path[0] === 'remind' && method === 'POST') {
-      const data = JSON.parse(body);
+      const data = safeJsonParse(body);
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       const result = await this.executeReminder(data);
       return { status: 200, body: JSON.stringify(result) };
     }
@@ -204,7 +241,8 @@ class NuPIServer {
 
     if (path[0] === 'tasks' && path[2] === 'status' && method === 'PUT') {
       const taskId = path[1];
-      const data = JSON.parse(body || '{}');
+      const data = safeJsonParse(body || '{}');
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       const isCompleted = data.status === 'COMPLETED';
       await this.db.query(
         `UPDATE tasks SET status = $1, updated_at = NOW()${isCompleted ? ', completed_at = NOW()' : ''} WHERE id = $2`,
@@ -215,7 +253,8 @@ class NuPIServer {
 
     if (path[0] === 'tasks' && path[2] === 'result' && method === 'PUT') {
       const taskId = path[1];
-      const data = JSON.parse(body || '{}');
+      const data = safeJsonParse(body || '{}');
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       await this.db.query(
         `UPDATE tasks SET result = $1, completed_at = NOW() WHERE id = $2`,
         [JSON.stringify(data.result), taskId]
@@ -225,7 +264,8 @@ class NuPIServer {
 
     if (path[0] === 'tasks' && path[2] === 'error' && method === 'PUT') {
       const taskId = path[1];
-      const data = JSON.parse(body || '{}');
+      const data = safeJsonParse(body || '{}');
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       await this.db.query(
         `UPDATE tasks SET error = $1, updated_at = NOW() WHERE id = $2`,
         [data.error, taskId]
@@ -287,7 +327,8 @@ class NuPIServer {
 
     try {
       if (action === 'register' && method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const result = await userService.register({
           email: data.email,
           username: data.username,
@@ -301,7 +342,8 @@ class NuPIServer {
       }
 
       if (action === 'login' && method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const result = await userService.login({
           email: data.email,
           username: data.username,
@@ -314,7 +356,8 @@ class NuPIServer {
       }
 
       if (action === 'refresh' && method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const tokens = await userService.refreshToken(data.refresh_token);
         return { status: 200, body: JSON.stringify(tokens) };
       }
@@ -324,13 +367,15 @@ class NuPIServer {
         const token = authHeader?.replace('Bearer ', '') || '';
         const payload = jwtService.verifyToken(token);
         if (payload) {
-          await userService.logout(payload.sub, body ? JSON.parse(body).refresh_token : undefined);
+          const bodyData = safeJsonParse(body);
+          await userService.logout(payload.sub, bodyData?.refresh_token);
         }
         return { status: 200, body: JSON.stringify({ message: 'Logged out' }) };
       }
 
       if (action === 'password-reset' && method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const token = await userService.requestPasswordReset(data.email);
         return {
           status: 200,
@@ -342,7 +387,8 @@ class NuPIServer {
       }
 
       if (action === 'reset-password' && method === 'POST') {
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         await userService.resetPassword(data.token, data.password);
         return { status: 200, body: JSON.stringify({ message: 'Password reset successful' }) };
       }
@@ -365,7 +411,8 @@ class NuPIServer {
         }
 
         if (method === 'PUT') {
-          const data = JSON.parse(body);
+          const data = safeJsonParse(body);
+          if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
           const updated = await userService.updateProfile(authResult.user.id, data);
           return { status: 200, body: JSON.stringify(updated) };
         }
@@ -383,7 +430,8 @@ class NuPIServer {
           };
         }
 
-        const data = JSON.parse(body);
+        const data = safeJsonParse(body);
+        if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         await userService.changePassword(
           authResult.user.id,
           data.current_password,
@@ -430,16 +478,6 @@ class NuPIServer {
     return result.rows[0]?.id || taskId;
   }
 
-  private async saveMemory(data: any): Promise<string> {
-    const result = await this.db.query<any>(
-      `INSERT INTO memory (topic, insight, source)
-       VALUES ($1, $2, 'nupi')
-       RETURNING id`,
-      [data.topic, data.insight]
-    );
-    return result.rows[0]?.id;
-  }
-
   private async handleRecoveryRequest(
     method: string,
     path: string[],
@@ -448,9 +486,9 @@ class NuPIServer {
     const action = path[2];
 
     if (action === 'failed' && method === 'POST') {
-      const data = JSON.parse(body || '{}');
-      const maxRetries = data.max_retries || 3;
-      const delayMs = (data.delay_ms || 300000) / 1000;
+      const data = safeJsonParse(body || '{}');
+      const maxRetries = data?.max_retries || 3;
+      const delayMs = (data?.delay_ms || 300000) / 1000;
 
       const result = await this.db.query<any>(
         `UPDATE tasks
@@ -491,9 +529,9 @@ class NuPIServer {
     }
 
     if (action === 'dlq-retry' && method === 'POST') {
-      const data = JSON.parse(body || '{}');
-      const maxRetries = data.max_retries || 3;
-      const delayMs = (data.delay_ms || 300000) / 1000;
+      const data = safeJsonParse(body || '{}');
+      const maxRetries = data?.max_retries || 3;
+      const delayMs = (data?.delay_ms || 300000) / 1000;
 
       const dlqItems = await this.db.query<any>(
         `SELECT id, original_task_id, title, description, error_message, retry_count
