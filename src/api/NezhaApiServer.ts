@@ -194,6 +194,10 @@ class NuPIServer {
       return { status: 200, body: JSON.stringify(result) };
     }
 
+    if (path[0] === 'admin' && path[1] === 'recovery') {
+      return await this.handleRecoveryRequest(method, path, body);
+    }
+
     return { status: 404, body: JSON.stringify({ error: 'Not found' }) };
   }
 
@@ -344,6 +348,131 @@ class NuPIServer {
       [data.topic, data.insight]
     );
     return result.rows[0]?.id;
+  }
+
+  private async handleRecoveryRequest(
+    method: string,
+    path: string[],
+    body: string
+  ): Promise<{ status: number; body: string }> {
+    const action = path[2];
+
+    if (action === 'failed' && method === 'POST') {
+      const data = JSON.parse(body || '{}');
+      const maxRetries = data.max_retries || 3;
+      const delayMs = (data.delay_ms || 300000) / 1000;
+
+      const result = await this.db.query<any>(
+        `UPDATE tasks
+         SET status = 'PENDING',
+             error = NULL,
+             next_retry_at = NOW() + ($3::text || '60 seconds')::INTERVAL,
+             updated_at = NOW()
+         WHERE status = 'FAILED'
+           AND retry_count < $1
+           AND completed_at < NOW() - ($2::text || '300 seconds')::INTERVAL
+           AND error_category NOT IN ('FATAL', 'PERMANENT', 'INVALID_INPUT')
+         RETURNING id, title, retry_count`,
+        [maxRetries, String(delayMs), '60']
+      );
+
+      logger.info(`[NuPI] Recovered ${result.rows.length} failed tasks`);
+      return { status: 200, body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }) };
+    }
+
+    if (action === 'stuck' && method === 'POST') {
+      const result = await this.db.query<any>(
+        `UPDATE tasks
+         SET status = 'PENDING',
+              error = 'Auto-recovered: stuck in RUNNING state',
+              retry_count = COALESCE(retry_count, 0) + 1,
+              updated_at = NOW()
+         WHERE status = 'RUNNING'
+           AND started_at < NOW() - INTERVAL '10 minutes'
+           AND (updated_at IS NULL OR updated_at < NOW() - INTERVAL '5 minutes')
+         RETURNING id, title`,
+        []
+      );
+
+      if (result.rows.length > 0) {
+        logger.warn(`[NuPI] Recovered ${result.rows.length} stuck tasks`);
+      }
+      return { status: 200, body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }) };
+    }
+
+    if (action === 'dlq-retry' && method === 'POST') {
+      const data = JSON.parse(body || '{}');
+      const maxRetries = data.max_retries || 3;
+      const delayMs = (data.delay_ms || 300000) / 1000;
+
+      const dlqItems = await this.db.query<any>(
+        `SELECT id, original_task_id, title, description, error_message, retry_count
+         FROM dead_letter_queue
+         WHERE resolved = false
+           AND retry_count < $1
+           AND failed_at < NOW() - ($2::text || '300 seconds')::INTERVAL
+         ORDER BY failed_at ASC
+         LIMIT 10`,
+        [maxRetries, String(delayMs)]
+      );
+
+      let successCount = 0;
+      for (const item of dlqItems.rows) {
+        try {
+          const newTaskId = await this.createTask({
+            title: `[AUTO-RETRY] ${item.title}`,
+            description: item.description || '',
+            priority: 10,
+          });
+
+          await this.db.query(
+            `UPDATE dead_letter_queue
+             SET resolved = true,
+                 review_status = 'resolved',
+                 resolution_notes = 'Auto-retried by NuPI recovery API'
+             WHERE id = $1`,
+            [item.id]
+          );
+
+          logger.info(`[NuPI] Auto-retried DLQ item: ${item.title}`);
+          successCount++;
+        } catch (error) {
+          logger.error(`[NuPI] Failed to retry DLQ item ${item.title}:`, error);
+        }
+      }
+
+      return { status: 200, body: JSON.stringify({ retried: successCount, total: dlqItems.rows.length }) };
+    }
+
+    if (action === 'stats' && method === 'GET') {
+      const [failed, stuck, dlq] = await Promise.all([
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) FROM tasks
+           WHERE status = 'FAILED'
+           AND retry_count < 3
+           AND error_category NOT IN ('FATAL', 'PERMANENT', 'INVALID_INPUT')`
+        ),
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) FROM tasks
+           WHERE status = 'RUNNING'
+           AND started_at < NOW() - INTERVAL '10 minutes'`
+        ),
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) FROM dead_letter_queue WHERE resolved = false`
+        ),
+      ]);
+
+      return {
+        status: 200,
+        body: JSON.stringify({
+          failedTasksRecoverable: parseInt(failed.rows[0]?.count || '0', 10),
+          stuckTasks: parseInt(stuck.rows[0]?.count || '0', 10),
+          dlqItemsPending: parseInt(dlq.rows[0]?.count || '0', 10),
+        }),
+      };
+    }
+
+    return { status: 404, body: JSON.stringify({ error: 'Unknown recovery action' }) };
   }
 
   private async executePrompt(data: any): Promise<any> {
