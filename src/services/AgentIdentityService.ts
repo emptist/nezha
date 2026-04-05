@@ -27,6 +27,17 @@ export interface AgentIdentity {
   source?: string;
 }
 
+interface IdentityRow {
+  id: string;
+  project: string | null;
+  git_hash: string | null;
+  machine_fingerprint: string | null;
+  created_at: Date;
+  display_name: string | null;
+  description: string | null;
+  source: string | null;
+}
+
 export class AgentIdentityService {
   private db: DatabaseClient;
   private static currentIdentity: AgentIdentity | null = null;
@@ -214,32 +225,32 @@ export class AgentIdentityService {
     };
   }
 
-  private rowToIdentity(row: any): AgentIdentity {
+  private rowToIdentity(row: IdentityRow): AgentIdentity {
     return {
       id: row.id,
       project: row.project,
       gitHash: row.git_hash,
       machineFingerprint: row.machine_fingerprint,
       createdAt: row.created_at,
-      displayName: row.display_name,
-      description: row.description,
-      source: row.source,
+      displayName: row.display_name ?? undefined,
+      description: row.description ?? undefined,
+      source: row.source ?? undefined,
     };
   }
 
   async getById(id: string): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
+    const result = await this.db.query<IdentityRow>(
       `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description
        FROM agent_identities WHERE id = $1`,
       [id]
     );
 
     if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
+    return this.rowToIdentity(result.rows[0]!);
   }
 
   async list(limit = 20): Promise<AgentIdentity[]> {
-    const result = await this.db.query(
+    const result = await this.db.query<IdentityRow>(
       `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description
        FROM agent_identities ORDER BY created_at DESC LIMIT $1`,
       [limit]

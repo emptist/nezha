@@ -1,9 +1,6 @@
-/**
- * Memory Skills for the Learning System
- */
-
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import { logger } from '../utils/logger.js';
 
 let _db: DatabaseClient | null = null;
 
@@ -13,6 +10,26 @@ async function getDatabaseClient(): Promise<DatabaseClient> {
     _db = new DatabaseClient(config);
   }
   return _db;
+}
+
+interface MemorySaveParams {
+  content: string;
+  tags?: string[];
+  context?: string;
+  source?: string;
+  importance?: number;
+}
+
+interface MemorySearchParams {
+  query: string;
+  tags?: string[];
+  limit?: number;
+}
+
+interface MemoryLinkParams {
+  source_id: string;
+  target_id: string;
+  relationship: string;
 }
 
 export const memorySkills = {
@@ -47,18 +64,18 @@ export const memorySkills = {
       },
       required: ['content'],
     },
-    execute: async (params: any) => {
+    execute: async (params: MemorySaveParams) => {
       const { content, tags, context, source, importance } = params;
       const query = `INSERT INTO memories (content, tags, context, source, importance)
                     VALUES ($1, $2, $3, $4, $5)`;
       const values = [content, tags, context, source, importance];
 
       try {
-        const db = await getDatabaseClient(); // Establish database connection
+        const db = await getDatabaseClient();
         await db.query(query, values);
-        console.log('Memory saved successfully');
+        logger.info('[MemorySkill] Saved memory successfully');
       } catch (error) {
-        console.error('Error saving memory:', error);
+        logger.error('[MemorySkill] Error saving memory:', error);
         throw new Error('Failed to save memory', { cause: error });
       }
     },
@@ -85,9 +102,8 @@ export const memorySkills = {
       },
       required: ['query'],
     },
-    execute: async (params: any) => {
-      // Placeholder for actual implementation
-      console.log('Searching memory', params);
+    execute: async (params: MemorySearchParams) => {
+      logger.info(`[MemorySkill] Searching memory: ${params.query}`);
     },
   },
 
@@ -111,9 +127,8 @@ export const memorySkills = {
       },
       required: ['source_id', 'target_id', 'relationship'],
     },
-    execute: async (params: any) => {
-      // Placeholder for actual implementation
-      console.log('Linking memory', params);
+    execute: async (params: MemoryLinkParams) => {
+      logger.info(`[MemorySkill] Linking ${params.source_id} → ${params.target_id} (${params.relationship})`);
     },
   },
 };
