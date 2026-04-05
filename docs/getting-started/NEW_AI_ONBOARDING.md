@@ -18,7 +18,7 @@ Welcome to Nezha! This guide helps new AI agents get started.
 | Duplicate Issues Cleaned      | ✅ DONE  | 429 duplicates marked, 36 outdated closed                                         |
 | DLQ Cleaned                   | ✅ DONE  | 37 items archived                                                                 |
 | Broadcast Duplicate Tasks     | ✅ FIXED | Commit `85dc796`                                                                  |
-| **P2 Quality Control Hook**  | ✅ DONE  | `prepare-commit-msg` hook enforces commit traceability (2026-03-25)              |
+| **P2 Quality Control Hook**   | ✅ DONE  | `prepare-commit-msg` hook enforces commit traceability (2026-03-25)               |
 
 ### Active Issues to Monitor
 
@@ -43,17 +43,19 @@ Welcome to Nezha! This guide helps new AI agents get started.
 
 ### PostgreSQL Path
 
-**IMPORTANT**: PostgreSQL is installed via Postgres.app, NOT via Homebrew. Use the full path:
+> **Updated (2026-04-01):** `psql` now works directly without full path.
+
+**IMPORTANT**: PostgreSQL is installed via Postgres.app, NOT via Homebrew.
 
 ```bash
-# ✅ CORRECT - Use full path
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
-
-# ❌ WRONG - Will fail with "command not found"
+# ✅ WORKS - Direct command (recommended)
 psql -h 127.0.0.1 -U postgres -d nezha
+
+# ✅ ALSO WORKS - Full path (legacy, still supported)
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
-**Why**: Postgres.app installs to `/Applications/Postgres.app/Contents/Versions/18/bin/`, which is NOT in system PATH. Always use the full path.
+**Note (Historical)**: Previously, Postgres.app path was NOT in system PATH. As of 2026-04-01, it's accessible directly.
 
 ### Commit Traceability (Quality Control)
 
@@ -70,6 +72,7 @@ git commit -m "feat: Add feature"
 ```
 
 Get task/issue IDs from:
+
 - Task list: `nezha tasks`
 - Issue list: `nezha issue list`
 - Inter-reviews: `nezha review-show`
@@ -82,7 +85,7 @@ See [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md) - Quality Control section for de
 
 ```bash
 # Check if issue is already resolved
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status, resolution FROM issues WHERE title ILIKE '%your issue keywords%';"
+psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status, resolution FROM issues WHERE title ILIKE '%your issue keywords%';"
 ```
 
 **Issue Status Values**:
@@ -94,7 +97,7 @@ See [DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md) - Quality Control section for de
 **After fixing an issue**, update its status:
 
 ```bash
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE issues SET status = 'resolved', resolution = 'Fixed: <description>' WHERE id = '<issue_id>';"
+psql -h 127.0.0.1 -U postgres -d nezha -c "UPDATE issues SET status = 'resolved', resolution = 'Fixed: <description>' WHERE id = '<issue_id>';"
 ```
 
 **Why**: Working on already-resolved issues wastes time and may introduce NEW bugs!
@@ -220,16 +223,16 @@ npm run cli -- task list --status pending
 
 ```bash
 # Check pending tasks
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status FROM tasks WHERE status IN ('PENDING', 'RUNNING') LIMIT 10;"
+psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, status FROM tasks WHERE status IN ('PENDING', 'RUNNING') LIMIT 10;"
 
 # Check open issues
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY created_at DESC LIMIT 10;"
+psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY created_at DESC LIMIT 10;"
 
 # Check specific issue
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT * FROM issues WHERE id = '<issue_id>';"
+psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT * FROM issues WHERE id = '<issue_id>';"
 
 # Check all open issues
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY severity, created_at;"
+psql -h 127.0.0.1 -U postgres -d nezha -c "SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY severity, created_at;"
 ```
 
 ## Reflection Markers

@@ -10,12 +10,111 @@
 **Role:** Autonomous AI software engineering agent
 **Purpose:** Execute software development tasks continuously with self-improvement capabilities
 
+## Architecture Principle: Services, Not Dependencies
+
+**Critical Concept:** Nezha provides services TO other software, not depends ON other software.
+
+### External Subsystems (2026-04-02)
+
+Piano and NuPI are now **external repositories** that use Nezha via npm link:
+
+| Subsystem | Location                            | Purpose                     |
+| --------- | ----------------------------------- | --------------------------- |
+| **Piano** | `/Users/jk/gits/hub/tools_ai/piano` | Task routing, orchestration |
+| **NuPI**  | `/Users/jk/gits/hub/tools_ai/nupi`  | Pi executor, local AI       |
+
+**Usage:**
+
+```bash
+# In any project, link to use Piano/NuPI
+npm link @nezha/piano
+npm link @nezha/nupi
+```
+
+**Key points:**
+
+- Piano/NuPI import from `nezha` package (via npm link)
+- After Nezha code changes: `npm run build` (piano/nupi use updated dist/)
+- Core Nezha has no internal piano/nupi directories anymore
+
+### Dependency vs Service
+
+| Concept        | Definition         | Example                          |
+| -------------- | ------------------ | -------------------------------- |
+| **Dependency** | Required to run    | Nezha needs PostgreSQL           |
+| **Service**    | Provided to others | Trae uses Nezha to execute tasks |
+
+### Examples
+
+- **Trae detection is NOT a dependency:**
+  - Nezha checks if Trae files exist at `~/.trae/`
+  - If Trae is not installed, the check returns false - no error
+  - Trae might not even exist on the machine - no problem
+  - This is **passive detection**, not a dependency
+
+- **OpenCode integration is NOT a dependency:**
+  - OpenCode sends tasks to Nezha via CLI or HTTP
+  - If OpenCode isn't running, Nezha continues working (heartbeat mode)
+  - This is **active service**, not a dependency
+
+### Clear Separation
+
+```
+┌─────────────────────────────────────────────┐
+│  Nezha Core (无外部依赖)                      │
+│  - 只依赖 PostgreSQL                         │
+└─────────────────────────────────────────────┘
+              ↑ 提供服务 (Services provided)
+              │
+    ┌─────────┼─────────┐
+    │         │         │
+ OpenCode   Trae      Pi
+(调用nezha) (调用nezha) (调用nezha)
+```
+
+**Remember:** " nezha monitors X files" ≠ " nezha depends on X"
+
+### The Deeper Truth: Knowledge, Not Dependency
+
+**核心洞察**: Nezha 不是依赖外部软件的存在，而是依赖**对外部世界的知识**。
+
+- 我们利用 Pi、OpenCode、Trae 的**特性**
+- 我们利用**对这些特性的知识**来形成我们的服务
+- 我们依赖的是**知识**，而不是**外部世界的存在**
+- 这是**服务**，不是**依赖**
+
+**示例**:
+
+- "Nezha 知道 Trae 会在 ~/.trae/ 留下文件" → 知识
+- "Nezha 检查这些文件是否存在" → 利用知识提供服务
+- "如果 Trae 不存在，检查返回 false，跳过" → 不影响运行
+
+这就是**被动检测 (Passive Detection)** vs **依赖 (Dependency)** 的区别。
+
+### Two Types of External Integration
+
+| Type                   | Description                       | Example                     |
+| ---------------------- | --------------------------------- | --------------------------- |
+| **Passive Detection**  | Check if files exist, skip if not | Trae file check             |
+| **Active Cooperation** | Requires external to pass info    | OpenCode passing session_id |
+
+**Active Cooperation IS Interdependency:**
+
+当 OpenCode 需要**主动传递**信息给 Nezha 时（如 session_id、source），这是协作关系，不是单向依赖：
+
+- 如果 OpenCode 传递正确的 env vars → ID 正确（利用知识提供服务）
+- 如果 OpenCode 不传递 → ID 退回到 git hash（降级运行，不影响核心功能）
+
+**关键区别**: 即使不传递信息，Nezha 仍然可以工作（heartbeat 模式），只是降级而已。
+
+The detection is passive and optional. The presence enables features; absence simply means those features are skipped.
+
 ## Memory Structure
 
 ### Long-Term Memory (ROM)
 
 - **Location:** `.memory/` (root directory)
-- **Files:** `MEMORY.md`, `POSTGRESQL_PATH.md`, `reflections.md`
+- **Files:** `MEMORY.md`, `POSTGRESQL_PATH.md`, `reflections.md`, `AI_LEVELS.md`
 - **Purpose:** Critical system knowledge that AI must read on startup
 
 ### Short-Term Memory
@@ -23,6 +122,49 @@
 - **Location:** `.tmp/nezha-memory/` (daily append)
 - **Files:** `YYYY-MM-DD.md` (daily logs)
 - **Purpose:** Session handoffs, working notes
+
+## Database Schema (AI Tool Index)
+
+On startup, also read the `table_documentation` table - it contains:
+
+```sql
+-- Query all table documentation
+SELECT table_name, purpose, key_columns, cli_commands
+FROM table_documentation
+ORDER BY table_name;
+
+-- Tables AI can modify
+SELECT table_name, purpose FROM table_documentation
+WHERE ai_can_modify = true;
+```
+
+This table is the **AI's tool index** - tells AI what database capabilities are available, what each table does, and what CLI commands can be used.
+
+**AI's Responsibility:** Maintain and grow this table! When adding new tables, features, or capabilities, update `table_documentation` so future AIs can discover and use them. This is the source of truth for AI autonomy.
+
+## Self-Driven Workflow (Startup + After Each Task)
+
+AI should check for pending work at two points:
+
+### 1. At Startup
+
+Before doing anything else, check for pending tasks and issues:
+
+```sql
+-- Check pending tasks
+SELECT id, title, priority, status FROM tasks
+WHERE status = 'PENDING' ORDER BY priority DESC LIMIT 5;
+
+-- Check open issues
+SELECT id, title, severity, status FROM issues
+WHERE status = 'OPEN' ORDER BY severity DESC LIMIT 5;
+```
+
+### 2. After Completing Each Task
+
+After finishing work, check again to pick up new tasks. This creates a continuous self-driven workflow.
+
+**Tools Available:** Use MCP tools or CLI commands (see `table_documentation`) to query and work with tasks/issues. The system is designed for AI to operate autonomously - check, work, learn, repeat.
 
 ## How Nezha Works
 
@@ -85,14 +227,16 @@ The `memory`, `issues`, and `skills` tables have a `viewers[]` array to track wh
 
 ### 1. PostgreSQL Path (CRITICAL)
 
-Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, which is NOT in system PATH.
+> **Updated 2026-04-01:** Full path no longer required - `psql` works directly.
+
+Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, but now accessible via PATH.
 
 ```bash
-# ✅ CORRECT - Use full path
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
-
-# ❌ WRONG - Will fail
+# ✅ WORKS - Direct command (recommended)
 psql -h 127.0.0.1 -U postgres -d nezha
+
+# ✅ ALSO WORKS - Full path (legacy)
+/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
 ```
 
 ### 2. Code Change Sources (Workflow Triggers)
@@ -215,7 +359,7 @@ If novel insight found, save to memory with high importance. If pattern repeats,
 
 ## Database Access
 
-```bash
+````bash
 # PostgreSQL full path (IMPORTANT!)
 /Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
 
@@ -223,4 +367,47 @@ If novel insight found, save to memory with high importance. If pattern repeats,
 psql -c "SELECT COUNT(*) FROM tasks WHERE status = 'PENDING';"
 psql -c "SELECT title, status FROM tasks ORDER BY priority DESC LIMIT 10;"
 psql -c "SELECT content, source FROM memory ORDER BY created_at DESC LIMIT 10;"
+
+## GitHub Integration (2026-04-03)
+
+### Problem Solved
+
+- DB Issue 噪声淹没问题（450+ pending，太多难以区分）
+- AI 创建的 Issue 人类看不到，无法参与讨论
+
+### Solution: Dual Issue System
+
+| Type | Storage | Visibility | Use Case |
+|------|---------|------------|----------|
+| DB Issue | PostgreSQL | AI only | Internal tracking, AI-to-AI |
+| GitHub Issue | GitHub | Human + AI | Important issues, discussion |
+
+### How It Works
+
+1. AI creates Issue → DB Issue created
+2. If severity = `critical` or `high` → auto-sync to GitHub Issue
+3. GitHub Issue gets labels: `nezha-ai`, `critical/high`
+4. DB Issue stores `github_url` in metadata (bidirectional link)
+
+### Usage
+
+```bash
+# In reflection, use severity to trigger GitHub sync
+[ISSUE] title: Something wrong severity: high
+
+# Or via broadcast
+nezha share "[ISSUE] Need human attention on X severity:critical"
 ```
+
+### Configuration
+
+- Default repo: `emptist/nezha` (configurable in ReflectionPlugin)
+- GitHub token: Uses `gh auth token` or `GITHUB_TOKEN` env var
+
+### Webhook (Future)
+
+- GitHub → DB sync via webhook
+- Human-created GitHub Issues visible to AI
+
+```
+````

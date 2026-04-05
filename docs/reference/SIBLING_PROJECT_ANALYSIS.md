@@ -1281,9 +1281,9 @@ class PiExecutor {
 - 多任务并发
 
 ```typescript
-// src/bridge/NezhaPiBridge.ts
+// src/bridge/NUPIBridge.ts
 
-interface NezhaPiBridge {
+interface NUPIBridge {
   // 任务委派
   delegateTask(task: Task): Promise<TaskHandle>;
 

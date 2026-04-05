@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SoulService } from '../../src/services/SoulService.js';
+import { AgentIdentityService } from '../../src/services/AgentIdentityService.js';
+
+vi.mock('../../src/services/AgentIdentityService.js', () => ({
+  AgentIdentityService: {
+    getResolvedIdentity: vi.fn().mockResolvedValue({ id: 'test-agent-id', name: 'Test Agent' }),
+  },
+}));
 
 const mockQuery = vi.fn();
 

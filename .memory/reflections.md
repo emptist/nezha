@@ -4,10 +4,11 @@
 
 ### PostgreSQL Path (CRITICAL)
 
+> **Updated 2026-04-01:** Full path no longer required - `psql` works directly.
+
 - Postgres.app installs to `/Applications/Postgres.app/Contents/Versions/18/bin/`
-- This path is NOT in system PATH
-- Always use full path: `/Applications/Postgres.app/Contents/Versions/18/bin/psql`
-- Many AI agents have failed due to this!
+- Now accessible via PATH directly
+- Use `psql -h 127.0.0.1 -U postgres -d nezha`
 
 ### CLI Command Rename (2026-03-25)
 

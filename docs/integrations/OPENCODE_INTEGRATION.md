@@ -555,9 +555,9 @@ curl -X DELETE "http://localhost:4096/session/$SESSION_ID"
 
 ---
 
-## OpenCode on Nezha / Nezhapi
+## OpenCode on Nezha / NuPI
 
-> **关键**: Nezha 和 Nezhapi 是**独立产品**，不依赖 OpenCode
+> **关键**: Nezha 和 NuPI 是**独立产品**，不依赖 OpenCode
 
 Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
 
@@ -577,11 +577,11 @@ psql -d nezha -c "INSERT INTO tasks ..."
 
 ---
 
-### 方案 2: OpenCode on Nezhapi
+### 方案 2: OpenCode on NuPI
 
-> **Nezhapi = Nezha + Pi = 增强版哪吒**
+> **NuPI = Nezha + Pi = 增强版哪吒**
 
-Nezhapi 是 **Nezha 与 Pi 的深度融合产品**：
+NuPI 是 **Nezha 与 Pi 的深度融合产品**：
 
 - **Nezha 的增强**: 增加 pi 执行能力、REST API
 - **Pi 的增强**: 增加任务管理、长期记忆、多 AI 协作
@@ -597,19 +597,19 @@ Nezhapi 是 **Nezha 与 Pi 的深度融合产品**：
 
 **适用场景**：需要 pi 执行能力、REST API、多 AI 协作
 
-**成功后转向**: 如果 nezhapi 验证成功，主攻 nezhapi 开发，nezha 保持维护
+**成功后转向**: 如果 nupi 验证成功，主攻 nupi 开发，nezha 保持维护
 
 ---
 
-### 方案 2: OpenCode on Nezhapi (Nezha + Pi)
+### 方案 2: OpenCode on NuPI (Nezha + Pi)
 
 > **当前状态**: REST API 已可用，Pi 执行器集成开发中
 
-通过 REST API 调用 Nezhapi：
+通过 REST API 调用 NuPI：
 
 ```bash
 # 启动服务
-npm run nezhapi
+npm run nupi
 
 # API 调用
 curl http://localhost:4099/tasks
@@ -628,9 +628,9 @@ curl http://localhost:4099/broadcast
 
 ---
 
-## Nezhapi (Nezha + Pi 集成)
+## NuPI (Nezha + Pi 集成)
 
-> **Nezhapi = Nezha + Pi**
+> **NuPI = Nezha + Pi**
 
 Nezha 与 Pi 的集成服务，同时提供：
 
@@ -641,13 +641,13 @@ Nezha 与 Pi 的集成服务，同时提供：
 
 ```bash
 # 方式 1: 使用 npm
-npm run nezhapi
+npm run nupi
 
 # 方式 2: 直接运行
 node dist/api/NezhaApiServer.js
 
 # 方式 3: 指定端口
-NEZHAPI_PORT=4100 npm run nezhapi
+NUPI_PORT=4100 npm run nupi
 ```
 
 服务默认监听端口 **4099**。
@@ -668,7 +668,7 @@ NEZHAPI_PORT=4100 npm run nezhapi
 ### OpenCode 集成示例
 
 ```typescript
-// 在 OpenCode 工具中调用 Nezhapi
+// 在 OpenCode 工具中调用 NuPI
 const tasks = await fetch('http://localhost:4099/tasks').then(r => r.json());
 console.log('待处理任务:', tasks.rows.length);
 

@@ -3,6 +3,7 @@ import {
   isLaunchAgentInstalled,
   startLaunchAgent,
 } from '../daemon/launchd.js';
+import { logger } from '../utils/logger.js';
 
 export interface DaemonAutoStartOptions {
   autoInstall?: boolean;
@@ -24,16 +25,16 @@ export class DaemonAutoStartService {
     status: 'running' | 'started' | 'stopped' | 'error';
     message: string;
   }> {
-    console.log('[DaemonAutoStart] Checking daemon status...');
+    logger.info('[DaemonAutoStart] Checking daemon status...');
 
     const isInstalled = await isLaunchAgentInstalled();
     if (!isInstalled) {
-      console.warn('[DaemonAutoStart] Daemon not installed');
+      logger.warn('[DaemonAutoStart] Daemon not installed');
       if (this.options.autoInstall) {
-        console.log(
+        logger.info(
           '[DaemonAutoStart] Auto-install is enabled, but installation requires manual setup'
         );
-        console.log('[DaemonAutoStart] Run: nezha install');
+        logger.info('[DaemonAutoStart] Run: nezha install');
         return {
           success: false,
           status: 'stopped',
@@ -50,7 +51,7 @@ export class DaemonAutoStartService {
     const status = await getLaunchAgentStatus();
 
     if (status.status === 'running') {
-      console.log(`[DaemonAutoStart] Daemon already running (PID: ${status.pid})`);
+      logger.info(`[DaemonAutoStart] Daemon already running (PID: ${status.pid})`);
       return {
         success: true,
         status: 'running',
@@ -58,13 +59,13 @@ export class DaemonAutoStartService {
       };
     }
 
-    console.log('[DaemonAutoStart] Daemon not running, attempting to start...');
+    logger.info('[DaemonAutoStart] Daemon not running, attempting to start...');
 
     try {
       const result = await startLaunchAgent();
 
       if (!result.ok) {
-        console.error(`[DaemonAutoStart] Failed to start daemon: ${result.error}`);
+        logger.error(`[DaemonAutoStart] Failed to start daemon: ${result.error}`);
         return {
           success: false,
           status: 'error',
@@ -72,7 +73,7 @@ export class DaemonAutoStartService {
         };
       }
 
-      console.log('[DaemonAutoStart] Daemon started successfully');
+      logger.info('[DaemonAutoStart] Daemon started successfully');
 
       const started = await this.waitForDaemon();
 
@@ -91,7 +92,7 @@ export class DaemonAutoStartService {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`[DaemonAutoStart] Error starting daemon: ${message}`);
+      logger.error(`[DaemonAutoStart] Error starting daemon: ${message}`);
       return {
         success: false,
         status: 'error',
@@ -107,14 +108,14 @@ export class DaemonAutoStartService {
       const status = await getLaunchAgentStatus();
 
       if (status.status === 'running') {
-        console.log(`[DaemonAutoStart] Daemon is now running (PID: ${status.pid})`);
+        logger.info(`[DaemonAutoStart] Daemon is now running (PID: ${status.pid})`);
         return true;
       }
 
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    console.warn('[DaemonAutoStart] Timeout waiting for daemon to start');
+    logger.warn('[DaemonAutoStart] Timeout waiting for daemon to start');
     return false;
   }
 

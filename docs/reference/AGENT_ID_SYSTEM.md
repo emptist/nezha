@@ -56,60 +56,162 @@ AI 启动时自动选择/创建身份，无需手动干预。
 ## ID 格式
 
 ```
-S-{source}-{project}-{branch}-{hash}   # Specific: 有项目/git
-G-{source}-{machine-fingerprint}-{hash}  # General: 无项目/git
+S-{source}-{project}-{session_id | branch | gitHash}   # Specific: 有项目/git
+G-{source}-{machine-fingerprint}                      # General: 无项目/git
 ```
+
+### 规则说明
+
+- **有 session_id** → 直接使用（同一 session 只有一个 AI）
+- **有 branch** → 直接使用（同一 branch 保持相同 ID）
+- **无 project** → 用 machine fingerprint
+
+> **核心**: ID 由 `generateSemanticId()` 直接生成（single source of truth），不是从 DB 查询出来的。DB 只用于存储/获取 metadata（display_name 等），首次运行时 INSERT。
 
 ### 示例
 
 ```
-# Nezha Daemon (默认 source=nezha)
-S-nezha-nezha.git-minimax2-7-4b0ab6
- ↑     │         │            │
- │     │         │            └── 确定性哈希 (6位)
- │     │         └── Git branch (分支名)
- │     └── 项目名 (git remote 或目录名)
- └── 来源标识 (nezha/opencode/trae/pi/external)
+# 从 OpenCode 运行 (有 session_id)
+S-opencode-nezha-abc123def456
 
-# OpenCode Server (source=opencode)
-S-opencode-nezha.git-main-a1b2c3
+# 从 OpenCode 运行 (无 session_id，有 branch)
+S-opencode-nezha-git-fix_main
 
-# Trae (source=trae)
-S-trae-nezha.git-feature-d4e5f6
+# 从 Trae 运行 (有 session_id)
+S-trae-nezha-20260325T123456
 
-# Pi (source=pi)
-S-pi-nezha.git-dev-g7h8i9
+# 未识别来源，有 project 和 git
+S-unknown-nezha-git-6245053
 
-# General (无项目/git)
-G-nezha-71c2ae97d5d52059-4b0ab6
+# 未识别来源，无 project (用 machine fingerprint)
+G-unknown-abcd1234efgh5678
 ```
+
+### 优先级
+
+| 优先级 | 条件                     | 格式                                |
+| ------ | ------------------------ | ----------------------------------- |
+| 1      | 有 session_id            | `S-{source}-{project}-{session_id}` |
+| 2      | 无 session_id，有 branch | `S-{source}-{project}-{branch}`     |
+| 3      | 无 session_id，无 branch | `S-{source}-{project}`              |
+
+> **注意**: 不使用 gitHash，同一 branch 下 ID 保持稳定。DB 只存储 metadata，不用于 ID 生成。
 
 ### 字段说明
 
-| 字段                  | 来源                                  | 价值                 |
-| --------------------- | ------------------------------------- | -------------------- |
-| `S/G`                 | 自动判断                              | 区分特定/通用身份    |
-| `source`              | 环境变量 `NEZHA_AGENT_SOURCE`         | **区分不同 AI 系统** |
-| `project`             | git remote 或目录名                   | 知道来自哪个项目     |
-| `branch`              | `git rev-parse --abbrev-ref HEAD`     | 知道在哪个分支工作   |
-| `machine-fingerprint` | SHA256(主机名+平台+CPU)               | 机器识别             |
-| `hash`                | SHA256(project\|git\|machine\|source) | 确定性保证           |
+| 字段         | 来源                              | 价值                 |
+| ------------ | --------------------------------- | -------------------- |
+| `S/G`        | 自动判断                          | 区分特定/通用身份    |
+| `source`     | 环境变量 `NEZHA_AGENT_SOURCE`     | **区分不同 AI 系统** |
+| `project`    | git remote 或目录名               | 知道来自哪个项目     |
+| `session_id` | 外部传入或环境变量                | 同一 session 唯一    |
+| `branch`     | `git rev-parse --abbrev-ref HEAD` | 知道在哪个分支工作   |
 
 ### 来源标识 (source)
 
 通过环境变量 `NEZHA_AGENT_SOURCE` 设置：
 
-| 值         | 说明                |
-| ---------- | ------------------- |
-| `nezha`    | Nezha Daemon (默认) |
-| `opencode` | OpenCode Server     |
-| `trae`     | Trae                |
-| `pi`       | Pi                  |
-| `external` | 其他外部 AI         |
+| 值         | 说明            |
+| ---------- | --------------- |
+| `unknown`  | 未知来源 (默认) |
+| `nezha`    | Nezha Daemon    |
+| `opencode` | OpenCode Server |
+| `trae`     | Trae            |
+| `pi`       | Pi              |
+| `external` | 其他外部 AI     |
+
+### 环境检测 vs 安装检测
+
+**关键概念区分**:
+
+| 检测类型     | 目的                       | 例子                                     | 是依赖吗                |
+| ------------ | -------------------------- | ---------------------------------------- | ----------------------- |
+| **环境检测** | 知道"我正在谁的环境中运行" | `AI_AGENT === 'TRAE'` → 当前在 Trae 内部 | **否** - 只是上下文感知 |
+| **安装检测** | 知道"某软件是否已安装"     | `~/.trae/` 是否存在                      | **否** - 被动检测       |
+
+**为什么区分这个很重要**:
+
+```typescript
+// 这行代码"提到"了 Trae，但"不依赖" Trae
+if (process.env.AI_AGENT !== 'TRAE') {
+  return { source: null, sessionId: null };
+}
+
+// 如果 AI_AGENT 不是 TRAE (Trae 没运行)，代码正常执行
+// 只是不启用 Trae 相关的功能
+// 这叫"提到" ≠ "依赖"
+```
+
+**重要原则**:
+
+- **提到** ≠ **依赖**
+- 检查是一种**知识运用**，不是**依赖关系**
+- 代码中可能出现软件名称，但只要不是 `import` 或必须存在才能运行，就不是依赖
+
+### 当前检测实现
+
+| 软件           | 检测方式                                                                                              | 类型     | 说明                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------- |
+| **Trae**       | `process.env.AI_AGENT === 'TRAE'`                                                                     | 环境检测 | Trae 设置 `AI_AGENT=TRAE` 告诉 Nezha "你在我里面" |
+| **OpenCode**   | 1. 配置 URL 检查 2. 进程检查 `ps aux \| grep opencode` 3. 配置文件 `~/.config/opencode/opencode.json` | 混合检测 | OpenCode 没有设置类似 `AI_AGENT` 的环境变量       |
+| **Pi**         | `process.env.ENABLE_PI === 'true'`                                                                    | 环境检测 | 需要手动启用                                      |
+| **PostgreSQL** | 必须存在                                                                                              | 依赖     | 这是真正的依赖，没有 PostgreSQL 无法运行          |
+
+> **注意**: OpenCode 没有像 Trae 那样设置 `AI_AGENT` 环境变量，所以无法通过环境检测知道"我正在 OpenCode 内部"。这是 OpenCode 的**设计选择**，不是 Nezha 的缺陷。
+
+### 重要前提：软件需要主动留下标识
+
+**核心观点**: 如果软件自己不主动"留下名字"（设置环境变量/特征），Nezha 无法用同样的方法检测到它。
+
+| 软件         | 是否主动留下名字        | 结果                                           |
+| ------------ | ----------------------- | ---------------------------------------------- |
+| **Trae**     | ✅ 设置 `AI_AGENT=TRAE` | Nezha 可以知道"我在 Trae 里面"                 |
+| **OpenCode** | ❌ 不设置类似变量       | Nezha 无法通过环境变量知道"我在 OpenCode 里面" |
+
+- Trae 选择主动暴露自己的环境 → Nezha 能检测
+- OpenCode 选择不这样做 → Nezha 无法通过环境检测知道
+
+**这是软件的设计选择，不是 Nezha 的缺陷。Nezha 只是"知识运用"——你告诉我，我就知道；不告诉我，我就不知道。**
+
+### 核心原则：因地制宜 + 知识驱动
+
+**ID 生成机制是独立的**，不依赖外部软件是否存在：
+
+1. **因地制宜**: 看软件做什么，利用软件留下的特征来设置 ID
+   - Trae 设置 `AI_AGENT` → 利用它
+   - OpenCode 可能设置 session_id → 利用它
+   - 什么都没有 → 降级到 git hash
+
+2. **知识驱动**: 依靠对软件的知识来设计机制
+   - 我知道 Trae 会设置 `AI_AGENT` → 设计环境检测
+   - 我知道 OpenCode 可能传递 session_id → 设计 session 检测
+   - 我知道 git hash 总是存在 → 设计兜底方案
+
+3. **独立运行**: 无论软件是否存在，机制都能工作
+   - 软件存在 → 利用特征 (环境变量/文件/进程)
+   - 软件不存在 → 降级运行 (git hash / machine fingerprint)
+
+**这就是"依赖知识而非依赖存在"的实际含义。**
+
+### 补充：主动提供 vs 被动检测
+
+如果软件**主动提供**信息（而非 Nezha 去检测），情况不同：
+
+> **示例**: 如果 OpenCode 运行环境中的软体时，会以明确的方式提供它自己和它的大模型的信息
+>
+> - OpenCode 可以主动传递 `session_id` 给 Nezha
+> - OpenCode 可以主动设置 `NEZHA_AGENT_SOURCE=opencode`
+> - 这是 OpenCode **主动提供**，不是 Nezha **依赖** OpenCode
+
+| 场景         | 谁在行动                    | 结果                   |
+| ------------ | --------------------------- | ---------------------- |
+| **主动提供** | OpenCode 主动设置环境变量   | Nezha 可以利用这些信息 |
+| **被动检测** | Nezha 检查文件/进程是否存在 | 不依赖软件存在         |
+| **都不做**   | -                           | 降级运行 (git hash)    |
+
+**关键点**: 无论哪种情况，都是 **Nezha 在做检测/利用**，不是 Nezha 依赖软件。软件存在 → 用特征；软件不存在 → 降级。
 
 ### 降级方案
-
-如果 git 不可用，自动降级到 General 格式：
 
 ```
 无项目/git → 机器指纹 → G-格式

@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
+import { logger } from '../utils/logger.js';
 
 export interface AgentContext {
   project: string;
@@ -28,8 +29,7 @@ export interface AgentIdentity {
 
 export class AgentIdentityService {
   private db: DatabaseClient;
-  private static cachedIdentity: AgentIdentity | null = null;
-  private static cachePromise: Promise<AgentIdentity> | null = null;
+  private static currentIdentity: AgentIdentity | null = null;
   private static externalIdentity: AgentIdentity | null = null;
 
   constructor(db: DatabaseClient) {
@@ -38,8 +38,8 @@ export class AgentIdentityService {
 
   static setExternalIdentity(identity: AgentIdentity): void {
     AgentIdentityService.externalIdentity = identity;
-    AgentIdentityService.cachedIdentity = identity;
-    console.log(`[AgentIdentity] External identity set: ${identity.id}`);
+    AgentIdentityService.currentIdentity = identity;
+    logger.info(`[AgentIdentity] External identity set: ${identity.id}`);
   }
 
   static getExternalIdentity(): AgentIdentity | null {
@@ -47,23 +47,14 @@ export class AgentIdentityService {
   }
 
   static async getResolvedIdentity(): Promise<AgentIdentity> {
-    if (AgentIdentityService.cachedIdentity) {
-      return AgentIdentityService.cachedIdentity;
-    }
-    if (AgentIdentityService.cachePromise) {
-      return AgentIdentityService.cachePromise;
+    if (AgentIdentityService.currentIdentity) {
+      return AgentIdentityService.currentIdentity;
     }
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
-    AgentIdentityService.cachePromise = service.resolve().finally(() => {
-      db.close();
-    });
-    return AgentIdentityService.cachePromise;
-  }
-
-  static resetCache(): void {
-    AgentIdentityService.cachedIdentity = null;
-    AgentIdentityService.cachePromise = null;
+    const identity = await service.resolve();
+    await db.close();
+    return identity;
   }
 
   async resolve(): Promise<AgentIdentity> {
@@ -72,27 +63,16 @@ export class AgentIdentityService {
     }
 
     const context = this.detectContext();
-    const source = context.source || 'nezha';
+    const id = this.generateSemanticId(context);
 
-    let identity: AgentIdentity | null = null;
-
-    if (context.project) {
-      if (context.sessionId) {
-        identity = await this.findKeyMatch(context.project, context.sessionId, source, true);
-      } else if (context.gitHash) {
-        identity = await this.findKeyMatch(context.project, context.gitHash, source, false);
-      }
-    } else {
-      identity = await this.findMachineMatch(context.machineFingerprint, source);
+    const existing = await this.getById(id);
+    if (existing) {
+      AgentIdentityService.currentIdentity = existing;
+      return existing;
     }
 
-    if (identity) {
-      AgentIdentityService.cachedIdentity = identity;
-      return identity;
-    }
-
-    identity = await this.createIdentity(context);
-    AgentIdentityService.cachedIdentity = identity;
+    const identity = await this.createIdentity(context);
+    AgentIdentityService.currentIdentity = identity;
     return identity;
   }
 
@@ -103,7 +83,10 @@ export class AgentIdentityService {
     const source = traeEnv.source || this.detectSource();
     const branch = this.getGitBranch();
     const sessionId =
-      traeEnv.sessionId || process.env.NEZHA_SESSION_ID || process.env.OPENCODE_SESSION_ID || undefined;
+      traeEnv.sessionId ||
+      process.env.NEZHA_SESSION_ID ||
+      process.env.OPENCODE_SESSION_ID ||
+      undefined;
 
     return {
       project: this.getProjectName(),
@@ -188,116 +171,38 @@ export class AgentIdentityService {
   }
 
   generateSemanticId(context: AgentContext): string {
-    const hash = this.generateDeterministicHash(context);
-    const shortHash = hash.substring(0, 6);
-    const source = context.source || 'nezha';
+    const source = context.source || 'unknown';
 
-    // S = Specific: 有项目信息
     if (context.project) {
-      // 有 sessionId 用 sessionId，无则用 git hash
-      const keyPart = context.sessionId
-        ? context.sessionId.substring(0, 6)
-        : context.gitHash
-          ? context.gitHash.substring(0, 7)
-          : '';
-      return `S-${source}-${context.project}-${keyPart ? keyPart + '-' : ''}${shortHash}`;
+      if (context.sessionId) {
+        return `S-${source}-${context.project}-${context.sessionId}`;
+      }
+      if (context.branch) {
+        return `S-${source}-${context.project}-${context.branch}`;
+      }
+      return `S-${source}-${context.project}`;
     }
 
-    // G = General: 无项目信息
-    return `G-${source}-${context.machineFingerprint}-${shortHash}`;
-  }
-
-  generateDeterministicHash(context: AgentContext): string {
-    const data = [context.project, context.gitHash || 'no-git', context.machineFingerprint].join(
-      '|'
-    );
-
-    return crypto.createHash('sha256').update(data).digest('hex').substring(0, 16);
-  }
-
-  private async findExactMatch(context: AgentContext): Promise<AgentIdentity | null> {
-    if (!context.gitHash) return null;
-
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
-       FROM agent_identities 
-       WHERE project = $1 AND git_hash = $2 AND source = $3
-       ORDER BY created_at DESC LIMIT 1`,
-      [context.project, context.gitHash, context.source || 'nezha']
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findProjectMatch(project: string): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source
-       FROM agent_identities 
-       WHERE project = $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [project]
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findKeyMatch(
-    project: string,
-    key: string,
-    source: string,
-    isSessionId: boolean = false
-  ): Promise<AgentIdentity | null> {
-    let result;
-    if (isSessionId) {
-      result = await this.db.query(
-        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-         FROM agent_identities 
-         WHERE project = $1 AND session_id = $2 AND source = $3
-         ORDER BY created_at DESC LIMIT 1`,
-        [project, key, source]
-      );
-    } else {
-      result = await this.db.query(
-        `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-         FROM agent_identities 
-         WHERE project = $1 AND git_hash = $2 AND source = $3
-         ORDER BY created_at DESC LIMIT 1`,
-        [project, key.substring(0, 7), source]
-      );
-    }
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
-  }
-
-  private async findMachineMatch(
-    machineFingerprint: string,
-    source: string
-  ): Promise<AgentIdentity | null> {
-    const result = await this.db.query(
-      `SELECT id, project, git_hash, machine_fingerprint, created_at, display_name, description, source, session_id
-       FROM agent_identities 
-       WHERE machine_fingerprint = $1 AND source = $2
-       ORDER BY created_at DESC LIMIT 1`,
-      [machineFingerprint, source]
-    );
-
-    if (result.rows.length === 0) return null;
-    return this.rowToIdentity(result.rows[0]);
+    return `G-${source}-${context.machineFingerprint}`;
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
-    const source = context.source ?? 'nezha';
+    const source = context.source ?? 'unknown';
     const id = this.generateSemanticId(context);
 
     await this.db.query(
       `INSERT INTO agent_identities (id, project, git_hash, machine_fingerprint, source, session_id)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, context.project, context.gitHash, context.machineFingerprint, source, context.sessionId || null]
+      [
+        id,
+        context.project,
+        context.gitHash,
+        context.machineFingerprint,
+        source,
+        context.sessionId || null,
+      ]
     );
-    console.log(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
+    logger.info(`[AgentIdentity] Created new identity: ${id} (source: ${source})`);
 
     return {
       id,

@@ -1,25 +1,36 @@
 # Nezha
 
-> AI 驱动的自主开发系统 - 让编辑器 AI 能够持续工作、自主执行任务
+> AI-driven autonomous development system - enabling editor AI to work continuously and execute tasks autonomously
 
-**设计原则**: PostgreSQL 优先，文件仅在不可避免时使用。
+**Design Principle**: PostgreSQL-first; files only when absolutely necessary.
 
-## 项目目标
+## Project Goals
 
-构建一个能够**自主运行**的 AI 开发系统，具备以下核心能力：
+Build an AI development system capable of **autonomous operation** with these core capabilities:
 
-| 能力                 | 说明                        | 状态      |
-| -------------------- | --------------------------- | --------- |
-| **永久记忆**         | PostgreSQL 存储 + 任务历史  | ✅ 已实现 |
-| **持续工作**         | 心跳机制 + 任务调度         | ✅ 已实现 |
-| **任务执行**         | Agent 调用 + 错误处理       | ✅ 已实现 |
-| **Process Guardian** | 孤儿进程清理 + 实例数控制   | ✅ 已实现 |
-| **对话日志**         | PostgreSQL + JSONL 双存储   | ✅ 已实现 |
-| **技能系统**         | DB-only 技能加载 + 安全扫描 | ✅ 已实现 |
-| **AI 构建技能**      | AI 自主生成技能             | ✅ 已实现 |
-| **任务评审**         | 自动化 QC + 学习模式        | ✅ 已实现 |
-| **AI 互相 Review**   | AI 互相 review 代码         | ✅ 已实现 |
-| **知识导入**         | SOUL.md → PostgreSQL        | ✅ 已实现 |
+| Capability | Description | Status |
+|------------|-------------|--------|
+| **Permanent Memory** | PostgreSQL storage + task history | ✅ Implemented |
+| **Continuous Work** | Heartbeat mechanism + task scheduling | ✅ Implemented |
+| **Task Execution** | Agent invocation + error handling | ✅ Implemented |
+| **Process Guardian** | Orphan process cleanup + instance control | ✅ Implemented |
+| **Conversation Log** | PostgreSQL + JSONL dual storage | ✅ Implemented |
+| **Skill System** | DB-only skill loading + security scanning | ✅ Implemented |
+| **AI Skill Builder** | Autonomous skill generation by AI | ✅ Implemented |
+| **Task Review** | Automated QC + learning mode | ✅ Implemented |
+| **AI Inter-Review** | AI-to-AI code review | ✅ Implemented |
+| **Knowledge Import** | SOUL.md → PostgreSQL | ✅ Implemented |
+| **API Server** | HTTP REST API with rate limiting + validation | ✅ Implemented |
+| **Security Hardening** | Input validation, auth, error handlers | ✅ Implemented |
+
+### Current Status
+
+| Metric | Value |
+|--------|-------|
+| **Tests** | 1032 passing ✅ |
+| **TypeScript Build** | 0 errors ✅ |
+| **Language** | Full English (0 Chinese) ✅ |
+| **Security** | Rate limiting, input validation, no secrets in code ✅ |
 
 ## 核心设计
 
@@ -27,20 +38,28 @@
 
 > **核心原则**: 集成不应该破坏独立性
 
-Nezha 采用三层架构设计：
+Nezha 采用四层架构设计：
 
-| 层级 | 说明 | 独立性 | 示例服务 |
-|------|------|--------|----------|
-| **核心层** | Nezha 的核心功能 | ✅ 可以独立运行 | HeartbeatService, MemoryService, Scheduler |
-| **集成层** | 与外部 AI 系统的集成 | ⚠️ 可选部署 | OpenCodeReminderService, TraeSkillSyncService |
-| **支持层** | 支持核心层和集成层 | ✅ 通用服务 | AIProvider, CacheService, EncryptionService |
+| 层级         | 说明                         | 独立性  | 示例服务                                      |
+| ------------ | ---------------------------- | ------- | --------------------------------------------- |
+| **核心层**   | Nezha 的核心功能，可独立运行 | ✅      | HeartbeatService, MemoryService, Scheduler    |
+| **子系统层** | 扩展核心功能，独立 npm 包    | ✅      | Piano (任务路由), NuPI (Pi执行)               |
+| **集成层**   | 与外部 AI 系统的集成         | ⚠️ 可选 | OpenCodeReminderService, TraeSkillSyncService |
+| **支持层**   | 通用服务                     | ✅      | AIProvider, CacheService, EncryptionService   |
 
 **核心原则**:
-- ✅ 核心层不依赖集成层
-- ✅ 集成层失败不影响核心功能
-- ✅ 集成层可以替换为其他 AI 系统
+
+- ✅ 核心层不依赖子系统/集成层
+- ✅ 子系统/集成层失败不影响核心功能
+- ✅ 核心层 → 子系统 → 集成层（单向依赖）
+
+**子系统**:
+
+- **Piano** (`/Users/jk/gits/hub/tools_ai/piano`) - 任务路由和协调，extends HeartbeatService
+- **NuPI** (/Users/jk/gits/hub/tools_ai/nupi`) - Pi 执行器，独立执行 Pi 任务
 
 **详细文档**:
+
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - 架构设计文档
 - [docs/SERVICE_CATALOG.md](./docs/SERVICE_CATALOG.md) - 服务目录
 - [docs/INTEGRATION_ARCHITECTURE.md](./docs/INTEGRATION_ARCHITECTURE.md) - 集成架构原则
@@ -475,6 +494,33 @@ interface ClawHubClient {
 - 用户审批
 - 自动屏蔽恶意技能
 
+## Security
+
+### API Server Security (NezhaApiServer)
+
+| Feature | Implementation |
+|---------|----------------|
+| **Rate Limiting** | Sliding window: 100 requests/min per IP → 429 response |
+| **Input Validation** | Body size limit (1MB), required field checks, parameter clamping |
+| **SQL Injection Prevention** | Parameterized queries throughout |
+| **Authentication** | JWT middleware for sensitive endpoints (`/tasks`, `/memory`, etc.) |
+| **Localhost Check** | Sensitive endpoints restricted to localhost only |
+
+### Process Stability
+
+| Handler | Behavior | Severity |
+|---------|----------|----------|
+| `unhandledRejection` | Log error details with promise/reason | ⚠️ Non-fatal |
+| `uncaughtException` | Log stack trace → graceful shutdown → exit(1) | 🔴 Fatal |
+| `SIGINT` / `SIGTERM` | Wait for running tasks → stop services → close DB | ✅ Graceful |
+
+### Code Security Practices
+
+- ✅ No hardcoded secrets in source code
+- ✅ All credentials via environment variables
+- ✅ `.gitignore` excludes `.env`, `.secrets/`, `nezha.db`
+- ✅ API-based architecture (no direct DB access from subsystems)
+
 ## 技术选型
 
 | 组件       | 技术       | 版本  | 说明              |
@@ -560,22 +606,22 @@ cp .env.example .env
 
 在 `.env` 文件中配置：
 
-| 变量                  | 说明                             | 默认值        |
-| --------------------- | -------------------------------- | ------------- |
-| DB_HOST               | PostgreSQL 主机                  | localhost     |
-| DB_PORT               | PostgreSQL 端口                  | 5432          |
-| DB_NAME               | 数据库名                         | nezha         |
-| DB_USER               | 数据库用户                       | postgres      |
-| DB_PASSWORD           | 数据库密码                       | your_password |
-| EMBEDDING_PROVIDER    | 嵌入提供者 (ollama/zhipu/openai) | -             |
-| WEBHOOK_URL           | Webhook 通知 URL                 | -             |
-| NEZHA_MAX_RETRIES     | 任务最大重试次数                 | 3             |
-| NEZHA_TASK_TIMEOUT    | 任务超时时间 (ms)                | 300000        |
-| NEZHA_AGENT_ID        | 手动指定身份 ID (覆盖自动)       | 自动解析      |
-| NEZHA_AGENT_NAME      | 身份显示名称                     | -             |
-| NEZHA_OPENCODE_PORT   | OpenCode Server 端口             | 4096          |
-| NEZHA_HEALTH_PORT     | 健康检查 API 端口                | 4097          |
-| NEZHAPI_PORT          | Nezhapi 服务端口                 | 4099          |
+| 变量                | 说明                             | 默认值        |
+| ------------------- | -------------------------------- | ------------- |
+| DB_HOST             | PostgreSQL 主机                  | localhost     |
+| DB_PORT             | PostgreSQL 端口                  | 5432          |
+| DB_NAME             | 数据库名                         | nezha         |
+| DB_USER             | 数据库用户                       | postgres      |
+| DB_PASSWORD         | 数据库密码                       | your_password |
+| EMBEDDING_PROVIDER  | 嵌入提供者 (ollama/zhipu/openai) | -             |
+| WEBHOOK_URL         | Webhook 通知 URL                 | -             |
+| NEZHA_MAX_RETRIES   | 任务最大重试次数                 | 3             |
+| NEZHA_TASK_TIMEOUT  | 任务超时时间 (ms)                | 300000        |
+| NEZHA_AGENT_ID      | 手动指定身份 ID (覆盖自动)       | 自动解析      |
+| NEZHA_AGENT_NAME    | 身份显示名称                     | -             |
+| NEZHA_OPENCODE_PORT | OpenCode Server 端口             | 4096          |
+| NEZHA_HEALTH_PORT   | 健康检查 API 端口                | 4097          |
+| NUPI_PORT        | NuPI 服务端口                 | 4099          |
 
 ### 启动流程
 
@@ -613,19 +659,21 @@ nezha start
 
 ### 端口配置
 
-| 服务 | 默认端口 | 环境变量 | 说明 |
-|------|----------|----------|------|
-| OpenCode Server | 4096 | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
-| OpenCode Desktop | 56795 | - | OpenCode Desktop App |
-| Nezha Health | 4097 | `NEZHA_HEALTH_PORT` | 健康检查 API |
-| Nezhapi | 4099 | `NEZHAPI_PORT` | REST API 服务 |
+| 服务             | 默认端口 | 环境变量              | 说明                  |
+| ---------------- | -------- | --------------------- | --------------------- |
+| OpenCode Server  | 4096     | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
+| OpenCode Desktop | 56795    | -                     | OpenCode Desktop App  |
+| Nezha Health     | 4097     | `NEZHA_HEALTH_PORT`   | 健康检查 API          |
+| NuPI          | 4099     | `NUPI_PORT`        | REST API 服务         |
 
 **配置优先级**:
+
 1. 环境变量（最高）
 2. `config.yaml`
 3. 默认值（最低）
 
 **示例**:
+
 ```bash
 # 使用 OpenCode Desktop App (端口 56795)
 export NEZHA_OPENCODE_PORT=56795
@@ -634,9 +682,9 @@ export NEZHA_OPENCODE_PORT=56795
 export NEZHA_HEALTH_PORT=5000
 ```
 
-### OpenCode on Nezha / Nezhapi
+### OpenCode on Nezha / NuPI
 
-> **关键**: Nezha 和 Nezhapi 是**独立产品**，不依赖 OpenCode
+> **关键**: Nezha 和 NuPI 是**独立产品**，不依赖 OpenCode
 
 Nezha 提供两种架构供 OpenCode 运行（但两者都可以独立使用）：
 
@@ -673,7 +721,7 @@ NUPI 是一个**独立产品**，是 Nezha 与 Pi 的深度融合：
 
 ```bash
 # 启动 NUPI 服务
-npm run nezhapi
+npm run nupi
 ```
 
 **API 端点** (端口 4099):

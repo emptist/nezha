@@ -1,5 +1,5 @@
 import { logger } from '../utils/logger.js';
-import { type ClawHubSkill, type SkillReviewResult } from './SkillReviewer.js';
+import { type ClawHubSkill, type SkillReviewResult, SkillReviewer } from './SkillReviewer.js';
 import { type EmbeddingProvider } from './embedding/index.js';
 
 export interface CreateSkillInput {
@@ -102,6 +102,7 @@ export class DatabaseSkillLoader {
   private lastRefresh: number = 0;
   private dbClient: unknown = null;
   private embeddingProvider?: EmbeddingProvider;
+  private skillReviewer: SkillReviewer = new SkillReviewer();
 
   setEmbeddingProvider(provider: EmbeddingProvider): void {
     this.embeddingProvider = provider;
@@ -490,16 +491,46 @@ export class DatabaseSkillLoader {
       }
     }
 
+    const skillContent = [input.instructions, input.description, input.category]
+      .filter(Boolean)
+      .join('\n\n');
+    const fakeSkill: ClawHubSkill = {
+      id,
+      name: input.name,
+      description: input.description || '',
+      author: input.author || 'unknown',
+      version: '1.0.0',
+      downloads: 0,
+      rating: 0,
+      tags: input.tags || [],
+      repository: '',
+      verified: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const reviewResult = await this.skillReviewer.reviewSkill(fakeSkill, skillContent);
+    const safetyScore = reviewResult.score;
+    const scanStatus = reviewResult.isSafe
+      ? 'clean'
+      : reviewResult.issues.length > 0
+        ? 'suspicious'
+        : 'reviewed';
+    logger.info(
+      `[SkillLoader] Safety scan for ${input.name}: score=${safetyScore}, status=${scanStatus}`
+    );
+
     const result = await client.query(
       `INSERT INTO skills (
         id, name, description, instructions, source, author,
         tags, trigger_phrases, anti_patterns, quick_start, examples, emoji,
         category, project_id, permissions, status, is_enabled,
         safety_score, scan_status, version, embedding
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'approved', TRUE, 70, 'reviewed', '1.0.0', $16)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'approved', TRUE, $16, $17, '1.0.0', $18)
        ON CONFLICT (name) DO UPDATE SET
         description = EXCLUDED.description,
         instructions = EXCLUDED.instructions,
+        safety_score = EXCLUDED.safety_score,
+        scan_status = EXCLUDED.scan_status,
         updated_at = NOW()
        RETURNING id`,
       [
@@ -518,6 +549,8 @@ export class DatabaseSkillLoader {
         input.category || null,
         input.project_id || null,
         input.permissions || [],
+        safetyScore,
+        scanStatus,
         embeddingStr,
       ]
     );

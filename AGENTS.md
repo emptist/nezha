@@ -43,13 +43,38 @@
    - **NUPI 定位**: OpenCode 的一个**部件/团队成员**，提供永续工作能力
    - **验证目标**: 如果 NUPI 验证成功，NUPI 将成为 OpenCode 的核心组件
 
-4. **长期记忆 (ROM)**
+4. **服务 vs 依赖 (重要概念)**
+
+   Nezha 为其他软件**提供服务**，而不是**依赖**其他软件：
+
+   | 概念     | 定义               | 例子                   |
+   | -------- | ------------------ | ---------------------- |
+   | **依赖** | 必须存在才能运行   | Nezha 依赖 PostgreSQL  |
+   | **服务** | 为其他软件提供能力 | Trae 用 Nezha 执行任务 |
+
+   **两种外部集成方式**:
+
+   | 方式         | 描述                           | 例子                     |
+   | ------------ | ------------------------------ | ------------------------ |
+   | **被动检测** | 检查文件是否存在，不存在则跳过 | Trae 文件检查            |
+   | **主动协作** | 需要外部主动传递信息           | OpenCode 传递 session_id |
+
+   **主动协作说明**:
+   - Trae 检测不是依赖：检查 `~/.trae/` 文件是否存在，Trae 不存在则跳过
+   - OpenCode 集成不是依赖：OpenCode 不运行时 Nezha 仍可工作 (heartbeat 模式)
+   - 当需要主动传递信息时 (如 session_id)，这是**协作关系**，不是单向依赖
+
+   **记住**: "Nezha 监控 X 文件" ≠ "Nezha 依赖 X"
+
+   > 详细说明见 `docs/reference/AGENT_ID_SYSTEM.md` - 包含环境检测 vs 安装检测的区别
+
+5. **长期记忆 (ROM)**
    - `.memory/` 目录是 Nezha 的长期记忆 (ROM)
    - **启动时必须先读取** `.memory/` 下的所有 `.md` 文件
    - 包含关键知识：PostgreSQL 路径、系统配置、重要经验等
    - 例如：读取 `.memory/MEMORY.md` 和 `.memory/POSTGRESQL_PATH.md`
 
-5. **学习系统使用指南**
+6. **学习系统使用指南**
 
    **AI 智能学习原则 (重要!)**
 
@@ -95,13 +120,13 @@
      2. 订阅 MCP 广播消息
      3. 或直接查询 memory 表
 
-6. **学习系统设计原则**
+7. **学习系统设计原则**
    - 不通过程序代码实现学习功能
    - 通过 Prompt 指令让 AI 自主学习
    - 参考 LEARNING_SYSTEM.md 中的 System Prompt 设计
    - 提供工具支持：memory_save, memory_search, memory_link
 
-7. **禁止**
+8. **禁止**
    - 不要盲目实现，先问"龙虾怎么做的？"
    - 不要编写复杂的 NLP 规则来提取知识
    - 不要用程序硬编码学习逻辑
@@ -135,7 +160,7 @@
 - [x] memory 表 agent_id 关联 (learn 现在自动记录 AI 身份)
 - [x] git hook prepare-commit-msg 正则修复 (支持 S-/G- 格式 ID)
 - [x] 创建 OpenCode+Nezha 集成架构讨论 (Meeting + Issue)
-- [x] **Nezhapi** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
+- [x] **NuPI** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
 - [x] **PiExecutor** - Pi 执行器 - 支持本地模型执行
 
 ## AI 通信方法

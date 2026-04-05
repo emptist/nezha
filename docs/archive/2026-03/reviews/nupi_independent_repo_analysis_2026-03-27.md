@@ -279,7 +279,7 @@ import { logger } from '../utils/logger.js';
    - 编写API文档
 
 6. **独立启动脚本**
-   - 优化npm run nezhapi
+   - 优化npm run nupi
    - 支持独立安装（可选）
    - 提供Docker支持（可选）
 

@@ -8,6 +8,7 @@ import {
   type IConfig,
   type TransportConfig,
 } from './types.js';
+import { logger } from '../utils/logger.js';
 import {
   DATABASE_CONFIG,
   TASK_CONFIG,
@@ -38,7 +39,6 @@ function parseIntEnv(value: string | undefined, defaultValue: number, key: strin
 export async function resolveAgentIdAsync(
   config: IConfig
 ): Promise<{ id: string; displayName?: string }> {
-  // Priority 1: Environment variable override
   const envAgentId = process.env.NEZHA_AGENT_ID;
   if (envAgentId && envAgentId.trim()) {
     const displayName = process.env[ENV_KEYS.AGENT_NAME];
@@ -48,20 +48,17 @@ export async function resolveAgentIdAsync(
     };
   }
 
-  // Priority 2: Use AgentIdentityService with PostgreSQL (Required)
-  const db = new DatabaseClient(config);
-  const identityService = new AgentIdentityService(db);
-  const identity = await identityService.resolve();
-  await db.close();
+  const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+  const identity = await AgentIdentityService.getResolvedIdentity();
 
-  console.log(`[AgentIdentity] Resolved identity: ${identity.id}`);
+  logger.info(`[AgentIdentity] Resolved identity: ${identity.id}`);
   return {
     id: identity.id,
     displayName: identity.displayName,
   };
 }
 
-// Sync wrapper for backwards compatibility
+// Sync wrapper - returns env var or empty (async resolution should be used for real ID)
 function loadOrCreateAgentId(): { id: string; displayName?: string } {
   const envAgentId = process.env.NEZHA_AGENT_ID;
   if (envAgentId && envAgentId.trim()) {
@@ -73,7 +70,7 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
   }
 
   return {
-    id: `temp-${crypto.randomUUID().substring(0, 8)}`,
+    id: '',
     displayName: undefined,
   };
 }
@@ -81,9 +78,6 @@ function loadOrCreateAgentId(): { id: string; displayName?: string } {
 export class Config implements IConfig {
   private static instance: Config | null = null;
   private readonly config: NezhaConfig;
-  private static resolvedAgentId: { id: string; displayName?: string } | null = null;
-  private static resolvedAgentIdString: string | null = null;
-  private static resolutionPromise: Promise<{ id: string; displayName?: string }> | null = null;
 
   private constructor() {
     this.config = this.loadConfig();
@@ -98,9 +92,6 @@ export class Config implements IConfig {
 
   static resetInstance(): void {
     Config.instance = null;
-    Config.resolvedAgentId = null;
-    Config.resolvedAgentIdString = null;
-    Config.resolutionPromise = null;
   }
 
   private loadConfig(): NezhaConfig {
@@ -108,7 +99,7 @@ export class Config implements IConfig {
     const yamlConfig = yamlResult.config;
 
     if (!yamlResult.valid) {
-      console.warn('YAML config validation warnings:', yamlResult.errors);
+      logger.warn('YAML config validation warnings:', yamlResult.errors);
     }
 
     const dbConfig = this.loadDbConfig(yamlConfig);
@@ -330,25 +321,9 @@ export class Config implements IConfig {
   }
 
   async getAgentIdAsync(): Promise<string> {
-    if (Config.resolvedAgentIdString) {
-      return Config.resolvedAgentIdString;
-    }
-
-    try {
-      const { DatabaseClient } = await import('../db/DatabaseClient.js');
-      const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
-      const db = new DatabaseClient(this);
-      const service = new AgentIdentityService(db);
-      const identity = await service.resolve();
-      await db.close();
-      Config.resolvedAgentIdString = identity.id;
-      Config.resolvedAgentId = identity;
-      return identity.id;
-    } catch {
-      const sessionId = getCurrentSessionId();
-      if (sessionId) return sessionId;
-      return this.config.agentId;
-    }
+    const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+    const identity = await AgentIdentityService.getResolvedIdentity();
+    return identity.id;
   }
 
   getAgentDisplayName(): string | undefined {

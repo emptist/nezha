@@ -1,5 +1,5 @@
 import { Cron } from 'croner';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import {
   DATABASE_TABLES,
@@ -27,11 +27,14 @@ const standardMetrics = createStandardMetrics();
 
 function countOpenCodeProcesses(): number {
   try {
-    const output = execSync('ps aux | grep -E "opencode run" | grep -v grep | wc -l', {
+    const output = execFileSync('ps', ['aux'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'ignore'],
     });
-    return parseInt(output.trim(), 10) || 0;
+    const lines = output.split('\n');
+    const pattern = /opencode (run|serve|\.)/;
+    const count = lines.filter(line => pattern.test(line) && !line.includes('grep')).length;
+    return count;
   } catch {
     return 0;
   }

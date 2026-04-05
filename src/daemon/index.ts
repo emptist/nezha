@@ -8,6 +8,8 @@ import { HealthServer } from '../services/HealthServer.js';
 import { OpenCodeReminderService } from '../services/OpenCodeReminderService.js';
 import { logger } from '../utils/logger.js';
 
+let apiServerStop: (() => Promise<void>) | null = null;
+
 const TASK_WAIT_TIMEOUT_MS = 20000;
 
 async function waitForRunningTasks(db: DatabaseClient, timeoutMs: number): Promise<number> {
@@ -52,6 +54,15 @@ async function main(): Promise<void> {
   });
   await healthServer.start();
 
+  try {
+    const { server: apiServer } = await import('../api/NezhaApiServer.js');
+    apiServerStop = apiServer.stop.bind(apiServer);
+    logger.info('[Daemon] NuPI API server loaded successfully');
+  } catch (err) {
+    logger.error(`[Daemon] Failed to load NuPI API server: ${err instanceof Error ? err.message : err}`);
+    logger.warn('[Daemon] Continuing without NuPI API — task creation via HTTP will be unavailable');
+  }
+
   await heartbeatService.start();
 
   const opencodeReminder = new OpenCodeReminderService(db, {
@@ -76,6 +87,10 @@ async function main(): Promise<void> {
 
     opencodeReminder.stop();
     await heartbeatService.stop();
+    if (apiServerStop) {
+      await apiServerStop();
+      logger.info('[Daemon] NuPI API server stopped');
+    }
     await healthServer.stop();
     await db.close();
 
@@ -90,6 +105,15 @@ async function main(): Promise<void> {
   process.on('SIGTERM', async () => {
     await shutdown('SIGTERM');
     process.exit(0);
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error(`Uncaught Exception: ${error.message}`, { stack: error.stack });
+    shutdown('uncaughtException').finally(() => process.exit(1));
   });
 
   logger.info('Nezha Daemon running. PID:', process.pid);

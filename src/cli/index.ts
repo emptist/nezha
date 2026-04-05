@@ -2003,11 +2003,17 @@ Examples:
           const content = match[1]?.trim();
           if (!content) continue;
 
-          const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|type|severity|tags):|$)/is);
-          const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|type|severity|tags):|$)/is);
+          const titleMatch = content.match(
+            /title:\s*(.+?)(?=\s+(?:description|type|severity|tags):|$)/is
+          );
+          const descMatch = content.match(
+            /description:\s*(.+?)(?=\s+(?:title|type|severity|tags):|$)/is
+          );
           const typeMatch = content.match(/type:\s*(\w+)/i);
           const severityMatch = content.match(/severity:\s*(\w+)/i);
-          const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|type|severity):|$)/is);
+          const tagsMatch = content.match(
+            /tags:\s*(.+?)(?=\s+(?:title|description|type|severity):|$)/is
+          );
 
           const title = titleMatch?.[1]?.trim();
           const description = descMatch?.[1]?.trim() || null;
@@ -2057,11 +2063,17 @@ Examples:
           const content = match[1]?.trim();
           if (!content) continue;
 
-          const titleMatch = content.match(/title:\s*(.+?)(?=\s+(?:description|priority|type|tags):|$)/is);
-          const descMatch = content.match(/description:\s*(.+?)(?=\s+(?:title|priority|type|tags):|$)/is);
+          const titleMatch = content.match(
+            /title:\s*(.+?)(?=\s+(?:description|priority|type|tags):|$)/is
+          );
+          const descMatch = content.match(
+            /description:\s*(.+?)(?=\s+(?:title|priority|type|tags):|$)/is
+          );
           const priorityMatch = content.match(/priority:\s*(\d+)/i);
           const typeMatch = content.match(/type:\s*(\w+)/i);
-          const tagsMatch = content.match(/tags:\s*(.+?)(?=\s+(?:title|description|priority|type):|$)/is);
+          const tagsMatch = content.match(
+            /tags:\s*(.+?)(?=\s+(?:title|description|priority|type):|$)/is
+          );
 
           const title = titleMatch?.[1]?.trim();
           const description = descMatch?.[1]?.trim() || null;
@@ -3506,6 +3518,13 @@ Examples:
           }
           console.log(`  Session: ${getCurrentSessionId() || '(none)'}`);
           console.log('');
+        } else if (subcommand === 'id') {
+          const db = await cliInstance.getDb();
+          const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+          const identityService = new AgentIdentityService(db);
+          const resolved = await identityService.resolve();
+          await db.close();
+          console.log(resolved.id);
         } else if (subcommand === 'soul-id') {
           const db = await cliInstance.getDb();
           const { SoulService } = await import('../services/SoulService.js');
@@ -3590,6 +3609,7 @@ Examples:
         } else {
           console.log('\nUsage: nezha agents <subcommand>');
           console.log('\nSubcommands:');
+          console.log('  id                   Print agent ID (simple output)');
           console.log('  whoami               Show current agent identity');
           console.log('  scores [n]          Show top n agents by score (default: 10)');
           console.log('  stats               Show agent scoring statistics');
