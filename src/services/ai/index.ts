@@ -2,6 +2,9 @@ import { AIProvider, AIProviderConfig } from './AIProvider.js';
 import { OpenAIProvider } from './OpenAIProvider.js';
 import { AnthropicProvider } from './AnthropicProvider.js';
 import { OllamaProvider } from './OllamaProvider.js';
+import { GLM5Provider } from './GLM5Provider.js';
+
+const DEFAULT_GLM5_URL = 'https://open.bigmodel.cn/api/paas/v4';
 
 export class AIProviderFactory {
   private static instance: AIProvider | null = null;
@@ -26,10 +29,10 @@ export class AIProviderFactory {
       };
     } else if (zhipuKey && !openaiKey && !anthropicKey) {
       config = {
-        provider: 'openai',
-        model: process.env.ZHIPU_MODEL || 'glm-4-flash',
+        provider: 'glm5',
+        model: process.env.ZHIPU_MODEL || 'glm-5',
         apiKey: zhipuKey,
-        baseUrl: process.env.ZHIPU_API_URL || 'https://open.bigmodel.cn/api/paas/v4',
+        baseUrl: process.env.ZHIPU_BASE_URL || DEFAULT_GLM5_URL,
       };
     } else if (openaiKey?.startsWith('sk-')) {
       config = {
@@ -63,6 +66,8 @@ export class AIProviderFactory {
         return new AnthropicProvider(config);
       case 'ollama':
         return new OllamaProvider(config);
+      case 'glm5':
+        return new GLM5Provider(config);
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
     }
@@ -77,3 +82,4 @@ export type { AIProvider, AIProviderConfig, AICompletionResponse } from './AIPro
 export { OpenAIProvider } from './OpenAIProvider.js';
 export { AnthropicProvider } from './AnthropicProvider.js';
 export { OllamaProvider } from './OllamaProvider.js';
+export { GLM5Provider } from './GLM5Provider.js';
