@@ -107,6 +107,15 @@ async function main(): Promise<void> {
     process.exit(0);
   });
 
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error(`Unhandled Rejection at: ${promise}, reason: ${reason}`);
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error(`Uncaught Exception: ${error.message}`, { stack: error.stack });
+    shutdown('uncaughtException').finally(() => process.exit(1));
+  });
+
   logger.info('Nezha Daemon running. PID:', process.pid);
 }
 
