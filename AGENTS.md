@@ -2,27 +2,28 @@
 
 **重要！开始工作前请先阅读本文件，了解可用的工具和系统。**
 
-## 可用 MCP 工具 (重要!)
+## 可用 MCP 工具
 
-本项目已配置以下 MCP 工具，AI 应该主动使用：
+本项目配置以下 MCP 工具，AI 应该主动使用：
 
-### nezha-learning (学习与记忆)
+### nezha-learning
 
 - `learn` - 保存有价值的洞察到数据库
 - `memory_search` - 搜索过去的记忆
-- `remind_me` - 触发自我反思，提醒你保存学习
+- `remind_me` - 触发自我反思
 - `whoami` - 获取当前 AI 身份
 - `get_system_info` - 获取系统状态
+- `get_tasks` - 获取待处理任务
+- `get_skill` - 加载技能
+- `get_soul` - 获取 AI 灵魂/人格
+- `save_soul` - 保存 AI 灵魂/人格
+- `get_inter_review_stats` - Inter-Review 统计
 
-### nezha-areflect (反射标记解析)
+### nezha-areflect
 
-- `reflect` - 解析文本中的 [LEARN][ISSUE][TASK] 标记并保存
-
-**使用方式**：
-
-- 在回复中包含标记如 `[LEARN] insight: ...` 让 areflect 解析
-- 或直接调用 `learn` 工具保存
-- 或调用 `remind_me` 触发自我反思
+- `reflect` - 解析 [LEARN][ISSUE][TASK] 标记并保存
+- `check_pending_work` - 检查待处理工作
+- `get_recent_learnings` - 获取最近学习
 
 ## 核心指令
 
@@ -32,18 +33,17 @@
    - 龙虾没有的功能，优先度降低
 
 2. **当前优先级**
-   - **P0: NUPI 开发** (Nezha + Pi 集成)
-     - 完善 REST API
-     - 集成 Pi 执行器
-     - 验证端到端流程
+   - **P0: 完善核心功能**
+     - 持续改进系统设计和实现
+     - 保持代码质量和测试覆盖率
+     - 优化文档和记忆系统
 
 3. **产品概念 (重要!)**
-   - **Nezha**: 独立产品，任务管理+记忆 (后台服务)
-   - **NUPI**: **Nezha using Pi** (牛派)，Nezha + Pi = 二合一
-   - **NUPI 定位**: OpenCode 的一个**部件/团队成员**，提供永续工作能力
-   - **验证目标**: 如果 NUPI 验证成功，NUPI 将成为 OpenCode 的核心组件
+   - **Nezha**: 独立产品，AI 驱动的自主开发系统
+   - **核心能力**: 任务管理 + 记忆系统 + 持续工作 + 代码评审
+   - **外部集成**: Piano (任务路由), NuPI (Pi 执行器) 作为独立子系统
 
-4. **服务 vs 依赖 (重要概念)**
+4. **服务 vs 依赖**
 
    Nezha 为其他软件**提供服务**，而不是**依赖**其他软件：
 

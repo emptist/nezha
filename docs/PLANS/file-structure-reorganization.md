@@ -1,6 +1,6 @@
 # 文件结构分析 - 待整理
 
-> **状态 (2026-04-02)**: 已完成整理。Piano/NuPI 已迁移到外部仓库 `/Users/jk/gits/hub/tools_ai/piano` 和 `/Users/jk/gits/hub/tools_ai/nupi`。
+> **⚠️ 已过时 (2026-04-05)**: 整理已完成，此文档仅作历史参考。
 
 ## 整理目标
 

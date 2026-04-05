@@ -14,29 +14,6 @@
 
 **Critical Concept:** Nezha provides services TO other software, not depends ON other software.
 
-### External Subsystems (2026-04-02)
-
-Piano and NuPI are now **external repositories** that use Nezha via npm link:
-
-| Subsystem | Location                            | Purpose                     |
-| --------- | ----------------------------------- | --------------------------- |
-| **Piano** | `/Users/jk/gits/hub/tools_ai/piano` | Task routing, orchestration |
-| **NuPI**  | `/Users/jk/gits/hub/tools_ai/nupi`  | Pi executor, local AI       |
-
-**Usage:**
-
-```bash
-# In any project, link to use Piano/NuPI
-npm link @nezha/piano
-npm link @nezha/nupi
-```
-
-**Key points:**
-
-- Piano/NuPI import from `nezha` package (via npm link)
-- After Nezha code changes: `npm run build` (piano/nupi use updated dist/)
-- Core Nezha has no internal piano/nupi directories anymore
-
 ### Dependency vs Service
 
 | Concept        | Definition         | Example                          |
