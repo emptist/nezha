@@ -299,17 +299,64 @@ class NuPIServer {
     }
 
     if (path[0] === 'status' && method === 'GET') {
-      const [tasks, issues, memories] = await Promise.all([
+      const detailed = path[1] === 'full';
+
+      const [
+        pendingTasks,
+        openIssues,
+        totalMemories,
+        failedTasks,
+        recentMemories,
+        criticalTasks,
+        recentLearnings,
+        openIssuesList,
+      ] = await Promise.all([
         this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'"),
         this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM issues WHERE status NOT IN ('resolved', 'closed')"),
         this.db.query<{ count: string }>('SELECT COUNT(*) as count FROM memory'),
+        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'"),
+        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM memory WHERE created_at > NOW() - INTERVAL '24 hours'"),
+        detailed ? this.db.query<{ title: string; priority: number }>(
+          "SELECT title, priority FROM tasks WHERE status = 'PENDING' AND priority >= 8 ORDER BY priority DESC LIMIT 5"
+        ) : { rows: [] },
+        detailed ? this.db.query<{ content: string; tags: string[] }>(
+          "SELECT content, tags FROM memory WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY importance DESC LIMIT 5"
+        ) : { rows: [] },
+        detailed ? this.db.query<{ id: string; title: string; severity: string; issue_type: string; status: string }>(
+          `SELECT id, title, severity, issue_type, status FROM issues WHERE status = 'open'
+           ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+           created_at DESC LIMIT 10`
+        ) : { rows: [] },
       ]);
+
+      const baseStatus = {
+        pendingTasks: parseInt(pendingTasks.rows[0]?.count || '0', 10),
+        openIssues: parseInt(openIssues.rows[0]?.count || '0', 10),
+        memoryCount: parseInt(totalMemories.rows[0]?.count || '0', 10),
+        failedTasks: parseInt(failedTasks.rows[0]?.count || '0', 10),
+        recentMemories: parseInt(recentMemories.rows[0]?.count || '0', 10),
+      };
+
+      if (!detailed) {
+        return { status: 200, body: JSON.stringify(baseStatus) };
+      }
+
       return {
         status: 200,
         body: JSON.stringify({
-          pendingTasks: parseInt(tasks.rows[0]?.count || '0', 10),
-          openIssues: parseInt(issues.rows[0]?.count || '0', 10),
-          memoryCount: parseInt(memories.rows[0]?.count || '0', 10),
+          ...baseStatus,
+          hasIssues: baseStatus.pendingTasks > 0 || baseStatus.failedTasks > 0 || baseStatus.openIssues > 0,
+          criticalTasks: criticalTasks.rows,
+          recentLearnings: recentLearnings.rows.map(r => ({ content: r.content, tags: r.tags || [] })),
+          suggestions: ['Review recent code changes', 'Optimize slow queries', 'Update documentation', 'Run comprehensive tests'],
+          totalMemories: baseStatus.memoryCount,
+          openIssuesList: openIssuesList.rows.map(i => ({
+            id: i.id,
+            title: i.title,
+            severity: i.severity,
+            issueType: i.issue_type,
+            status: i.status,
+          })),
         }),
       };
     }
