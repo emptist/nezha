@@ -1,25 +1,36 @@
 # Nezha
 
-> AI 驱动的自主开发系统 - 让编辑器 AI 能够持续工作、自主执行任务
+> AI-driven autonomous development system - enabling editor AI to work continuously and execute tasks autonomously
 
-**设计原则**: PostgreSQL 优先，文件仅在不可避免时使用。
+**Design Principle**: PostgreSQL-first; files only when absolutely necessary.
 
-## 项目目标
+## Project Goals
 
-构建一个能够**自主运行**的 AI 开发系统，具备以下核心能力：
+Build an AI development system capable of **autonomous operation** with these core capabilities:
 
-| 能力                 | 说明                        | 状态      |
-| -------------------- | --------------------------- | --------- |
-| **永久记忆**         | PostgreSQL 存储 + 任务历史  | ✅ 已实现 |
-| **持续工作**         | 心跳机制 + 任务调度         | ✅ 已实现 |
-| **任务执行**         | Agent 调用 + 错误处理       | ✅ 已实现 |
-| **Process Guardian** | 孤儿进程清理 + 实例数控制   | ✅ 已实现 |
-| **对话日志**         | PostgreSQL + JSONL 双存储   | ✅ 已实现 |
-| **技能系统**         | DB-only 技能加载 + 安全扫描 | ✅ 已实现 |
-| **AI 构建技能**      | AI 自主生成技能             | ✅ 已实现 |
-| **任务评审**         | 自动化 QC + 学习模式        | ✅ 已实现 |
-| **AI 互相 Review**   | AI 互相 review 代码         | ✅ 已实现 |
-| **知识导入**         | SOUL.md → PostgreSQL        | ✅ 已实现 |
+| Capability | Description | Status |
+|------------|-------------|--------|
+| **Permanent Memory** | PostgreSQL storage + task history | ✅ Implemented |
+| **Continuous Work** | Heartbeat mechanism + task scheduling | ✅ Implemented |
+| **Task Execution** | Agent invocation + error handling | ✅ Implemented |
+| **Process Guardian** | Orphan process cleanup + instance control | ✅ Implemented |
+| **Conversation Log** | PostgreSQL + JSONL dual storage | ✅ Implemented |
+| **Skill System** | DB-only skill loading + security scanning | ✅ Implemented |
+| **AI Skill Builder** | Autonomous skill generation by AI | ✅ Implemented |
+| **Task Review** | Automated QC + learning mode | ✅ Implemented |
+| **AI Inter-Review** | AI-to-AI code review | ✅ Implemented |
+| **Knowledge Import** | SOUL.md → PostgreSQL | ✅ Implemented |
+| **API Server** | HTTP REST API with rate limiting + validation | ✅ Implemented |
+| **Security Hardening** | Input validation, auth, error handlers | ✅ Implemented |
+
+### Current Status
+
+| Metric | Value |
+|--------|-------|
+| **Tests** | 1032 passing ✅ |
+| **TypeScript Build** | 0 errors ✅ |
+| **Language** | Full English (0 Chinese) ✅ |
+| **Security** | Rate limiting, input validation, no secrets in code ✅ |
 
 ## 核心设计
 
@@ -482,6 +493,33 @@ interface ClawHubClient {
 - 安全评分
 - 用户审批
 - 自动屏蔽恶意技能
+
+## Security
+
+### API Server Security (NezhaApiServer)
+
+| Feature | Implementation |
+|---------|----------------|
+| **Rate Limiting** | Sliding window: 100 requests/min per IP → 429 response |
+| **Input Validation** | Body size limit (1MB), required field checks, parameter clamping |
+| **SQL Injection Prevention** | Parameterized queries throughout |
+| **Authentication** | JWT middleware for sensitive endpoints (`/tasks`, `/memory`, etc.) |
+| **Localhost Check** | Sensitive endpoints restricted to localhost only |
+
+### Process Stability
+
+| Handler | Behavior | Severity |
+|---------|----------|----------|
+| `unhandledRejection` | Log error details with promise/reason | ⚠️ Non-fatal |
+| `uncaughtException` | Log stack trace → graceful shutdown → exit(1) | 🔴 Fatal |
+| `SIGINT` / `SIGTERM` | Wait for running tasks → stop services → close DB | ✅ Graceful |
+
+### Code Security Practices
+
+- ✅ No hardcoded secrets in source code
+- ✅ All credentials via environment variables
+- ✅ `.gitignore` excludes `.env`, `.secrets/`, `nezha.db`
+- ✅ API-based architecture (no direct DB access from subsystems)
 
 ## 技术选型
 
