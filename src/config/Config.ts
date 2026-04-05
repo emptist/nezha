@@ -8,6 +8,7 @@ import {
   type IConfig,
   type TransportConfig,
 } from './types.js';
+import { logger } from '../utils/logger.js';
 import {
   DATABASE_CONFIG,
   TASK_CONFIG,
@@ -50,7 +51,7 @@ export async function resolveAgentIdAsync(
   const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
   const identity = await AgentIdentityService.getResolvedIdentity();
 
-  console.log(`[AgentIdentity] Resolved identity: ${identity.id}`);
+  logger.info(`[AgentIdentity] Resolved identity: ${identity.id}`);
   return {
     id: identity.id,
     displayName: identity.displayName,
@@ -98,7 +99,7 @@ export class Config implements IConfig {
     const yamlConfig = yamlResult.config;
 
     if (!yamlResult.valid) {
-      console.warn('YAML config validation warnings:', yamlResult.errors);
+      logger.warn('YAML config validation warnings:', yamlResult.errors);
     }
 
     const dbConfig = this.loadDbConfig(yamlConfig);
