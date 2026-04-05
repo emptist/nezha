@@ -68,7 +68,7 @@ export class PiExecutor {
 
   constructor(config: PiConfig = {}) {
     this.piPath = config.piPath || 'pi';
-    this.defaultModel = config.model || 'zai:glm-5';
+    this.defaultModel = config.model || 'zhipu/glm-5';
     this.env = config.env || {};
   }
 

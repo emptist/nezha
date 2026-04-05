@@ -9,7 +9,7 @@
  * - 参考：docs/ARCHITECTURE.md
  */
 export interface AIProviderConfig {
-  provider: 'openai' | 'anthropic' | 'ollama' | 'glm5';
+  provider?: 'openai' | 'anthropic' | 'ollama' | 'glm5';
   model?: string;
   apiKey?: string;
   baseUrl?: string;
@@ -63,6 +63,6 @@ export abstract class BaseAIProvider implements AIProvider {
   }
 
   getProvider(): string {
-    return this.config.provider;
+    return this.config.provider || 'unknown';
   }
 }

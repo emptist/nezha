@@ -75,8 +75,12 @@ export class GitHubService {
     return response.json() as Promise<T>;
   }
 
-  async createIssue(options: CreateGitHubIssueOptions): Promise<GitHubIssue> {
+  async createIssue(options: CreateGitHubIssueOptions, agentName?: string): Promise<GitHubIssue> {
     logger.info(`[GitHub] Creating issue: ${options.title}`);
+
+    const signature = agentName
+      ? `\n\n---\n*Created by ${agentName} via Nezha AI*`
+      : '\n\n---\n*Created via Nezha AI*';
 
     const issue = await this.request<GitHubIssue>(
       `/repos/${options.owner}/${options.repo}/issues`,
@@ -84,7 +88,7 @@ export class GitHubService {
         method: 'POST',
         body: JSON.stringify({
           title: options.title,
-          body: options.body,
+          body: options.body + signature,
           labels: options.labels ?? [],
         }),
       }
