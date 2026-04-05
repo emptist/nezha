@@ -15,12 +15,80 @@ const PORT = process.env.NUPI_PORT || 4099;
 const DEFAULT_MODEL = 'zai:glm-4.5-flash';
 const MAX_BODY_SIZE = 1024 * 1024;
 
-function safeJsonParse(body: string): any {
+interface ParsedBody {
+  [key: string]: unknown;
+}
+
+interface TaskCreateData extends ParsedBody {
+  title?: string;
+  description?: unknown;
+  priority?: unknown;
+  category?: unknown;
+  project_id?: unknown;
+  depends_on?: unknown;
+  max_retries?: unknown;
+  timeout_seconds?: unknown;
+  assigned_to?: unknown;
+}
+
+interface BroadcastData extends ParsedBody {
+  message?: unknown;
+  to?: unknown;
+  priority?: unknown;
+}
+
+interface MemoryData extends ParsedBody {
+  content?: unknown;
+  insight?: unknown;
+  source?: unknown;
+  tags?: unknown;
+}
+
+interface PromptData extends ParsedBody {
+  model?: unknown;
+  system_prompt?: unknown;
+  task?: unknown;
+}
+
+interface ChatMessage {
+  role: string;
+  content?: string;
+}
+
+interface ChatCompletionData extends ParsedBody {
+  model?: unknown;
+  messages?: ChatMessage[];
+}
+
+interface ReminderData extends ParsedBody {
+  message?: unknown;
+  type?: unknown;
+}
+
+interface RecoveryData extends ParsedBody {
+  max_retries?: unknown;
+  delay_ms?: unknown;
+}
+
+function safeJsonParse<T = ParsedBody>(body: string): T | null {
   try {
     return JSON.parse(body);
   } catch {
     return null;
   }
+}
+
+function str(value: unknown, fallback: string = ''): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+  if (value === null || value === undefined) return fallback;
+  return String(value);
+}
+
+function num(value: unknown, fallback: number = 0): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return parseInt(value, 10) || fallback;
+  return fallback;
 }
 
 function validateBodySize(body: string, maxBytes: number = MAX_BODY_SIZE): boolean {
@@ -234,9 +302,9 @@ class NuPIServer {
         return { status: 400, body: JSON.stringify({ error: 'Invalid request: message is required' }) };
       }
       const broadcastService = await BroadcastService.create(this.db);
-      const id = await broadcastService.sendBroadcast(data.message, {
-        targetAgent: data.to,
-        priority: (data.priority as any) || 'normal',
+      const id = await broadcastService.sendBroadcast(str(data.message), {
+        targetAgent: str(data.to),
+        priority: str(data.priority, 'normal') as never,
       });
       return { status: 201, body: JSON.stringify({ id }) };
     }
@@ -258,15 +326,15 @@ class NuPIServer {
       }
 
       if (method === 'POST') {
-        const data = safeJsonParse(body);
+        const data = safeJsonParse<MemoryData>(body);
         if (!data) {
           return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         }
-        const result = await this.db.query<any>(
+        const result = await this.db.query<{ id: string }>(
           `INSERT INTO memory (content, source, tags)
            VALUES ($1, $2, $3)
            RETURNING id`,
-          [data.content || data.insight || '', data.source || 'nupi', data.tags || []]
+          [str(data.content) || str(data.insight), str(data.source, 'nupi'), data.tags]
         );
         return { status: 201, body: JSON.stringify({ id: result.rows[0]?.id }) };
       }
@@ -435,10 +503,10 @@ class NuPIServer {
         const data = safeJsonParse(body);
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const result = await userService.register({
-          email: data.email,
-          username: data.username,
-          password: data.password,
-          display_name: data.display_name,
+          email: str(data.email),
+          username: str(data.username),
+          password: str(data.password),
+          display_name: str(data.display_name),
         });
         return {
           status: 201,
@@ -450,9 +518,9 @@ class NuPIServer {
         const data = safeJsonParse(body);
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         const result = await userService.login({
-          email: data.email,
-          username: data.username,
-          password: data.password,
+          email: str(data.email),
+          username: str(data.username),
+          password: str(data.password),
         });
         return {
           status: 200,
@@ -463,7 +531,7 @@ class NuPIServer {
       if (action === 'refresh' && method === 'POST') {
         const data = safeJsonParse(body);
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-        const tokens = await userService.refreshToken(data.refresh_token);
+        const tokens = await userService.refreshToken(str(data.refresh_token));
         return { status: 200, body: JSON.stringify(tokens) };
       }
 
@@ -473,7 +541,7 @@ class NuPIServer {
         const payload = jwtService.verifyToken(token);
         if (payload) {
           const bodyData = safeJsonParse(body);
-          await userService.logout(payload.sub, bodyData?.refresh_token);
+          await userService.logout(payload.sub, str(bodyData?.refresh_token));
         }
         return { status: 200, body: JSON.stringify({ message: 'Logged out' }) };
       }
@@ -481,7 +549,7 @@ class NuPIServer {
       if (action === 'password-reset' && method === 'POST') {
         const data = safeJsonParse(body);
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-        const token = await userService.requestPasswordReset(data.email);
+        const token = await userService.requestPasswordReset(str(data.email));
         return {
           status: 200,
           body: JSON.stringify({
@@ -494,7 +562,7 @@ class NuPIServer {
       if (action === 'reset-password' && method === 'POST') {
         const data = safeJsonParse(body);
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-        await userService.resetPassword(data.token, data.password);
+        await userService.resetPassword(str(data.token), str(data.password));
         return { status: 200, body: JSON.stringify({ message: 'Password reset successful' }) };
       }
 
@@ -539,43 +607,44 @@ class NuPIServer {
         if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
         await userService.changePassword(
           authResult.user.id,
-          data.current_password,
-          data.new_password
+          str(data.current_password),
+          str(data.new_password)
         );
         return { status: 200, body: JSON.stringify({ message: 'Password changed successfully' }) };
       }
 
       return { status: 404, body: JSON.stringify({ error: 'User endpoint not found' }) };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       const status =
-        error.message.includes('exists') || error.message.includes('Invalid') ? 400 : 500;
-      return { status, body: JSON.stringify({ error: error.message }) };
+        message.includes('exists') || message.includes('Invalid') ? 400 : 500;
+      return { status, body: JSON.stringify({ error: message }) };
     }
   }
 
-  private async createTask(data: any): Promise<string> {
+  private async createTask(data: TaskCreateData): Promise<string> {
     const identity = await AgentIdentityService.getResolvedIdentity();
     const taskId = crypto.randomUUID();
-    const maxRetries = data.max_retries ?? 3;
-    const timeoutSeconds = data.timeout_seconds ?? 300;
+    const maxRetries = num(data.max_retries, 3);
+    const timeoutSeconds = num(data.timeout_seconds, 300);
     const isLongRunning = timeoutSeconds > 600;
 
-    const result = await this.db.query<any>(
+    const result = await this.db.query<{ id: string }>(
       `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by, created_by_identity)
        VALUES ($1, $2::uuid, $3, $4, 'PENDING', $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING id`,
       [
         taskId,
         data.project_id || null,
-        data.title,
-        data.description || '',
-        data.priority !== undefined ? data.priority : 50,
+        str(data.title),
+        str(data.description, ''),
+        data.priority !== undefined ? num(data.priority, 50) : 50,
         data.depends_on || null,
         maxRetries,
         timeoutSeconds,
         isLongRunning,
         data.assigned_to || null,
-        data.category || 'general',
+        str(data.category, 'general'),
         identity.id,
         identity.id,
       ]
@@ -591,9 +660,9 @@ class NuPIServer {
     const action = path[2];
 
     if (action === 'failed' && method === 'POST') {
-      const data = safeJsonParse(body || '{}');
-      const maxRetries = data?.max_retries || 3;
-      const delayMs = (data?.delay_ms || 300000) / 1000;
+      const data = safeJsonParse<RecoveryData>(body || '{}');
+      const maxRetries = num(data?.max_retries, 3);
+      const delayMs = num(data?.delay_ms, 300000) / 1000;
 
       const result = await this.db.query<any>(
         `UPDATE tasks
@@ -634,9 +703,9 @@ class NuPIServer {
     }
 
     if (action === 'dlq-retry' && method === 'POST') {
-      const data = safeJsonParse(body || '{}');
-      const maxRetries = data?.max_retries || 3;
-      const delayMs = (data?.delay_ms || 300000) / 1000;
+      const data = safeJsonParse<RecoveryData>(body || '{}');
+      const maxRetries = num(data?.max_retries, 3);
+      const delayMs = num(data?.delay_ms, 300000) / 1000;
 
       const dlqItems = await this.db.query<any>(
         `SELECT id, original_task_id, title, description, error_message, retry_count
@@ -652,7 +721,7 @@ class NuPIServer {
       let successCount = 0;
       for (const item of dlqItems.rows) {
         try {
-          const newTaskId = await this.createTask({
+        const _newTaskId = await this.createTask({
             title: `[AUTO-RETRY] ${item.title}`,
             description: item.description || '',
             priority: 10,
@@ -708,10 +777,10 @@ class NuPIServer {
     return { status: 404, body: JSON.stringify({ error: 'Unknown recovery action' }) };
   }
 
-  private async executePrompt(data: any): Promise<any> {
-    const model = data.model || DEFAULT_MODEL;
-    const systemPrompt = data.system_prompt || 'You are a helpful AI assistant.';
-    const userPrompt = data.task || 'Hello';
+  private async executePrompt(data: PromptData): Promise<Record<string, unknown>> {
+    const model = str(data.model, DEFAULT_MODEL);
+    const systemPrompt = str(data.system_prompt, 'You are a helpful AI assistant.');
+    const userPrompt = str(data.task, 'Hello');
 
     try {
       const provider = AIProviderFactory.createFromEnv();
@@ -723,12 +792,12 @@ class NuPIServer {
     }
   }
 
-  private async executeOpenAIChat(data: any): Promise<any> {
-    const model = data.model || DEFAULT_MODEL;
-    const messages = data.messages || [];
+  private async executeOpenAIChat(data: ChatCompletionData): Promise<Record<string, unknown>> {
+    const model = str(data.model, DEFAULT_MODEL);
+    const messages: ChatMessage[] = data.messages || [];
 
-    const systemMessage = messages.find((m: any) => m.role === 'system')?.content || '';
-    const userMessage = messages.find((m: any) => m.role === 'user')?.content || '';
+    const systemMessage = messages.find((m) => m.role === 'system')?.content || '';
+    const userMessage = messages.find((m) => m.role === 'user')?.content || '';
 
     try {
       const provider = AIProviderFactory.createFromEnv();
@@ -761,29 +830,29 @@ class NuPIServer {
     }
   }
 
-  private async executeReminder(data: any): Promise<any> {
-    const interval = data.interval_ms || 3600000;
-    const count = data.count || 1;
-    const results = [];
+  private async executeReminder(data: ReminderData): Promise<Record<string, unknown>> {
+    const interval = num(data.interval_ms, 3600000);
+    const count = num(data.count, 1);
+    const results: unknown[] = [];
 
     const systemPrompt =
-      data.system_prompt ||
-      '你是Nezha的自我提醒助手。遵循NEVER DECLARE DONE原则：1.永远不要宣布完成 2.总是以问题结尾 3.禁止Done/Completed/Finished 4.定期检查任务队列';
+      str(data.system_prompt) ||
+      'You are the Nezha self-reminder assistant. Follow NEVER DECLARE DONE principle: 1. Never announce completion 2. Always end with questions 3. No Done/Completed/Finished 4. Check task queue regularly';
 
     for (let i = 0; i < count; i++) {
       if (i > 0) {
         await new Promise(resolve => setTimeout(resolve, interval));
       }
 
-      const tasks = await this.db.query<any>(
+      const tasks = await this.db.query<{ count: string }>(
         `SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'`
       );
       const pendingCount = parseInt(tasks.rows[0]?.count || '0', 10);
 
-      const memories = await this.db.query<any>(
+      const memories = await this.db.query<{ content: string }>(
         `SELECT content FROM memory ORDER BY created_at DESC LIMIT 3`
       );
-      const recentInsights = memories.rows.map((r: any) => r.content).join('; ');
+      const recentInsights = memories.rows.map((r) => r.content).join('; ');
 
       const task = `当前状态检查：
 - 待处理任务: ${pendingCount}个
@@ -791,7 +860,7 @@ class NuPIServer {
 
 请用一句话总结并以问号结尾提醒AI继续工作。`;
 
-      const executor = new PiSDKExecutor({ model: data.model || DEFAULT_MODEL });
+      const executor = new PiSDKExecutor({ model: str(data.model, DEFAULT_MODEL) });
       const result = await executor.executeWithPrompt(systemPrompt, task, 60000);
 
       results.push({
