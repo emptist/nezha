@@ -27,6 +27,54 @@ function validateBodySize(body: string, maxBytes: number = MAX_BODY_SIZE): boole
   return Buffer.byteLength(body, 'utf-8') <= maxBytes;
 }
 
+class RateLimiter {
+  private requests: Map<string, number[]> = new Map();
+  private readonly windowMs: number;
+  private readonly maxRequests: number;
+
+  constructor(windowMs: number = 60000, maxRequests: number = 100) {
+    this.windowMs = windowMs;
+    this.maxRequests = maxRequests;
+    setInterval(() => this.cleanup(), this.windowMs);
+  }
+
+  isAllowed(key: string): boolean {
+    const now = Date.now();
+    const timestamps = this.requests.get(key) || [];
+
+    const validTimestamps = timestamps.filter(t => now - t < this.windowMs);
+
+    if (validTimestamps.length >= this.maxRequests) {
+      return false;
+    }
+
+    validTimestamps.push(now);
+    this.requests.set(key, validTimestamps);
+    return true;
+  }
+
+  getRemaining(key: string): number {
+    const now = Date.now();
+    const timestamps = this.requests.get(key) || [];
+    const validCount = timestamps.filter(t => now - t < this.windowMs).length;
+    return Math.max(0, this.maxRequests - validCount);
+  }
+
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [key, timestamps] of this.requests) {
+      const valid = timestamps.filter(t => now - t < this.windowMs);
+      if (valid.length === 0) {
+        this.requests.delete(key);
+      } else {
+        this.requests.set(key, valid);
+      }
+    }
+  }
+}
+
+const rateLimiter = new RateLimiter(60000, 100);
+
 class NuPIServer {
   private server: http.Server | null = null;
   private db: DatabaseClient;
@@ -69,6 +117,16 @@ class NuPIServer {
       const rawUrl = req.url ?? '';
       const url = rawUrl.split('?')[0] ?? '';
       const method = req.method ?? 'GET';
+
+      const clientIp = req.socket.remoteAddress || 'unknown';
+      if (!rateLimiter.isAllowed(clientIp)) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'X-RateLimit-Remaining': '0',
+        });
+        res.end(JSON.stringify({ error: 'Too many requests', retryAfter: 60 }));
+        return;
+      }
 
       try {
         let body = '';
@@ -288,8 +346,8 @@ class NuPIServer {
 
     if (path[0] === 'memory' && path[1] === 'search' && method === 'GET') {
       const query = new URLSearchParams(rawUrl.split('?')[1] || '');
-      const q = query.get('q') || '';
-      const limit = parseInt(query.get('limit') || '5', 10);
+      const q = (query.get('q') || '').slice(0, 200);
+      const limit = Math.min(Math.max(parseInt(query.get('limit') || '50', 10) || 50, 1), 100);
       const result = await this.db.query<any>(
         `SELECT content, created_at FROM memory
          WHERE content ILIKE $1 ORDER BY created_at DESC LIMIT $2`,
