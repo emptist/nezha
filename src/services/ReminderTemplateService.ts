@@ -44,7 +44,13 @@ export class ReminderTemplateService {
   }
 
   private registerHelpers(): void {
-    Handlebars.registerHelper('if', (conditional: any, options: any) => {
+    interface HelperOptions {
+      fn: (ctx?: unknown) => string;
+      inverse: (ctx?: unknown) => string;
+      data?: { index: number; key: number };
+    }
+
+    Handlebars.registerHelper('if', (conditional: unknown, options: HelperOptions) => {
       if (conditional) {
         return options.fn({});
       } else {
@@ -52,7 +58,7 @@ export class ReminderTemplateService {
       }
     });
 
-    Handlebars.registerHelper('unless', (conditional: any, options: any) => {
+    Handlebars.registerHelper('unless', (conditional: unknown, options: HelperOptions) => {
       if (!conditional) {
         return options.fn({});
       } else {
@@ -60,13 +66,13 @@ export class ReminderTemplateService {
       }
     });
 
-    Handlebars.registerHelper('each', (context: any, options: any) => {
+    Handlebars.registerHelper('each', (context: unknown[] | null | undefined, options: HelperOptions) => {
       if (!context || context.length === 0) {
         return options.inverse({});
       }
       return context
-        .map((item: any, index: number) => {
-          return options.fn(item, { data: { index, key: index } });
+        .map((item: unknown, index: number) => {
+          return options.fn(item);
         })
         .join('');
     });
@@ -150,7 +156,7 @@ export class ReminderTemplateService {
     >
   ): Promise<ReminderTemplate | null> {
     const setClauses: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIndex = 1;
 
     if (updates.description !== undefined) {

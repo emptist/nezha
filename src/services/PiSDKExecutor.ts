@@ -49,7 +49,7 @@ export class PiSDKExecutor {
       });
 
       let output = '';
-      session.subscribe((event: any) => {
+      session.subscribe((event: { type?: string; assistantMessageEvent?: { type?: string; delta?: string } }) => {
         if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
           output += event.assistantMessageEvent.delta;
         }

@@ -13,6 +13,12 @@ export interface ReminderConfig {
   enableMemorySave?: boolean;
 }
 
+interface SchedulerEventData {
+  taskId?: string;
+  title?: string;
+  error?: string;
+}
+
 export class ReminderService {
   private readonly db: DatabaseClient;
   private broadcastService: BroadcastService | null = null;
@@ -45,11 +51,11 @@ export class ReminderService {
   private subscribeToEvents(): void {
     if (!this.eventBus) return;
 
-    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_COMPLETED, async (data: any) => {
+    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_COMPLETED, async (data: SchedulerEventData) => {
       await this.onTaskCompleted(data);
     });
 
-    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_FAILED, async (data: any) => {
+    this.eventBus.subscribe(SCHEDULER_EVENTS.TASK_FAILED, async (data: SchedulerEventData) => {
       await this.onTaskFailed(data);
     });
 
