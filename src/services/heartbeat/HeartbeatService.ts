@@ -1,17 +1,17 @@
 /**
  * @layer core
- * @description 心跳服务，负责任务调度和进程监控
+ * @description Heartbeat service for task scheduling and process monitoring
  *
- * 架构说明：
- * - 这是核心层服务，Nezha 的核心功能
- * - 不依赖外部 AI 系统
- * - 可以独立运行（只执行内部 AI）
- * - 参考：docs/ARCHITECTURE.md
+ * Architecture:
+ * - Core layer service, Nezha's primary functionality
+ * - Does not depend on external AI systems
+ * - Can run independently (internal AI execution only)
+ * - See: docs/ARCHITECTURE.md
  *
- * Piano 扩展：
- * - Piano 需要继承此类，添加任务路由功能
- * - 见 piano/src/services/PianoHeartbeatService.ts
- * - 需要将 executeTask 改为 protected 或提供扩展点
+ * Piano Extension:
+ * - Piano extends this class to add task routing
+ * - See: piano/src/services/PianoHeartbeatService.ts
+ * - executeTask is protected for subclass override
  */
 import { Scheduler } from '../../core/Scheduler.js';
 import { AIProvider, AIProviderFactory } from '../ai/index.js';
@@ -109,13 +109,13 @@ export class HeartbeatService {
     // if (executor === 'opencode') { ... }
     // if (executor === 'pi') { ... }
 
-    // 核心逻辑：仅内部 AI 执行
+    // Core logic: internal AI execution only
     await this.executeInternalAI(taskId, title, description, retryCount, maxRetries);
   }
 
   /**
-   * 内部 AI 执行逻辑
-   * 提取为 protected 方法供子类在需要时调用
+   * Internal AI execution logic
+   * Extracted as protected method for subclass use when needed
    */
   protected async executeInternalAI(
     taskId: string,
@@ -219,7 +219,7 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
     }
   }
 
-  // 以下是辅助方法，保留供核心和子类使用
+  // Helper methods below, retained for core and subclass use
 
   private async getRecentBroadcasts(): Promise<string> {
     try {
@@ -287,6 +287,6 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
 
   // NOTE: PianoHeartbeatService overrides this to extract and create subtasks from Pi output
   // protected async extractAndCreateTasks(output: string, parentTitle: string, options: { complexity: number }): Promise<void> {
-  //   // 从 Pi 输出中解析子任务并创建
+  //   // Parse subtasks from Pi output and create them
   // }
 }
