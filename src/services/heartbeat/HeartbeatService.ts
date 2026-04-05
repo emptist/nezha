@@ -28,7 +28,7 @@ export interface HeartbeatConfig {
   taskTimeoutMs?: number;
   enableReminder?: boolean;
   enablePi?: boolean;
-  // TODO: Piano 使用以下配置（未来通过子类扩展）
+  // NOTE: Piano extends this via PianoHeartbeatService with TaskRouter
   // opencodeUrl?: string;
   // opencodeAuth?: { username: string; password: string };
 }
@@ -86,18 +86,12 @@ export class HeartbeatService {
   }
 
   /**
-   * 核心任务执行 - 仅内部 AI
+   * Core task execution - internal AI only
    *
-   * TODO: Piano 子类需要扩展此逻辑
-   * - 使用 TaskRouter 决定执行器 (internal/opencode/pi)
+   * NOTE: PianoHeartbeatService overrides this with TaskRouter-based routing:
    * - opencode → TaskCoordinator.execute()
    * - pi → TaskPlanner.plan() + PiExecutor.execute()
-   * - internal → 此处的默认逻辑
-   *
-   * 建议扩展方式：
-   * 1. 将 executeTask 改为 protected
-   * 2. 子类 override 并在调用前插入 Piano 逻辑
-   * 3. 或提供 beforeExecuteTask(task) 钩子
+   * - internal → default logic here
    */
   protected async executeTask(
     taskId: string,
@@ -110,7 +104,7 @@ export class HeartbeatService {
   ): Promise<void> {
     logger.info(`Executing task: ${title}`);
 
-    // TODO: Piano 子类在这里插入路由逻辑
+    // NOTE: PianoHeartbeatService inserts routing logic here via override
     // const executor = this.taskRouter?.route(title, description);
     // if (executor === 'opencode') { ... }
     // if (executor === 'pi') { ... }
@@ -291,7 +285,7 @@ Save via: node dist/cli/index.js areflect "[LEARN] insight: ..."`;
     return markers.some(marker => content.includes(marker));
   }
 
-  // TODO: 提取方法供 Piano 子类调用
+  // NOTE: PianoHeartbeatService overrides this to extract and create subtasks from Pi output
   // protected async extractAndCreateTasks(output: string, parentTitle: string, options: { complexity: number }): Promise<void> {
   //   // 从 Pi 输出中解析子任务并创建
   // }
