@@ -207,7 +207,8 @@ export class ReflectionPlugin implements Plugin {
                 body,
                 labels: ['nezha-ai', severity],
               },
-              agentName
+              agentName,
+              agentId
             );
             await this.db.query(
               `UPDATE issues SET metadata = jsonb_set(metadata, '{github_url}', $1) WHERE id = $2`,
