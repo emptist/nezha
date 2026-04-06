@@ -7,10 +7,53 @@ on:
     branches: [main, develop]
 
 jobs:
+  commit-msg:
+    name: Verify Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify commit messages
+        run: |
+          # For push events, check against HEAD~1
+          # For PR events, check against base branch
+          if [ "${{ github.event_name }}" == "push" ]; then
+            COMPARE_REF="HEAD~1"
+          else
+            COMPARE_REF="origin/${{ github.base_ref }}"
+          fi
+
+          echo "Checking commits from $COMPARE_REF..."
+          if git rev-parse --verify "$COMPARE_REF" >/dev/null 2>&1; then
+            COMMITS=$(git log --format='%H' $COMPARE_REF..HEAD)
+          else
+            # First commit or no base - check all
+            COMMITS=$(git log --format='%H' -n 50)
+          fi
+
+          for commit in $COMMITS; do
+            msg=$(git log -1 --format='%B' $commit | head -1)
+            echo "Commit: $msg"
+            if ! echo "$msg" | grep -qE '\[(task|issue|inter-review): [a-f0-9-]+\]'; then
+              echo "ERROR: Commit missing task/issue/inter-review ID"
+              echo "Found: $msg"
+              exit 1
+            fi
+            if ! echo "$msg" | grep -qE '\[Agent: (S-|G-)[a-zA-Z0-9_-]+\]'; then
+              echo "ERROR: Commit missing [Agent:] tag"
+              echo "Found: $msg"
+              exit 1
+            fi
+          done
+          echo "All commits verified"
+
   test:
     name: Test
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,7 +86,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     needs: test
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
