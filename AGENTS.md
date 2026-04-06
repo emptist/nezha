@@ -184,6 +184,19 @@
 3. **多 AI 协作**: 需要讨论的问题，应该发起 AI 间讨论（通过数据库任务 + Inter-Review）
 4. **紧急情况**: 只有在系统明确需要人类批准时（如安全、权限问题）才挂起等待人类
 
+### Git 提交规则 (重要!)
+
+每次 commit **必须**包含:
+
+- `[task: <uuid>]` 或 `[issue: <uuid>]` 或 `[inter-review: <uuid>]`
+- `[Agent: <ai-id>]` (由 hook 自动添加)
+
+**禁止绕过**:
+
+- ❌ 不要使用 `git config core.hooksPath /dev/null` 绕过 hook
+- ❌ 不要使用 `--no-verify` 跳过 commit 检查
+- ✅ 如果 hook 验证失败，修复 commit message 后重试
+
 ### 错误模式 ❌
 
 ```
