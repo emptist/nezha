@@ -67,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build workspaces
+        run: npm run build --workspace=auto-reflect
+
       - name: Run typecheck
         run: npm run typecheck
 
@@ -100,7 +103,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build workspaces
+        run: npm run build --workspace=auto-reflect
+
+      - name: Build main package
         run: npm run build
 
       - name: Verify build output
