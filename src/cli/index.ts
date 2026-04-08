@@ -747,7 +747,7 @@ export class Cli {
     - Prompt suggestions created
     - New patterns discovered`;
 
-    await this.addTask('Continuous Improvement Cycle', description, 10);
+    await this.addTask('Continuous Improvement Cycle', description, 50);
   }
 
   async saveLearn(insight: string, context?: string, importance: number = 7): Promise<void> {
