@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
-config();
+config({ quiet: true });
 
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
