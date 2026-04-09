@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
@@ -39,9 +40,9 @@ interface IdentityRow {
 }
 
 export class AgentIdentityService {
-  private db: DatabaseClient;
-  private static currentIdentity: AgentIdentity | null = null;
   private static externalIdentity: AgentIdentity | null = null;
+  private static currentIdentity: AgentIdentity | null = null;
+  private db: DatabaseClient;
 
   constructor(db: DatabaseClient) {
     this.db = db;
@@ -58,9 +59,6 @@ export class AgentIdentityService {
   }
 
   static async getResolvedIdentity(): Promise<AgentIdentity> {
-    if (AgentIdentityService.currentIdentity) {
-      return AgentIdentityService.currentIdentity;
-    }
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
     const identity = await service.resolve();
@@ -78,12 +76,10 @@ export class AgentIdentityService {
 
     const existing = await this.getById(id);
     if (existing) {
-      AgentIdentityService.currentIdentity = existing;
       return existing;
     }
 
     const identity = await this.createIdentity(context);
-    AgentIdentityService.currentIdentity = identity;
     return identity;
   }
 
