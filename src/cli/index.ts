@@ -1264,9 +1264,9 @@ async function main(): Promise<void> {
         const matches = [...commitMsg.matchAll(uuidPattern)];
 
         if (matches.length === 0) {
-          cli.error('==========================================');
-          cli.error(' COMMIT BLOCKED - Missing Task/Issue ID');
-          cli.error('==========================================');
+          cli.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          cli.error('  COMMIT BLOCKED - Missing Task/Issue ID');
+          cli.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
           cli.error('');
           cli.error('Your commit message must reference a task or issue:');
           cli.error('  [task: <uuid>]   - Use a task ID');
