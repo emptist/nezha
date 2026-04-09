@@ -887,7 +887,11 @@ class NuPIServer {
 }
 
 export const server = new NuPIServer();
-server.start().catch(err => {
-  logger.error(`[NuPI] Failed to start: ${err}`);
-  process.exit(1);
-});
+server.start()
+  .then(() => {
+    logger.info('[NuPI] API server started on port 4099 (auto-loaded on module import)');
+  })
+  .catch(err => {
+    logger.error(`[NuPI] Failed to start: ${err}`);
+    process.exit(1);
+  });
