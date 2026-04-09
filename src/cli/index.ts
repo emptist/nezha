@@ -1264,15 +1264,23 @@ async function main(): Promise<void> {
         const matches = [...commitMsg.matchAll(uuidPattern)];
 
         if (matches.length === 0) {
-          cli.error('Commit message must contain one of:');
-          cli.error('  [task: <uuid>] - Task ID');
-          cli.error('  [issue: <uuid>] - Issue ID');
-          cli.error('  [inter-review: <uuid>] - Inter-review ID (评审结果)');
+          cli.error('==========================================');
+          cli.error(' COMMIT BLOCKED - Missing Task/Issue ID');
+          cli.error('==========================================');
           cli.error('');
+          cli.error('Your commit message must reference a task or issue:');
+          cli.error('  [task: <uuid>]   - Use a task ID');
+          cli.error('  [issue: <uuid>] - Use an issue ID');
+          cli.error('');
+          cli.error('To get a valid ID, run:');
           cli.error(
-            'Example: git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"'
+            '  psql -h localhost -U postgres -d nezha -c "SELECT id, title FROM tasks ORDER BY created_at DESC LIMIT 5;"'
           );
-          cli.error('See: docs/DEVELOPER_GUIDE.md - Quality Control section for details');
+          cli.error('');
+          cli.error('Example:');
+          cli.error('  git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"');
+          cli.error('');
+          cli.error('Do NOT try to modify code to bypass this - just add a valid task/issue ID!');
           process.exit(1);
         }
 
