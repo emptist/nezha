@@ -11,7 +11,7 @@ import { UserService } from '../services/UserService.js';
 import { JwtAuthMiddleware } from '../services/JwtAuthMiddleware.js';
 import { jwtService } from '../services/JwtService.js';
 
-const PORT = process.env.NUPI_PORT || 4099;
+const PORT = process.env.NUPI_PORT || 5999;
 const DEFAULT_MODEL = 'zai:glm-4.5-flash';
 const MAX_BODY_SIZE = 1024 * 1024;
 

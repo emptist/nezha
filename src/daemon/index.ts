@@ -54,6 +54,9 @@ async function main(): Promise<void> {
   });
   await healthServer.start();
 
+  // Wait for API server to be ready
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
   try {
     const { server: apiServer } = await import('../api/NezhaApiServer.js');
     apiServerStop = apiServer.stop.bind(apiServer);
