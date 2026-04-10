@@ -198,7 +198,7 @@ class NuPIServer {
 
       try {
         let body = '';
-        if (method === 'POST' || method === 'PUT') {
+        if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
           body = await new Promise<string>((resolve, reject) => {
             let size = 0;
             req.on('data', (chunk: Buffer) => {
@@ -264,6 +264,7 @@ class NuPIServer {
     }
 
     if (path[0] === 'tasks') {
+      console.log('[TASKS] path length:', path.length, 'method:', method);
       if (method === 'GET') {
         const queryParams = new URLSearchParams(rawUrl.split('?')[1] || '');
         const status = queryParams.get('status') || 'PENDING';
@@ -279,7 +280,10 @@ class NuPIServer {
       if (method === 'POST') {
         const data = safeJsonParse(body);
         if (!data || !data.title) {
-          return { status: 400, body: JSON.stringify({ error: 'Invalid request: title is required' }) };
+          return {
+            status: 400,
+            body: JSON.stringify({ error: 'Invalid request: title is required' }),
+          };
         }
         const id = await this.createTask(data);
         return { status: 201, body: JSON.stringify({ id }) };
@@ -299,7 +303,10 @@ class NuPIServer {
     if (path[0] === 'broadcast' && method === 'POST') {
       const data = safeJsonParse(body);
       if (!data || !data.message) {
-        return { status: 400, body: JSON.stringify({ error: 'Invalid request: message is required' }) };
+        return {
+          status: 400,
+          body: JSON.stringify({ error: 'Invalid request: message is required' }),
+        };
       }
       const broadcastService = await BroadcastService.create(this.db);
       const id = await broadcastService.sendBroadcast(str(data.message), {
@@ -381,10 +388,10 @@ class NuPIServer {
       const taskId = path[1];
       const data = safeJsonParse(body || '{}');
       if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-      await this.db.query(
-        `UPDATE tasks SET result = $1, completed_at = NOW() WHERE id = $2`,
-        [JSON.stringify(data.result), taskId]
-      );
+      await this.db.query(`UPDATE tasks SET result = $1, completed_at = NOW() WHERE id = $2`, [
+        JSON.stringify(data.result),
+        taskId,
+      ]);
       return { status: 200, body: JSON.stringify({ id: taskId }) };
     }
 
@@ -392,16 +399,63 @@ class NuPIServer {
       const taskId = path[1];
       const data = safeJsonParse(body || '{}');
       if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
-      await this.db.query(
-        `UPDATE tasks SET error = $1, updated_at = NOW() WHERE id = $2`,
-        [data.error, taskId]
-      );
+      await this.db.query(`UPDATE tasks SET error = $1, updated_at = NOW() WHERE id = $2`, [
+        data.error,
+        taskId,
+      ]);
       return { status: 200, body: JSON.stringify({ id: taskId }) };
+    }
+
+    if (path[0] === 'tasks' && path.length === 2 && method === 'PATCH') {
+      const taskId = path[1];
+      const data = safeJsonParse(body || '{}');
+      console.log('[PATCH] taskId:', taskId, 'data:', JSON.stringify(data));
+      if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
+
+      const updates: string[] = [];
+      const values: unknown[] = [];
+      let paramIndex = 1;
+
+      if (data.priority !== undefined) {
+        updates.push(`priority = $${paramIndex++}`);
+        values.push(data.priority);
+      }
+      if (data.status !== undefined) {
+        updates.push(`status = $${paramIndex++}`);
+        values.push(data.status);
+        if (data.status === 'COMPLETED') {
+          updates.push(`completed_at = NOW()`);
+        }
+      }
+      if (data.title !== undefined) {
+        updates.push(`title = $${paramIndex++}`);
+        values.push(data.title);
+      }
+      if (data.description !== undefined) {
+        updates.push(`description = $${paramIndex++}`);
+        values.push(data.description);
+      }
+      if (data.assigned_to !== undefined) {
+        updates.push(`assigned_to = $${paramIndex++}`);
+        values.push(data.assigned_to);
+      }
+
+      if (updates.length === 0) {
+        return { status: 400, body: JSON.stringify({ error: 'No fields to update' }) };
+      }
+
+      values.push(taskId);
+      await this.db.query(
+        `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex}`,
+        values
+      );
+      return { status: 200, body: JSON.stringify({ id: taskId, updated: Object.keys(data) }) };
     }
 
     if (path[0] === 'issues' && method === 'GET') {
       const limit = parseInt(
-        new URLSearchParams(rawUrl.split('?')[1] || '').get('limit') || '10', 10
+        new URLSearchParams(rawUrl.split('?')[1] || '').get('limit') || '10',
+        10
       );
       const result = await this.db.query<any>(
         `SELECT id, title, severity, status FROM issues
@@ -437,22 +491,42 @@ class NuPIServer {
         recentLearnings,
         openIssuesList,
       ] = await Promise.all([
-        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'"),
-        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM issues WHERE status NOT IN ('resolved', 'closed')"),
+        this.db.query<{ count: string }>(
+          "SELECT COUNT(*) as count FROM tasks WHERE status = 'PENDING'"
+        ),
+        this.db.query<{ count: string }>(
+          "SELECT COUNT(*) as count FROM issues WHERE status NOT IN ('resolved', 'closed')"
+        ),
         this.db.query<{ count: string }>('SELECT COUNT(*) as count FROM memory'),
-        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'"),
-        this.db.query<{ count: string }>("SELECT COUNT(*) as count FROM memory WHERE created_at > NOW() - INTERVAL '24 hours'"),
-        detailed ? this.db.query<{ title: string; priority: number }>(
-          "SELECT title, priority FROM tasks WHERE status = 'PENDING' AND priority >= 8 ORDER BY priority DESC LIMIT 5"
-        ) : { rows: [] },
-        detailed ? this.db.query<{ content: string; tags: string[] }>(
-          "SELECT content, tags FROM memory WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY importance DESC LIMIT 5"
-        ) : { rows: [] },
-        detailed ? this.db.query<{ id: string; title: string; severity: string; issue_type: string; status: string }>(
-          `SELECT id, title, severity, issue_type, status FROM issues WHERE status = 'open'
+        this.db.query<{ count: string }>(
+          "SELECT COUNT(*) as count FROM tasks WHERE status = 'FAILED' AND created_at > NOW() - INTERVAL '24 hours'"
+        ),
+        this.db.query<{ count: string }>(
+          "SELECT COUNT(*) as count FROM memory WHERE created_at > NOW() - INTERVAL '24 hours'"
+        ),
+        detailed
+          ? this.db.query<{ title: string; priority: number }>(
+              "SELECT title, priority FROM tasks WHERE status = 'PENDING' AND priority >= 8 ORDER BY priority DESC LIMIT 5"
+            )
+          : { rows: [] },
+        detailed
+          ? this.db.query<{ content: string; tags: string[] }>(
+              "SELECT content, tags FROM memory WHERE created_at > NOW() - INTERVAL '24 hours' ORDER BY importance DESC LIMIT 5"
+            )
+          : { rows: [] },
+        detailed
+          ? this.db.query<{
+              id: string;
+              title: string;
+              severity: string;
+              issue_type: string;
+              status: string;
+            }>(
+              `SELECT id, title, severity, issue_type, status FROM issues WHERE status = 'open'
            ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
            created_at DESC LIMIT 10`
-        ) : { rows: [] },
+            )
+          : { rows: [] },
       ]);
 
       const baseStatus = {
@@ -471,10 +545,19 @@ class NuPIServer {
         status: 200,
         body: JSON.stringify({
           ...baseStatus,
-          hasIssues: baseStatus.pendingTasks > 0 || baseStatus.failedTasks > 0 || baseStatus.openIssues > 0,
+          hasIssues:
+            baseStatus.pendingTasks > 0 || baseStatus.failedTasks > 0 || baseStatus.openIssues > 0,
           criticalTasks: criticalTasks.rows,
-          recentLearnings: recentLearnings.rows.map(r => ({ content: r.content, tags: r.tags || [] })),
-          suggestions: ['Review recent code changes', 'Optimize slow queries', 'Update documentation', 'Run comprehensive tests'],
+          recentLearnings: recentLearnings.rows.map(r => ({
+            content: r.content,
+            tags: r.tags || [],
+          })),
+          suggestions: [
+            'Review recent code changes',
+            'Optimize slow queries',
+            'Update documentation',
+            'Run comprehensive tests',
+          ],
           totalMemories: baseStatus.memoryCount,
           openIssuesList: openIssuesList.rows.map(i => ({
             id: i.id,
@@ -616,8 +699,7 @@ class NuPIServer {
       return { status: 404, body: JSON.stringify({ error: 'User endpoint not found' }) };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      const status =
-        message.includes('exists') || message.includes('Invalid') ? 400 : 500;
+      const status = message.includes('exists') || message.includes('Invalid') ? 400 : 500;
       return { status, body: JSON.stringify({ error: message }) };
     }
   }
@@ -679,7 +761,10 @@ class NuPIServer {
       );
 
       logger.info(`[NuPI] Recovered ${result.rows.length} failed tasks`);
-      return { status: 200, body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }) };
+      return {
+        status: 200,
+        body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }),
+      };
     }
 
     if (action === 'stuck' && method === 'POST') {
@@ -699,7 +784,10 @@ class NuPIServer {
       if (result.rows.length > 0) {
         logger.warn(`[NuPI] Recovered ${result.rows.length} stuck tasks`);
       }
-      return { status: 200, body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }) };
+      return {
+        status: 200,
+        body: JSON.stringify({ recovered: result.rows.length, tasks: result.rows }),
+      };
     }
 
     if (action === 'dlq-retry' && method === 'POST') {
@@ -721,7 +809,7 @@ class NuPIServer {
       let successCount = 0;
       for (const item of dlqItems.rows) {
         try {
-        const _newTaskId = await this.createTask({
+          const _newTaskId = await this.createTask({
             title: `[AUTO-RETRY] ${item.title}`,
             description: item.description || '',
             priority: 10,
@@ -743,7 +831,10 @@ class NuPIServer {
         }
       }
 
-      return { status: 200, body: JSON.stringify({ retried: successCount, total: dlqItems.rows.length }) };
+      return {
+        status: 200,
+        body: JSON.stringify({ retried: successCount, total: dlqItems.rows.length }),
+      };
     }
 
     if (action === 'stats' && method === 'GET') {
@@ -796,8 +887,8 @@ class NuPIServer {
     const model = str(data.model, DEFAULT_MODEL);
     const messages: ChatMessage[] = data.messages || [];
 
-    const systemMessage = messages.find((m) => m.role === 'system')?.content || '';
-    const userMessage = messages.find((m) => m.role === 'user')?.content || '';
+    const systemMessage = messages.find(m => m.role === 'system')?.content || '';
+    const userMessage = messages.find(m => m.role === 'user')?.content || '';
 
     try {
       const provider = AIProviderFactory.createFromEnv();
@@ -852,7 +943,7 @@ class NuPIServer {
       const memories = await this.db.query<{ content: string }>(
         `SELECT content FROM memory ORDER BY created_at DESC LIMIT 3`
       );
-      const recentInsights = memories.rows.map((r) => r.content).join('; ');
+      const recentInsights = memories.rows.map(r => r.content).join('; ');
 
       const task = `当前状态检查：
 - 待处理任务: ${pendingCount}个
@@ -887,7 +978,8 @@ class NuPIServer {
 }
 
 export const server = new NuPIServer();
-server.start()
+server
+  .start()
   .then(() => {
     logger.info('[NuPI] API server started on port 4099 (auto-loaded on module import)');
   })
