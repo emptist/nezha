@@ -1829,9 +1829,12 @@ async function main(): Promise<void> {
         await broadcastService.sendBroadcast(text, { priority: 'normal' });
         console.log('✓ Reflection broadcast to all AIs');
 
+        const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+        const identity = await AgentIdentityService.getResolvedIdentity();
+        const defaultProjectId = '00000000-0000-0000-0000-000000000001';
         await db.query(
-          `INSERT INTO memory (content, tags, source, importance) VALUES ($1, ARRAY['reflection', 'broadcast'], 'areflect', 6)`,
-          [text]
+          `INSERT INTO memory (content, tags, source, importance, agent_id, project_id) VALUES ($1, ARRAY['reflection', 'broadcast'], 'areflect', 6, $2, $3::uuid)`,
+          [text, identity.id, defaultProjectId]
         );
         console.log('✓ Saved to memory');
 
