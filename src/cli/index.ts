@@ -133,8 +133,8 @@ export class Cli {
     this.healthServer = new HealthServer(db, 4097);
     await this.healthServer.start();
 
-    // NuPI API server (port 4099) auto-starts on module import
-    logger.info('[CLI] NuPI API server available at http://127.0.0.1:4099');
+    // NuPI API server (port 5999) auto-starts on module import
+    logger.info('[CLI] NuPI API server available at http://127.0.0.1:5999');
 
     await this.heartbeatService.start();
 
