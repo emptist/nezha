@@ -173,7 +173,7 @@ async function reflect(text: string): Promise<ReflectResult> {
   while ((match = ANNOUNCE_PATTERN.exec(text)) !== null) {
     const message = match[1]?.trim();
     const priority = match[2]?.trim() || 'normal';
-    const targetAgent = match[3]?.trim() || null;
+    const targetAgent = match[3]?.trim() || 'all-ais';
     if (message) {
       await database.query(
         `INSERT INTO project_communications (from_ai, to_ai, message_type, content, priority)

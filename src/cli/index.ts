@@ -2107,12 +2107,14 @@ Examples:
         while ((match = announcePattern.exec(text)) !== null) {
           const message = match[1]?.trim();
           const priority = match[2]?.trim() || 'normal';
-          const targetAgent = match[3]?.trim() || null;
+          const targetAgent = match[3]?.trim() || 'all-ais';
           if (message) {
+            const { AgentIdentityService } = await import('../services/AgentIdentityService.js');
+            const identity = await AgentIdentityService.getResolvedIdentity();
             await db.query(
               `INSERT INTO project_communications (from_ai, to_ai, message_type, content, priority)
                VALUES ($1, $2, 'broadcast', $3, $4)`,
-              ['areflect-cli', targetAgent, message, priority]
+              [identity.id, targetAgent, message, priority]
             );
             console.log(`✓ Sent broadcast: ${message.substring(0, 50)}...`);
             count++;
