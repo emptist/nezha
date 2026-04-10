@@ -34,6 +34,7 @@ import {
   DAEMON_LABEL,
 } from '../daemon/launchd.js';
 import path from 'node:path';
+import { readFile, writeFile } from 'fs/promises';
 
 export let isVerbose = false;
 export let transportMode: 'http' | 'cli' = 'http';
@@ -753,13 +754,50 @@ export class Cli {
     await this.addTask('Continuous Improvement Cycle', description, 50);
   }
 
-  async saveLearn(insight: string, context?: string, importance: number = 7): Promise<void> {
+  async saveLearn(
+    insight: string,
+    context?: string,
+    importance: number = 7,
+    injectToAgents: boolean = false
+  ): Promise<void> {
     const { SelfImprovementService } = await import('../services/SelfImprovementService.js');
     const db = await this.getDb();
     const service = new SelfImprovementService(db);
 
     const result = await service.learn({ insight, context, importance });
     cli.success(`Learning saved: ${result}`);
+
+    if (injectToAgents) {
+      await this.injectToAgentsMd(insight, context);
+    }
+  }
+
+  private async injectToAgentsMd(insight: string, context?: string): Promise<void> {
+    const agentsPath = path.join(process.cwd(), 'AGENTS.md');
+    try {
+      let content = '';
+      try {
+        content = await readFile(agentsPath, 'utf-8');
+      } catch {
+        content = '# AGENTS.md\n\n## Learnings\n\n';
+      }
+
+      const timestamp = new Date().toISOString().split('T')[0];
+      const entry = `- **${timestamp}**: ${insight}${context ? ` (${context})` : ''}\n`;
+
+      const learningsMatch = content.match(/(## Learnings\n)/);
+      if (learningsMatch) {
+        const insertPos = learningsMatch.index! + learningsMatch[0].length;
+        content = content.slice(0, insertPos) + entry + content.slice(insertPos);
+      } else {
+        content += '\n## Learnings\n\n' + entry;
+      }
+
+      await writeFile(agentsPath, content, 'utf-8');
+      cli.success('Injected to AGENTS.md');
+    } catch (error) {
+      cli.warn(`Failed to inject to AGENTS.md: ${error}`);
+    }
   }
 
   async listTasks(
@@ -1846,6 +1884,7 @@ async function main(): Promise<void> {
         const insight = args.slice(1).find(a => !a.startsWith('--')) || '';
         const contextIndex = args.indexOf('--context');
         const importanceIndex = args.indexOf('--importance');
+        const injectIndex = args.indexOf('--inject');
         const context =
           contextIndex !== -1 && args[contextIndex + 1]
             ? String(args[contextIndex + 1])
@@ -1854,21 +1893,26 @@ async function main(): Promise<void> {
           importanceIndex !== -1 && args[importanceIndex + 1]
             ? parseInt(String(args[importanceIndex + 1]), 10) || 7
             : 7;
+        const injectToAgents = injectIndex !== -1;
 
         if (!insight) {
           cli.error('Insight text is required');
           console.log(
-            '\nUsage: nezha learn "Your insight here" [--context "When this applies"] [--importance 1-10]'
+            '\nUsage: nezha learn "Your insight here" [--context "When this applies"] [--importance 1-10] [--inject]'
           );
+          console.log('\nOptions:');
+          console.log('  --context <text>   Context when this insight applies');
+          console.log('  --importance 1-10  Importance level (default: 7)');
+          console.log('  --inject           Also inject to AGENTS.md (disk backup)');
           console.log('\nExamples:');
           console.log('  nezha learn "Always run typecheck after edits"');
           console.log(
-            '  nezha learn "Cron expressions need croner library" --context "Scheduler enhancement"'
+            '  nezha learn "Cron expressions need croner library" --context "Scheduler" --inject'
           );
           process.exit(1);
         }
 
-        await cliInstance.saveLearn(insight, context, importance);
+        await cliInstance.saveLearn(insight, context, importance, injectToAgents);
         break;
       }
 
