@@ -337,10 +337,22 @@ export class DatabaseSkillLoader {
 
   async getSuggestedSkills(taskContext: string, limit: number = 5): Promise<StoredSkill[]> {
     const matches = await this.findSkillsByTrigger(taskContext);
+    return matches.slice(0, limit).map(m => m.skill);
+  }
 
-    const validMatches = matches.filter(m => !m.antiPatternMatch);
-
-    return validMatches.slice(0, limit).map(m => m.skill);
+  async incrementUseCount(skillNames: string[]): Promise<void> {
+    if (skillNames.length === 0) return;
+    try {
+      const db = this.dbClient as { query: (sql: string, args: unknown[]) => Promise<unknown> };
+      if (!db?.query) return;
+      await db.query(
+        `UPDATE skills SET use_count = use_count + 1, updated_at = NOW() 
+         WHERE name = ANY($1)`,
+        [skillNames]
+      );
+    } catch (error) {
+      logger.debug('Failed to increment use_count:', error);
+    }
   }
 
   async getSkillMatchDetails(skillName: string, taskContext: string): Promise<SkillMatch | null> {
