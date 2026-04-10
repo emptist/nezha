@@ -40,7 +40,7 @@ fi
 
 cd "$GIT_ROOT"
 
-NEZHA_PORT=${NEZHA_PORT:-4099}
+NEZHA_PORT=${NEZHA_PORT:-5999}
 NEZHA_API_KEY=${NEZHA_API_KEY:-}
 
 resolve_agent_id_via_api() {
