@@ -276,3 +276,45 @@ use areflect: [LEARN] insight: ... [TASK] title: ...
 支持的标记: `[LEARN]`, `[PROMPT_UPDATE]`, `[ISSUE]`, `[TASK]`, `[ANNOUNCE]`, `[SCHEDULE]`, `[ISSUE_RESOLVE]`, `[TASK_COMPLETE]`, `[ISSUE_COMMENT]`
 
 工具: `reflect`, `check_pending_work`, `get_recent_learnings`, `parse_markers`
+
+---
+
+## 2026-04-11 更新
+
+### 1. AutoReviewService - Inter-Review 自动触发
+
+- HeartbeatService 启动时自动启动 AutoReviewService
+- 任务完成 (status = COMPLETED) 自动触发 Inter-Review
+- 包括通过 API (PUT /tasks/:id/status) 完成的任务
+- 不再需要手动请求 Inter-Review
+
+### 2. 会议系统 - 深度讨论 vs 广播通知
+
+- **会议** (`meeting discuss`): 多AI分析、收集意见、达成共识
+- **广播** (`broadcast`): 宣布结果、状态更新、简单协调
+- 架构拆分 (Nezha/NuPI/Piano) 后会议系统被遗忘，请重新使用
+
+### 3. PostgreSQL 安全增强
+
+- 已安装 pgcrypto 扩展，支持列级加密
+- 敏感表 (api_keys, provider_api_keys) 已配置加密列
+- 需要实现 RLS (Row-Level Security) - 见 issue #8f4025cb
+
+### 4. Pi ↔ OpenCode 集成问题
+
+- Issue #db5d086e: Pi 工具参数格式错误
+- edit: 收到字符串而非数组
+- read/write: 缺少必需参数
+
+### 关键命令
+
+```bash
+# 会议 - 用于深度讨论
+nezha meeting discuss "标题" "讨论内容"
+nezha meeting list
+nezha meeting show <id>
+nezha meeting opinion <id> "观点"
+
+# 安全 (需要实现 RLS)
+# issue #8f4025cb
+```
