@@ -116,12 +116,43 @@ export class AgentIdentityService {
   }
 
   private detectTraeEnv(): { source: string | null; sessionId: string | null } {
-    if (process.env.AI_AGENT !== 'TRAE') {
-      return { source: null, sessionId: null };
+    // First try env vars (works in normal terminal)
+    if (process.env.AI_AGENT === 'TRAE') {
+      const logDir = process.env.TRAE_SANDBOX_LOG_DIR;
+      const sessionId = logDir?.match(/\/logs\/(\d{8}T\d{6})\//)?.[1] || null;
+      return { source: 'TRAE', sessionId };
     }
-    const logDir = process.env.TRAE_SANDBOX_LOG_DIR;
-    const sessionId = logDir?.match(/\/logs\/(\d{8}T\d{6})\//)?.[1] || null;
-    return { source: 'TRAE', sessionId };
+
+    // Fallback: dynamic detection (works in git hooks where env vars are not inherited)
+    return this.detectTraeDynamically();
+  }
+
+  private detectTraeDynamically(): { source: string | null; sessionId: string | null } {
+    try {
+      const homeDir = os.homedir();
+      const traeLogDir = path.join(homeDir, '.trae', 'logs');
+
+      if (!fs.existsSync(traeLogDir)) {
+        return { source: null, sessionId: null };
+      }
+
+      // Scan for most recent session directory
+      const dirs = fs.readdirSync(traeLogDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .sort((a, b) => b.name.localeCompare(a.name));
+
+      if (dirs.length > 0) {
+        // Directory name format: YYYYMMDDTHHMMSS
+        const sessionId = dirs[0].name.match(/^\d{8}T\d{6}$/)?.[0] || null;
+        if (sessionId) {
+          logger.info(`[AgentIdentity] Detected Trae dynamically via ~/.trae/logs/ (session: ${sessionId})`);
+          return { source: 'TRAE', sessionId };
+        }
+      }
+    } catch {
+      // Ignore errors - Trae may not be installed
+    }
+    return { source: null, sessionId: null };
   }
 
   private getGitBranch(): string {
