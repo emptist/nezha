@@ -14,6 +14,7 @@
  * - executeTask is protected for subclass override
  */
 import { Scheduler } from '../../core/Scheduler.js';
+import { EventBus } from '../../core/EventBus.js';
 import { AIProvider, AIProviderFactory } from '../ai/index.js';
 import { DATABASE_TABLES, TASK_STATUS } from '../../config/constants.js';
 import { logger } from '../../utils/logger.js';
@@ -22,6 +23,7 @@ import { ReminderService } from '../ReminderService.js';
 import { NextStepAdvisor } from '../../plugins/NextStepAdvisor.js';
 import { getPluginManager } from '../../core/PluginManager.js';
 import { Config } from '../../config/Config.js';
+import { AutoReviewService } from '../AutoReviewService.js';
 
 export interface HeartbeatConfig {
   heartbeatIntervalMs?: number;
@@ -41,6 +43,7 @@ export class HeartbeatService {
   protected readonly pluginManager = getPluginManager();
   protected readonly nextStepAdvisor: NextStepAdvisor;
   protected readonly config: HeartbeatConfig;
+  protected readonly autoReviewService: AutoReviewService;
 
   constructor(db: DatabaseClient, config?: HeartbeatConfig) {
     this.db = db;
@@ -61,6 +64,12 @@ export class HeartbeatService {
       enableMemorySave: true,
     });
 
+    const eventBus = this.scheduler.getEventBus();
+    this.autoReviewService = new AutoReviewService(eventBus, db, {
+      enabled: true,
+      reviewerId: 'nezha-auto-heartbeat',
+    });
+
     this.scheduler.onTaskReady = this.executeTask.bind(this);
   }
 
@@ -71,12 +80,15 @@ export class HeartbeatService {
     this.reminderService.setEventBus(this.scheduler.getEventBus());
     this.reminderService.startBlindLoop();
 
+    this.autoReviewService.start();
+
     await this.scheduler.start();
-    logger.info('HeartbeatService started with ReminderService');
+    logger.info('HeartbeatService started with ReminderService and AutoReviewService');
   }
 
   async stop(): Promise<void> {
     this.reminderService.stopBlindLoop();
+    this.autoReviewService.stop();
     this.scheduler.stop();
     logger.info('HeartbeatService stopped');
   }

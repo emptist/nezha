@@ -391,12 +391,14 @@ export class Cli {
     const taskId = crypto.randomUUID();
     const createdBy = this.agentIdentity?.id;
     const createdByIdentity = this.agentIdentity?.id || null;
+    const defaultProjectId = '00000000-0000-0000-0000-000000000001';
+    const resolvedProjectId = projectId || defaultProjectId;
 
     await db.query(
       `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by, created_by_identity) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
       [
         taskId,
-        projectId || null,
+        resolvedProjectId,
         taskData.title,
         taskData.description,
         TASK_STATUS.PENDING,

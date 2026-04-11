@@ -710,6 +710,7 @@ class NuPIServer {
     const maxRetries = num(data.max_retries, 3);
     const timeoutSeconds = num(data.timeout_seconds, 300);
     const isLongRunning = timeoutSeconds > 600;
+    const projectId = data.project_id || '00000000-0000-0000-0000-000000000001';
 
     const result = await this.db.query<{ id: string }>(
       `INSERT INTO tasks (id, project_id, title, description, status, priority, depends_on, max_retries, timeout_seconds, is_long_running, assigned_to, category, created_by, created_by_identity)
@@ -717,7 +718,7 @@ class NuPIServer {
        RETURNING id`,
       [
         taskId,
-        data.project_id || null,
+        projectId,
         str(data.title),
         str(data.description, ''),
         data.priority !== undefined ? num(data.priority, 50) : 50,
