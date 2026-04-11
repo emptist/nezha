@@ -10,6 +10,8 @@ import { AIProviderFactory } from '../services/ai/index.js';
 import { UserService } from '../services/UserService.js';
 import { JwtAuthMiddleware } from '../services/JwtAuthMiddleware.js';
 import { jwtService } from '../services/JwtService.js';
+import { EventBus } from '../core/EventBus.js';
+import { SCHEDULER_EVENTS } from '../core/Scheduler.js';
 
 const PORT = process.env.NUPI_PORT || 5999;
 const DEFAULT_MODEL = 'zai:glm-4.5-flash';
@@ -148,10 +150,12 @@ class NuPIServer {
   private db: DatabaseClient;
   private userService: UserService | null = null;
   private jwtAuth: JwtAuthMiddleware;
+  private eventBus: EventBus;
 
   constructor() {
     this.db = new DatabaseClient(Config.getInstance());
     this.jwtAuth = new JwtAuthMiddleware(this.db);
+    this.eventBus = new EventBus();
   }
 
   private async getUserService(): Promise<UserService> {
@@ -377,10 +381,27 @@ class NuPIServer {
       const data = safeJsonParse(body || '{}');
       if (!data) return { status: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
       const isCompleted = data.status === 'COMPLETED';
+
+      const taskResult = await this.db.query<{ title: string; description: string }>(
+        `SELECT title, description FROM tasks WHERE id = $1`,
+        [taskId]
+      );
+      const task = taskResult.rows[0];
+
       await this.db.query(
         `UPDATE tasks SET status = $1, updated_at = NOW()${isCompleted ? ', completed_at = NOW()' : ''} WHERE id = $2`,
         [data.status, taskId]
       );
+
+      if (isCompleted && task) {
+        this.eventBus.publish(SCHEDULER_EVENTS.TASK_COMPLETED, {
+          taskId,
+          title: task.title,
+          description: task.description,
+          timestamp: new Date(),
+        });
+      }
+
       return { status: 200, body: JSON.stringify({ id: taskId, status: data.status }) };
     }
 

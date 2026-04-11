@@ -137,16 +137,25 @@ export class AgentIdentityService {
       }
 
       // Scan for most recent session directory
-      const dirs = fs.readdirSync(traeLogDir, { withFileTypes: true })
+      const dirs = fs
+        .readdirSync(traeLogDir, { withFileTypes: true })
         .filter(d => d.isDirectory())
         .sort((a, b) => b.name.localeCompare(a.name));
 
       if (dirs.length > 0) {
         // Directory name format: YYYYMMDDTHHMMSS
-        const sessionId = dirs[0].name.match(/^\d{8}T\d{6}$/)?.[0] || null;
-        if (sessionId) {
-          logger.info(`[AgentIdentity] Detected Trae dynamically via ~/.trae/logs/ (session: ${sessionId})`);
-          return { source: 'TRAE', sessionId };
+        const firstDirName = dirs[0]?.name;
+        if (!firstDirName) {
+          // fall through to return null at end
+        } else {
+          const match = firstDirName.match(/^\d{8}T\d{6}$/);
+          const sessionId = match ? match[0] : null;
+          if (sessionId) {
+            logger.info(
+              `[AgentIdentity] Detected Trae dynamically via ~/.trae/logs/ (session: ${sessionId})`
+            );
+            return { source: 'TRAE', sessionId };
+          }
         }
       }
     } catch {
