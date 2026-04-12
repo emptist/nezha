@@ -849,9 +849,30 @@ nezha review-respond <id> <msg> # 回应 review
 nezha help
 ```
 
-### HTTP API (Recommended)
+### CLI (Recommended for internal use)
 
-Primary interface for external systems:
+Since Piano and NuPI both have nezha npm linked, CLI is preferred:
+
+```bash
+# List pending tasks
+nezha tasks
+
+# List open issues
+nezha issues list --status open
+
+# Get system status
+nezha status
+```
+
+**Why CLI?**
+
+- No HTTP overhead
+- Works offline
+- Native to systems with nezha installed
+
+### HTTP API (For external systems)
+
+For systems without nezha CLI:
 
 ```bash
 # Get client
