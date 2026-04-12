@@ -40,7 +40,7 @@ export class IssueTrackingService {
     }>(
       `SELECT id, title, description, status, resolution, issue_type, severity, created_at, resolved_at
        FROM issues
-       WHERE (${conditions}) AND status = 'OPEN'
+       WHERE (${conditions}) AND status = 'open'
        ORDER BY created_at DESC
        LIMIT 5`,
       values
