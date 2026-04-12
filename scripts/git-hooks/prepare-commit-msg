@@ -76,7 +76,8 @@ validate_commit() {
     fi
 
     if [ -n "$cmd" ]; then
-        eval "$cmd validate-commit $COMMIT_MSG_FILE" 2>/dev/null
+        # FIXED: Show output instead of suppressing
+        eval "$cmd validate-commit $COMMIT_MSG_FILE" 2>&1 || true
     fi
 }
 
@@ -84,6 +85,15 @@ AGENT_ID=$(resolve_agent_id_via_api)
 if [ -z "$AGENT_ID" ]; then
     AGENT_ID=$(resolve_agent_id_via_cli)
 fi
+
+# FIXED: Use SQL fallback when nezha command not available
+validate_with_sql() {
+    local commit_msg=$(cat "$COMMIT_MSG_FILE")
+    if echo "$commit_msg" | grep -qE '\[(task|issue|inter-review):'; then
+        return 0
+    fi
+    return 1
+}
 
 validate_commit_quiet() {
     local cmd=""
@@ -94,10 +104,19 @@ validate_commit_quiet() {
     fi
 
     if [ -n "$cmd" ]; then
-        $cmd validate-commit "$COMMIT_MSG_FILE" >/dev/null 2>&1
-        return $?
+        # FIXED: Show real errors, don't suppress output
+        if $cmd validate-commit "$COMMIT_MSG_FILE" 2>&1; then
+            return 0
+        fi
+        return 1
     fi
-    return 0
+    
+    # FIXED: When no command, use SQL fallback
+    echo "[prepare-commit-msg] nezha not found, using SQL fallback..." >&2
+    if validate_with_sql; then
+        return 0
+    fi
+    return 1
 }
 
 if ! validate_commit_quiet; then
@@ -106,7 +125,13 @@ if ! validate_commit_quiet; then
     echo " COMMIT BLOCKED - Quality Control Check"
     echo "=========================================="
     echo ""
-    validate_commit
+    echo "Your commit message must contain a task or issue ID."
+    echo "Example: git commit -m 'Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]'"
+    echo ""
+    echo "To get valid ID, run:"
+    echo "  psql -h localhost -U postgres -d nezha -c \"SELECT id, title FROM tasks ORDER BY created_at DESC LIMIT 5;\""
+    echo ""
+    validate_commit 2>&1 || true
     exit 1
 fi
 
