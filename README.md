@@ -8,29 +8,29 @@
 
 Build an AI development system capable of **autonomous operation** with these core capabilities:
 
-| Capability | Description | Status |
-|------------|-------------|--------|
-| **Permanent Memory** | PostgreSQL storage + task history | ✅ Implemented |
-| **Continuous Work** | Heartbeat mechanism + task scheduling | ✅ Implemented |
-| **Task Execution** | Agent invocation + error handling | ✅ Implemented |
-| **Process Guardian** | Orphan process cleanup + instance control | ✅ Implemented |
-| **Conversation Log** | PostgreSQL + JSONL dual storage | ✅ Implemented |
-| **Skill System** | DB-only skill loading + security scanning | ✅ Implemented |
-| **AI Skill Builder** | Autonomous skill generation by AI | ✅ Implemented |
-| **Task Review** | Automated QC + learning mode | ✅ Implemented |
-| **AI Inter-Review** | AI-to-AI code review | ✅ Implemented |
-| **Knowledge Import** | SOUL.md → PostgreSQL | ✅ Implemented |
-| **API Server** | HTTP REST API with rate limiting + validation | ✅ Implemented |
-| **Security Hardening** | Input validation, auth, error handlers | ✅ Implemented |
+| Capability             | Description                                   | Status         |
+| ---------------------- | --------------------------------------------- | -------------- |
+| **Permanent Memory**   | PostgreSQL storage + task history             | ✅ Implemented |
+| **Continuous Work**    | Heartbeat mechanism + task scheduling         | ✅ Implemented |
+| **Task Execution**     | Agent invocation + error handling             | ✅ Implemented |
+| **Process Guardian**   | Orphan process cleanup + instance control     | ✅ Implemented |
+| **Conversation Log**   | PostgreSQL + JSONL dual storage               | ✅ Implemented |
+| **Skill System**       | DB-only skill loading + security scanning     | ✅ Implemented |
+| **AI Skill Builder**   | Autonomous skill generation by AI             | ✅ Implemented |
+| **Task Review**        | Automated QC + learning mode                  | ✅ Implemented |
+| **AI Inter-Review**    | AI-to-AI code review                          | ✅ Implemented |
+| **Knowledge Import**   | SOUL.md → PostgreSQL                          | ✅ Implemented |
+| **API Server**         | HTTP REST API with rate limiting + validation | ✅ Implemented |
+| **Security Hardening** | Input validation, auth, error handlers        | ✅ Implemented |
 
 ### Current Status
 
-| Metric | Value |
-|--------|-------|
-| **Tests** | 1032 passing ✅ |
-| **TypeScript Build** | 0 errors ✅ |
-| **Language** | Full English (0 Chinese) ✅ |
-| **Security** | Rate limiting, input validation, no secrets in code ✅ |
+| Metric               | Value                                                  |
+| -------------------- | ------------------------------------------------------ |
+| **Tests**            | 1032 passing ✅                                        |
+| **TypeScript Build** | 0 errors ✅                                            |
+| **Language**         | Full English (0 Chinese) ✅                            |
+| **Security**         | Rate limiting, input validation, no secrets in code ✅ |
 
 ## 核心设计
 
@@ -498,21 +498,21 @@ interface ClawHubClient {
 
 ### API Server Security (NezhaApiServer)
 
-| Feature | Implementation |
-|---------|----------------|
-| **Rate Limiting** | Sliding window: 100 requests/min per IP → 429 response |
-| **Input Validation** | Body size limit (1MB), required field checks, parameter clamping |
-| **SQL Injection Prevention** | Parameterized queries throughout |
-| **Authentication** | JWT middleware for sensitive endpoints (`/tasks`, `/memory`, etc.) |
-| **Localhost Check** | Sensitive endpoints restricted to localhost only |
+| Feature                      | Implementation                                                     |
+| ---------------------------- | ------------------------------------------------------------------ |
+| **Rate Limiting**            | Sliding window: 100 requests/min per IP → 429 response             |
+| **Input Validation**         | Body size limit (1MB), required field checks, parameter clamping   |
+| **SQL Injection Prevention** | Parameterized queries throughout                                   |
+| **Authentication**           | JWT middleware for sensitive endpoints (`/tasks`, `/memory`, etc.) |
+| **Localhost Check**          | Sensitive endpoints restricted to localhost only                   |
 
 ### Process Stability
 
-| Handler | Behavior | Severity |
-|---------|----------|----------|
-| `unhandledRejection` | Log error details with promise/reason | ⚠️ Non-fatal |
-| `uncaughtException` | Log stack trace → graceful shutdown → exit(1) | 🔴 Fatal |
-| `SIGINT` / `SIGTERM` | Wait for running tasks → stop services → close DB | ✅ Graceful |
+| Handler              | Behavior                                          | Severity     |
+| -------------------- | ------------------------------------------------- | ------------ |
+| `unhandledRejection` | Log error details with promise/reason             | ⚠️ Non-fatal |
+| `uncaughtException`  | Log stack trace → graceful shutdown → exit(1)     | 🔴 Fatal     |
+| `SIGINT` / `SIGTERM` | Wait for running tasks → stop services → close DB | ✅ Graceful  |
 
 ### Code Security Practices
 
@@ -621,7 +621,7 @@ cp .env.example .env
 | NEZHA_AGENT_NAME    | 身份显示名称                     | -             |
 | NEZHA_OPENCODE_PORT | OpenCode Server 端口             | 4096          |
 | NEZHA_HEALTH_PORT   | 健康检查 API 端口                | 4097          |
-| NUPI_PORT        | NuPI 服务端口                 | 4099          |
+| NUPI_PORT           | NuPI 服务端口                    | 4099          |
 
 ### 启动流程
 
@@ -664,7 +664,7 @@ nezha start
 | OpenCode Server  | 4096     | `NEZHA_OPENCODE_PORT` | Nezha 管理的 OpenCode |
 | OpenCode Desktop | 56795    | -                     | OpenCode Desktop App  |
 | Nezha Health     | 4097     | `NEZHA_HEALTH_PORT`   | 健康检查 API          |
-| NuPI          | 4099     | `NUPI_PORT`        | REST API 服务         |
+| NuPI             | 4099     | `NUPI_PORT`           | REST API 服务         |
 
 **配置优先级**:
 
@@ -848,6 +848,39 @@ nezha review-respond <id> <msg> # 回应 review
 # 帮助
 nezha help
 ```
+
+### HTTP API (Recommended)
+
+Primary interface for external systems:
+
+```bash
+# Get client
+import { getNuPIClient } from '@nezha/nupi';
+const client = getNuPIClient({ baseUrl: 'http://127.0.0.1:5999' });
+
+# Query
+client.getTasks({ status: 'PENDING', limit: 10 });
+client.getIssues({ status: 'open', limit: 10 });
+```
+
+**Endpoints** (port 5999):
+
+| Endpoint         | Method   | Description      |
+| ---------------- | -------- | ---------------- |
+| `/tasks`         | GET/POST | Task CRUD        |
+| `/issues`        | GET/POST | Issue CRUD       |
+| `/memory/search` | GET      | Search learnings |
+| `/status`        | GET      | System status    |
+
+### MCP (Fallback)
+
+MCP is for external AI clients that don't support HTTP:
+
+- Claude Code / other MCP-compatible agents
+- Fallback when HTTP unavailable
+
+**Primary method**: Use HTTP API (`@nezha/nupi` client)
+**Use MCP only when**: HTTP not supported
 
 ### Process Guardian 命令
 

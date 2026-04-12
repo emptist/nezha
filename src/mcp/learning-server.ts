@@ -572,7 +572,7 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
 
       if (include_issues) {
         const issuesResult = await database.query(
-          `SELECT id, title, severity, status FROM issues WHERE status = 'OPEN' ORDER BY severity DESC, created_at DESC LIMIT 5`
+          `SELECT id, title, severity, status FROM issues WHERE status = 'open' ORDER BY severity DESC, created_at DESC LIMIT 5`
         );
         lines.push('\n--- Open Issues ---');
         if (issuesResult.rows.length > 0) {

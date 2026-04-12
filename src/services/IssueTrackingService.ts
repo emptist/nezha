@@ -161,7 +161,7 @@ export class IssueTrackingService {
 
   async getOpenIssuesCount(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM issues WHERE status = 'OPEN'`
+      `SELECT COUNT(*) as count FROM issues WHERE status = 'open'`
     );
     return parseInt(result.rows[0]?.count ?? '0', 10);
   }
