@@ -202,19 +202,39 @@ The `memory`, `issues`, and `skills` tables have a `viewers[]` array to track wh
 
 ## Important Lessons Learned
 
-### 1. PostgreSQL Path (CRITICAL)
+### 1. PostgreSQL Access (CRITICAL)
 
-> **Updated 2026-04-01:** Full path no longer required - `psql` works directly.
-
-Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, but now accessible via PATH.
+> **Important:** Always use `psql` directly - full path is NOT needed!
 
 ```bash
-# ✅ WORKS - Direct command (recommended)
+# ✅ RECOMMENDED - Direct command
 psql -h 127.0.0.1 -U postgres -d nezha
 
-# ✅ ALSO WORKS - Full path (legacy)
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
+# Query examples:
+psql -c "SELECT title, status FROM tasks WHERE status = 'PENDING' LIMIT 10;"
+psql -c "SELECT * FROM agent_configs;"
 ```
+
+### 2. System Configuration Storage
+
+Use `agent_configs` table for system knowledge (ports, IDs, paths):
+
+```sql
+-- Get NuPI's OpenCode port
+SELECT capabilities FROM agent_configs
+WHERE agent_id = 'nupi' AND name = 'opencode_port';
+
+-- Get all system configs
+SELECT agent_id, name, capabilities FROM agent_configs
+WHERE scope = 'system';
+```
+
+| Config Name   | Purpose                     |
+| ------------- | --------------------------- |
+| opencode_port | NuPI headless server (5111) |
+| nezha_port    | Nezha API server (5999)     |
+| postgres_path | PostgreSQL binary path      |
+| project_id    | Project IDs                 |
 
 ### 2. Code Change Sources (Workflow Triggers)
 

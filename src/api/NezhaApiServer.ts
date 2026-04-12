@@ -556,6 +556,9 @@ class NuPIServer {
         memoryCount: parseInt(totalMemories.rows[0]?.count || '0', 10),
         failedTasks: parseInt(failedTasks.rows[0]?.count || '0', 10),
         recentMemories: parseInt(recentMemories.rows[0]?.count || '0', 10),
+        nupiMode: process.env.NUPI_MODE || 'standalone',
+        nupiSelfModelStrong: process.env.NUPI_SELF_MODEL_STRONG === 'true',
+        nupiHasExternal: process.env.NUPI_EXTERNAL_URL !== undefined,
       };
 
       if (!detailed) {
