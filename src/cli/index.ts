@@ -4,6 +4,9 @@
 import { config } from 'dotenv';
 config({ quiet: true });
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { Config } from '../config/Config.js';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
@@ -12,6 +15,12 @@ import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkgPath = join(__dirname, '..', '..', 'package.json');
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+const VERSION = pkg.version;
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -59,7 +68,7 @@ async function main() {
   }
 
   if (command === '--version' || command === '-v') {
-    console.log('nezha v0.1.0');
+    console.log(`nezha v${VERSION}`);
     return;
   }
 
