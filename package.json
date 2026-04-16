@@ -1,17 +1,15 @@
 {
   "name": "nezha",
   "version": "0.1.0",
-  "description": "AI-driven autonomous development system with permanent memory, continuous work, and self-optimization",
+  "description": "Nezha - AI Coordination Layer. Tasks, Issues, Meetings.",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "./dist/index.js",
   "types": "dist/index.d.ts",
   "workspaces": [
     "auto-reflect"
   ],
   "bin": {
-    "nezha": "./dist/cli/index.js",
-    "nezha-mcp": "./dist/mcp/learning-server.js",
-    "areflect-mcp": "./dist/mcp/areflect-server.js"
+    "nezha": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "tsc",
