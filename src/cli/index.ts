@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import { IssueCommands } from './IssueCommands.js';
 import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands } from './MeetingCommands.js';
+import { BroadcastCommands } from './BroadcastCommands.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -104,6 +105,35 @@ async function main() {
       await issueCmd.list();
       break;
     }
+    case 'meeting': {
+      const subcmd = args[1];
+      if (subcmd === 'discuss') {
+        const title = args[2];
+        const description = args.slice(3).join(' ') || '';
+        if (!title) {
+          console.log('Usage: nezha meeting discuss "title" "description"');
+          return;
+        }
+        const meetingCmd = new MeetingCommands({ db });
+        await meetingCmd.createDiscussion(title, description);
+        console.log(`Created meeting: ${title}`);
+      } else {
+        console.log('Usage: nezha meeting discuss "title" "description"');
+      }
+      break;
+    }
+    case 'announce': {
+      const message = args.slice(1).join(' ');
+      if (!message) {
+        console.log('Usage: nezha announce "message" [--priority low|normal|high|critical]');
+        return;
+      }
+      const priorityIndex = args.indexOf('--priority');
+      const priority = priorityIndex !== -1 ? (args[priorityIndex + 1] as any) : 'normal';
+      const broadcastCmd = new BroadcastCommands(db);
+      await broadcastCmd.send(message, undefined, priority);
+      break;
+    }
     default:
       console.log(`Unknown command: ${command}`);
       console.log(COMMANDS);
@@ -116,3 +146,4 @@ main().catch(err => {
   logger.error('CLI error:', err);
   process.exit(1);
 });
+test
