@@ -11,6 +11,7 @@ import { IssueCommands } from './IssueCommands.js';
 import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
+import { AgentIdentityService } from '../services/AgentIdentityService.js';
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -134,6 +135,28 @@ async function main() {
       await broadcastCmd.send(message, undefined, priority);
       break;
     }
+    case 'agents': {
+      if (args[1] === 'id') {
+        const identity = await AgentIdentityService.getResolvedIdentity();
+        console.log(identity.id);
+      }
+      break;
+    }
+    case 'validate-commit': {
+      const msgFile = args[1];
+      if (!msgFile) {
+        console.log('Error: commit message file required');
+        process.exit(1);
+      }
+      const fs = await import('fs');
+      const msg = fs.readFileSync(msgFile, 'utf-8');
+      if (!msg.includes('[task:') && !msg.includes('[issue:') && !msg.includes('[inter-review:')) {
+        console.log('Error: commit must contain [task:], [issue:], or [inter-review:]');
+        process.exit(1);
+      }
+      console.log('Commit message valid');
+      break;
+    }
     default:
       console.log(`Unknown command: ${command}`);
       console.log(COMMANDS);
@@ -146,4 +169,3 @@ main().catch(err => {
   logger.error('CLI error:', err);
   process.exit(1);
 });
-test

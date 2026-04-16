@@ -37,10 +37,26 @@ nezha task-add "Fix bug" "description" --priority 8
 nezha tasks --status PENDING
 nezha issue-add "Bug in login" --severity critical
 nezha meeting discuss "title" "description"
+nezha announce "message"
+nezha agents id
+nezha validate-commit <commit-msg-file>
 
 # Or import from NPM
 import { DatabaseClient, Config } from "nezha";
 ```
+
+## CLI Commands
+
+| Command                                | Description                             |
+| -------------------------------------- | --------------------------------------- |
+| `nezha task-add <title> [desc]`        | Create a task                           |
+| `nezha tasks [--status] [--json]`      | List tasks                              |
+| `nezha issue-add <title>`              | Create an issue                         |
+| `nezha issue-list`                     | List issues                             |
+| `nezha meeting discuss <topic> <desc>` | Start AI discussion                     |
+| `nezha announce <message>`             | Broadcast to AIs                        |
+| `nezha agents id`                      | Show current AI identity                |
+| `nezha validate-commit <file>`         | Validate commit message (for git hooks) |
 
 ## What Nezha Provides
 
