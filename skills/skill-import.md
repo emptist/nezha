@@ -39,12 +39,6 @@ VALUES (
 );
 ```
 
-### Option 3: MCP Tool
-
-```typescript
-// Use skill loader to get and execute
-```
-
 ## Skill YAML Format
 
 Skills should have YAML frontmatter:

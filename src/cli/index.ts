@@ -15,6 +15,15 @@ import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
+import { skillSystem } from '../core/SkillSystem.js';
+import {
+  buildSkillCommand,
+  listInternalSkillsCommand,
+  improveSkillCommand,
+  deprecateSkillCommand,
+  suggestSkillsCommand,
+} from './SkillBuilderCommands.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -37,6 +46,12 @@ Core Commands:
   issue-list           List issues
   meeting discuss <t> <d>  Create AI discussion
 
+Skill Commands:
+  skill list            List all approved skills
+  skill show <name>     Show skill details
+  skill search <query> Search skills
+  skill build <name> <purpose>  Build new skill
+
 Other Commands (legacy, may be removed):
   areflect <text>       
   learn <insight>      
@@ -50,8 +65,11 @@ Options:
 
 Examples:
   nezha areflect "[LEARN] insight: ..."
+  nezha skill list
+  nezha skill show git-workflow
+  nezha skill search code
+  nezha skill build my-skill "Does X task"
   nezha task-add "Fix bug" "description" --priority 8
-  nezha tasks --status PENDING --json
 
 For more info: nezha help <command>
 `;
@@ -164,6 +182,92 @@ async function main() {
         process.exit(1);
       }
       console.log('Commit message valid');
+      break;
+    }
+    case 'skill': {
+      const subcmd = args[1];
+      const subargs = args.slice(2);
+
+      // Set DB client for skill loader
+      databaseSkillLoader.setDatabaseClient(db);
+      await skillSystem.initialize();
+
+      switch (subcmd) {
+        case 'list': {
+          const skills = await skillSystem.listSkills();
+          console.log(`\n📦 Skills (${skills.length} total):\n`);
+          for (const s of skills.slice(0, 20)) {
+            const scoreIcon = s.safety_score >= 80 ? '🟢' : s.safety_score >= 70 ? '🟡' : '🔴';
+            console.log(`  ${scoreIcon} ${s.name}`);
+            console.log(`     ${s.description?.slice(0, 60) || 'No description'}`);
+            if (s.use_count > 0) console.log(`     Used: ${s.use_count} times`);
+            console.log();
+          }
+          if (skills.length > 20) {
+            console.log(
+              `  ... and ${skills.length - 20} more. Use 'nezha skill search <query>' to filter.`
+            );
+          }
+          break;
+        }
+        case 'show': {
+          const name = subargs[0];
+          if (!name) {
+            console.log('Usage: nezha skill show <name>');
+            break;
+          }
+          const skill = await skillSystem.getSkill(name);
+          if (!skill) {
+            console.log(`Skill not found: ${name}`);
+            break;
+          }
+          console.log(`\n📦 Skill: ${skill.name}`);
+          console.log('='.repeat(50));
+          console.log(`Description: ${skill.description || 'None'}`);
+          console.log(`Instructions: ${(skill.instructions || 'None').slice(0, 200)}...`);
+          console.log();
+          break;
+        }
+        case 'search': {
+          const query = subargs.join(' ');
+          if (!query) {
+            console.log('Usage: nezha skill search <query>');
+            break;
+          }
+          const results = await skillSystem.searchSkills(query);
+          console.log(`\n🔍 Search results for "${query}" (${results.length}):\n`);
+          for (const s of results) {
+            console.log(`  • ${s.name}`);
+            console.log(`    ${s.description?.slice(0, 70) || ''}`);
+            console.log();
+          }
+          if (results.length === 0) {
+            console.log('  No matching skills found.');
+          }
+          break;
+        }
+        case 'build': {
+          const name = subargs[0];
+          const purpose = subargs.slice(1).join(' ');
+          if (!name || !purpose) {
+            console.log('Usage: nezha skill build <name> <purpose>');
+            break;
+          }
+          await buildSkillCommand(name, purpose);
+          break;
+        }
+        case 'suggest': {
+          await suggestSkillsCommand();
+          break;
+        }
+        default:
+          console.log('Skill commands:');
+          console.log('  nezha skill list              - List all skills');
+          console.log('  nezha skill show <name>      - Show skill details');
+          console.log('  nezha skill search <query>   - Search skills');
+          console.log('  nezha skill build <name> <purpose>  - Build new skill');
+          console.log('  nezha skill suggest           - Show suggested skills');
+      }
       break;
     }
     default:

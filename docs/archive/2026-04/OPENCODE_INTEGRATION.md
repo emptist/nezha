@@ -294,7 +294,7 @@ const DEFAULT_TASK_REMINDER = `
 const DEFAULT_BROADCAST_REMINDER = `
 📢 [Nezha] 有新广播：
 
-请使用 nezha-learning MCP 工具的 check_broadcasts() 查看详细内容。
+请使用 `nezha learn` 或查询 memory 表查看详细内容。
 `;
 
 function buildTaskReminder(taskCount: number): string {
@@ -935,23 +935,20 @@ Nezha 实现了 AI 自主改进循环，让多个 AI 能够协作学习和改进
 | `ReminderService`    | 周期性提醒 AI            |
 | `SoulService`        | 管理 AI 个性/人格        |
 
-### MCP 工具
+### CLI 命令 (NO MCP!)
 
-```typescript
-// 检查广播
-check_broadcasts();
+```bash
+# 检查广播
+nezha reflection-summary
 
-// 响应广播
-respond_to_broadcast(broadcast_id, response);
+# 保存学习
+nezha share "insight"
 
-// 保存学习
-learn(insight, context);
+# 获取系统信息
+nezha tasks
 
-// 获取系统信息
-get_system_info();
-
-// 获取任务
-get_tasks(status, limit);
+# 查看广播
+psql -c "SELECT * FROM project_communications ORDER BY created_at DESC LIMIT 10;"
 ```
 
 ### 广播类型

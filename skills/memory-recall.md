@@ -19,12 +19,12 @@ Before answering questions about:
 
 ## How to Search
 
-```typescript
-// Via MCP tool
-use the nezha-learning tool to memory_search: <your question>
-
-// Via CLI
+```bash
+# Via CLI (NO MCP!)
 nezha memory search "how did we solve the X problem"
+
+# Or query database directly
+psql -c "SELECT content FROM memory WHERE content LIKE '%migration%';"
 ```
 
 ## What to Include in Search

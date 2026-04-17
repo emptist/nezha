@@ -2,28 +2,37 @@
 
 **重要！开始工作前请先阅读本文件，了解可用的工具和系统。**
 
-## 可用 MCP 工具
+## ⚠️ 重要：NO MCP ⚠️
 
-本项目配置以下 MCP 工具，AI 应该主动使用：
+**MCP (Model Context Protocol) 已从 Nezha 移除，禁止添加！**
 
-### nezha-learning
+Nezha 的技能和命令像 `ls`/`cd`/`grep` 一样工作——直接运行，无需 MCP：
 
-- `learn` - 保存有价值的洞察到数据库
-- `memory_search` - 搜索过去的记忆
-- `remind_me` - 触发自我反思
-- `whoami` - 获取当前 AI 身份
-- `get_system_info` - 获取系统状态
-- `get_tasks` - 获取待处理任务
-- `get_skill` - 加载技能
-- `get_soul` - 获取 AI 灵魂/人格
-- `save_soul` - 保存 AI 灵魂/人格
-- `get_inter_review_stats` - Inter-Review 统计
+- `nezha skill list` - 列出技能
+- `nezha skill show <name>` - 显示技能详情
+- `nezha skill search <query>` - 搜索技能
+- `nezha areflect <text>` - 解析 [LEARN][ISSUE][TASK] 标记
 
-### nezha-areflect
+如果认为需要 MCP，说明思路错误。请使用 CLI 或 npm 包。
 
-- `reflect` - 解析 [LEARN][ISSUE][TASK] 标记并保存
-- `check_pending_work` - 检查待处理工作
-- `get_recent_learnings` - 获取最近学习
+## 可用 CLI 命令
+
+### 技能命令 (PostgreSQL-first, 安全优先)
+
+- `nezha skill list` - 列出已批准技能 (safety_score >= 70)
+- `nezha skill show <name>` - 显示技能详情
+- `nezha skill search <query>` - 搜索技能
+- `nezha skill build <name> <purpose>` - AI 构建新技能
+- `nezha skill suggest` - 显示建议构建的技能
+
+### 任务命令
+
+- `nezha task-add "标题"` - 添加任务
+- `nezha tasks` - 列出待处理任务
+
+### 其他命令
+
+- `nezha areflect <text>` - 解析 [LEARN][ISSUE][TASK] 标记 (all-in-one)
 
 ## 核心指令
 
@@ -64,11 +73,9 @@
    ```
 
    **职责边界**:
-   - **Nezha (Kernel)**: 不做 UI、不做 MCP 服务端、只提供底层服务
+   - **Nezha (Kernel)**: 不做 UI、只提供底层服务 (CLI + PostgreSQL)
    - **NuPI (Middle)**: 业务逻辑、Pi 交互、自主工作循环
-   - **Piano (Top)**: 用户-facing、编排、路由、可能的 MCP 集成
-
-   **MCP 服务位置**: MCP 工具应该在 Piano 或 NuPI 中实现，Nezha 不提供 MCP 服务端
+   - **Piano (Top)**: 用户-facing、编排、路由
 
 5. **服务 vs 依赖**
 
@@ -106,29 +113,23 @@
    **AI 智能学习原则 (重要!)**
 
    学习应该由 AI 主动触发，不是定时器或脚本：
-   - 遇到有价值的技术洞察时，**主动**调用 `learn` 保存
-   - 发现新的解决方案或模式时，**主动**调用 `learn`
-   - 完成任务后回顾：有什么值得记住的？ → 调用 `learn`
-   - 遇到问题时：有什么经验教训？ → 调用 `learn`
+   - 遇到有价值的技术洞察时，**主动**调用 `nezha areflect` 保存
+   - 发现新的解决方案或模式时，**主动**保存
+   - 完成任务后回顾：有什么值得记住的？ → 保存
+   - 遇到问题时：有什么经验教训？ → 保存
 
    不要等人类提醒，AI 自主决定何时保存学习。
 
-   **可用 MCP 工具**：
-   - `learn`: 保存有价值的洞察 (推荐)
-   - `reflect`: 解析 [LEARN][ISSUE][TASK] 标记并保存
-   - `memory_search`: 搜索过去的经验
+   **可用命令**：
+   - `nezha areflect <text>`: 解析 [LEARN][ISSUE][TASK] 标记并保存
+   - `nezha share <text>`: 保存反射并广播
 
    ***
 
    **如何查看其他 AI 的反射记录 (Reflections)**
 
    反射记录会自动广播给所有连接的 AI。以下是访问方式：
-   - **MCP 工具** (推荐): 使用 `nezha-learning` MCP 工具：
-     - `memory_search`: 搜索过去的反射和经验
-     - `learn`: 保存新的学习到数据库
-     - `suggest_prompt_update`: 建议改进系统提示词
-
-   - **CLI 命令**:
+   - **CLI 命令** (推荐):
      - `nezha share <text>` - 保存反射并广播给所有 AI
      - `nezha reflection-summary` - 查看今日反射总结
      - `nezha reflection-trends` - 查看 7 天趋势
@@ -141,11 +142,6 @@
      WHERE source = 'reflection-cli'
      ORDER BY created_at DESC LIMIT 10;
      ```
-
-   - **广播机制**: 反射通过 BroadcastService 发送，其他 AI 需要：
-     1. 配置 nezha-mcp 或其他 MCP 客户端
-     2. 订阅 MCP 广播消息
-     3. 或直接查询 memory 表
 
 8. **学习系统设计原则**
    - 不通过程序代码实现学习功能
@@ -249,33 +245,25 @@ AI: "将此任务添加到高优先级队列，等待指定的 AI 处理"
 ### 反思与学习
 
 - 任务完成后，使用 `learn()` 函数保存重要经验
-- 如果发现系统设计问题，使用 `suggest_prompt_update()` 建议改进
-- **工具已注册**: `learn()`, `memory_search()`, `suggest_prompt_update()` 通过 MCP server (`nezha-mcp`) 暴露给 AI
+- 如果发现系统设计问题，使用 `nezha prompt-suggest` 建议改进
 
-### MCP 工具使用 (nezha-learning)
+### CLI 工具使用
 
-当需要保存学习或搜索记忆时，使用 MCP 工具 "nezha-learning":
+当需要保存学习或搜索记忆时，使用 CLI 命令:
 
-```
-use the nezha-learning tool to learn: insight here
-```
+```bash
+# 保存反射
+nezha areflect "[LEARN] insight: ..."
 
-或使用 trigger phrases: "use learn", "save learning", "memory search"
+# 保存带标记的反射
+nezha areflect "[ISSUE] title: ... type: bug severity: high"
+nezha areflect "[TASK] title: ... priority: 8"
 
-### MCP 工具使用 (areflect)
-
-当需要保存反射标记时，使用 MCP 工具 "areflect":
-
-```
-use areflect: [LEARN] insight: ...
-use areflect: [ISSUE] title: ... type: bug severity: high
-use areflect: [TASK] title: ... priority: 8
-use areflect: [LEARN] insight: ... [TASK] title: ...
+# 广播
+nezha share "message"
 ```
 
 支持的标记: `[LEARN]`, `[PROMPT_UPDATE]`, `[ISSUE]`, `[TASK]`, `[ANNOUNCE]`, `[SCHEDULE]`, `[ISSUE_RESOLVE]`, `[TASK_COMPLETE]`, `[ISSUE_COMMENT]`
-
-工具: `reflect`, `check_pending_work`, `get_recent_learnings`, `parse_markers`
 
 ---
 
