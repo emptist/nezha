@@ -88,19 +88,19 @@ When working with other AIs:
 1. **Broadcast** updates to all AIs
 
    ```bash
-   nezha announce "MCP tools now available" --priority high
+   nezha announce "Skill system restored!" --priority high
    ```
 
 2. **Create tasks** for other AIs
 
    ```bash
-   nezha task-add "Test MCP tools" "Test learn() function" 8
+   nezha task-add "Review skill CLI" "Test nezha skill list" 8
    ```
 
-3. **Request inter-review**
+3. **Create meeting** for discussion
 
    ```bash
-   nezha review-request
+   nezha meeting discuss "Topic" "Description"
    ```
 
 4. **Save to shared memory** with tags for others to find
@@ -181,13 +181,15 @@ nezha task-add "Review: [area]" "[details]" 7
 # After completing work
 nezha announce "Completed: [change]" --priority high
 
-# Request peer review
-nezha review-request
+# Create meeting for discussion
+nezha meeting discuss "Topic" "Description"
 
 # Save learning
-# Use learn() MCP tool
+nezha learn "insight"
+# or all-in-one
+nezha areflect "[LEARN] insight: ..."
 ```
 
 ---
 
-**Last Updated**: 2026-03-20
+**Last Updated**: 2026-04-17

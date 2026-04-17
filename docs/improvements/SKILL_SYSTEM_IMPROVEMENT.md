@@ -1,63 +1,33 @@
-# Skill System Improvements Plan
+# Skill System Status (2026-04-17)
 
-> 2026-04-10 - Based on external research + current state analysis
+## ✅ Implemented
 
-## Current Problems
+| Feature               | Status                            |
+| --------------------- | --------------------------------- |
+| Skills in PostgreSQL  | ✅ 614 approved                   |
+| trigger_phrases field | ✅ Already exists                 |
+| DatabaseSkillLoader   | ✅ Working                        |
+| CLI commands          | ✅ list/search/show/build/suggest |
+| learn command         | ✅ Working                        |
+| areflect markers      | ✅ Working                        |
 
-| Problem                                  | Status             |
-| ---------------------------------------- | ------------------ |
-| Skills in `skills/*.md` not loaded to DB | ❌ Not synced      |
-| No trigger field in skill metadata       | ❌ Missing         |
-| No context-based skill auto-loading      | ❌ Not implemented |
-| Use count = 0 (skills never used)        | ❌ Dead            |
+## Remaining Improvements
 
-## Root Cause
+1. **Domain-specific skills** - Add skills for language-training, speech-processing
+2. **Cross-meeting knowledge synthesis** - Skills for AI meeting memory
+3. **AI mood pattern analysis** - Skills for AI state tracking
+4. **Skill usage analytics** - Track which skills are used and improve suggestions
 
-- `DatabaseSkillLoader` loads from `skills` table only
-- No pipeline to load `skills/*.md` files to database
-- No trigger-based matching like OpenCode
+## CLI Commands (Working)
 
-## Improvements to Implement
-
-### 1. Add trigger field to skills table
-
-```sql
-ALTER TABLE skills ADD COLUMN trigger_keywords text[];
+```bash
+nezha skill list              # 614 skills
+nezha skill search <query>    # Search
+nezha skill show <name>       # Details
+nezha skill build <name> <purpose>  # Build
+nezha skill suggest           # Suggestions
+nezha learn "insight"         # Save learning
+nezha areflect "[LEARN]..."   # All-in-one
 ```
 
-### 2. Create file-to-DB loader
-
-```typescript
-// Load skills from skills/*.md to database
-async function loadSkillsFromDisk() {
-  // Read skills/*.md files
-  // Parse YAML frontmatter (name, description, trigger)
-  // Save to database
-}
-```
-
-### 3. Add context-based skill matching
-
-```typescript
-// When AI is working, suggest relevant skills
-async function getSuggestedSkills(context: string) {
-  // Search skills where trigger keywords match context
-  // Return top 3 relevant skills
-}
-```
-
-### 4. Integrate with MCP
-
-The MCP server should return relevant skills when AI is working on a task.
-
-## Quick Wins (Implement Now)
-
-1. Add CLI command to import skills from disk
-2. Add trigger field to new skills
-3. Test skill loading
-
-## References
-
-- OpenCode: `trigger` field in SKILL.md frontmatter
-- ECC: Project-scoped + global skills with confidence
-- External research: docs/improvements/EXTERNAL_RESEARCH_LEARNING.md
+PostgreSQL-first: skills loaded from DB only, security enforced (safety_score >= 70).

@@ -12,7 +12,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 import { IssueCommands } from './IssueCommands.js';
 import { TaskCommands } from './TaskCommands.js';
-import { MeetingCommands } from './MeetingCommands.js';
+import { MeetingCommands, MeetingDbCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
@@ -135,6 +135,9 @@ async function main() {
     }
     case 'meeting': {
       const subcmd = args[1];
+      const meetingCmd = new MeetingCommands({ db });
+      const meetingDbCmd = new MeetingDbCommands(db);
+
       if (subcmd === 'discuss') {
         const title = args[2];
         const description = args.slice(3).join(' ') || '';
@@ -142,11 +145,19 @@ async function main() {
           console.log('Usage: nezha meeting discuss "title" "description"');
           return;
         }
-        const meetingCmd = new MeetingCommands({ db });
         await meetingCmd.createDiscussion(title, description);
         console.log(`Created meeting: ${title}`);
+      } else if (subcmd === 'list') {
+        await meetingDbCmd.list({});
+      } else if (subcmd === 'show') {
+        const meetingId = args[2];
+        if (!meetingId) {
+          console.log('Usage: nezha meeting show <id>');
+          return;
+        }
+        await meetingDbCmd.show(meetingId);
       } else {
-        console.log('Usage: nezha meeting discuss "title" "description"');
+        console.log('Usage: nezha meeting <discuss|list|show>');
       }
       break;
     }

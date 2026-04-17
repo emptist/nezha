@@ -4,12 +4,12 @@
 
 ## Current Nezha System Prompts
 
-| File                     | Purpose                                      | Issues                                |
-| ------------------------ | -------------------------------------------- | ------------------------------------- |
-| `AGENTS.md`              | Core instructions, MCP tools, workflow rules | Too long, some outdated               |
-| `.memory/MEMORY.md`      | Long-term knowledge, architecture principles | Partially outdated                    |
-| `.memory/AI_LEVELS.md`   | AI capability levels (DEPRECATED)            | Marked as deprecated but still exists |
-| `.memory/reflections.md` | Reflection patterns                          | OK                                    |
+| File                     | Purpose                                         | Issues                                |
+| ------------------------ | ----------------------------------------------- | ------------------------------------- |
+| `AGENTS.md`              | Core instructions, CLI commands, workflow rules | Updated 2026-04-17                    |
+| `.memory/MEMORY.md`      | Long-term knowledge, architecture principles    | Partially outdated                    |
+| `.memory/AI_LEVELS.md`   | AI capability levels (DEPRECATED)               | Marked as deprecated but still exists |
+| `.memory/reflections.md` | Reflection patterns                             | OK                                    |
 
 ## External Systems Comparison
 
@@ -107,7 +107,7 @@ Be the assistant you'd actually want to talk to.
 ```
 AGENTS.md (short, 50 lines)
 ├── Architecture decisions (ref to docs/)
-├── MCP tools (ref to skills/)
+├── CLI commands (ref to skills/)
 └── Core workflow (ref to .memory/)
 ```
 

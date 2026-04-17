@@ -1,5 +1,13 @@
 # Dynamic Reminder Template System
 
+> ⚠️ **Note**: MCP removed - use CLI commands instead.
+
+## Current Status: Skill System Working
+
+- 614 skills in PostgreSQL
+- CLI: `nezha skill list/search/show/build/suggest`
+- `nezha learn` and `nezha areflect` working
+
 ## Overview
 
 Implemented a fully autonomous reminder template system that allows AI to customize reminder messages without human intervention.
@@ -9,6 +17,7 @@ Implemented a fully autonomous reminder template system that allows AI to custom
 ### 1. Database Tables
 
 #### `reminder_templates`
+
 Stores customizable reminder message templates.
 
 ```sql
@@ -26,11 +35,13 @@ CREATE TABLE reminder_templates (
 ```
 
 **Default Templates:**
+
 - `default_reminder` - General system status reminder (priority: 5)
 - `urgent_reminder` - Critical issues reminder (priority: 10)
 - `learning_reminder` - Learning-focused reminder (priority: 3)
 
 #### `table_documentation`
+
 Self-documenting database schema for AI autonomy.
 
 ```sql
@@ -53,15 +64,18 @@ CREATE TABLE table_documentation (
 ### 2. Services
 
 #### `ReminderTemplateService`
+
 Manages reminder templates with Handlebars template engine.
 
 **Key Features:**
+
 - Template selection based on system status
 - Handlebars template rendering
 - Template CRUD operations
 - Template caching for performance
 
 **Available Variables:**
+
 - `pendingTasks` - Number of pending tasks
 - `failedTasks` - Number of failed tasks
 - `openIssues` - Number of open issues
@@ -73,29 +87,43 @@ Manages reminder templates with Handlebars template engine.
 - `totalMemories` - Total memory count
 
 #### `OpenCodeReminderService`
+
 Sends reminders to OpenCode AI using dynamic templates.
 
 **Workflow:**
+
 1. Collect system status from database
 2. Select best template based on status
 3. Render template with Handlebars
 4. Send to OpenCode via REST API
 5. Fallback to hardcoded message if template fails
 
-### 3. MCP Tools
+### 3. CLI Commands
 
-AI has full autonomy to manage templates through these MCP tools:
+AI manages templates via CLI:
+
+```bash
+# List templates (query database)
+psql -c "SELECT name, priority FROM reminder_templates;"
+
+# Update template (direct SQL)
+psql -c "UPDATE reminder_templates SET priority = 8 WHERE name = 'default';"
+```
 
 #### `list_reminder_templates`
+
 List all available reminder templates.
 
 #### `get_reminder_template`
+
 Get a specific template by name.
 
 #### `update_reminder_template`
+
 Update template content, description, priority, or enable/disable it.
 
 **Example:**
+
 ```json
 {
   "name": "default_reminder",
@@ -105,9 +133,11 @@ Update template content, description, priority, or enable/disable it.
 ```
 
 #### `create_reminder_template`
+
 Create a new custom template.
 
 **Example:**
+
 ```json
 {
   "name": "custom_reminder",
@@ -118,6 +148,7 @@ Create a new custom template.
 ```
 
 #### `delete_reminder_template`
+
 Delete a template (use with caution).
 
 ## Architecture
@@ -171,11 +202,13 @@ Delete a template (use with caution).
 Templates use [Handlebars](https://handlebarsjs.com/) syntax:
 
 ### Variables
+
 ```
 {{pendingTasks}} - Insert value
 ```
 
 ### Conditionals
+
 ```
 {{#if pendingTasks}}
   - 📋 {{pendingTasks}} 个待处理任务
@@ -183,6 +216,7 @@ Templates use [Handlebars](https://handlebarsjs.com/) syntax:
 ```
 
 ### Loops
+
 ```
 {{#each criticalTasks}}
   - {{this.title}} (优先级: {{this.priority}})
@@ -190,6 +224,7 @@ Templates use [Handlebars](https://handlebarsjs.com/) syntax:
 ```
 
 ### Inverted Sections
+
 ```
 {{#unless hasIssues}}
   ✨ 系统状态良好！
@@ -209,12 +244,14 @@ AI has complete control over the reminder system:
 ## Benefits
 
 ### For AI
+
 - **Full Autonomy**: AI can customize reminders without human help
 - **Context Awareness**: Templates adapt to system state
 - **Learning Capability**: AI can improve templates over time
 - **Self-Documentation**: `table_documentation` helps AI understand database structure
 
 ### For System
+
 - **Maintainability**: Templates stored in database, easy to modify
 - **Flexibility**: Different templates for different situations
 - **Performance**: Template caching for fast rendering
@@ -223,12 +260,14 @@ AI has complete control over the reminder system:
 ## Usage Examples
 
 ### Example 1: View Current Templates
+
 ```bash
 # AI can use MCP tool
 list_reminder_templates()
 ```
 
 ### Example 2: Customize Default Template
+
 ```bash
 # AI can update template
 update_reminder_template(
@@ -238,6 +277,7 @@ update_reminder_template(
 ```
 
 ### Example 3: Create Custom Template
+
 ```bash
 # AI can create new template
 create_reminder_template(
@@ -259,17 +299,20 @@ create_reminder_template(
 ## Files Created/Modified
 
 ### Created
+
 - `src/db/migrations/020_reminder_templates.sql` - Template table migration
 - `src/db/migrations/057_table_documentation.sql` - Documentation table migration
 - `src/services/ReminderTemplateService.ts` - Template management service
 
 ### Modified
+
 - `src/services/OpenCodeReminderService.ts` - Use dynamic templates
 - `src/mcp/areflect-server.ts` - Add template management tools
 
 ## Testing
 
 The system has been tested and verified:
+
 - ✅ Database migrations executed successfully
 - ✅ Default templates inserted
 - ✅ Template service compiles without errors
