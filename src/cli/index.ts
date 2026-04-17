@@ -270,6 +270,64 @@ async function main() {
       }
       break;
     }
+    case 'learn': {
+      const insight = args.slice(1).join(' ');
+      if (!insight) {
+        console.log('Usage: nezha learn "insight"');
+        break;
+      }
+      await db.query(
+        `INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'cli', 5, ARRAY['learning'])`,
+        [insight]
+      );
+      console.log(`✅ Learning saved: ${insight.slice(0, 50)}...`);
+      break;
+    }
+    case 'areflect': {
+      const text = args.slice(1).join(' ');
+      if (!text) {
+        console.log('Usage: nezha areflect "[LEARN] insight: ..."');
+        break;
+      }
+      // Parse markers: [LEARN], [TASK], [ISSUE], etc.
+      const learnMatch = text.match(/\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+))?/i);
+      const taskMatch = text.match(/\[TASK\]\s*title:\s*(.+?)(?:\s*priority:\s*(\d+))?/i);
+      const issueMatch = text.match(
+        /\[ISSUE\]\s*title:\s*(.+?)(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?/i
+      );
+
+      if (learnMatch && learnMatch[1]) {
+        const content = learnMatch[1];
+        const context = learnMatch[2] || '';
+        await db.query(
+          `INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['learning'])`,
+          [context ? `${content} (context: ${context})` : content]
+        );
+        console.log(`✅ Learning saved: ${content.slice(0, 50)}...`);
+      }
+      if (taskMatch && taskMatch[1]) {
+        const title = taskMatch[1];
+        const priority = parseInt(taskMatch[2] || '5', 10);
+        await db.query(`INSERT INTO tasks (title, status, priority) VALUES ($1, 'PENDING', $2)`, [
+          title,
+          priority,
+        ]);
+        console.log(`✅ Task created: ${title}`);
+      }
+      if (issueMatch && issueMatch[1]) {
+        const title = issueMatch[1];
+        const severity = issueMatch[3] || 'medium';
+        await db.query(`INSERT INTO issues (title, status, severity) VALUES ($1, 'open', $2)`, [
+          title,
+          severity,
+        ]);
+        console.log(`✅ Issue created: ${title}`);
+      }
+      if (!learnMatch && !taskMatch && !issueMatch) {
+        console.log('No valid markers found. Use: [LEARN], [TASK], or [ISSUE]');
+      }
+      break;
+    }
     default:
       console.log(`Unknown command: ${command}`);
       console.log(COMMANDS);
