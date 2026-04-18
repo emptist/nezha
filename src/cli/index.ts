@@ -165,6 +165,17 @@ async function main() {
       await issueCmd.list();
       break;
     }
+    case 'issue-resolve': {
+      const issueId = args[1];
+      if (!issueId) {
+        console.log('Usage: nezha issue-resolve <issue-id> [notes]');
+        return;
+      }
+      const notes = args.slice(2).join(' ') || undefined;
+      const issueCmd = new IssueCommands(db);
+      await issueCmd.resolve(issueId, notes);
+      break;
+    }
     case 'meeting': {
       const subcmd = args[1];
       const meetingCmd = new MeetingCommands({ db });

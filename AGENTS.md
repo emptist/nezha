@@ -340,6 +340,7 @@ nezha meeting opinion <id> "观点"
 - `nezha task-complete <id>` - 标记任务为 COMPLETED
 - Git hook 自动完成: commit 包含 `[task: <uuid>]`
 - 任务验证: 执行前检查是否已完成，避免重复工作
+- Git hook 自动解决: commit 包含 `[issue: <uuid>]` 标记 issue 为 RESOLVED
 
 ### 3. agent_sessions 表
 
