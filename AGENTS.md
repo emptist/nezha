@@ -224,18 +224,29 @@ Nezha 的技能和命令像 `ls`/`cd`/`grep` 一样工作——直接运行，�
 3. **多 AI 协作**: 需要讨论的问题，应该发起 AI 间讨论（通过数据库任务 + Inter-Review）
 4. **紧急情况**: 只有在系统明确需要人类批准时（如安全、权限问题）才挂起等待人类
 
-### Git 提交规则 (重要!)
+### 5. Git Hooks (重要!)
 
-每次 commit **必须**包含:
+**所有 Nezha 家族项目共享中央 hooks**:
+- 位置: `scripts/git-hooks/central/`
+- 自动标记任务/问题完成
+- 验证提交信息包含 task/issue ID
+- 自动添加 `[Agent: <id>]`
 
-- `[task: <uuid>]` 或 `[issue: <uuid>]` 或 `[inter-review: <uuid>]`
-- `[Agent: <ai-id>]` (由 hook 自动添加)
+**设置**:
+```bash
+# 使用中央 hooks (推荐)
+git config core.hooksPath /Users/jk/gits/hub/tools_ai/nezha/scripts/git-hooks/central
+```
 
 **禁止绕过**:
+- ❌ 不要使用 `git config core.hooksPath /dev/null`
+- ❌ 不要使用 `--no-verify`
 
-- ❌ 不要使用 `git config core.hooksPath /dev/null` 绕过 hook
-- ❌ 不要使用 `--no-verify` 跳过 commit 检查
-- ✅ 如果 hook 验证失败，修复 commit message 后重试
+**自动操作**:
+| Commit 包含 | 操作 |
+|------------|------|
+| `[task: <uuid>]` | 标记任务 COMPLETED |
+| `[issue: <uuid>]` | 标记问题 RESOLVED |
 
 ### 错误模式 ❌
 
