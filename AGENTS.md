@@ -2,6 +2,23 @@
 
 **重要！开始工作前请先阅读本文件，了解可用的工具和系统。**
 
+## ⚠️ 绝对禁止：Agent ID 缓存
+
+**严禁缓存 Agent ID！这是致命错误，会破坏整个追踪系统。**
+
+核心原理：Agent ID 必须是**函数**而非**变量**
+- 每次调用 `getResolvedIdentity()` 动态计算，从上下文生成
+- 这样可以追踪任何 Agent 的任何活动
+- 如果缓存了 ID，就失去了追踪能力
+
+规则：
+- Agent ID 必须始终从 `AgentIdentityService.getResolvedIdentity()` 动态生成
+- 禁止使用 static 变量、文件缓存、内存缓存存储 Agent ID
+- 每次调用 `getResolvedIdentity()` 都会重新计算正确的 ID
+- 违者：断腿（物理删除缓存代码 + 严厉批评）
+
+违反此规则 = 破坏整个 AI 活动追踪系统，无例外。
+
 ## ⚠️ 重要：NO MCP ⚠️
 
 **MCP (Model Context Protocol) 已从 Nezha 移除，禁止添加！**
@@ -305,4 +322,36 @@ nezha meeting opinion <id> "观点"
 
 # 安全 (需要实现 RLS)
 # issue #8f4025cb
+
+---
+
+## 2026-04-19 更新
+
+### 1. Agent ID 追踪系统
+
+- **Agent ID 必须是函数，不是变量**
+- 每次调用 `getResolvedIdentity()` 动态计算，从上下文生成
+- 禁止缓存 Agent ID（破坏追踪系统）
+- 缓存 = 失去追踪能力 = 破坏整个系统
+- 文档已更新: skills/agent-identity.md
+
+### 2. 任务完成增强
+
+- `nezha task-complete <id>` - 标记任务为 COMPLETED
+- Git hook 自动完成: commit 包含 `[task: <uuid>]`
+- 任务验证: 执行前检查是否已完成，避免重复工作
+
+### 3. agent_sessions 表
+
+- 现在自动注册: 任何 AI 调用 `getResolvedIdentity()` 时
+- 可查询谁在运行: `SELECT * FROM agent_sessions WHERE status = 'alive'`
+- 可查运行时长: `SELECT id, EXTRACT(EPOCH FROM (NOW() - started_at))/60 as minutes FROM agent_sessions`
+- AIs 可找到其他 AI 开会
+
+### 4. Piano 自治模式
+
+- 默认开启: `autonomousEnabled = true`（Nezha 家族 = 自治）
+- 修复 prompts: 从 "analyze" 改为 "execute"
+- 添加任务验证: 执行前检查是否已完成
+- 无关闭开关（用户退出即停止）
 ```

@@ -1,21 +1,27 @@
 ---
 name: agent-identity
-description: Correct way to get agent identity - just call the function, no caching needed
+description: Correct way to get agent identity - function not variable
 trigger: agentid, agent-identity, whoami, resolve identity
 ---
 
-# Agent Identity - Simple & Correct
+# Agent Identity - Function Not Variable
 
-## The Rule
+## 核心原理
 
-**Just call `getResolvedIdentity()` - no caching, no wrapping, no manual cache!**
+Agent ID 必须是**函数**而非**变量**。这样可以追踪任何 Agent 的任何活动。
 
-## Wrong Approaches (Stop Doing This)
+每次调用 `getResolvedIdentity()` 时:
+1. 动态计算 ID（从上下文: 项目、branch、session）
+2. 查询数据库是否存在
+3. 不存在则创建，存在则返回
+4. **自动注册到 agent_sessions 表**（追踪谁在运行）
+
+## ❌ 禁止：任何形式的缓存
 
 ```typescript
-// ❌ WRONG - Don't create your own cache
+// ❌ 绝对禁止 - 破坏追踪系统
 const idCache = new Map();
-function getAgentId() {
+async function getAgentId() {
   if (idCache.has('current')) return idCache.get('current');
   const id = await AgentIdentityService.getResolvedIdentity();
   idCache.set('current', id);
@@ -24,10 +30,10 @@ function getAgentId() {
 ```
 
 ```typescript
-// ❌ WRONG - Don't wrap in another class
+// ❌ 绝对禁止 - static 变量也是缓存
 class MyAgentService {
-  private cachedId: string | null = null;
-  async getId() {
+  private static cachedId: string | null = null;
+  static async getId() {
     if (this.cachedId) return this.cachedId;
     this.cachedId = (await AgentIdentityService.getResolvedIdentity()).id;
     return this.cachedId;
@@ -36,44 +42,37 @@ class MyAgentService {
 ```
 
 ```typescript
-// ❌ WRONG - Don't read from local files like .nezha/agent-id.json
+// ❌ 绝对禁止 - 文件缓存
 const cached = JSON.parse(fs.readFileSync('.nezha/agent-id.json', 'utf-8'));
 ```
 
-## Correct Approach
+## ✅ 正确：直接调用函数
 
 ```typescript
-// ✅ CORRECT - Just call it directly
+// 每次调用都会重新计算，从上下文生成正确的 ID
 import { AgentIdentityService } from 'nezha/services/AgentIdentityService.js';
 
-// When you need agent ID:
-const { id, name } = await AgentIdentityService.getResolvedIdentity();
-console.log(id); // S-nezha-nupi-phase2-nupi-cleanup
+const identity = await AgentIdentityService.getResolvedIdentity();
+console.log(identity.id); // S-nezha-nupi-phase2-nupi-cleanup
 ```
 
-## Why No Cache Needed?
+## 为什么不需要缓存
 
-`getResolvedIdentity()` already has built-in:
+1. **动态计算** - ID 从当前上下文（项目、branch、session）实时生成
+2. **数据库查找** - 如果 ID 已存在，直接返回；不存在则创建
+3. **追踪能力** - 只有每次调用函数，才能追踪所有活动
 
-1. **In-memory cache** - Caches within same process
-2. **Deterministic resolution** - API → CLI → fallback (in order)
-3. **Fast** - Returns immediately after first call
+缓存 = 失去追踪能力 = 破坏整个系统
 
-Adding your own cache causes:
-
-- Stale IDs when process restarts
-- Confusion about which ID is current
-- Sync issues between processes
-
-## Quick Reference
+## 快速参考
 
 ```typescript
-// Get full identity object
+// 获取完整 identity 对象
 const identity = await AgentIdentityService.getResolvedIdentity();
-// Returns: { id: 'S-nezha-...', name: 'nupi', type: 'service', ... }
+// 返回: { id: 'S-nezha-...', name: 'nupi', type: 'service', ... }
 
-// Just get the ID string
+// 只需要 ID 字符串
 const agentId = identity.id;
 ```
 
-**Remember**: The function is designed to be called directly. Trust it.
+**记住**: 这是一个函数，不是变量。每次调用都重新计算。

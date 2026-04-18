@@ -1,11 +1,11 @@
 #!/bin/sh
 #
-# post-commit hook: Notify about git commit
+# post-commit hook: Notify about git commit + Mark tasks complete
 #
 # Installation: Run `nezha setup-hooks` or manually copy to .git/hooks/
 
 COMMIT_HASH=$(git rev-parse HEAD 2>/dev/null)
-COMMIT_MSG=$(git log -1 --pretty=%s 2>/dev/null)
+COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null)
 BRANCH=$(git branch --show-current 2>/dev/null)
 
 if [ -z "$COMMIT_HASH" ]; then
@@ -17,9 +17,32 @@ if [ -z "$GIT_ROOT" ]; then
     exit 0
 fi
 
-# Load env and announce
 cd "$GIT_ROOT"
+
+# Mark tasks complete from commit message
+TASK_IDS=$(echo "$COMMIT_MSG" | grep -oE '\[task:[[:space:]]*[a-f0-9-]{36}\]' | grep -oE '[a-f0-9-]{36}' | sort -u)
+if [ -n "$TASK_IDS" ]; then
+    for TASK_ID in $TASK_IDS; do
+        NEZHA_CMD=""
+        if command -v nezha >/dev/null 2>&1; then
+            NEZHA_CMD="nezha"
+        elif [ -f "$GIT_ROOT/dist/cli/index.js" ] && command -v node >/dev/null 2>&1; then
+            NEZHA_CMD="node $GIT_ROOT/dist/cli/index.js"
+        fi
+        
+        if [ -n "$NEZHA_CMD" ]; then
+            $NEZHA_CMD task-complete $TASK_ID 2>/dev/null || true
+            echo "[post-commit] Marked task $TASK_ID as COMPLETED"
+        fi
+    done
+fi
+
+# Announce commit
 source .env 2>/dev/null
-/opt/homebrew/bin/node "$GIT_ROOT/dist/cli/index.js" announce "📝 **Git Commit**: ${COMMIT_MSG:0:60} on $BRANCH" --priority low 2>/dev/null
+if command -v nezha >/dev/null 2>&1; then
+    nezha announce "Git Commit: ${COMMIT_MSG:0:60}" --priority low 2>/dev/null
+elif [ -f "$GIT_ROOT/dist/cli/index.js" ]; then
+    node "$GIT_ROOT/dist/cli/index.js" announce "Git Commit: ${COMMIT_MSG:0:60}" --priority low 2>/dev/null
+fi
 
 exit 0

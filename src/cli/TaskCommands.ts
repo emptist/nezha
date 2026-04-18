@@ -20,14 +20,32 @@ export class TaskCommands {
     return id;
   }
 
-  async list(options?: { status?: string; limit?: number }): Promise<void> {
+  async updateStatus(taskId: string, status: string): Promise<boolean> {
+    const validStatuses = ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status: ${status}. Valid: ${validStatuses.join(', ')}`);
+    }
+    
+    const result = await this.db.query(
+      `UPDATE tasks SET status = $1, completed_at = $2 WHERE id = $3 RETURNING id`,
+      [status, status === 'COMPLETED' ? new Date() : null, taskId]
+    );
+    return result.rows.length > 0;
+  }
+
+  async list(options?: { status?: string; limit?: number; json?: boolean }): Promise<void> {
     const limit = options?.limit ?? 10;
     const status = options?.status ?? 'PENDING';
 
     const result = await this.db.query(
-      `SELECT id, title, status, priority FROM tasks WHERE status = $1 ORDER BY priority DESC, created_at DESC LIMIT $2`,
+      `SELECT id, title, status, priority, description, created_at FROM tasks WHERE status = $1 ORDER BY priority DESC, created_at DESC LIMIT $2`,
       [status, limit]
     );
+
+    if (options?.json) {
+      console.log(JSON.stringify(result.rows, null, 2));
+      return;
+    }
 
     if (result.rows.length === 0) {
       console.log(`No ${status} tasks`);

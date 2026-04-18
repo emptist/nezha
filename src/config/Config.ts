@@ -150,7 +150,7 @@ export class Config implements IConfig {
   private loadTaskConfig(yaml?: NezhaYamlConfig): TaskConfig {
     return {
       heartbeatIntervalMs: parseIntEnv(
-        process.env[ENV_KEYS.HEARTBEAT_INTERVAL],
+        process.env[ENV_KEYS.HEARTBEAT_INTERVAL] || process.env.HEARTBEAT_INTERVAL_MS,
         yaml?.task?.heartbeatIntervalMs || TASK_CONFIG.DEFAULT_HEARTBEAT_INTERVAL_MS,
         ENV_KEYS.HEARTBEAT_INTERVAL
       ),

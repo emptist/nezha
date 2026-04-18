@@ -108,19 +108,6 @@ export class AgentSessionService {
     }
   }
 
-  async heartbeat(workingOn?: string): Promise<void> {
-    if (!this.sessionId) {
-      return;
-    }
-
-    await this.db.query(
-      `UPDATE agent_sessions 
-       SET last_heartbeat = NOW(), working_on = COALESCE($1, working_on)
-       WHERE id = $2 AND status = 'alive'`,
-      [workingOn, this.sessionId]
-    );
-  }
-
   async unregister(): Promise<void> {
     if (!this.sessionId) {
       return;

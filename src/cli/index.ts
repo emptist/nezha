@@ -111,8 +111,40 @@ async function main() {
     case 'tasks': {
       const statusIndex = args.indexOf('--status');
       const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
+      const jsonIndex = args.indexOf('--json');
+      const isJson = jsonIndex !== -1;
       const taskCmd = new TaskCommands(db);
-      await taskCmd.list({ status });
+      await taskCmd.list({ status, json: isJson });
+      break;
+    }
+    case 'task-complete': {
+      const taskId = args[1];
+      if (!taskId) {
+        console.log('Usage: nezha task-complete <task-id>');
+        return;
+      }
+      const taskCmd = new TaskCommands(db);
+      const result = await taskCmd.updateStatus(taskId, 'COMPLETED');
+      console.log(result ? `Task ${taskId.slice(0,8)} marked COMPLETED` : `Task not found`);
+      break;
+    }
+    case 'task-complete-by-commit': {
+      const taskCmd = new TaskCommands(db);
+      const commitMsg = args.slice(1).join(' ') || '';
+      const taskIds = commitMsg.match(/\[task:\s*([a-f0-9-]+)\]/gi) || [];
+      const uniqueIds = [...new Set(taskIds.map(m => m.match(/[a-f0-9-]{36}/)?.[0]).filter((id): id is string => !!id))];
+      
+      if (uniqueIds.length === 0) {
+        console.log('No task IDs found in commit message');
+        return;
+      }
+      
+      let completed = 0;
+      for (const id of uniqueIds) {
+        const result = await taskCmd.updateStatus(id, 'COMPLETED');
+        if (result) completed++;
+      }
+      console.log(`Marked ${completed}/${uniqueIds.length} tasks COMPLETED`);
       break;
     }
     case 'issue-add': {

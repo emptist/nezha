@@ -6,6 +6,7 @@ import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
+import { getAgentSessionService } from './AgentSessionService.js';
 
 export interface AgentContext {
   project: string;
@@ -40,37 +41,30 @@ interface IdentityRow {
 }
 
 export class AgentIdentityService {
-  private static externalIdentity: AgentIdentity | null = null;
-  private static currentIdentity: AgentIdentity | null = null;
   private db: DatabaseClient;
 
   constructor(db: DatabaseClient) {
     this.db = db;
   }
 
-  static setExternalIdentity(identity: AgentIdentity): void {
-    AgentIdentityService.externalIdentity = identity;
-    AgentIdentityService.currentIdentity = identity;
-    logger.info(`[AgentIdentity] External identity set: ${identity.id}`);
-  }
-
-  static getExternalIdentity(): AgentIdentity | null {
-    return AgentIdentityService.externalIdentity;
-  }
-
   static async getResolvedIdentity(): Promise<AgentIdentity> {
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
+    
+    // Resolve identity
     const identity = await service.resolve();
+    
+    // Auto-register session in agent_sessions when identity is used
+    // This tracks who is alive - every AI activity triggers this
+    const sessionService = getAgentSessionService(db);
+    const source = service.detectContext().source || 'nezha';
+    await sessionService.registerSession(source);
+    
     await db.close();
     return identity;
   }
 
   async resolve(): Promise<AgentIdentity> {
-    if (AgentIdentityService.externalIdentity) {
-      return AgentIdentityService.externalIdentity;
-    }
-
     const context = this.detectContext();
     const id = this.generateSemanticId(context);
 
