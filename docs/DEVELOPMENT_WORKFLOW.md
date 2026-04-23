@@ -1,94 +1,74 @@
 # Development Workflow
 
-## Build, Test, Update Global
+## Quick Start
 
-All Nezha family projects (nezha, nupi, piano) share the same workflow:
-
-### Quick (Use the Script)
+When code changes, just run:
 
 ```bash
-cd /Users/jk/gits/hub/tools_ai/{project}
-./scripts/dev-link.sh
+npm run dev
 ```
 
-This:
-1. Cleans dist
-2. Builds
-3. Verifies git hash
-4. Links to global (npm link)
-5. Verifies global hash matches local
+That's it! This will:
+1. Clean dist
+2. Build with latest code
+3. Delete global install (fixes pnpm caching issue)
+4. Link to global
+5. Show both local & global hashes for verification
 
-### Manual
+## Check Status Any Time
 
 ```bash
-cd /Users/jk/gits/hub/tools_ai/{project}
+npm run status
+```
 
-# 1. Build
+Shows local vs global hash - helps debug if running old code.
+
+## Each Project
+
+### nupi
+```bash
+cd /Users/jk/gits/hub/tools_ai/nupi
+npm run dev    # build + link + verify
+npm run status # check hashes
+nupi          # test
+```
+
+### piano
+```bash
+cd /Users/jk/gits/hub/tools_ai/piano
+npm run dev    # build + link + verify
+npm run status # check hashes
+piano         # test
+```
+
+## Manual (without npm scripts)
+
+```bash
+# 1. Clean and build
 rm -rf dist && npm run build
 
-# 2. Verify hash
-grep GIT_HASH dist/extension.js  # or dist/src/extension.js
+# 2. Delete global first (IMPORTANT - pnpm caches!)
+rm -rf $(npm root -g)/@nezha/{project}
 
-# 3. Link to global
+# 3. Link
 npm link
 
-# 4. Verify global
+# 4. Verify hashes match
+grep GIT_HASH dist/extension.js
 grep GIT_HASH $(npm root -g)/@nezha/{project}/dist/extension.js
 ```
 
-### Why This Matters
+## Why Delete First?
 
-The git hash appears in logs:
+pnpm caches global packages by path - it won't detect your local code changes. Deleting forces fresh install.
+
+## Verifying Works
+
+Check startup logs for correct hash:
+
 ```
-[NuPI@e6146b57] Starting...
-[Piano@49f1e3f] Thinking router ready...
-```
-
-If global is stale, you'll see old hash and potentially run old code.
-
-## Project Structure
-
-| Project | Entry | Global Link |
-|---------|-------|-------------|
-| nezha | `nezha` CLI | N/A (npm install) |
-| nupi | `nupi` command | `@nezha/nupi` |
-| piano | `piano` command | `@nezha/piano` |
-
-## Common Issues
-
-### Hash Mismatch After Link
-
-If `dev-link.sh` shows hash mismatch:
-```bash
-rm -rf $(npm root -g)/@nezha/{project}
-npm link
+ NuPI@0bd29925] Starting...
+[Piano@476823e] Thinking router ready...
 ```
 
-### pnpm Doesn't Detect Changes
-
-**Never use `pnpm add -g .`** - it caches by path and doesn't detect local file changes.
-
-Always use `npm link` instead.
-
-## Testing
-
-After updating global:
-
-```bash
-# Test nupi
-nupi
-
-# Test piano
-piano
-```
-
-Check logs for correct git hash at startup.
-
-## Commit Process
-
-Before committing, always rebuild:
-```bash
-./scripts/dev-link.sh
-git add -A
-git commit -m "description [task: xxx]"
-```
+If hash looks old, run `npm run dev` again.

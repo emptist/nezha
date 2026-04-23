@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli/index.ts",
+    "status": "echo === STATUS ===; echo 'Nezha CLI'; grep -r 'version' dist/cli/index.js | head -1",
     "dev:watch": "tsx watch src/cli/index.ts",
     "start": "node dist/cli/index.js start",
     "start:daemon": "node dist/cli/index.js start",
