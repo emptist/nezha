@@ -415,21 +415,14 @@ nezha context --json           # 获取结构化上下文 (包含agentId)
 
 详见 `docs/DEVELOPMENT_WORKFLOW.md`
 
-## 开发命令
+## 开发命令 (简单!)
 
 ```bash
-# 快速更新 (所有项目通用)
-./scripts/dev-link.sh
+# 代码变更后运行 (自动 build + link + verify)
+npm run dev
 
-# 构建并验证 hash
-rm -rf dist && npm run build
-grep GIT_HASH dist/extension.js
-
-# 更新全局
-npm link
-
-# 验证全局与本地一致
-grep GIT_HASH $(npm root -g)/@nezha/{project}/dist/extension.js
+# 检查状态
+npm run status
 ```
 
-**⚠️ 不要使用 `pnpm add -g .`** - 它不会检测本地文件变更！
+**每个项目命令相同!**

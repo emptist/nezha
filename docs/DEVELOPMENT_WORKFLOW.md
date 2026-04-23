@@ -8,20 +8,15 @@ When code changes, just run:
 npm run dev
 ```
 
-That's it! This will:
-1. Clean dist
-2. Build with latest code
-3. Delete global install (fixes pnpm caching issue)
-4. Link to global
-5. Show both local & global hashes for verification
+That's it! This will build and link the latest code.
 
-## Check Status Any Time
+## Check Status
 
 ```bash
 npm run status
 ```
 
-Shows local vs global hash - helps debug if running old code.
+Shows local vs global code status.
 
 ## Each Project
 
@@ -41,26 +36,32 @@ npm run status # check hashes
 piano         # test
 ```
 
-## Manual (without npm scripts)
-
+### traenupi
 ```bash
-# 1. Clean and build
-rm -rf dist && npm run build
-
-# 2. Delete global first (IMPORTANT - pnpm caches!)
-rm -rf $(npm root -g)/@nezha/{project}
-
-# 3. Link
-npm link
-
-# 4. Verify hashes match
-grep GIT_HASH dist/extension.js
-grep GIT_HASH $(npm root -g)/@nezha/{project}/dist/extension.js
+cd /Users/jk/gits/hub/tools_ai/traenupi
+npm run dev:link  # build + link + verify
+npm run status     # check hashes
+traenupi          # test
 ```
 
-## Why Delete First?
+### nezha (CLI)
+```bash
+cd /Users/jk/gits/hub/tools_ai/nezha
+npm run dev    # run CLI in dev mode
+npm run status # check version
+```
 
-pnpm caches global packages by path - it won't detect your local code changes. Deleting forces fresh install.
+## What "dev" Does
+
+1. Clean dist
+2. Build with latest code  
+3. Delete global install (fixes pnpm caching)
+4. Link to global
+5. Show verification (hashes match)
+
+## Why Delete Global First?
+
+pnpm caches global packages by path - won't detect your local code changes. Deleting forces fresh install.
 
 ## Verifying Works
 
