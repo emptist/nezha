@@ -49,7 +49,11 @@ Nezha 的技能和命令像 `ls`/`cd`/`grep` 一样工作——直接运行，�
 
 ### 其他命令
 
-- `nezha areflect <text>` - 解析 [LEARN][ISSUE][TASK] 标记 (all-in-one)
+- `nezha areflect <text>` - 解析 [LEARN][ISSUE][TASK] 标记 (all-in-one) **← 最重要的是令令**
+- `nezha learn <insight>` - 保存学习
+- `nezha broadcast <msg>` - 广播
+
+**注意:** `areflect` 是最重要的 all-in-one 命令，不要被旧文档中的 "legacy" 标签误导！
 
 ## 核心指令
 
@@ -202,6 +206,37 @@ Nezha 的技能和命令像 `ls`/`cd`/`grep` 一样工作——直接运行，�
 - [x] 创建 OpenCode+Nezha 集成架构讨论 (Meeting + Issue)
 - [x] **NuPI** - Nezha + Pi 集成服务 (REST API + Pi 执行器)
 - [x] **PiExecutor** - Pi 执行器 - 支持本地模型执行
+- [x] **Structured Context Pattern** - Weak AI works with JSON data, not commands
+
+## Structured Context Pattern (重要!)
+
+弱 AI 模型 (如 llama3.2:3b) 当被提供结构化 JSON 数据时可以正确推理，但运行命令时会出错。
+
+**解决方案**: nezha 生成 JSON → 注入到 Pi prompt → 弱 AI 正确推理
+
+### 命令
+
+```bash
+nezha context --json        # 生成结构化上下文 JSON
+nezha skill suggest --context X --json  # 技能匹配 JSON
+nezha tasks next --json      # 任务列表 JSON
+```
+
+### 核心洞察
+
+| 方法 | 结果 |
+|------|------|
+| AI 运行 `nezha context --json` | ❌ 编造文件 |
+| AI 获得 JSON 直接推理 | ✅ **正确推理** |
+
+### 应用场景
+
+- Session 启动时注入任务/问题
+- 任务分配时提供具体上下文
+- 会议前后注入会议摘要
+- 技能建议作为 JSON
+
+详见 `docs/patterns/structured-context-pattern.md`
 
 ## AI 通信方法
 
@@ -288,7 +323,8 @@ nezha areflect "[ISSUE] title: ... type: bug severity: high"
 nezha areflect "[TASK] title: ... priority: 8"
 
 # 广播
-nezha share "message"
+nezha areflect "[LEARN] insight: ..."  # All-in-one (most important!)
+nezha share "message"             # Broadcast to all AIs
 ```
 
 支持的标记: `[LEARN]`, `[PROMPT_UPDATE]`, `[ISSUE]`, `[TASK]`, `[ANNOUNCE]`, `[SCHEDULE]`, `[ISSUE_RESOLVE]`, `[TASK_COMPLETE]`, `[ISSUE_COMMENT]`
@@ -329,7 +365,15 @@ nezha share "message"
 nezha meeting discuss "标题" "讨论内容"
 nezha meeting list
 nezha meeting show <id>
+nezha meeting search <term>     # 搜索所有会议意见
+nezha meeting summary <id>      # 会议参与者统计
+nezha meeting recommend <关键词> # 查找相关会议
 nezha meeting opinion <id> "观点"
+
+# 工具发现
+nezha tools                    # 列出所有工具
+nezha tools learn              # AI优先学习
+nezha context --json           # 获取结构化上下文 (包含agentId)
 
 # 安全 (需要实现 RLS)
 # issue #8f4025cb

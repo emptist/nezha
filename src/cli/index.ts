@@ -24,6 +24,7 @@ import {
   deprecateSkillCommand,
   suggestSkillsCommand,
 } from './SkillBuilderCommands.js';
+import { resolveMeetingId } from '../utils/resolve-id.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -52,24 +53,26 @@ Skill Commands:
   skill search <query> Search skills
   skill build <name> <purpose>  Build new skill
 
-Other Commands (legacy, may be removed):
-  areflect <text>       
-  learn <insight>      
-  broadcast <msg>      (no restrictions, AIs can ignore)
+All-in-One Commands:
+  areflect <text>       Create/update: [LEARN] text [TASK] title,status [ISSUE] title,status
 
-Options:
-  --status <status>     Filter by status
-  --priority <n>      Set priority (0-100)
-  --severity <s>       Set severity (low/medium/high/critical)
-  --json             Output as JSON
+Knowledge Tools:
+  learn <insight>       Save learning (use areflect for new content)
+  archive <id>          Archive outdated knowledge
+  revise <id> <text>    Update existing knowledge
+
+System Commands:
+  broadcast <msg>      Programmatic notifications (git hooks, etc.)
+
+Tool Discovery:
+  tools                 List available tools
+  tools <name>          Show tool details
+  learnTheseFirst       Priority learnings for new AI
 
 Examples:
   nezha areflect "[LEARN] insight: ..."
-  nezha skill list
-  nezha skill show git-workflow
-  nezha skill search code
-  nezha skill build my-skill "Does X task"
-  nezha task-add "Fix bug" "description" --priority 8
+  nezha areflect "[LEARN] text [TASK] title, COMPLETED [ISSUE] title, RESOLVED"
+  nezha tools learn
 
 For more info: nezha help <command>
 `;
@@ -109,10 +112,30 @@ async function main() {
       break;
     }
     case 'tasks': {
+      const subcmd = args[1];
       const statusIndex = args.indexOf('--status');
-      const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
       const jsonIndex = args.indexOf('--json');
       const isJson = jsonIndex !== -1;
+      
+      if (subcmd === 'next') {
+        const tasks = await db.query(
+          `SELECT id, title, priority, status, created_at 
+           FROM tasks WHERE status = 'PENDING' 
+           ORDER BY priority DESC NULLS LAST, created_at ASC LIMIT 3`
+        );
+        if (isJson) {
+          console.log(JSON.stringify(tasks.rows, null, 2));
+        } else {
+          console.log('\n📋 Next tasks:\n');
+          for (const t of tasks.rows) {
+            console.log(`  [${t.priority || 5}] ${t.title}`);
+            console.log(`     ${t.id.slice(0, 8)} | ${t.status}`);
+          }
+        }
+        break;
+      }
+      
+      const status = statusIndex !== -1 ? args[statusIndex + 1] : undefined;
       const taskCmd = new TaskCommands(db);
       await taskCmd.list({ status, json: isJson });
       break;
@@ -191,16 +214,109 @@ async function main() {
         await meetingCmd.createDiscussion(title, description);
         console.log(`Created meeting: ${title}`);
       } else if (subcmd === 'list') {
-        await meetingDbCmd.list({});
+        const limitIdx = args.indexOf('--limit');
+        const statusIdx = args.indexOf('--status');
+        const limitArg = limitIdx > 0 ? args[limitIdx + 1] : undefined;
+        const statusArg = statusIdx > 0 ? args[statusIdx + 1] : undefined;
+        const limit = limitArg && !isNaN(parseInt(limitArg, 10)) ? parseInt(limitArg, 10) : 100;
+        const status = statusArg || undefined;
+        await meetingDbCmd.list({ limit: Math.min(limit, 500), status: status });
       } else if (subcmd === 'show') {
-        const meetingId = args[2];
-        if (!meetingId) {
+        const meetingIdArg = args[2];
+        if (!meetingIdArg) {
           console.log('Usage: nezha meeting show <id>');
           return;
         }
-        await meetingDbCmd.show(meetingId);
+        const resolvedId = await resolveMeetingId(db, meetingIdArg);
+        await meetingDbCmd.show(resolvedId || meetingIdArg);
+      } else if (subcmd === 'complete') {
+        const meetingIdArg = args[2];
+        if (!meetingIdArg) {
+          console.log('Usage: nezha meeting complete <id> [consensus]');
+          return;
+        }
+        const resolvedId = await resolveMeetingId(db, meetingIdArg);
+        const consensus = args.slice(3).join(' ') || undefined;
+        await meetingDbCmd.complete(resolvedId || meetingIdArg, consensus);
+      } else if (subcmd === 'cleanup') {
+        const daysIdx = args.indexOf('--days');
+        const days =
+          daysIdx > 0 && args[daysIdx + 1] ? parseInt(args[daysIdx + 1] as string, 10) : 5;
+        await meetingDbCmd.cleanup(days);
+      } else if (subcmd === 'archive') {
+        const daysIdx = args.indexOf('--days');
+        const days =
+          daysIdx > 0 && args[daysIdx + 1] ? parseInt(args[daysIdx + 1] as string, 10) : 30;
+        await meetingDbCmd.archive(days);
+      } else if (subcmd === 'search') {
+        const term = args.slice(2).join(' ');
+        if (!term) {
+          console.log('Usage: nezha meeting search <term>');
+          return;
+        }
+        const results = await db.query(
+          `SELECT m.id, m.topic, o.author, LEFT(o.perspective, 80) as perspective, o.created_at
+           FROM meetings m JOIN meeting_opinions o ON m.id = o.meeting_id
+           WHERE o.perspective ILIKE '%' || $1 || '%'
+           ORDER BY o.created_at DESC LIMIT 20`,
+          [term]
+        );
+        console.log(`\n🔍 Found ${results.rows.length} matching opinion(s):\n`);
+        for (const r of results.rows) {
+          console.log(`  ${r.topic.slice(0, 50)}`);
+          console.log(`    ${r.id.slice(0, 8)} | ${r.author} | ${r.perspective}...\n`);
+        }
+      } else if (subcmd === 'summary') {
+        const meetingIdArg = args[2];
+        if (!meetingIdArg) {
+          console.log('Usage: nezha meeting summary <id>');
+          return;
+        }
+        const resolvedId = await resolveMeetingId(db, meetingIdArg);
+        const meetingId = resolvedId || meetingIdArg;
+        
+        const [meeting, opinions] = await Promise.all([
+          db.query('SELECT topic, status, created_by, created_at FROM meetings WHERE id = $1', [meetingId]),
+          db.query(`SELECT author, position, COUNT(*) as cnt FROM meeting_opinions WHERE meeting_id = $1 GROUP BY author, position`, [meetingId])
+        ]);
+        
+        if (meeting.rows.length === 0) {
+          console.log('Meeting not found');
+          return;
+        }
+        
+        const m = meeting.rows[0]!;
+        const ops = opinions.rows;
+        console.log(`\n📊 Meeting Summary: ${m.topic}\n`);
+        console.log(`Status: ${m.status}`);
+        console.log(`Created: ${m.created_at}\n`);
+        console.log('Positions:');
+        for (const o of ops) {
+          const icon = o.position === 'support' ? '👍' : o.position === 'oppose' ? '👎' : '➖';
+          console.log(`  ${icon} ${o.author}: ${o.cnt}`);
+        }
+      } else if (subcmd === 'recommend') {
+        const term = args.slice(2).join(' ');
+        if (!term) {
+          console.log('Usage: nezha meeting recommend <keyword>');
+          return;
+        }
+        const results = await db.query(
+          `SELECT m.id, m.topic, COUNT(o.id) as opinion_count
+           FROM meetings m 
+           LEFT JOIN meeting_opinions o ON m.id = o.meeting_id
+           WHERE m.topic ILIKE '%' || $1 || '%' OR m.topic ILIKE '%' || $1 || '%'
+           GROUP BY m.id, m.topic
+           ORDER BY opinion_count DESC LIMIT 10`,
+          [term]
+        );
+        console.log(`\n📋 Related meetings for "${term}":\n`);
+        for (const r of results.rows) {
+          console.log(`  ${r.topic.slice(0, 60)}`);
+          console.log(`    ${r.id.slice(0, 8)} | ${r.opinion_count} opinions\n`);
+        }
       } else {
-        console.log('Usage: nezha meeting <discuss|list|show>');
+        console.log('Usage: nezha meeting <discuss|list|show|search|summary|recommend>');
       }
       break;
     }
@@ -220,6 +336,117 @@ async function main() {
       if (args[1] === 'id') {
         const identity = await AgentIdentityService.getResolvedIdentity();
         console.log(identity.id);
+      }
+      break;
+    }
+    case 'context': {
+      const jsonIndex = args.indexOf('--json');
+      const isJson = jsonIndex !== -1;
+      const forIndex = args.indexOf('--for');
+      const purpose = forIndex !== -1 ? args[forIndex + 1] : 'general';
+      
+      const [tasks, issues, learnings, identity] = await Promise.all([
+        db.query(`SELECT id, title, priority FROM tasks WHERE status = 'PENDING' ORDER BY priority DESC NULLS LAST, created_at ASC LIMIT 5`),
+        db.query(`SELECT id, title, severity FROM issues WHERE status = 'open' ORDER BY severity, created_at DESC LIMIT 5`),
+        db.query(`SELECT content FROM memory WHERE tags @> ARRAY['essential'] OR tags @> ARRAY['learning'] ORDER BY importance DESC NULLS LAST, created_at DESC LIMIT 3`),
+        AgentIdentityService.getResolvedIdentity()
+      ]);
+      
+      const context = {
+        timestamp: new Date().toISOString(),
+        agentId: identity.id,
+        agentName: identity.displayName || identity.project || 'unknown',
+        purpose,
+        summary: {
+          pendingTasks: tasks.rows.length,
+          highPriorityTasks: tasks.rows.filter((t: any) => t.priority >= 80).length,
+          openIssues: issues.rows.length,
+          criticalIssues: issues.rows.filter((i: any) => i.severity === 'critical').length
+        },
+        nextTasks: tasks.rows.map((t: any) => ({
+          id: t.id.slice(0, 8),
+          title: t.title,
+          priority: t.priority
+        })),
+        criticalIssues: issues.rows.filter((i: any) => i.severity === 'critical').map((i: any) => ({
+          id: i.id.slice(0, 8),
+          title: i.title
+        })),
+        recentLearnings: learnings.rows.map((l: any) => l.content.slice(0, 100))
+      };
+      
+      if (isJson) {
+        console.log(JSON.stringify(context, null, 2));
+      } else {
+        console.log('\n📊 NEZHA CONTEXT\n');
+        console.log(`🤖 Agent: ${context.agentName} (${context.agentId})`);
+        console.log(`Tasks: ${context.summary.pendingTasks} pending | ${context.summary.highPriorityTasks} high priority`);
+        console.log(`Issues: ${context.summary.openIssues} open | ${context.summary.criticalIssues} critical\n`);
+        console.log('Next Tasks:');
+        for (const t of context.nextTasks) {
+          console.log(`  [${t.priority || 5}] ${t.title} (${t.id})`);
+        }
+      }
+      break;
+    }
+    case 'tools':
+    case 'learnTheseFirst':
+    case 'learn-first': {
+      const isLearnFirst = command === 'learnTheseFirst' || command === 'learn-first';
+      const subcmd = isLearnFirst ? 'learn' : args[1];
+      
+      if (subcmd === 'learn') {
+        const learnings = await db.query(
+          `SELECT content, importance FROM memory WHERE tags @> ARRAY['essential'] OR tags @> ARRAY['tool-discovery'] 
+           ORDER BY importance DESC NULLS LAST, created_at DESC LIMIT 10`
+        );
+        console.log('\n📚 Priority Learnings for New AI:\n');
+        for (const l of learnings.rows) {
+          let text = l.content;
+          text = text.replace(/^#+\s+/gm, '').replace(/^[*•-]\s+/gm, '');
+          text = text.replace(/\n.+$/g, '');
+          text = text.replace(/Insight:\s*/gi, '').replace(/Context:\s*/gi, '| ');
+          text = text.replace(/Problem\n.+$/gi, '').replace(/Root Cause\n.+$/gi, '');
+          console.log(`  ${text.slice(0, 65)}`);
+        }
+        console.log(`\n${learnings.rows.length} priority learnings. More: nezha tools learn`);
+        break;
+      }
+      
+      const docs = await db.query(
+        `SELECT table_name, purpose, usage_context, cli_commands, mcp_tools, tags
+         FROM table_documentation WHERE ai_can_modify = true ORDER BY table_name`
+      );
+      if (subcmd) {
+        const tool = docs.rows.find(r => r.table_name === subcmd);
+        if (tool) {
+          console.log(`\n🔧 Tool: ${tool.table_name}`);
+          console.log('='.repeat(50));
+          console.log(`Purpose: ${tool.purpose}`);
+          if (tool.usage_context) console.log(`Usage: ${tool.usage_context}`);
+          if (tool.cli_commands?.length) {
+            console.log('\nCLI Commands:');
+            for (const c of tool.cli_commands) {
+              console.log(`  ${c.cmd} - ${c.desc}`);
+            }
+          }
+          if (tool.mcp_tools?.length) {
+            console.log('\nMCP Tools:', tool.mcp_tools.join(', '));
+          }
+        } else {
+          console.log(`Tool not found: ${subcmd}`);
+        }
+      } else {
+        console.log('\n🔧 Available Tools (table_documentation):\n');
+        for (const d of docs.rows) {
+          const cmdCount = d.cli_commands?.length || 0;
+          const mcpCount = d.mcp_tools?.length || 0;
+          console.log(`  ${d.table_name} - ${d.purpose.slice(0, 50)}`);
+          if (cmdCount || mcpCount) {
+            console.log(`    CLI: ${cmdCount}, MCP: ${mcpCount}`);
+          }
+        }
+        console.log(`\nUse 'nezha tools <name>' for details or 'nezha tools learn' for priority learnings.`);
       }
       break;
     }
@@ -311,7 +538,30 @@ async function main() {
           break;
         }
         case 'suggest': {
-          await suggestSkillsCommand();
+          const contextIndex = args.indexOf('--context');
+          const jsonIndex = args.indexOf('--json');
+          const isJson = jsonIndex !== -1;
+          const context = contextIndex !== -1 ? args[contextIndex + 1] : '';
+          
+          if (context) {
+            const results = await skillSystem.searchSkills(context);
+            const relevant = results.filter(s => s.safety_score >= 70).slice(0, 5);
+            if (isJson) {
+              console.log(JSON.stringify(relevant.map(s => ({
+                name: s.name,
+                description: s.description,
+                instructions: s.instructions?.slice(0, 200)
+              })), null, 2));
+            } else {
+              console.log(`\n🔍 Skills suggested for "${context}":\n`);
+              for (const s of relevant) {
+                console.log(`  • ${s.name}`);
+                console.log(`    ${s.description?.slice(0, 60)}`);
+              }
+            }
+          } else {
+            await suggestSkillsCommand();
+          }
           break;
         }
         default:
@@ -337,45 +587,105 @@ async function main() {
       console.log(`✅ Learning saved: ${insight.slice(0, 50)}...`);
       break;
     }
+    case 'archive': {
+      const id = args[1];
+      if (!id) {
+        console.log('Usage: nezha archive <memory-id> [--reason <reason>]');
+        break;
+      }
+      const reasonIdx = args.indexOf('--reason');
+      const reason = reasonIdx !== -1 ? args.slice(reasonIdx + 1).join(' ') : 'outdated';
+      const timestamp = new Date().toISOString();
+      await db.query(
+        `UPDATE memory SET tags = array_append(tags, 'archived'), 
+         content = content || ' [ARCHIVED: ' || $2 || ' at ' || $3 || ']' WHERE id = $1`,
+        [id, reason, timestamp]
+      );
+      console.log(`Archived memory ${id}`);
+      if (reason === 'outdated') {
+        console.log(`💡 Consider revising if knowledge is still relevant: nezha revise ${id} <new-content>`);
+      }
+      break;
+    }
+    case 'revise': {
+      const id = args[1];
+      const newContent = args.slice(2).join(' ');
+      if (!id || !newContent) {
+        console.log('Usage: nezha revise <memory-id> <new-content>');
+        break;
+      }
+      await db.query(
+        `UPDATE memory SET content = $2, importance = 7,
+         tags = ARRAY['learning', 'revised']
+         WHERE id = $1`,
+        [id, newContent]
+      );
+      console.log(`Revised memory ${id}`);
+      break;
+    }
     case 'areflect': {
       const text = args.slice(1).join(' ');
       if (!text) {
         console.log('Usage: nezha areflect "[LEARN] insight: ..."');
         break;
       }
-      // Parse markers: [LEARN], [TASK], [ISSUE], etc.
-      const learnMatch = text.match(/\[LEARN\]\s*insight:\s*(.+?)(?:\s*context:\s*(.+))?/i);
-      const taskMatch = text.match(/\[TASK\]\s*title:\s*(.+?)(?:\s*priority:\s*(\d+))?/i);
-      const issueMatch = text.match(
-        /\[ISSUE\]\s*title:\s*(.+?)(?:\s*type:\s*(\w+))?(?:\s*severity:\s*(\w+))?/i
-      );
+// Parse markers - supports create + update/comment
+      // [LEARN] text | [TASK] title,COMPLETED | [ISSUE] title,RESOLVED
+      const learnMatch = text.match(/\[LEARN\]\s*(.+?)(?=\[TASK\]|\[ISSUE\]|$)/is);
+      const taskMatch = text.match(/\[TASK\]\s*(.+?)(?=\[LEARN\]|\[ISSUE\]|$)/is);
+      const issueMatch = text.match(/\[ISSUE\]\s*(.+?)(?=\[LEARN\]|\[TASK\]|$)/is);
 
       if (learnMatch && learnMatch[1]) {
-        const content = learnMatch[1];
-        const context = learnMatch[2] || '';
+        const content = learnMatch[1].trim();
         await db.query(
           `INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['learning'])`,
-          [context ? `${content} (context: ${context})` : content]
+          [content]
         );
         console.log(`✅ Learning saved: ${content.slice(0, 50)}...`);
       }
       if (taskMatch && taskMatch[1]) {
-        const title = taskMatch[1];
-        const priority = parseInt(taskMatch[2] || '5', 10);
-        await db.query(`INSERT INTO tasks (title, status, priority) VALUES ($1, 'PENDING', $2)`, [
-          title,
-          priority,
-        ]);
-        console.log(`✅ Task created: ${title}`);
+        const raw = taskMatch[1].trim();
+        const completedMatch = raw.match(/^(.+?)\s*,\s*(?:COMPLETED|DONE)/i);
+        const commentMatch = raw.match(/^(.+?)\s*,\s*comment:\s*(.+)/i);
+        if (completedMatch && completedMatch[1]) {
+          await db.query(
+            `UPDATE tasks SET status = 'COMPLETED', result = 'Completed via areflect', completed_at = NOW() WHERE title ILIKE $1 AND status != 'COMPLETED'`,
+            [completedMatch[1].trim()]
+          );
+          console.log(`✅ Task completed: ${completedMatch[1].trim().slice(0, 40)}`);
+        } else if (commentMatch && commentMatch[2]) {
+          const taskTitle = commentMatch[1]?.trim() || raw;
+          const taskComment = commentMatch[2]?.trim() || '';
+          await db.query(`INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['task-comment'])`, [`Task: ${taskTitle} - ${taskComment}`]);
+          console.log(`✅ Task comment: ${taskTitle.slice(0, 40)}`);
+        } else {
+          await db.query(`INSERT INTO tasks (title, status, priority) VALUES ($1, 'PENDING', 5)`, [raw]);
+          console.log(`✅ Task created: ${raw.slice(0, 50)}...`);
+        }
       }
       if (issueMatch && issueMatch[1]) {
-        const title = issueMatch[1];
-        const severity = issueMatch[3] || 'medium';
-        await db.query(`INSERT INTO issues (title, status, severity) VALUES ($1, 'open', $2)`, [
-          title,
-          severity,
-        ]);
-        console.log(`✅ Issue created: ${title}`);
+        const raw = issueMatch[1].trim();
+        const resolvedMatch = raw.match(/^(.+?)\s*,\s*(?:RESOLVED|FIXED)/i);
+        const commentMatch = raw.match(/^(.+?)\s*,\s*comment:\s*(.+)/i);
+        if (resolvedMatch && resolvedMatch[1]) {
+          await db.query(`UPDATE issues SET status = 'RESOLVED' WHERE title ILIKE $1 AND status != 'RESOLVED'`, [resolvedMatch[1].trim()]);
+          console.log(`✅ Issue resolved: ${resolvedMatch[1].trim().slice(0, 40)}`);
+        } else if (commentMatch && commentMatch[2]) {
+          const issueTitle = (commentMatch && commentMatch[1]) ? commentMatch[1].trim() : raw;
+          const issueComment = (commentMatch && commentMatch[2]) ? commentMatch[2].trim() : '';
+          await db.query(`INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['issue-comment'])`, [`Issue: ${issueTitle} - ${issueComment}`]);
+          console.log(`✅ Issue comment: ${issueTitle.slice(0, 40)}`);
+        } else {
+          const hasSeverity = raw.match(/severity:\s*(critical|high|medium|low|cosmetic)/i);
+          const severity = (hasSeverity && hasSeverity[1]) ? hasSeverity[1].toLowerCase() : 'medium';
+          const titlePart = hasSeverity 
+            ? raw.substring(0, raw.lastIndexOf('severity:'))
+            : raw;
+          const titleRaw = titlePart.match(/title:\s*(.+)/i);
+          const title = (titleRaw && titleRaw[1]) ? titleRaw[1].trim() : raw;
+          await db.query(`INSERT INTO issues (title, status, severity) VALUES ($1, 'open', $2)`, [title, severity]);
+          console.log(`✅ Issue created: ${title.slice(0, 50)} (${severity})`);
+        }
       }
       if (!learnMatch && !taskMatch && !issueMatch) {
         console.log('No valid markers found. Use: [LEARN], [TASK], or [ISSUE]');

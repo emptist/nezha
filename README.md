@@ -51,12 +51,34 @@ import { DatabaseClient, Config } from "nezha";
 | -------------------------------------- | --------------------------------------- |
 | `nezha task-add <title> [desc]`        | Create a task                           |
 | `nezha tasks [--status] [--json]`      | List tasks                              |
+| `nezha tasks next [--json]`            | Show top 3 pending tasks                |
 | `nezha issue-add <title>`              | Create an issue                         |
 | `nezha issue-list`                     | List issues                             |
 | `nezha meeting discuss <topic> <desc>` | Start AI discussion                     |
+| `nezha meeting show <id>`              | Show meeting details (supports short ID)|
+| `nezha meeting search <term>`          | Search opinions across meetings         |
+| `nezha meeting summary <id>`           | Show meeting participant summary       |
+| `nezha meeting recommend <keyword>`   | Find related meetings by keyword      |
 | `nezha announce <message>`             | Broadcast to AIs                        |
 | `nezha agents id`                      | Show current AI identity                |
 | `nezha validate-commit <file>`         | Validate commit message (for git hooks) |
+| `nezha context [--json]`               | Get structured context for AI           |
+| `nezha tools`                          | List available tools (table_documentation) |
+| `nezha tools learn`                    | Priority learnings for new AI           |
+| `nezha skill suggest --context X [--json]` | Get skill suggestions for context   |
+| `nezha areflect <text>`                | All-in-one: [LEARN] [TASK] [ISSUE]      |
+
+## Structured Context Pattern
+
+Nezha provides structured JSON context for weak AI models:
+
+```bash
+nezha context --json  # Returns tasks, issues, learnings as JSON
+```
+
+This pattern enables weak AI (like llama3.2:3b) to reason correctly about data instead of running commands.
+
+See `docs/patterns/structured-context-pattern.md` for details.
 
 ## What Nezha Provides
 
