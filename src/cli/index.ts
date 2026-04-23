@@ -61,8 +61,7 @@ Knowledge Tools:
   archive <id>          Archive outdated knowledge
   revise <id> <text>    Update existing knowledge
 
-System Commands:
-  broadcast <msg>      Programmatic notifications (git hooks, etc.)
+announce <msg>       Programmatic notifications to all AIs
 
 Tool Discovery:
   tools                 List available tools
@@ -320,7 +319,8 @@ async function main() {
       }
       break;
     }
-    case 'announce': {
+    case 'announce':
+case 'broadcast': {
       const message = args.slice(1).join(' ');
       if (!message) {
         console.log('Usage: nezha announce "message" [--priority low|normal|high|critical]');
