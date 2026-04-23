@@ -410,4 +410,26 @@ nezha context --json           # 获取结构化上下文 (包含agentId)
 - 修复 prompts: 从 "analyze" 改为 "execute"
 - 添加任务验证: 执行前检查是否已完成
 - 无关闭开关（用户退出即停止）
+
+### 5. 开发工作流
+
+详见 `docs/DEVELOPMENT_WORKFLOW.md`
+
+## 开发命令
+
+```bash
+# 快速更新 (所有项目通用)
+./scripts/dev-link.sh
+
+# 构建并验证 hash
+rm -rf dist && npm run build
+grep GIT_HASH dist/extension.js
+
+# 更新全局
+npm link
+
+# 验证全局与本地一致
+grep GIT_HASH $(npm root -g)/@nezha/{project}/dist/extension.js
 ```
+
+**⚠️ 不要使用 `pnpm add -g .`** - 它不会检测本地文件变更！
