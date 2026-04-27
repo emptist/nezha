@@ -46,6 +46,7 @@ Core Commands:
   issue-add <title>    Add an issue
   issue-list           List issues
   meeting discuss <t> <d>  Create AI discussion
+  meeting opinion <id> <perspective> [--position support|oppose|neutral]
 
 Skill Commands:
   skill list            List all approved skills
@@ -302,7 +303,7 @@ async function main() {
         }
         const results = await db.query(
           `SELECT m.id, m.topic, COUNT(o.id) as opinion_count
-           FROM meetings m 
+           FROM meetings m
            LEFT JOIN meeting_opinions o ON m.id = o.meeting_id
            WHERE m.topic ILIKE '%' || $1 || '%' OR m.topic ILIKE '%' || $1 || '%'
            GROUP BY m.id, m.topic
@@ -314,8 +315,23 @@ async function main() {
           console.log(`  ${r.topic.slice(0, 60)}`);
           console.log(`    ${r.id.slice(0, 8)} | ${r.opinion_count} opinions\n`);
         }
+      } else if (subcmd === 'opinion') {
+        const meetingIdArg = args[2];
+        const perspective = args.slice(3).join(' ');
+        if (!meetingIdArg || !perspective) {
+          console.log('Usage: nezha meeting opinion <meeting-id> <perspective> [--position support|oppose|neutral] [--reasoning text]');
+          return;
+        }
+        const resolvedId = await resolveMeetingId(db, meetingIdArg);
+        const meetingId = resolvedId || meetingIdArg;
+        const posIdx = args.indexOf('--position');
+        const position = posIdx !== -1 ? args[posIdx + 1] as any : undefined;
+        const reasoningIdx = args.indexOf('--reasoning');
+        const reasoning = reasoningIdx !== -1 ? args.slice(reasoningIdx + 1).join(' ') : undefined;
+        const author = (await AgentIdentityService.getResolvedIdentity()).id;
+        await meetingDbCmd.addOpinion(meetingId, author, perspective, reasoning, position);
       } else {
-        console.log('Usage: nezha meeting <discuss|list|show|search|summary|recommend>');
+        console.log('Usage: nezha meeting <discuss|list|show|opinion|search|summary|recommend>');
       }
       break;
     }
