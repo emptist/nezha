@@ -36,14 +36,51 @@ ln -s /Users/jk/gits/hub/tools_ai/nezha/scripts/git-hooks/central/.hooks/* .git/
 | `[issue: <uuid>]` | Mark issue RESOLVED |
 | (any commit) | Add `[Agent: <id>]` to message |
 
+## Commit Message Validation Rules
+
+**The hook enforces strict quality control:**
+
+| Requirement | Description |
+|-------------|-------------|
+| `[inter-review: <uuid>]` | **MANDATORY** - Must exist in DB and be completed |
+| `[task: <uuid>]` OR `[issue: <uuid>]` | **MANDATORY** - At least one required |
+
+**Example valid commit:**
+```bash
+git commit -m "feat: add feature [task: abc123] [inter-review: def456]"
+git commit -m "fix: bug [issue: xyz789] [inter-review: def456]"
+```
+
+**Validation process:**
+1. If CLI available: Uses `nezha validate-commit` - strict validation against DB
+2. If CLI unavailable: Falls back to simple regex check (less strict)
+
+## Human Commits (Bypass)
+
+**For human developers**, you can bypass the QC requirements by adding `<none ai>` to your commit message:
+
+```bash
+# Human commit - no validation required
+git commit -m "Quick fix <none ai>"
+git commit -m "Update docs [none ai]"
+```
+
+When `<none ai>` is detected:
+- ✅ Commit is accepted without task/inter-review IDs
+- ✅ No `[Agent: <id>]` is appended
+- ✅ post-commit skips task auto-completion
+
 ## For Weak Model AIs
 
 When working on any Nezha-family project (nezha, nupi, piano):
 
-1. **Always include task/issue ID in commits**
+1. **All commits require inter-review**
    ```
-   git commit -m "feat: add feature [task: <uuid>]"
-   git commit -m "fix: bug [issue: <uuid>]"
+   # First, request an inter-review
+   nezha inter-review request <task-id>
+   
+   # After review is completed, commit with both IDs
+   git commit -m "feat: add feature [task: <uuid>] [inter-review: <uuid>]"
    ```
 
 2. **Never bypass hooks**
