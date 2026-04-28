@@ -74,7 +74,7 @@ When `<none ai>` is detected:
 
 When working on any Nezha-family project (nezha, nupi, piano):
 
-1. **All commits require inter-review**
+1. **All commits require inter-review from ANOTHER AI**
    ```
    # If you commit without [inter-review:], the system will:
    # - Auto-create an inter-review request
@@ -84,14 +84,19 @@ When working on any Nezha-family project (nezha, nupi, piano):
    # Just commit with your task/issue ID - the rest is automatic!
    git commit -m "feat: add feature [task: <uuid>]"
    
-   # Or if you already have a completed inter-review:
+   # Or if you already have a completed inter-review from another AI:
    git commit -m "feat: add feature [task: <uuid>] [inter-review: <uuid>]"
    ```
 
-2. **Never bypass hooks**
+2. **You cannot use your own inter-review**
+   - The system validates that you didn't perform the review yourself
+   - You must get another AI to review your code first
+   - If you try to use your own review, commit will be blocked
+
+3. **Never bypass hooks**
    - ❌ Don't use `git config core.hooksPath /dev/null`
    - ❌ Don't use `--no-verify`
 
-3. **If commit fails**, fix the message and retry
+4. **If commit fails**, fix the message and retry
 
-4. **The hook needs `nezha` command** - make sure it's in PATH or use absolute path
+5. **The hook needs `nezha` command** - make sure it's in PATH or use absolute path

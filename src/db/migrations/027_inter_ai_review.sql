@@ -62,14 +62,22 @@ RETURNS UUID AS $$
 DECLARE
     v_id UUID;
     v_existing_id UUID;
+    v_existing_status TEXT;
 BEGIN
-    SELECT id INTO v_existing_id FROM inter_reviews 
-    WHERE task_id = p_task_id LIMIT 1;
+    -- Check for existing pending/in_progress review for this task
+    SELECT id, status INTO v_existing_id, v_existing_status 
+    FROM inter_reviews 
+    WHERE task_id = p_task_id 
+      AND status IN ('pending', 'in_progress')
+    ORDER BY requested_at DESC
+    LIMIT 1;
     
+    -- If there's a pending/in_progress review, reuse it
     IF v_existing_id IS NOT NULL THEN
         RETURN v_existing_id;
     END IF;
     
+    -- Otherwise create a new review (even if previous one was completed)
     INSERT INTO inter_reviews (
         task_id, commit_hash, branch, reviewer_id, status, review_context, requested_at
     ) VALUES (

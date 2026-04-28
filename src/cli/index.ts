@@ -524,10 +524,10 @@ case 'broadcast': {
       const currentIdentity = await AgentIdentityService.getResolvedIdentity();
       const currentAgentId = currentIdentity.id;
 
-      // Validate inter-review exists, is completed, and was requested by current AI
+      // Validate inter-review exists, is completed, and was NOT performed by current AI
       const reviewId = reviewMatch[1];
       const reviewResult = await db.query(
-        `SELECT id, status, summary, task_id, reviewer_id, session_id 
+        `SELECT id, status, summary, task_id, reviewer_id, session_id, reviewed_by 
          FROM inter_reviews WHERE id::text LIKE $1`,
         [`${reviewId}%`]
       );
@@ -545,7 +545,16 @@ case 'broadcast': {
         process.exit(1);
       }
 
+      // Validate ownership - check if current AI performed this review
+      // You cannot use a review you did yourself - need another AI to review
+      if (review.reviewed_by === currentAgentId) {
+        console.log(`Error: You performed this inter-review yourself (reviewed_by: ${review.reviewed_by})`);
+        console.log('You cannot use your own inter-review - ask another AI to review your code first.');
+        process.exit(1);
+      }
+
       console.log(`✓ Inter-review ${reviewId} validated (status: ${review.status})`);
+      console.log(`  Reviewed by: ${review.reviewed_by || 'unknown'}`);
       if (review.summary) {
         console.log(`  Summary: ${review.summary.slice(0, 80)}...`);
       }

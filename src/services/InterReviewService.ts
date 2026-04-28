@@ -5,6 +5,7 @@ import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
 import { BroadcastService } from './BroadcastService.js';
 import { getCommitDiff } from '../utils/git.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -195,8 +196,11 @@ export class InterReviewService extends EventEmitter {
       await this.db.query('BEGIN');
       logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+      const reviewedBy = currentIdentity.id;
+
       await this.db.query(
-        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           reviewId,
           'completed',
@@ -210,9 +214,10 @@ export class InterReviewService extends EventEmitter {
           reviewResult.testCoverageScore,
           reviewResult.documentationScore,
           rawResponse,
+          reviewedBy,
         ]
       );
-      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId} (reviewed_by: ${reviewedBy})`);
 
       if (reviewResult.learnings.length > 0) {
         const review = await this.getReview(reviewId);
@@ -289,8 +294,8 @@ export class InterReviewService extends EventEmitter {
 
       try {
         await this.db.query(
-          `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null]
+          `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null, null]
         );
         logger.debug(`[InterReview] Marked review as failed: ${reviewId}`);
       } catch (updateErr) {
@@ -570,8 +575,11 @@ Format:
       await this.db.query('BEGIN');
       logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+      const reviewedBy = currentIdentity.id;
+
       await this.db.query(
-        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           reviewId,
           'completed',
@@ -585,9 +593,10 @@ Format:
           scores.testCoverage ?? null,
           scores.documentation ?? null,
           null,
+          reviewedBy,
         ]
       );
-      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId} (reviewed_by: ${reviewedBy})`);
 
       if (response || acceptedSuggestions) {
         await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [
