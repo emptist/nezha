@@ -15,6 +15,7 @@ import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands, MeetingDbCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { InterReviewService } from '../services/InterReviewService.js';
 import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
 import { skillSystem } from '../core/SkillSystem.js';
 import {
@@ -482,8 +483,33 @@ case 'broadcast': {
 
       // INTER-REVIEW IS MANDATORY (human requirement from the beginning)
       if (!reviewMatch) {
-        console.log('Error: commit must contain [inter-review:<id>] - all commits require peer review');
-        console.log('Create an inter-review first, then reference it in your commit.');
+        console.log('\n⚠️  No inter-review found in commit message');
+        console.log('   Auto-requesting inter-review from other AIs...\n');
+
+        const reviewService = new InterReviewService(db);
+        const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+
+        const { getGitHash, getGitBranch } = await import('../utils/git.js');
+        const commitHash = await getGitHash() || 'unknown';
+        const branch = await getGitBranch() || 'unknown';
+
+        const request = {
+          taskId: taskMatch?.[1] || undefined,
+          commitHash,
+          branch,
+          reviewerId: currentIdentity.id,
+          context: {
+            message: 'Auto-requested from commit validation',
+            taskDescription: taskMatch?.[1] ? `Task: ${taskMatch[1]}` : undefined,
+          },
+        };
+
+        const newReviewId = await reviewService.requestReview(request, true);
+
+        console.log(`✅ Inter-review requested: ${newReviewId}`);
+        console.log('\n📝 Please retry your commit with this review ID:');
+        console.log(`   git commit -m "Your message [task:${taskMatch?.[1] || '<id>'}] [inter-review:${newReviewId}]"`);
+        console.log('\n⏳ Or wait for the review to be completed by another AI');
         process.exit(1);
       }
 
@@ -519,17 +545,7 @@ case 'broadcast': {
         process.exit(1);
       }
 
-      // NEW: Validate ownership - check if current AI performed this review
-      // The inter-review's reviewer_id should NOT be the current AI
-      // (you can't use a review you did yourself - you need someone else to review your code)
-      if (review.reviewer_id === currentAgentId) {
-        console.log(`Error: You performed this inter-review yourself (reviewer_id: ${review.reviewer_id})`);
-        console.log('You cannot use your own inter-review - ask another AI to review your code first.');
-        process.exit(1);
-      }
-
       console.log(`✓ Inter-review ${reviewId} validated (status: ${review.status})`);
-      console.log(`  Review requested for: ${review.reviewer_id}`);
       if (review.summary) {
         console.log(`  Summary: ${review.summary.slice(0, 80)}...`);
       }

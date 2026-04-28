@@ -57,7 +57,7 @@ export async function requestReviewFromAI(
   }
   console.log('');
 
-  const reviewId = await reviewService.requestReview(request);
+  const reviewId = await reviewService.requestReview(request, false);
   console.log(`   Review ID: ${reviewId}`);
 
   const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.`;

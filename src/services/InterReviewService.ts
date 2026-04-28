@@ -144,7 +144,7 @@ export class InterReviewService extends EventEmitter {
     return response.content;
   }
 
-  async requestReview(request: ReviewRequest): Promise<string> {
+  async requestReview(request: ReviewRequest, broadcast: boolean = true): Promise<string> {
     const result = await this.db.query<{ id: string }>(
       `SELECT request_inter_review($1, $2, $3, $4, $5) as id`,
       [
@@ -159,6 +159,19 @@ export class InterReviewService extends EventEmitter {
     const reviewId = result.rows[0]!.id;
     logger.info(`[InterReview] Review requested: ${reviewId}`);
     this.emit(InterReviewEvent.REVIEW_REQUESTED, { reviewId, request });
+
+    if (broadcast) {
+      try {
+        const bs = await this.ensureBroadcastService();
+        const taskInfo = request.taskId ? `Task: ${request.taskId}` : '';
+        const commitInfo = request.commitHash ? `Commit: ${request.commitHash.slice(0, 7)}` : '';
+        const msg = `🔍 Inter-review requested${taskInfo ? ` (${taskInfo})` : ''}${commitInfo ? ` - ${commitInfo}` : ''}. Please review: ${reviewId}`;
+        await bs.sendBroadcast(msg, { priority: 'normal' });
+        logger.info(`[InterReview] Broadcasted review request: ${reviewId}`);
+      } catch (broadcastErr) {
+        logger.warn(`[InterReview] Broadcast failed: ${broadcastErr}`);
+      }
+    }
 
     return reviewId;
   }

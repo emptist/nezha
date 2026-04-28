@@ -76,10 +76,15 @@ When working on any Nezha-family project (nezha, nupi, piano):
 
 1. **All commits require inter-review**
    ```
-   # First, request an inter-review
-   nezha inter-review request <task-id>
+   # If you commit without [inter-review:], the system will:
+   # - Auto-create an inter-review request
+   # - Broadcast to other AIs to review your code
+   # - Give you the review ID to use in your commit
    
-   # After review is completed, commit with both IDs
+   # Just commit with your task/issue ID - the rest is automatic!
+   git commit -m "feat: add feature [task: <uuid>]"
+   
+   # Or if you already have a completed inter-review:
    git commit -m "feat: add feature [task: <uuid>] [inter-review: <uuid>]"
    ```
 
