@@ -40,6 +40,11 @@ fi
 
 cd "$GIT_ROOT"
 
+# Skip all validation for human commits (marked with <none ai>)
+if grep -q "<none ai>" "$COMMIT_MSG_FILE" 2>/dev/null; then
+    exit 0
+fi
+
 NEZHA_PORT=${NEZHA_PORT:-5999}
 NEZHA_API_KEY=${NEZHA_API_KEY:-}
 
@@ -130,6 +135,9 @@ if ! validate_commit_quiet; then
     echo ""
     echo "To get valid ID, run:"
     echo "  psql -h localhost -U postgres -d nezha -c \"SELECT id, title FROM tasks ORDER BY created_at DESC LIMIT 5;\""
+    echo ""
+    echo "NOTE: If this is a human commit (not AI), add <none ai> to bypass:"
+    echo "  git commit -m 'Quick fix <none ai>'"
     echo ""
     validate_commit 2>&1 || true
     exit 1

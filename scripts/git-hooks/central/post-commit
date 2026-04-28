@@ -19,6 +19,11 @@ fi
 
 cd "$GIT_ROOT"
 
+# Skip all actions for human commits (marked with <none ai>)
+if echo "$COMMIT_MSG" | grep -q "<none ai>"; then
+    exit 0
+fi
+
 # Mark tasks complete from commit message
 TASK_IDS=$(echo "$COMMIT_MSG" | grep -oE '\[task:[[:space:]]*[a-f0-9-]{36}\]' | grep -oE '[a-f0-9-]{36}' | sort -u)
 if [ -n "$TASK_IDS" ]; then

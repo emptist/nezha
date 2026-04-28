@@ -426,3 +426,46 @@ npm run status
 ```
 
 **每个项目命令相同!**
+
+---
+
+## ⚠️ MANDATORY Git Commit Workflow ⚠️
+
+**Human requirement (from the beginning): All commits MUST follow this workflow:**
+
+```
+1. Start: Issue/task/(former) inter-review ID → problem found, solution planned
+2. Implement: Write the code
+3. Code Inter-Review: Other AI reviews the code (MANDATORY)
+4. Git Commit: MUST have [task:id] or [issue:id] AND [inter-review:id]
+```
+
+**Commit Message Format (enforced by git hook):**
+```
+<description> [task:<id>] [inter-review:<id>] [Agent: <agent-id>]
+```
+
+Or:
+```
+<description> [issue:<id>] [inter-review:<id>] [Agent: <agent-id>]
+```
+
+**Validation Rules (enforced by prepare-commit-msg hook):**
+- ✅ `[task:<id>]` OR `[issue:<id>]` (at least one required)
+- ✅ `[inter-review:<id>]` (MANDATORY - all commits require peer review)
+- ✅ Inter-review must have status = 'completed'
+- ✅ IDs must exist in database
+
+**Inter-Review System:**
+- `inter_reviews` table: AI-to-AI code review system
+- `reviews` table: System-level reviews (different!)
+- Create: `nezha inter-review request <task-id>`
+- Status check: `SELECT id, status FROM inter_reviews WHERE id::text LIKE '<short-id>%';`
+- Must be 'completed' before commit
+
+**Violations:**
+- Commit without inter-review → BLOCKED
+- Inter-review not completed → BLOCKED
+- No task/issue ID → BLOCKED
+
+This protects the codebase from damage by ensuring all changes are peer-reviewed.

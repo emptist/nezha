@@ -474,10 +474,98 @@ case 'broadcast': {
       }
       const fs = await import('fs');
       const msg = fs.readFileSync(msgFile, 'utf-8');
-      if (!msg.includes('[task:') && !msg.includes('[issue:') && !msg.includes('[inter-review:')) {
-        console.log('Error: commit must contain [task:], [issue:], or [inter-review:]');
+
+      // Extract IDs
+      const taskMatch = msg.match(/\[task:\s*([a-f0-9-]+)\]/i);
+      const issueMatch = msg.match(/\[issue:\s*([a-f0-9-]+)\]/i);
+      const reviewMatch = msg.match(/\[inter-review:\s*([a-f0-9-]+)\]/i);
+
+      // INTER-REVIEW IS MANDATORY (human requirement from the beginning)
+      if (!reviewMatch) {
+        console.log('Error: commit must contain [inter-review:<id>] - all commits require peer review');
+        console.log('Create an inter-review first, then reference it in your commit.');
         process.exit(1);
       }
+
+      // TASK OR ISSUE IS MANDATORY (at least one must be present)
+      if (!taskMatch && !issueMatch) {
+        console.log('Error: commit must contain [task:<id>] or [issue:<id>] (or both)');
+        console.log('Example: git commit -m "Fix bug [task:abc123] [inter-review:def456]"');
+        process.exit(1);
+      }
+
+      // Get current AI's identity for ownership validation
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+      const currentAgentId = currentIdentity.id;
+
+      // Validate inter-review exists, is completed, and was requested by current AI
+      const reviewId = reviewMatch[1];
+      const reviewResult = await db.query(
+        `SELECT id, status, summary, task_id, reviewer_id, session_id 
+         FROM inter_reviews WHERE id::text LIKE $1`,
+        [`${reviewId}%`]
+      );
+
+      if (reviewResult.rows.length === 0) {
+        console.log(`Error: inter-review ${reviewId} not found in database`);
+        console.log('Create an inter-review first with: nezha inter-review request <task-id>');
+        process.exit(1);
+      }
+
+      const review = reviewResult.rows[0]!;
+      if (review.status !== 'completed') {
+        console.log(`Error: inter-review ${reviewId} status is '${review.status}', must be 'completed'`);
+        console.log('Wait for the inter-review to be completed before committing.');
+        process.exit(1);
+      }
+
+      // NEW: Validate ownership - check if current AI performed this review
+      // The inter-review's reviewer_id should NOT be the current AI
+      // (you can't use a review you did yourself - you need someone else to review your code)
+      if (review.reviewer_id === currentAgentId) {
+        console.log(`Error: You performed this inter-review yourself (reviewer_id: ${review.reviewer_id})`);
+        console.log('You cannot use your own inter-review - ask another AI to review your code first.');
+        process.exit(1);
+      }
+
+      console.log(`✓ Inter-review ${reviewId} validated (status: ${review.status})`);
+      console.log(`  Review requested for: ${review.reviewer_id}`);
+      if (review.summary) {
+        console.log(`  Summary: ${review.summary.slice(0, 80)}...`);
+      }
+
+      // Validate task if present
+      if (taskMatch) {
+        const taskId = taskMatch[1];
+        const taskResult = await db.query(
+          `SELECT id, status FROM tasks WHERE id::text LIKE $1`,
+          [`${taskId}%`]
+        );
+
+        if (taskResult.rows.length === 0) {
+          console.log(`Error: task ${taskId} not found in database`);
+          process.exit(1);
+        }
+
+        console.log(`✓ Task ${taskId} validated`);
+      }
+
+      // Validate issue if present
+      if (issueMatch) {
+        const issueId = issueMatch[1];
+        const issueResult = await db.query(
+          `SELECT id, status FROM issues WHERE id::text LIKE $1`,
+          [`${issueId}%`]
+        );
+
+        if (issueResult.rows.length === 0) {
+          console.log(`Error: issue ${issueId} not found in database`);
+          process.exit(1);
+        }
+
+        console.log(`✓ Issue ${issueId} validated`);
+      }
+
       console.log('Commit message valid');
       break;
     }
