@@ -58,7 +58,7 @@ export class AgentIdentityService {
     // This tracks who is alive - every AI activity triggers this
     const sessionService = getAgentSessionService(db);
     const source = service.detectContext().source || 'nezha';
-    await sessionService.registerSession(source);
+    await sessionService.registerSession(source, identity.id);
     
     await db.close();
     return identity;

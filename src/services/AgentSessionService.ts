@@ -30,7 +30,7 @@ export class AgentSessionService {
     return this.sessionId;
   }
 
-  async registerSession(agentType: string = 'opencode'): Promise<string> {
+  async registerSession(agentType: string = 'opencode', identityId?: string): Promise<string> {
     if (this.sessionId) {
       return this.sessionId;
     }
@@ -86,13 +86,14 @@ export class AgentSessionService {
       const gitBranch = await this.getGitBranch();
 
       await client.query(
-        `INSERT INTO agent_sessions (id, started_at, last_heartbeat, status, git_branch, agent_type)
-         VALUES ($1, NOW(), NOW(), 'alive', $2, $3)
+        `INSERT INTO agent_sessions (id, started_at, last_heartbeat, status, git_branch, agent_type, identity_id)
+         VALUES ($1, NOW(), NOW(), 'alive', $2, $3, $4)
          ON CONFLICT (id) DO UPDATE SET 
            status = 'alive',
            last_heartbeat = NOW(),
-           git_branch = $2`,
-        [sessionId, gitBranch, agentType]
+           git_branch = $2,
+           identity_id = $4`,
+        [sessionId, gitBranch, agentType, identityId || null]
       );
 
       await client.query('COMMIT');
