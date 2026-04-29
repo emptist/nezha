@@ -41,6 +41,10 @@ Nezha CLI - Coordination Layer
 
 Usage: nezha <command> [options]
 
+⚠️  IMPORTANT: Run nezha from YOUR project directory!
+   Your agent ID is derived from: source + project_name (git repo) + session
+   Running 'cd /path/to/nezha && nezha ...' will show you as S-*-nezha-*
+
 Core Commands:
   task-add <title> [desc] Add a task
   tasks [--status]      List tasks
