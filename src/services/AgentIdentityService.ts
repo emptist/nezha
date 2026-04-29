@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js';
 import { getAgentSessionService } from './AgentSessionService.js';
 
 export interface AgentContext {
-  project: string;
+  project: string | null;
   gitHash: string | null;
   machineFingerprint: string;
   cwd: string;
@@ -170,7 +170,7 @@ export class AgentIdentityService {
     }
   }
 
-  private getProjectName(): string {
+  private getProjectName(): string | null {
     try {
       // Try git remote first
       const remote = execSync('git remote get-url origin 2>/dev/null || echo ""', {
@@ -187,8 +187,9 @@ export class AgentIdentityService {
       // Fall through
     }
 
-    // Fallback to directory name
-    return path.basename(process.cwd()) || 'unknown';
+    // Not in a git repo - return null to indicate this is a global (non-project) context
+    // This will trigger G- ID generation instead of S- ID
+    return null;
   }
 
   private getGitHash(): string | null {
