@@ -16,6 +16,7 @@ import { MeetingCommands, MeetingDbCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
 import { ApiKeyService } from '../services/ApiKeyService.js';
+import { EncryptionService } from '../services/EncryptionService.js';
 import { InterReviewService } from '../services/InterReviewService.js';
 import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
 import { skillSystem } from '../core/SkillSystem.js';
@@ -362,6 +363,7 @@ case 'broadcast': {
       break;
     }
     case 'inner': {
+      await EncryptionService.getInstance().initialize();
       const subcmd = args[1];
       const apiKeyService = ApiKeyService.getInstance(db);
 
@@ -369,7 +371,7 @@ case 'broadcast': {
         const provider = args[2];
         const model = args[3];
         if (!provider) {
-          const current = await apiKeyService.getCurrentInnerProvider();
+          const current = await apiKeyService.getCurrentInnerModel();
           console.log(current
             ? `Provider: ${current.provider}, Model: ${current.model}`
             : 'No inner model provider configured');
