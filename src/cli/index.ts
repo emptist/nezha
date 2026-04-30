@@ -382,20 +382,76 @@ case 'broadcast': {
       } else if (subcmd === 'model') {
         const identity = await AgentIdentityService.getResolvedIdentity(true);
         console.log(identity.id);
+      } else if (subcmd === 'review') {
+        await EncryptionService.getInstance().initialize();
+        const reviewService = await InterReviewService.create(db);
+        const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+
+        const { getGitHash, getGitBranch, getGitDiff, getLastCommitMessage } = await import('../utils/git.js');
+        const commitHash = await getGitHash();
+        const branch = await getGitBranch() || 'main';
+        const commitMessage = getLastCommitMessage() || '';
+        const diff = getGitDiff();
+        const files = diff ? diff.split('\n') : [];
+
+        const taskMatch = commitMessage.match(/\[task:\s*([a-f0-9-]+)\]/i);
+
+        const request = {
+          taskId: taskMatch?.[1] || undefined,
+          commitHash: commitHash || undefined,
+          branch,
+          reviewerId: currentIdentity.id,
+          context: {
+            message: commitMessage,
+            files,
+            taskDescription: taskMatch?.[1] ? `Task: ${taskMatch[1]}` : undefined,
+          },
+        };
+
+        console.log('\n🔍 Requesting Inner AI review...\n');
+        const reviewId = await reviewService.requestReview(request, false);
+        console.log(`   Review ID: ${reviewId}`);
+
+        console.log('\n⏳ Inner AI is reviewing your code...\n');
+        const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough. Focus on: correctness, maintainability, test coverage, and preventing loop script pollution.`;
+        const result = await reviewService.performReview(reviewId, prompt);
+
+        console.log(`\n✅ Review completed (score: ${result.overallScore}/100)`);
+        console.log(`   Summary: ${result.summary.slice(0, 100)}...`);
+
+        if (result.findings.filter(f => f.severity === 'critical' || f.severity === 'high').length > 0) {
+          const criticalIssues = result.findings.filter(f => f.severity === 'critical' || f.severity === 'high');
+          console.log(`\n⚠️  Found ${criticalIssues.length} critical/high severity issues:`);
+          for (const finding of criticalIssues.slice(0, 3)) {
+            console.log(`   - [${finding.severity}] ${finding.message.slice(0, 80)}`);
+          }
+          console.log('\n❌ Review failed - please fix issues before committing');
+          process.exit(1);
+        }
+
+        console.log(`\n✅ Review passed! You can now commit with:`);
+        const msgForCommit = commitMessage || 'Update';
+        const taskPart = taskMatch ? ` [task:${taskMatch[1]}]` : '';
+        console.log(`   git commit -m "${msgForCommit}${taskPart} [inter-review:${reviewId}]"`);
+        console.log(`\n   Or use --no-verify to commit directly:`);
+        console.log(`   git commit -m "${msgForCommit}${taskPart} [inter-review:${reviewId}]" --no-verify`);
       } else {
         console.log('Usage: nezha inner set-model [provider] [model]');
         console.log('       nezha inner model');
+        console.log('       nezha inner review');
         console.log('');
         console.log('Commands:');
         console.log('  set-model [provider] [model]  Set the current inner AI provider and model');
         console.log('                                If no args, shows current provider and model');
         console.log('  model                         Show the inner AI agent ID');
+        console.log('  review                        Invoke Inner AI to review pending changes');
         console.log('');
         console.log('Examples:');
         console.log('  nezha inner set-model         Show current provider and model');
         console.log('  nezha inner set-model openrouter');
         console.log('  nezha inner set-model openrouter llama3.2:3b');
         console.log('  nezha inner model             Show inner agent ID');
+        console.log('  nezha inner review            Review current changes with Inner AI');
       }
       break;
     }
