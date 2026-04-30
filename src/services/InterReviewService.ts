@@ -186,7 +186,7 @@ export class InterReviewService extends EventEmitter {
       await this.db.query('BEGIN');
       logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
-      const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity(true);
       const reviewedBy = currentIdentity.id;
 
       await this.db.query(
