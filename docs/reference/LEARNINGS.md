@@ -22,10 +22,13 @@
 - Created `.env` file with `NEZHA_SECRET` for AES-256-GCM encryption
 - OpenRouter API key stored in `provider_api_keys` table (encrypted)
 - Encryption: PBKDF2 key derivation (100k iterations) + AES-256-GCM
+- **NEW**: Added `OpenRouterProvider` class at `src/services/ai/OpenRouterProvider.ts`
+- Provider auto-detected in `AIProviderFactory.createFromEnv()` when `OPENROUTER_API_KEY` is set
+- Default model: `tencent/hy3-preview:free` (free, works well)
 
 **Next Steps**:
-- Add OpenRouter provider to nezha
-- Use hy3-preview:free for QC tasks
+- Add OpenRouter provider to nezha ✅ DONE
+- Use hy3-preview:free for QC tasks (not yet)
 - Test inter-review request detection
 
 **References**:

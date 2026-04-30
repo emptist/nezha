@@ -396,8 +396,8 @@ nezha context --json           # 获取结构化上下文 (包含agentId)
 - Issue 已解决: #d9fa71fa "Ollama Trials - Local Model Integration"
 
 **下一步**:
-- 添加 OpenRouter provider 到 nezha
-- 使用 hy3-preview:free 进行 QC 任务
+- 添加 OpenRouter provider 到 nezha ✅ DONE
+- ~~使用 hy3-preview:free 进行 QC 任务~~ (not yet)
 
 ### 2. Agent ID 追踪系统
 

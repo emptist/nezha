@@ -3,6 +3,7 @@ import { OpenAIProvider } from './OpenAIProvider.js';
 import { AnthropicProvider } from './AnthropicProvider.js';
 import { OllamaProvider } from './OllamaProvider.js';
 import { GLM5Provider } from './GLM5Provider.js';
+import { OpenRouterProvider } from './OpenRouterProvider.js';
 
 const DEFAULT_GLM5_URL = 'https://open.bigmodel.cn/api/paas/v4';
 
@@ -17,11 +18,18 @@ export class AIProviderFactory {
     const openaiKey = process.env.OPENAI_API_KEY;
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
     const zhipuKey = process.env.ZHIPU_API_KEY;
+    const openrouterKey = process.env.OPENROUTER_API_KEY;
     const ollamaEnabled = process.env.OLLAMA_ENABLED === 'true' || process.env.OLLAMA_MODEL;
 
     let config: AIProviderConfig;
 
-    if (ollamaEnabled && !openaiKey && !anthropicKey && !zhipuKey) {
+    if (openrouterKey) {
+      config = {
+        provider: 'openrouter',
+        model: process.env.OPENROUTER_MODEL || 'tencent/hy3-preview:free',
+        apiKey: openrouterKey,
+      };
+    } else if (ollamaEnabled && !openaiKey && !anthropicKey && !zhipuKey) {
       config = {
         provider: 'ollama',
         model: process.env.OLLAMA_MODEL || 'mistral:7b',
@@ -68,6 +76,8 @@ export class AIProviderFactory {
         return new OllamaProvider(config);
       case 'glm5':
         return new GLM5Provider(config);
+      case 'openrouter':
+        return new OpenRouterProvider(config);
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
     }
@@ -83,3 +93,4 @@ export { OpenAIProvider } from './OpenAIProvider.js';
 export { AnthropicProvider } from './AnthropicProvider.js';
 export { OllamaProvider } from './OllamaProvider.js';
 export { GLM5Provider } from './GLM5Provider.js';
+export { OpenRouterProvider } from './OpenRouterProvider.js';

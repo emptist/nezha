@@ -9,7 +9,7 @@
  * - 参考：docs/ARCHITECTURE.md
  */
 export interface AIProviderConfig {
-  provider?: 'openai' | 'anthropic' | 'ollama' | 'glm5';
+  provider?: 'openai' | 'anthropic' | 'ollama' | 'glm5' | 'openrouter';
   model?: string;
   apiKey?: string;
   baseUrl?: string;
