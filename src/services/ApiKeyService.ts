@@ -57,7 +57,7 @@ export class ApiKeyService {
       throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
     }
 
-    const encrypted = this.encryption.encrypt(apiKey);
+    const encrypted = await this.encryption.encrypt(apiKey);
 
     await this.db.query(
       `INSERT INTO provider_api_keys (provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, updated_at)
@@ -104,7 +104,7 @@ export class ApiKeyService {
       salt: row.encrypted_salt,
     };
 
-    return this.encryption.decrypt(encryptedData);
+    return await this.encryption.decrypt(encryptedData);
   }
 
   async deleteApiKey(provider: string): Promise<void> {
@@ -132,7 +132,7 @@ export class ApiKeyService {
       throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
     }
 
-    const encrypted = this.encryption.encrypt(apiKey);
+    const encrypted = await this.encryption.encrypt(apiKey);
 
     await this.db.query(
       `UPDATE api_keys SET 
@@ -183,7 +183,7 @@ export class ApiKeyService {
       salt: rowData.encrypted_salt,
     };
 
-    return this.encryption.decrypt(encryptedData);
+    return await this.encryption.decrypt(encryptedData);
   }
 
   async listUserApiKeys(
@@ -227,7 +227,7 @@ export class ApiKeyService {
     return {
       provider: row.provider,
       model: row.model || 'llama3.2:3b',
-      apiKey: this.encryption.decrypt({
+      apiKey: await this.encryption.decrypt({
         encryptedData: row.encrypted_key,
         iv: row.encrypted_iv,
         tag: row.encrypted_tag,
@@ -272,7 +272,7 @@ export class ApiKeyService {
     return {
       provider: row.provider,
       model: row.model || 'llama3.2:3b',
-      apiKey: this.encryption.decrypt({
+      apiKey: await this.encryption.decrypt({
         encryptedData: row.encrypted_key,
         iv: row.encrypted_iv,
         tag: row.encrypted_tag,

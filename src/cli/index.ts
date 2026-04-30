@@ -62,7 +62,7 @@ Skill Commands:
   skill build <name> <purpose>  Build new skill
 
 All-in-One Commands:
-  areflect <text>       Create/update: [LEARN] text [TASK] title,status [ISSUE] title,status
+  areflect <text>       [LEARN] [ISSUE] [ISSUE_COMMENT] [ISSUE_RESOLVE] [TASK] [TASK_COMPLETE]
 
 Knowledge Tools:
   learn <insight>       Save learning (use areflect for new content)
@@ -867,69 +867,119 @@ case 'broadcast': {
     case 'areflect': {
       const text = args.slice(1).join(' ');
       if (!text) {
-        console.log('Usage: nezha areflect "[LEARN] insight: ..."');
+        console.log(`areflect - All-in-One Reflection Command
+
+Usage: nezha areflect <text with markers>
+
+Markers:
+  [LEARN] insight: <learning>
+  [ISSUE] title: <title> severity: <level>
+  [ISSUE_COMMENT] id: <uuid> comment: <text>
+  [ISSUE_RESOLVE] id: <uuid> resolution: <text>
+  [TASK] title: <title>
+  [TASK_COMPLETE] id: <uuid> result: <optional result>
+
+Examples:
+  nezha areflect "[LEARN] insight: Always check for pending work"
+  nezha areflect "[ISSUE_COMMENT] id: ebbe7d89 comment: Fixed the bug"
+  nezha areflect "[ISSUE] title: Bug in parser severity: high"
+  nezha areflect "[TASK] title: Fix parser bug"
+`);
         break;
       }
-// Parse markers - supports create + update/comment
-      // [LEARN] text | [TASK] title,COMPLETED | [ISSUE] title,RESOLVED
-      const learnMatch = text.match(/\[LEARN\]\s*(.+?)(?=\[TASK\]|\[ISSUE\]|$)/is);
-      const taskMatch = text.match(/\[TASK\]\s*(.+?)(?=\[LEARN\]|\[ISSUE\]|$)/is);
-      const issueMatch = text.match(/\[ISSUE\]\s*(.+?)(?=\[LEARN\]|\[TASK\]|$)/is);
 
-      if (learnMatch && learnMatch[1]) {
-        const content = learnMatch[1].trim();
-        await db.query(
-          `INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['learning'])`,
-          [content]
-        );
-        console.log(`✅ Learning saved: ${content.slice(0, 50)}...`);
-      }
-      if (taskMatch && taskMatch[1]) {
-        const raw = taskMatch[1].trim();
-        const completedMatch = raw.match(/^(.+?)\s*,\s*(?:COMPLETED|DONE)/i);
-        const commentMatch = raw.match(/^(.+?)\s*,\s*comment:\s*(.+)/i);
-        if (completedMatch && completedMatch[1]) {
+      const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
+      let count = 0;
+
+      const learnPattern = /\[LEARN\]\s*insight:\s*(.+?)(?=\[|$)/gis;
+      const issuePattern = /\[ISSUE\]\s*title:\s*(.+?)(?:\s*severity:\s*(\w+))?\s*(?=\[|$)/gi;
+      const issueCommentPattern = /\[ISSUE_COMMENT\]\s*id:\s*([a-f0-9-]+)\s+comment:\s*(.+?)\s*(?=\[|$)/gis;
+      const issueResolvePattern = /\[ISSUE_RESOLVE\]\s*id:\s*([a-f0-9-]+)\s+resolution:\s*(.+?)\s*(?=\[|$)/gis;
+      const taskPattern = /\[TASK\]\s*title:\s*(.+?)(?=\[|$)/gi;
+      const taskCompletePattern = /\[TASK_COMPLETE\]\s*id:\s*([a-f0-9-]+)(?:\s+result:\s*(.+?))?\s*(?=\[|$)/gis;
+
+      let match;
+
+      while ((match = learnPattern.exec(text)) !== null) {
+        const insight = match[1]?.trim();
+        if (insight) {
           await db.query(
-            `UPDATE tasks SET status = 'COMPLETED', result = 'Completed via areflect', completed_at = NOW() WHERE title ILIKE $1 AND status != 'COMPLETED'`,
-            [completedMatch[1].trim()]
+            `INSERT INTO memory (content, tags, source, importance) VALUES ($1, ARRAY['learning', 'reflection'], 'areflect', 7)`,
+            [insight]
           );
-          console.log(`✅ Task completed: ${completedMatch[1].trim().slice(0, 40)}`);
-        } else if (commentMatch && commentMatch[2]) {
-          const taskTitle = commentMatch[1]?.trim() || raw;
-          const taskComment = commentMatch[2]?.trim() || '';
-          await db.query(`INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['task-comment'])`, [`Task: ${taskTitle} - ${taskComment}`]);
-          console.log(`✅ Task comment: ${taskTitle.slice(0, 40)}`);
-        } else {
-          await db.query(`INSERT INTO tasks (title, status, priority) VALUES ($1, 'PENDING', 5)`, [raw]);
-          console.log(`✅ Task created: ${raw.slice(0, 50)}...`);
+          console.log(`✅ Learning saved: ${insight.substring(0, 60)}...`);
+          count++;
         }
       }
-      if (issueMatch && issueMatch[1]) {
-        const raw = issueMatch[1].trim();
-        const resolvedMatch = raw.match(/^(.+?)\s*,\s*(?:RESOLVED|FIXED)/i);
-        const commentMatch = raw.match(/^(.+?)\s*,\s*comment:\s*(.+)/i);
-        if (resolvedMatch && resolvedMatch[1]) {
-          await db.query(`UPDATE issues SET status = 'RESOLVED' WHERE title ILIKE $1 AND status != 'RESOLVED'`, [resolvedMatch[1].trim()]);
-          console.log(`✅ Issue resolved: ${resolvedMatch[1].trim().slice(0, 40)}`);
-        } else if (commentMatch && commentMatch[2]) {
-          const issueTitle = (commentMatch && commentMatch[1]) ? commentMatch[1].trim() : raw;
-          const issueComment = (commentMatch && commentMatch[2]) ? commentMatch[2].trim() : '';
-          await db.query(`INSERT INTO memory (content, source, importance, tags) VALUES ($1, 'areflect-cli', 5, ARRAY['issue-comment'])`, [`Issue: ${issueTitle} - ${issueComment}`]);
-          console.log(`✅ Issue comment: ${issueTitle.slice(0, 40)}`);
-        } else {
-          const hasSeverity = raw.match(/severity:\s*(critical|high|medium|low|cosmetic)/i);
-          const severity = (hasSeverity && hasSeverity[1]) ? hasSeverity[1].toLowerCase() : 'medium';
-          const titlePart = hasSeverity 
-            ? raw.substring(0, raw.lastIndexOf('severity:'))
-            : raw;
-          const titleRaw = titlePart.match(/title:\s*(.+)/i);
-          const title = (titleRaw && titleRaw[1]) ? titleRaw[1].trim() : raw;
-          await db.query(`INSERT INTO issues (title, status, severity) VALUES ($1, 'open', $2)`, [title, severity]);
+
+      while ((match = issuePattern.exec(text)) !== null) {
+        const title = match[1]?.trim();
+        const severity = match[2]?.trim() || 'medium';
+        if (title) {
+          await db.query(
+            `INSERT INTO issues (title, status, severity, discovered_by) VALUES ($1, 'open', $2, $3)`,
+            [title, severity.toLowerCase(), agentId]
+          );
           console.log(`✅ Issue created: ${title.slice(0, 50)} (${severity})`);
+          count++;
         }
       }
-      if (!learnMatch && !taskMatch && !issueMatch) {
-        console.log('No valid markers found. Use: [LEARN], [TASK], or [ISSUE]');
+
+      while ((match = issueCommentPattern.exec(text)) !== null) {
+        const id = match[1]?.trim();
+        const comment = match[2]?.trim();
+        if (id && comment) {
+          const result = await db.query<{ title: string }>(`SELECT title FROM issues WHERE id = $1`, [id]);
+          if (result.rows.length === 0) {
+            console.log(`Issue not found: ${id}`);
+          } else {
+            await db.query(
+              `INSERT INTO issue_comments (issue_id, author, content) VALUES ($1, $2, $3)`,
+              [id, agentId, comment]
+            );
+            console.log(`✅ Commented on issue: ${result.rows[0]!.title.substring(0, 50)}...`);
+            count++;
+          }
+        }
+      }
+
+      while ((match = issueResolvePattern.exec(text)) !== null) {
+        const id = match[1]?.trim();
+        const resolution = match[2]?.trim();
+        if (id && resolution) {
+          await db.query(
+            `UPDATE issues SET status = 'resolved', resolution = $1, resolved_at = NOW(), resolved_by = $2 WHERE id = $3`,
+            [resolution, agentId, id]
+          );
+          console.log(`✅ Issue resolved: ${id.slice(0, 8)}`);
+          count++;
+        }
+      }
+
+      while ((match = taskPattern.exec(text)) !== null) {
+        const title = match[1]?.trim();
+        if (title) {
+          await db.query(`INSERT INTO tasks (title, status, priority) VALUES ($1, 'PENDING', 5)`, [title]);
+          console.log(`✅ Task created: ${title.slice(0, 50)}`);
+          count++;
+        }
+      }
+
+      while ((match = taskCompletePattern.exec(text)) !== null) {
+        const id = match[1]?.trim();
+        const result = match[2]?.trim() || 'Completed via areflect';
+        if (id) {
+          await db.query(
+            `UPDATE tasks SET status = 'COMPLETED', result = $1, completed_at = NOW() WHERE id = $2`,
+            [result, id]
+          );
+          console.log(`✅ Task completed: ${id.slice(0, 8)}`);
+          count++;
+        }
+      }
+
+      if (count === 0) {
+        console.log('No reflection markers found in text.');
       }
       break;
     }

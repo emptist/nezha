@@ -74,9 +74,10 @@ export class EncryptionService {
     return this.key !== null;
   }
 
-  encrypt(plaintext: string): EncryptedData {
-    if (!this.key) {
-      throw new Error('Encryption service not initialized');
+  async encrypt(plaintext: string): Promise<EncryptedData> {
+    const encryptionSecret = process.env.NEZHA_SECRET;
+    if (!encryptionSecret) {
+      throw new Error('NEZHA_SECRET not set');
     }
 
     const iv = crypto.randomBytes(IV_LENGTH);
@@ -84,7 +85,9 @@ export class EncryptionService {
     const encoder = new TextEncoder();
     const plaintextBytes = encoder.encode(plaintext);
 
-    const cipher = crypto.createCipheriv(ALGORITHM, this.key, iv, {
+    const key = await this.deriveKey(encryptionSecret, salt);
+
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
       authTagLength: TAG_LENGTH,
     });
 
@@ -100,7 +103,7 @@ export class EncryptionService {
     };
   }
 
-  decrypt(encryptedData: EncryptedData): string {
+  async decrypt(encryptedData: EncryptedData): Promise<string> {
     if (!this.key) {
       throw new Error('Encryption service not initialized');
     }
@@ -108,8 +111,11 @@ export class EncryptionService {
     const iv = Buffer.from(encryptedData.iv, 'base64');
     const data = Buffer.from(encryptedData.encryptedData, 'base64');
     const tag = Buffer.from(encryptedData.tag, 'base64');
+    const salt = Buffer.from(encryptedData.salt, 'base64');
 
-    const decipher = crypto.createDecipheriv(ALGORITHM, this.key, iv, {
+    const key = await this.deriveKey(process.env.NEZHA_SECRET || '', salt);
+
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
       authTagLength: TAG_LENGTH,
     });
 
@@ -121,14 +127,14 @@ export class EncryptionService {
     return decoder.decode(decrypted);
   }
 
-  encryptString(plaintext: string): string {
-    const encrypted = this.encrypt(plaintext);
+  async encryptString(plaintext: string): Promise<string> {
+    const encrypted = await this.encrypt(plaintext);
     return JSON.stringify(encrypted);
   }
 
-  decryptString(encryptedString: string): string {
+  async decryptString(encryptedString: string): Promise<string> {
     const encrypted = JSON.parse(encryptedString) as EncryptedData;
-    return this.decrypt(encrypted);
+    return await this.decrypt(encrypted);
   }
 }
 
@@ -182,10 +188,10 @@ export function encryptSensitiveFields(
   return result;
 }
 
-export function decryptSensitiveFields(
+export async function decryptSensitiveFields(
   obj: Record<string, unknown>,
   encryption: EncryptionService
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   if (!encryption.isInitialized()) {
     return obj;
   }
@@ -198,7 +204,7 @@ export function decryptSensitiveFields(
       typeof result[key] === 'string'
     ) {
       try {
-        result[key] = encryption.decryptString(result[key] as string);
+        result[key] = await encryption.decryptString(result[key] as string);
         delete (result as Record<string, unknown>)[`${key}_encrypted`];
       } catch (error) {
         logger.warn(`Failed to decrypt field ${key}:`, error);
