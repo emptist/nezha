@@ -2,7 +2,6 @@
 // Minimal Nezha CLI - Database operations only, no daemon/server
 
 import { config } from 'dotenv';
-config({ quiet: true });
 
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -34,6 +33,23 @@ const __dirname = dirname(__filename);
 const pkgPath = join(__dirname, '..', '..', 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 const VERSION = pkg.version;
+
+// Load .env from nezha installation directory (where this script is located)
+const nezhaRoot = dirname(fileURLToPath(import.meta.url));
+
+// Load .env from nezha installation directory
+config({ path: join(nezhaRoot, '..', '..', '.env'), quiet: true });
+
+// Also load from user config directory (~/.config/nezha/.env or ~/.nezha/.env)
+const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+const userConfigPaths = [
+  join(homeDir, '.config', 'nezha', '.env'),
+  join(homeDir, '.nezha', '.env'),
+];
+
+for (const configPath of userConfigPaths) {
+  config({ path: configPath, quiet: true, override: true });
+}
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -363,7 +379,6 @@ case 'broadcast': {
       break;
     }
     case 'inner': {
-      await EncryptionService.getInstance().initialize();
       const subcmd = args[1];
       const apiKeyService = ApiKeyService.getInstance(db);
 
@@ -383,7 +398,6 @@ case 'broadcast': {
         const identity = await AgentIdentityService.getResolvedIdentity(true);
         console.log(identity.id);
       } else if (subcmd === 'review') {
-        await EncryptionService.getInstance().initialize();
         const reviewService = await InterReviewService.create(db);
         const currentIdentity = await AgentIdentityService.getResolvedIdentity();
 

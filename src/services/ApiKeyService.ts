@@ -40,6 +40,10 @@ export class ApiKeyService {
   private readonly encryption: EncryptionService;
   private static instance: ApiKeyService | null = null;
 
+  static resetInstance(): void {
+    ApiKeyService.instance = null;
+  }
+
   private constructor(db: DatabaseClient, encryption: EncryptionService) {
     this.db = db;
     this.encryption = encryption;
@@ -53,8 +57,8 @@ export class ApiKeyService {
   }
 
   async storeApiKey(provider: string, apiKey: string): Promise<void> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     const encrypted = await this.encryption.encrypt(apiKey);
@@ -75,8 +79,8 @@ export class ApiKeyService {
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     const result = await this.db.query<{
@@ -128,8 +132,8 @@ export class ApiKeyService {
   }
 
   async storeUserApiKeyEncrypted(apiKeyId: string, apiKey: string): Promise<void> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     const encrypted = await this.encryption.encrypt(apiKey);
@@ -148,8 +152,8 @@ export class ApiKeyService {
   }
 
   async getUserApiKeyDecrypted(apiKeyId: string, userRole: string): Promise<string | null> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     if (userRole !== 'admin' && userRole !== 'superadmin') {

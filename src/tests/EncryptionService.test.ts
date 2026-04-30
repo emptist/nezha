@@ -9,16 +9,21 @@ import {
   isEncryptedData,
 } from '../../src/services/EncryptionService.js';
 
+const TEST_SECRET = 'test-secret-12345';
+
 const resetEncryptionService = () => {
   (EncryptionService as unknown as { instance: null }).instance = null;
 };
 
 describe('EncryptionService', () => {
   let service: EncryptionService;
+  let originalSecret: string | undefined;
 
   beforeEach(() => {
     resetEncryptionService();
     service = EncryptionService.getInstance();
+    originalSecret = process.env.NEZHA_SECRET;
+    process.env.NEZHA_SECRET = TEST_SECRET;
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -26,6 +31,11 @@ describe('EncryptionService', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalSecret) {
+      process.env.NEZHA_SECRET = originalSecret;
+    } else {
+      delete process.env.NEZHA_SECRET;
+    }
   });
 
   describe('singleton pattern', () => {
@@ -36,78 +46,11 @@ describe('EncryptionService', () => {
     });
   });
 
-  describe('initialize', () => {
-    it('should initialize with a secret', async () => {
-      await service.initialize('test-secret-12345');
-      expect(service.isInitialized()).toBe(true);
-    });
-
-    it('should use NEZHA_SECRET from env when no secret provided', async () => {
-      const originalSecret = process.env.NEZHA_SECRET;
-      process.env.NEZHA_SECRET = 'env-secret-12345';
-      try {
-        resetEncryptionService();
-        const newService = EncryptionService.getInstance();
-        await newService.initialize();
-        expect(newService.isInitialized()).toBe(true);
-      } finally {
-        if (originalSecret) {
-          process.env.NEZHA_SECRET = originalSecret;
-        } else {
-          delete process.env.NEZHA_SECRET;
-        }
-      }
-    });
-
-    it('should not initialize without secret', async () => {
-      const originalSecret = process.env.NEZHA_SECRET;
-      delete process.env.NEZHA_SECRET;
-      try {
-        resetEncryptionService();
-        const newService = EncryptionService.getInstance();
-        await newService.initialize();
-        expect(newService.isInitialized()).toBe(false);
-      } finally {
-        if (originalSecret) {
-          process.env.NEZHA_SECRET = originalSecret;
-        }
-      }
-    });
-
-    it('should handle empty string gracefully (returns without error)', async () => {
-      const originalSecret = process.env.NEZHA_SECRET;
-      delete process.env.NEZHA_SECRET;
-      try {
-        await service.initialize('');
-        expect(service.isInitialized()).toBe(false);
-      } finally {
-        if (originalSecret) process.env.NEZHA_SECRET = originalSecret;
-      }
-    });
-  });
-
-  describe('isInitialized', () => {
-    it('should return false before initialization', () => {
-      resetEncryptionService();
-      const newService = EncryptionService.getInstance();
-      expect(newService.isInitialized()).toBe(false);
-    });
-
-    it('should return true after initialization', async () => {
-      await service.initialize('test-secret');
-      expect(service.isInitialized()).toBe(true);
-    });
-  });
-
   describe('encrypt and decrypt', () => {
-    beforeEach(async () => {
-      await service.initialize('test-secret');
-    });
-
-    it('should encrypt and decrypt a string', () => {
+    it('should encrypt and decrypt a string', async () => {
       const plaintext = 'Hello, World!';
-      const encrypted = service.encrypt(plaintext);
-      const decrypted = service.decrypt(encrypted);
+      const encrypted = await service.encrypt(plaintext);
+      const decrypted = await service.decrypt(encrypted);
 
       expect(encrypted).toHaveProperty('iv');
       expect(encrypted).toHaveProperty('encryptedData');
@@ -116,44 +59,44 @@ describe('EncryptionService', () => {
       expect(decrypted).toBe(plaintext);
     });
 
-    it('should produce different ciphertext each time', () => {
+    it('should produce different ciphertext each time', async () => {
       const plaintext = 'Same text';
-      const encrypted1 = service.encrypt(plaintext);
-      const encrypted2 = service.encrypt(plaintext);
+      const encrypted1 = await service.encrypt(plaintext);
+      const encrypted2 = await service.encrypt(plaintext);
 
       expect(encrypted1.iv).not.toBe(encrypted2.iv);
       expect(encrypted1.encryptedData).not.toBe(encrypted2.encryptedData);
     });
 
-    it('should handle empty string', () => {
+    it('should handle empty string', async () => {
       const plaintext = '';
-      const encrypted = service.encrypt(plaintext);
-      const decrypted = service.decrypt(encrypted);
+      const encrypted = await service.encrypt(plaintext);
+      const decrypted = await service.decrypt(encrypted);
       expect(decrypted).toBe(plaintext);
     });
 
-    it('should handle unicode characters', () => {
+    it('should handle unicode characters', async () => {
       const plaintext = '你好世界 🌍 مرحبا';
-      const encrypted = service.encrypt(plaintext);
-      const decrypted = service.decrypt(encrypted);
+      const encrypted = await service.encrypt(plaintext);
+      const decrypted = await service.decrypt(encrypted);
       expect(decrypted).toBe(plaintext);
     });
 
-    it('should handle long strings', () => {
+    it('should handle long strings', async () => {
       const plaintext = 'a'.repeat(10000);
-      const encrypted = service.encrypt(plaintext);
-      const decrypted = service.decrypt(encrypted);
+      const encrypted = await service.encrypt(plaintext);
+      const decrypted = await service.decrypt(encrypted);
       expect(decrypted).toBe(plaintext);
     });
 
-    it('should throw when encrypting without initialization', () => {
-      resetEncryptionService();
+    it('should throw when encrypting without NEZHA_SECRET', async () => {
+      delete process.env.NEZHA_SECRET;
       const uninitService = EncryptionService.getInstance();
-      expect(() => uninitService.encrypt('test')).toThrow('Encryption service not initialized');
+      await expect(uninitService.encrypt('test')).rejects.toThrow('NEZHA_SECRET not set');
     });
 
-    it('should throw when decrypting without initialization', () => {
-      resetEncryptionService();
+    it('should throw when decrypting without NEZHA_SECRET', async () => {
+      delete process.env.NEZHA_SECRET;
       const uninitService = EncryptionService.getInstance();
       const mockData: EncryptedData = {
         iv: 'test',
@@ -161,23 +104,23 @@ describe('EncryptionService', () => {
         tag: 'test',
         salt: 'test',
       };
-      expect(() => uninitService.decrypt(mockData)).toThrow('Encryption service not initialized');
+      await expect(uninitService.decrypt(mockData)).rejects.toThrow('NEZHA_SECRET not set');
     });
 
-    it('should throw when decrypting with tampered data', () => {
-      const encrypted = service.encrypt('test data');
+    it('should throw when decrypting with tampered data', async () => {
+      const encrypted = await service.encrypt('test data');
       encrypted.encryptedData = Buffer.from('tampered').toString('base64');
-      expect(() => service.decrypt(encrypted)).toThrow();
+      await expect(service.decrypt(encrypted)).rejects.toThrow();
     });
 
-    it('should throw when decrypting with tampered tag', () => {
-      const encrypted = service.encrypt('test data');
+    it('should throw when decrypting with tampered tag', async () => {
+      const encrypted = await service.encrypt('test data');
       encrypted.tag = Buffer.from('tampered').toString('base64');
-      expect(() => service.decrypt(encrypted)).toThrow();
+      await expect(service.decrypt(encrypted)).rejects.toThrow();
     });
 
-    it('should produce base64 encoded output', () => {
-      const encrypted = service.encrypt('test');
+    it('should produce base64 encoded output', async () => {
+      const encrypted = await service.encrypt('test');
       expect(() => Buffer.from(encrypted.iv, 'base64')).not.toThrow();
       expect(() => Buffer.from(encrypted.encryptedData, 'base64')).not.toThrow();
       expect(() => Buffer.from(encrypted.tag, 'base64')).not.toThrow();
@@ -186,29 +129,25 @@ describe('EncryptionService', () => {
   });
 
   describe('encryptString and decryptString', () => {
-    beforeEach(async () => {
-      await service.initialize('test-secret');
-    });
-
-    it('should encrypt and decrypt as JSON string', () => {
+    it('should encrypt and decrypt as JSON string', async () => {
       const plaintext = 'Secret API Key: 12345';
-      const encrypted = service.encryptString(plaintext);
-      const decrypted = service.decryptString(encrypted);
+      const encrypted = await service.encryptString(plaintext);
+      const decrypted = await service.decryptString(encrypted);
 
       expect(typeof encrypted).toBe('string');
       expect(decrypted).toBe(plaintext);
     });
 
-    it('should be valid JSON', () => {
-      const encrypted = service.encryptString('test');
+    it('should be valid JSON', async () => {
+      const encrypted = await service.encryptString('test');
       expect(() => JSON.parse(encrypted)).not.toThrow();
     });
 
-    it('should roundtrip complex strings', () => {
+    it('should roundtrip complex strings', async () => {
       const plaintext =
         'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-      const encrypted = service.encryptString(plaintext);
-      const decrypted = service.decryptString(encrypted);
+      const encrypted = await service.encryptString(plaintext);
+      const decrypted = await service.decryptString(encrypted);
       expect(decrypted).toBe(plaintext);
     });
   });
@@ -270,11 +209,21 @@ describe('containsSensitiveData', () => {
 
 describe('encryptSensitiveFields', () => {
   let service: EncryptionService;
+  let originalSecret: string | undefined;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetEncryptionService();
     service = EncryptionService.getInstance();
-    await service.initialize('test-secret');
+    originalSecret = process.env.NEZHA_SECRET;
+    process.env.NEZHA_SECRET = TEST_SECRET;
+  });
+
+  afterEach(() => {
+    if (originalSecret) {
+      process.env.NEZHA_SECRET = originalSecret;
+    } else {
+      delete process.env.NEZHA_SECRET;
+    }
   });
 
   it('should encrypt sensitive string fields', () => {
@@ -300,8 +249,8 @@ describe('encryptSensitiveFields', () => {
     expect(result.password_encrypted).toBeUndefined();
   });
 
-  it('should not modify when service not initialized', () => {
-    resetEncryptionService();
+  it('should not modify when NEZHA_SECRET not set', () => {
+    delete process.env.NEZHA_SECRET;
     const uninitService = EncryptionService.getInstance();
     const obj = { secret: 'value' };
 
@@ -350,67 +299,83 @@ describe('encryptSensitiveFields', () => {
 
 describe('decryptSensitiveFields', () => {
   let service: EncryptionService;
+  let originalSecret: string | undefined;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetEncryptionService();
     service = EncryptionService.getInstance();
-    await service.initialize('test-secret');
+    originalSecret = process.env.NEZHA_SECRET;
+    process.env.NEZHA_SECRET = TEST_SECRET;
   });
 
-  it('should decrypt encrypted fields', () => {
+  afterEach(() => {
+    if (originalSecret) {
+      process.env.NEZHA_SECRET = originalSecret;
+    } else {
+      delete process.env.NEZHA_SECRET;
+    }
+  });
+
+  it('should decrypt encrypted fields', async () => {
+    const encrypted = await service.encryptString('secret-password');
     const obj = {
       username: 'john',
-      password: service.encryptString('secret-password'),
+      password: encrypted,
       password_encrypted: true,
     };
 
-    const result = decryptSensitiveFields(obj as Record<string, unknown>, service);
+    const result = await decryptSensitiveFields(obj as Record<string, unknown>, service);
 
     expect(result.password).toBe('secret-password');
     expect(result.password_encrypted).toBeUndefined();
     expect(result.username).toBe('john');
   });
 
-  it('should not modify non-encrypted fields', () => {
+  it('should not modify non-encrypted fields', async () => {
     const obj = {
       name: 'John',
     };
 
-    const result = decryptSensitiveFields(obj, service);
+    const result = await decryptSensitiveFields(obj, service);
     expect(result.name).toBe('John');
   });
 
-  it('should not modify when service not initialized', () => {
-    resetEncryptionService();
+  it('should not modify when NEZHA_SECRET not set', async () => {
+    delete process.env.NEZHA_SECRET;
     const uninitService = EncryptionService.getInstance();
     const obj = {
       secret: 'encrypted-value',
       secret_encrypted: true,
     };
 
-    const result = decryptSensitiveFields(obj, uninitService);
+    const result = await decryptSensitiveFields(obj, uninitService);
     expect(result).toEqual(obj);
   });
 
-  it('should handle decryption failure gracefully', () => {
+  it('should handle decryption failure gracefully', async () => {
+    const encrypted = await service.encryptString('test');
     const obj = {
-      api_key: 'invalid-encrypted-data',
+      api_key: encrypted,
       api_key_encrypted: true,
     };
 
-    const result = decryptSensitiveFields(obj, service);
+    // Tamper with the encrypted data
+    const tamperedObj = { ...obj, api_key: 'invalid-encrypted-data' };
+    const result = await decryptSensitiveFields(tamperedObj as Record<string, unknown>, service);
     expect(result.api_key).toBe('invalid-encrypted-data');
   });
 
-  it('should decrypt multiple encrypted fields', () => {
+  it('should decrypt multiple encrypted fields', async () => {
+    const encryptedPass = await service.encryptString('pass123');
+    const encryptedToken = await service.encryptString('tok456');
     const obj = {
-      password: service.encryptString('pass123'),
+      password: encryptedPass,
       password_encrypted: true,
-      token: service.encryptString('tok456'),
+      token: encryptedToken,
       token_encrypted: true,
     };
 
-    const result = decryptSensitiveFields(obj as Record<string, unknown>, service);
+    const result = await decryptSensitiveFields(obj as Record<string, unknown>, service);
 
     expect(result.password).toBe('pass123');
     expect(result.token).toBe('tok456');

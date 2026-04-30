@@ -311,6 +311,14 @@ ${context}
 ## Your Task
 Analyze the code changes and provide feedback. But more importantly - EXTRACT LEARNING POINTS that can help the AI avoid similar issues in the future.
 
+## Test Detection (Important!)
+Carefully check if test files are included in the changes:
+- Look for files matching: *.test.ts, *.test.js, *.spec.ts, *.spec.js, *.e2e.ts, etc.
+- Check for test directories: __tests__/, test/, tests/
+- Look for Python tests: test_*.py, *_test.py
+- Consider if the code changes are properly tested
+- Set testCoverageScore based on ACTUAL test presence (0-100)
+
 ## Output Format
 Return JSON with:
 1. "summary": Brief summary of what changed
@@ -325,6 +333,12 @@ The "learnings" field is the most valuable output. Write specific, actionable re
 - "When modifying TaskWatchdogService, always update process_pids table"
 - "Use non-null assertion (!) after checking rows.length"
 - "Import Config from config/Config.js, not db/DatabaseClient.js"
+
+## Test Coverage Score Guidelines
+- 90-100: Comprehensive tests included with the changes
+- 70-89: Some tests included, but could be more thorough
+- 50-69: Minimal or basic tests only
+- 0-49: No tests detected or changes not tested
 
 Format:
 {
@@ -470,6 +484,56 @@ Format:
     return this.fallbackReview(response);
   }
 
+  private detectTestFiles(context: string): { hasTests: boolean; testFiles: string[] } {
+    const testFiles: string[] = [];
+    
+    // Match diff headers to find changed files
+    const diffFilePattern = /^diff --git a\/(.+?) b\/(.+?)$/gm;
+    let match: RegExpExecArray | null;
+    
+    while ((match = diffFilePattern.exec(context)) !== null) {
+      const fileA = match[1];
+      const fileB = match[2];
+      const filePath = fileB || fileA;
+      if (filePath && this.isTestFile(filePath)) {
+        testFiles.push(filePath);
+      }
+    }
+    
+    // Also check for test patterns in the context more broadly
+    const allFilePattern = /[\w\/\-]+\.(test|spec|e2e)\.[tj]sx?|__tests?__\/[\w\/\-]+\.[tj]sx?|tests?\/[\w\/\-]+\.[tj]sx?|test_[\w\/\-]+\.py|[\w\/\-]+_test\.py/gi;
+    let fileMatch: RegExpExecArray | null;
+    
+    while ((fileMatch = allFilePattern.exec(context)) !== null) {
+      const filePath = fileMatch[0];
+      if (!testFiles.includes(filePath)) {
+        testFiles.push(filePath);
+      }
+    }
+    
+    return {
+      hasTests: testFiles.length > 0,
+      testFiles,
+    };
+  }
+  
+  private isTestFile(filePath: string): boolean {
+    const testPatterns = [
+      /\.test\.[tj]sx?$/,     // *.test.ts, *.test.js, *.test.tsx, *.test.jsx
+      /\.spec\.[tj]sx?$/,     // *.spec.ts, *.spec.js, *.spec.tsx, *.spec.jsx
+      /\.e2e\.[tj]sx?$/,      // *.e2e.ts, *.e2e.js
+      /__tests?__\//,           // __tests__/ directory
+      /^[\w\/]*tests?\//,      // test/ or tests/ directory at start
+      /\/tests?\//,             // /test/ or /tests/ anywhere
+      /test_[\w]+\.py$/,       // test_*.py (Python)
+      /[\w]+_test\.py$/,       // *_test.py (Python)
+      /Test\.java$/,            // *Test.java
+      /Tests\.cs$/,             // *Tests.cs
+    ];
+    
+    return testPatterns.some(pattern => pattern.test(filePath));
+  }
+  
   private fallbackReview(context: string): ReviewResult {
     const issues: ReviewFinding[] = [];
     const suggestions: ReviewFinding[] = [];
@@ -482,13 +546,23 @@ Format:
       });
     }
 
-    if (!context.includes('test') && !context.includes('Test')) {
+    const testDetection = this.detectTestFiles(context);
+    
+    if (!testDetection.hasTests) {
       suggestions.push({
         type: 'suggestion',
         severity: 'medium',
-        message: 'No tests detected - consider adding test coverage',
+        message: 'No test files detected in changes - consider adding test coverage',
+      });
+    } else {
+      suggestions.push({
+        type: 'praise',
+        severity: 'low',
+        message: `Test files detected (${testDetection.testFiles.length}): ${testDetection.testFiles.slice(0, 3).join(', ')}${testDetection.testFiles.length > 3 ? '...' : ''}`,
       });
     }
+
+    const testCoverageScore = testDetection.hasTests ? 75 : 40;
 
     return {
       reviewId: '',
@@ -497,7 +571,7 @@ Format:
       learnings: [],
       overallScore: 70,
       codeQualityScore: 70,
-      testCoverageScore: context.includes('test') ? 80 : 50,
+      testCoverageScore,
       documentationScore: context.includes('docs') || context.includes('comment') ? 75 : 60,
     };
   }

@@ -16,7 +16,6 @@ export interface EncryptedData {
 }
 
 export class EncryptionService {
-  private key: Buffer | null = null;
   private static instance: EncryptionService | null = null;
 
   private constructor() {}
@@ -26,24 +25,6 @@ export class EncryptionService {
       EncryptionService.instance = new EncryptionService();
     }
     return EncryptionService.instance;
-  }
-
-  async initialize(secret?: string): Promise<void> {
-    const encryptionSecret = secret ?? process.env.NEZHA_SECRET;
-
-    if (!encryptionSecret) {
-      logger.warn('NEZHA_SECRET not set, encryption disabled');
-      return;
-    }
-
-    try {
-      const salt = crypto.randomBytes(SALT_LENGTH);
-      this.key = await this.deriveKey(encryptionSecret, salt);
-      logger.info('Encryption service initialized');
-    } catch (error) {
-      logger.error('Failed to initialize encryption service:', error);
-      throw error;
-    }
   }
 
   private async deriveKey(password: string, salt: Buffer): Promise<Buffer> {
@@ -70,13 +51,9 @@ export class EncryptionService {
     return Buffer.from(bits);
   }
 
-  isInitialized(): boolean {
-    return this.key !== null;
-  }
-
   async encrypt(plaintext: string): Promise<EncryptedData> {
-    const encryptionSecret = process.env.NEZHA_SECRET;
-    if (!encryptionSecret) {
+    const secret = process.env.NEZHA_SECRET;
+    if (!secret) {
       throw new Error('NEZHA_SECRET not set');
     }
 
@@ -85,14 +62,13 @@ export class EncryptionService {
     const encoder = new TextEncoder();
     const plaintextBytes = encoder.encode(plaintext);
 
-    const key = await this.deriveKey(encryptionSecret, salt);
+    const key = await this.deriveKey(secret, salt);
 
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
       authTagLength: TAG_LENGTH,
     });
 
     const encrypted = Buffer.concat([cipher.update(plaintextBytes), cipher.final()]);
-
     const tag = cipher.getAuthTag();
 
     return {
@@ -104,8 +80,9 @@ export class EncryptionService {
   }
 
   async decrypt(encryptedData: EncryptedData): Promise<string> {
-    if (!this.key) {
-      throw new Error('Encryption service not initialized');
+    const secret = process.env.NEZHA_SECRET;
+    if (!secret) {
+      throw new Error('NEZHA_SECRET not set');
     }
 
     const iv = Buffer.from(encryptedData.iv, 'base64');
@@ -113,7 +90,7 @@ export class EncryptionService {
     const tag = Buffer.from(encryptedData.tag, 'base64');
     const salt = Buffer.from(encryptedData.salt, 'base64');
 
-    const key = await this.deriveKey(process.env.NEZHA_SECRET || '', salt);
+    const key = await this.deriveKey(secret, salt);
 
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
       authTagLength: TAG_LENGTH,
@@ -172,7 +149,7 @@ export function encryptSensitiveFields(
   obj: Record<string, unknown>,
   encryption: EncryptionService
 ): Record<string, unknown> {
-  if (!encryption.isInitialized()) {
+  if (!process.env.NEZHA_SECRET) {
     return obj;
   }
 
@@ -192,7 +169,7 @@ export async function decryptSensitiveFields(
   obj: Record<string, unknown>,
   encryption: EncryptionService
 ): Promise<Record<string, unknown>> {
-  if (!encryption.isInitialized()) {
+  if (!process.env.NEZHA_SECRET) {
     return obj;
   }
 
