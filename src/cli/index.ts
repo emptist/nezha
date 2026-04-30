@@ -527,7 +527,7 @@ case 'broadcast': {
       // INTER-REVIEW IS MANDATORY (human requirement from the beginning)
       if (!reviewMatch) {
         console.log('\n⚠️  No inter-review found in commit message');
-        console.log('   Auto-requesting inter-review from other AIs...\n');
+        console.log('   Requesting inter-review and invoking Inner AI for immediate review...\n');
 
         const reviewService = await InterReviewService.create(db);
         const currentIdentity = await AgentIdentityService.getResolvedIdentity();
@@ -547,12 +547,25 @@ case 'broadcast': {
           },
         };
 
-        const newReviewId = await reviewService.requestReview(request, true);
+        const newReviewId = await reviewService.requestReview(request, false);
+        console.log(`📋 Inter-review requested: ${newReviewId}`);
 
-        console.log(`✅ Inter-review requested: ${newReviewId}`);
+        console.log('\n🔍 Inner AI is reviewing your code...');
+        const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough. Focus on: correctness, maintainability, test coverage, and preventing loop script pollution.`;
+        const result = await reviewService.performReview(newReviewId, prompt);
+        console.log(`✅ Review completed (score: ${result.overallScore}/100)`);
+        console.log(`   Summary: ${result.summary.slice(0, 100)}...`);
+
+        if (result.findings.filter(f => f.severity === 'critical' || f.severity === 'high').length > 0) {
+          const criticalIssues = result.findings.filter(f => f.severity === 'critical' || f.severity === 'high');
+          console.log(`\n⚠️  Found ${criticalIssues.length} critical/high severity issues:`);
+          for (const finding of criticalIssues.slice(0, 3)) {
+            console.log(`   - [${finding.severity}] ${finding.message.slice(0, 80)}`);
+          }
+        }
+
         console.log('\n📝 Please retry your commit with this review ID:');
         console.log(`   git commit -m "Your message [task:${taskMatch?.[1] || '<id>'}] [inter-review:${newReviewId}]"`);
-        console.log('\n⏳ Or wait for the review to be completed by another AI');
         process.exit(1);
       }
 
