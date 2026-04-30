@@ -210,7 +210,14 @@ export class DatabaseSkillLoader {
     };
 
     const result = await client.query(
-      `SELECT * FROM skills 
+      `SELECT *, 
+         COALESCE(
+           CASE WHEN content->>'markdown' != '' THEN content->>'markdown'
+           ELSE instructions 
+           END,
+           ''
+         ) AS instructions
+       FROM skills 
        WHERE name = $1 
          AND status = 'approved' 
          AND is_enabled = TRUE 
@@ -218,6 +225,7 @@ export class DatabaseSkillLoader {
        LIMIT 1`,
       [name]
     );
+
 
     if (result.rows.length > 0) {
       const skill = result.rows[0];

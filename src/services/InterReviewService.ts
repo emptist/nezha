@@ -303,13 +303,37 @@ export class InterReviewService extends EventEmitter {
   ): Promise<{ reviewResult: ReviewResult; rawResponse: string }> {
     const context = await this.getReviewContext(reviewId);
 
-    const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.
+    // 🆕 Load the inter-review-inner-ai skill for comprehensive system knowledge
+    let skillContent = '';
+    try {
+      const skillJson = await this.loadPromptFromSkills('inter-review-inner-ai');
+      if (skillJson) {
+        // Handle both string and object (JSONB auto-parse)
+        const parsed = typeof skillJson === 'string' ? JSON.parse(skillJson) : skillJson;
+        skillContent = parsed.markdown || (typeof skillJson === 'string' ? skillJson : JSON.stringify(skillJson));
+        logger.info('[InterReview] Loaded inter-review-inner-ai skill successfully');
+      }
+    } catch (err) {
+      logger.warn('[InterReview] Failed to load inter-review-inner-ai skill:', err);
+    }
 
-## Review Context
-${context}
+    // 🆕 Fallback: Load priority learnings and table docs if skill not found
+    let fallbackKnowledge = '';
+    if (!skillContent) {
+      try {
+        const priorityLearnings = await this.getPriorityLearnings();
+        const tableDocs = await this.getTableDocs();
+        fallbackKnowledge = `\n## 🎓 Priority Learnings\n${priorityLearnings}\n\n## 🔧 Nezha CLI Commands\n${tableDocs}\n`;
+        logger.info('[InterReview] Using fallback knowledge (priority learnings + table docs)');
+      } catch (err) {
+        logger.warn('[InterReview] Failed to load fallback knowledge:', err);
+      }
+    }
 
-## Your Task
-Analyze the code changes and provide feedback. But more importantly - EXTRACT LEARNING POINTS that can help the AI avoid similar issues in the future.
+    // Build the system prompt with skill content or fallback
+    const systemKnowledge = skillContent || fallbackKnowledge;
+
+    const prompt = `${systemKnowledge}\n\n## Review Context\n${context}\n\n## Your Task\nAnalyze the code changes and provide feedback. But more importantly - EXTRACT LEARNING POINTS that can help the AI avoid similar issues in the future.
 
 ## Test Detection (Important!)
 Carefully check if test files are included in the changes:
@@ -400,6 +424,33 @@ Format:
     }
 
     return context || 'Review context not available';
+  }
+
+  private async getPriorityLearnings(): Promise<string> {
+    try {
+      const result = await this.db.query<{ content: string }>(
+        `SELECT content FROM memory WHERE tags @> ARRAY['essential'] OR tags @> ARRAY['tool-discovery'] \n         ORDER BY importance DESC NULLS LAST LIMIT 10`
+      );
+      return result.rows.map(r => `- ${r.content.slice(0, 150)}`).join('\n');
+    } catch (err) {
+      logger.warn('[InterReview] Failed to get priority learnings:', err);
+      return 'Priority learnings not available';
+    }
+  }
+
+  private async getTableDocs(): Promise<string> {
+    try {
+      const result = await this.db.query<{ table_name: string; purpose: string; cli_commands: Array<{cmd: string; desc: string}> }>(
+        `SELECT table_name, purpose, cli_commands FROM table_documentation \n         WHERE ai_can_modify = true LIMIT 15`
+      );
+      return result.rows.map(r => {
+        const cmds = r.cli_commands?.map((c: any) => c.cmd).join(', ') || '';
+        return `- **${r.table_name}**: ${r.purpose} (${cmds})`;
+      }).join('\n');
+    } catch (err) {
+      logger.warn('[InterReview] Failed to get table docs:', err);
+      return 'Table documentation not available';
+    }
   }
 
   private async callReviewAI(systemPrompt: string, userPrompt: string): Promise<string> {

@@ -175,6 +175,18 @@ Nezha 的技能和命令像 `ls`/`cd`/`grep` 一样工作——直接运行，�
    - 不要编写复杂的 NLP 规则来提取知识
    - 不要用程序硬编码学习逻辑
 
+## 最近修复 (2026-04-30)
+
+- **Bug #7ea24171**: `nezha skill show` 失败 - 修复 `getSkillByName()` 中 `safety_score >= 70` 过滤器，新技能被屏蔽问题
+- **Bug #47a384ec**: `skill show` 显示空说明 - 修复 `DatabaseSkillLoader.getSkillByName()` 未映射 `content->>'markdown'` 到 `instructions` 字段
+- **新技能**: 构建 `inter-review-inner-ai` 技能 (7ebb65d1) 用于内部 AI 代码评审，构建 `project-onboarding` 技能 (8bc44063) 用于系统化 AI 入职
+- **NuPI 更新**: 简化 `extension.ts` 使用 `SESSION_ID` 作为会话内标识符，移除 `CURRENT_AI_IDENTITY`
+- **MASTER Bug #193993e0**: 大多数命令未正确处理 `--help` 标志 - 会创建任务/问题/广播而不是显示帮助
+  - 修复命令: `archive`, `agents`, `validate-commit`, `task-add`, `task-complete`, `issue-add`, `issue-resolve`, `tools`, `broadcast` 等
+  - 添加 `checkHelp()` 辅助函数统一处理 `--help` 标志
+- **Bug #28bd048d**: Inter-review 系统总是评分 70/100 - 可能的问题
+- **Bug #e57e8e5f**: `nezha archive --help` 失败 - 尝试将 `--help` 解析为 UUID
+
 ## OpenCode 研究成果
 
 从 OpenCode 源码学到：

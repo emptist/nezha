@@ -105,6 +105,18 @@ async function getDb(): Promise<DatabaseClient> {
   return new DatabaseClient(config);
 }
 
+/**
+ * Check if --help flag is present in args
+ * @returns true if help was shown, false otherwise
+ */
+function checkHelp(args: string[], usage: string): boolean {
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(usage);
+    return true;
+  }
+  return false;
+}
+
 async function main() {
   if (!command || command === 'help' || command === '--help' || args.length === 0) {
     console.log(COMMANDS);
@@ -120,6 +132,14 @@ async function main() {
 
   switch (command) {
     case 'task-add': {
+      if (checkHelp(args, 'Usage: nezha task-add "title" [desc] [--priority N] [--tags t1,t2]')) break;
+      
+      const usage = `Usage: nezha task-add "title" [desc] [--priority N] [--tags t1,t2]
+  Examples:
+    nezha task-add "Fix bug" "Description of bug" --priority 3
+    nezha task-add "New feature" --priority 1 --tags feature,urgent`;
+      if (checkHelp(args, usage)) break;
+      
       const title = args[1];
       const descIndex = args.indexOf('--description');
       const description = descIndex !== -1 && args[descIndex + 1] ? args[descIndex + 1] : '';
@@ -164,6 +184,10 @@ async function main() {
       break;
     }
     case 'task-complete': {
+      if (checkHelp(args, 'Usage: nezha task-complete <task-id>')) break;
+      
+      if (checkHelp(args, 'Usage: nezha task-complete <task-id>')) break;
+      
       const taskId = args[1];
       if (!taskId) {
         console.log('Usage: nezha task-complete <task-id>');
@@ -175,6 +199,8 @@ async function main() {
       break;
     }
     case 'task-complete-by-commit': {
+      if (checkHelp(args, 'Usage: nezha task-complete-by-commit <commit-hash>')) break;
+      
       const taskCmd = new TaskCommands(db);
       const commitMsg = args.slice(1).join(' ') || '';
       const taskIds = commitMsg.match(/\[task:\s*([a-f0-9-]+)\]/gi) || [];
@@ -194,6 +220,10 @@ async function main() {
       break;
     }
     case 'issue-add': {
+      if (checkHelp(args, 'Usage: nezha issue-add "title" [--severity critical|high|medium|low] [--tag t1,t2]')) break;
+      
+      if (checkHelp(args, 'Usage: nezha issue-add "title" [--severity critial|high|medium|low] [--tag t1,t2]')) break;
+      
       const title = args[1];
       if (!title) {
         console.log('Usage: nezha issue-add "title" [--severity critical]');
@@ -207,11 +237,17 @@ async function main() {
       break;
     }
     case 'issue-list': {
+      if (checkHelp(args, 'Usage: nezha issue-list [--status open|closed]')) break;
+      
       const issueCmd = new IssueCommands(db);
       await issueCmd.list();
       break;
     }
     case 'issue-resolve': {
+      if (checkHelp(args, 'Usage: nezha issue-resolve <issue-id> [notes]')) break;
+      
+      if (checkHelp(args, 'Usage: nezha issue-resolve <issue-id> [notes]')) break;
+      
       const issueId = args[1];
       if (!issueId) {
         console.log('Usage: nezha issue-resolve <issue-id> [notes]');
@@ -360,6 +396,8 @@ async function main() {
     }
     case 'announce':
 case 'broadcast': {
+      if (checkHelp(args, 'Usage: nezha broadcast "message" [--priority low|normal|high|critical]')) break;
+      
       const message = args.slice(1).join(' ');
       if (!message) {
         console.log('Usage: nezha announce "message" [--priority low|normal|high|critical]');
@@ -372,9 +410,14 @@ case 'broadcast': {
       break;
     }
     case 'agents': {
-      if (args[1] === 'id') {
+      const subcmd = args[1];
+      if (subcmd === 'id') {
         const identity = await AgentIdentityService.getResolvedIdentity();
         console.log(identity.id);
+      } else if (!subcmd || subcmd === '--help') {
+        console.log('Usage: nezha agents <subcommand>');
+        console.log('  id - Show current agent ID');
+        console.log('  --help - Show this help');
       }
       break;
     }
@@ -470,6 +513,8 @@ case 'broadcast': {
       break;
     }
     case 'context': {
+      if (checkHelp(args, 'Usage: nezha context')) break;
+      
       const jsonIndex = args.indexOf('--json');
       const isJson = jsonIndex !== -1;
       const forIndex = args.indexOf('--for');
@@ -522,6 +567,12 @@ case 'broadcast': {
     case 'tools':
     case 'learnTheseFirst':
     case 'learn-first': {
+      const usage = `Usage: nezha tools [tool-name]
+  nezha tools - list all tools
+  nezha tools <tool-name> - show tool details
+  nezha tools learn - show priority learnings`;
+      if (checkHelp(args, usage)) break;
+      
       const isLearnFirst = command === 'learnTheseFirst' || command === 'learn-first';
       const subcmd = isLearnFirst ? 'learn' : args[1];
       
@@ -582,9 +633,11 @@ case 'broadcast': {
     }
     case 'validate-commit': {
       const msgFile = args[1];
-      if (!msgFile) {
-        console.log('Error: commit message file required');
-        process.exit(1);
+      if (!msgFile || msgFile === '--help') {
+        console.log('Usage: nezha validate-commit <commit-message-file>');
+        console.log('  Validates commit message format and requests inter-review if missing');
+        console.log('  Commit message should contain: [task:<id>] [inter-review:<id>]');
+        process.exit(msgFile === '--help' ? 0 : 1);
       }
       const fs = await import('fs');
       const msg = fs.readFileSync(msgFile, 'utf-8');
@@ -844,8 +897,10 @@ case 'broadcast': {
     }
     case 'archive': {
       const id = args[1];
-      if (!id) {
+      if (!id || id === '--help') {
         console.log('Usage: nezha archive <memory-id> [--reason <reason>]');
+        console.log('  <memory-id>: ID of the memory to archive');
+        console.log('  --reason: Optional reason for archiving (default: outdated)');
         break;
       }
       const reasonIdx = args.indexOf('--reason');
