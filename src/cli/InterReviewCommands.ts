@@ -6,10 +6,10 @@ import { logger } from '../utils/logger.js';
 
 const REVIWER_ID = `nezha-${Date.now()}`;
 
-function createReviewService(): InterReviewService {
+async function createReviewService(): Promise<InterReviewService> {
   const config = Config.getInstance();
   const db = new DatabaseClient(config);
-  return new InterReviewService(db);
+  return InterReviewService.create(db);
 }
 
 export async function requestReviewFromAI(
@@ -17,7 +17,7 @@ export async function requestReviewFromAI(
   taskId?: string,
   taskDescription?: string
 ): Promise<void> {
-  const reviewService = createReviewService();
+  const reviewService = await createReviewService();
 
   let commit: string | undefined = commitHash;
   let commitMessage = '';
@@ -74,7 +74,7 @@ export async function requestReviewFromAI(
 }
 
 export async function performAIReview(reviewId: string): Promise<void> {
-  const reviewService = createReviewService();
+  const reviewService = await createReviewService();
 
   const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.`;
 
@@ -100,13 +100,13 @@ export async function respondToReview(
     effortMinutes?: number;
   }
 ): Promise<void> {
-  const reviewService = createReviewService();
+  const reviewService = await createReviewService();
   await reviewService.respondToReview(reviewId, response, accepted || [], options);
   console.log(`✅ Response recorded for review: ${reviewId}`);
 }
 
 export async function showReview(reviewId?: string): Promise<void> {
-  const reviewService = createReviewService();
+  const reviewService = await createReviewService();
 
   if (reviewId) {
     const review = await reviewService.getReview(reviewId);
@@ -132,7 +132,7 @@ export async function showReview(reviewId?: string): Promise<void> {
 }
 
 export async function showReviewStats(): Promise<void> {
-  const reviewService = createReviewService();
+  const reviewService = await createReviewService();
 
   const stats = await reviewService.getReviewStats();
   console.log('\n📊 Inter-Review Statistics\n');

@@ -337,7 +337,8 @@ export class DatabaseSkillLoader {
 
   async getSuggestedSkills(taskContext: string, limit: number = 5): Promise<StoredSkill[]> {
     const matches = await this.findSkillsByTrigger(taskContext);
-    return matches.slice(0, limit).map(m => m.skill);
+    const filtered = matches.filter(m => m.antiPatternMatch === null);
+    return filtered.slice(0, limit).map(m => m.skill);
   }
 
   async incrementUseCount(skillNames: string[]): Promise<void> {

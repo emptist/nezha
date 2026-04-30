@@ -52,10 +52,11 @@ const CONTEXT_SKILL_LIMIT = 3;
 export class ContextBuilder {
   private readonly memory: MemoryService;
   private readonly dailyMemory: DailyMemoryService;
-  private readonly interReviewService: InterReviewService;
+  private interReviewService!: InterReviewService;
   private readonly skillSystem: SkillSystem;
   private readonly memoryDir: string;
   private readonly embedding?: EmbeddingProvider;
+  private readonly db: DatabaseClient;
   private cachedCuratedMemory: string = '';
   private curatedMemoryLoaded: number = 0;
 
@@ -66,6 +67,7 @@ export class ContextBuilder {
       embedding?: EmbeddingConfig;
     }
   ) {
+    this.db = db;
     this.memoryDir = config?.memoryDir ?? DEFAULT_MEMORY_DIR;
 
     let embeddingProvider: EmbeddingProvider | undefined;
@@ -80,7 +82,6 @@ export class ContextBuilder {
 
     this.memory = new MemoryService(db, undefined, embeddingProvider);
     this.dailyMemory = new DailyMemoryService({ memoryDir: this.memoryDir });
-    this.interReviewService = new InterReviewService(db);
     this.skillSystem = new SkillSystem();
     this.skillSystem.setDatabaseClient(db);
     if (embeddingProvider) {
@@ -91,6 +92,11 @@ export class ContextBuilder {
     }
     this.embedding = embeddingProvider;
     this.initializeSkillSystem();
+    this.initializeInterReviewService();
+  }
+
+  private async initializeInterReviewService(): Promise<void> {
+    this.interReviewService = await InterReviewService.create(this.db);
   }
 
   private async initializeSkillSystem(): Promise<void> {

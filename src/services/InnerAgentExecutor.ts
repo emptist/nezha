@@ -1,4 +1,5 @@
 import { AIProvider, AIProviderFactory } from './ai/index.js';
+import type { DatabaseClient } from '../db/DatabaseClient.js';
 import { logger } from '../utils/logger.js';
 
 export interface TaskResult {
@@ -13,20 +14,16 @@ export interface ReflectionResult {
   output: string;
 }
 
-export class AITaskExecutor {
+export class InnerAgentExecutor {
   private readonly provider: AIProvider;
 
-  constructor(provider?: AIProvider) {
-    if (provider) {
-      this.provider = provider;
-    } else {
-      try {
-        this.provider = AIProviderFactory.createFromEnv();
-      } catch (error) {
-        logger.error('[AITaskExecutor] Failed to create AI provider:', error);
-        throw error;
-      }
-    }
+  constructor(provider: AIProvider) {
+    this.provider = provider;
+  }
+
+  static async create(db: DatabaseClient): Promise<InnerAgentExecutor> {
+    const provider = await AIProviderFactory.createInnerProvider(db);
+    return new InnerAgentExecutor(provider);
   }
 
   async executeTask(prompt: string, timeoutMs: number = 300000): Promise<TaskResult> {
@@ -67,20 +64,11 @@ export class AITaskExecutor {
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.warn('[AITaskExecutor] Reflection failed:', errorMessage);
+      logger.warn('[InnerAgentExecutor] Reflection failed:', errorMessage);
       return {
         success: false,
         output: errorMessage,
       };
     }
   }
-}
-
-let executorInstance: AITaskExecutor | null = null;
-
-export function getAITaskExecutor(): AITaskExecutor {
-  if (!executorInstance) {
-    executorInstance = new AITaskExecutor();
-  }
-  return executorInstance;
 }

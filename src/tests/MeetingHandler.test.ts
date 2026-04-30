@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MeetingHandler, type DiscussionTask } from '../services/MeetingHandler.js';
 
+const mockComplete = vi.hoisted(() => vi.fn().mockResolvedValue({ content: 'opinion content' }));
+
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => ({
     query: vi.fn(),
@@ -24,8 +26,8 @@ vi.mock('../services/AgentIdentityService.js', () => ({
 
 vi.mock('../services/ai/index.js', () => ({
   AIProviderFactory: {
-    createFromEnv: vi.fn().mockReturnValue({
-      complete: vi.fn().mockResolvedValue({ content: 'opinion content' }),
+    createInnerProvider: vi.fn().mockResolvedValue({
+      complete: mockComplete,
     }),
   },
 }));
@@ -33,13 +35,17 @@ vi.mock('../services/ai/index.js', () => ({
 describe('MeetingHandler', () => {
   let handler: MeetingHandler;
   let mockDb: any;
+  let mockProvider: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockDb = {
       query: vi.fn(),
     };
-    handler = new MeetingHandler(mockDb);
+    mockProvider = {
+      complete: mockComplete,
+    };
+    handler = new MeetingHandler(mockDb, mockProvider);
   });
 
   describe('constructor', () => {

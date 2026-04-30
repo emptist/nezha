@@ -62,18 +62,18 @@ export class InterReviewService extends EventEmitter {
   private broadcastService: BroadcastService | null = null;
   private getSessionId: () => string | null;
 
-  constructor(db: DatabaseClient, aiProvider?: AIProvider, getSessionId?: () => string | null) {
+  constructor(db: DatabaseClient, aiProvider: AIProvider, getSessionId?: () => string | null) {
     super();
     this.db = db;
-    this.aiProvider = aiProvider || this.createAIProvider();
+    this.aiProvider = aiProvider;
     this.getSessionId = getSessionId || (() => null);
   }
 
   static async create(
     db: DatabaseClient,
-    aiProvider?: AIProvider,
     getSessionId?: () => string | null
   ): Promise<InterReviewService> {
+    const aiProvider = await AIProviderFactory.createInnerProvider(db);
     const service = new InterReviewService(db, aiProvider, getSessionId);
     service.broadcastService = await BroadcastService.create(db);
     return service;
@@ -84,16 +84,6 @@ export class InterReviewService extends EventEmitter {
       this.broadcastService = await BroadcastService.create(this.db);
     }
     return this.broadcastService;
-  }
-
-  private createAIProvider(): AIProvider {
-    try {
-      return AIProviderFactory.createFromEnv();
-    } catch (error) {
-      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`, {
-        cause: error,
-      });
-    }
   }
 
   private isAIAvailable(): boolean {

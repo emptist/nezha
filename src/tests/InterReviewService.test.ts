@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { InterReviewService } from '../services/InterReviewService.js';
 
+const mockComplete = vi.hoisted(() => vi.fn().mockResolvedValue({ content: 'AI response' }));
+
 vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => ({
     query: vi.fn(),
@@ -9,8 +11,8 @@ vi.mock('../db/DatabaseClient.js', () => ({
 
 vi.mock('../services/ai/index.js', () => ({
   AIProviderFactory: {
-    createFromEnv: vi.fn().mockReturnValue({
-      complete: vi.fn().mockResolvedValue({ content: 'AI response' }),
+    createInnerProvider: vi.fn().mockResolvedValue({
+      complete: mockComplete,
     }),
   },
 }));
@@ -18,12 +20,17 @@ vi.mock('../services/ai/index.js', () => ({
 describe('InterReviewService', () => {
   let service: InterReviewService;
   let mockDb: any;
+  let mockProvider: any;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockDb = {
       query: vi.fn(),
     };
-    service = new InterReviewService(mockDb);
+    mockProvider = {
+      complete: mockComplete,
+    };
+    service = new InterReviewService(mockDb, mockProvider);
   });
 
   describe('constructor', () => {

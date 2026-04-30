@@ -490,7 +490,7 @@ case 'broadcast': {
         console.log('\n⚠️  No inter-review found in commit message');
         console.log('   Auto-requesting inter-review from other AIs...\n');
 
-        const reviewService = new InterReviewService(db);
+        const reviewService = await InterReviewService.create(db);
         const currentIdentity = await AgentIdentityService.getResolvedIdentity();
 
         const { getGitHash, getGitBranch } = await import('../utils/git.js');

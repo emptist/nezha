@@ -27,9 +27,14 @@ export class MeetingHandler {
   private readonly db: DatabaseClient;
   private readonly aiProvider: AIProvider;
 
-  constructor(db: DatabaseClient, aiProvider?: AIProvider) {
+  constructor(db: DatabaseClient, aiProvider: AIProvider) {
     this.db = db;
-    this.aiProvider = aiProvider || AIProviderFactory.createFromEnv();
+    this.aiProvider = aiProvider;
+  }
+
+  static async create(db: DatabaseClient): Promise<MeetingHandler> {
+    const aiProvider = await AIProviderFactory.createInnerProvider(db);
+    return new MeetingHandler(db, aiProvider);
   }
 
   async createMeetingFromTask(task: DiscussionTask): Promise<string> {
