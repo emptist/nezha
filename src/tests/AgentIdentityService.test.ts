@@ -155,9 +155,8 @@ describe('AgentIdentityService', () => {
     it('should use current provider model when configured', async () => {
       const { ApiKeyService } = await import('../services/ApiKeyService.js');
       vi.mocked(ApiKeyService.getInstance).mockReturnValue({
-        getCurrentInnerProvider: vi.fn().mockResolvedValue({
+        getCurrentInnerModel: vi.fn().mockResolvedValue({
           provider: 'openrouter',
-          apiKey: 'test-key',
           model: 'tencent/hy3-preview:free',
         }),
       } as any);

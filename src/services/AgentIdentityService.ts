@@ -77,7 +77,7 @@ export class AgentIdentityService {
     const apiKeyService = ApiKeyService.getInstance(this.db);
 
     try {
-      const current = await apiKeyService.getCurrentInnerProvider();
+      const current = await apiKeyService.getCurrentInnerModel();
       if (!current) {
         logger.warn('[AgentIdentity] No current inner provider configured, using fallback model');
         return INNER_FALLBACK_MODEL;

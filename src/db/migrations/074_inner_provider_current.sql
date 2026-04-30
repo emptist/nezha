@@ -2,6 +2,9 @@
 ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'not_used';
 ALTER TABLE provider_api_keys ALTER COLUMN status DROP DEFAULT;
 
+-- Add model column to store the model name in the database
+ALTER TABLE provider_api_keys ADD COLUMN IF NOT EXISTS model TEXT;
+
 -- Enforce only one in_use at a time
 CREATE UNIQUE INDEX IF NOT EXISTS idx_provider_api_keys_in_use ON provider_api_keys((true)) WHERE status = 'in_use';
 

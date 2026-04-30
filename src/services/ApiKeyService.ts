@@ -236,6 +236,23 @@ export class ApiKeyService {
     };
   }
 
+  async getCurrentInnerModel(): Promise<{ provider: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      model: string | null;
+    }>(`SELECT provider, model FROM provider_api_keys WHERE status = 'in_use' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+    };
+  }
+
   async getFallbackInnerProvider(): Promise<{ provider: string; apiKey: string; model: string } | null> {
     const result = await this.db.query<{
       provider: string;
