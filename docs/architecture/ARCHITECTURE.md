@@ -1,7 +1,11 @@
-# Nezha 架构设计
+# Nezha Architecture Design
 
-> **核心原则**: 集成不应该破坏独立性
-> **最后更新**: 2026-03-28 | **状态**: 当前结构 + 规划目标
+> **Core Principles**: 
+> 1. **Database First** - Database is source of truth, GitHub is human UI only
+> 2. **AI Value is in Thinking, Not Automation Scripts** - Loop scripts are problematic
+> 3. **Few Maintenance Scripts Are Useful** - Distinguish maintenance scripts vs loop scripts
+> 4. **Integration Should Not Break Independence**
+> **Last Updated**: 2026-04-30 | **Status**: Current Structure + Planned Goals
 
 ---
 

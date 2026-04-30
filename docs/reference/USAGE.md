@@ -1,6 +1,11 @@
 # Nezha Usage Guide
 
-Nezha is an AI-powered task automation system that continuously executes tasks from a PostgreSQL database using OpenCode as the AI agent.
+> **Core Principles**: 
+> 1. **Database First** - Database is source of truth, GitHub is human UI only
+> 2. **AI Value is in Thinking, Not Automation Scripts** - Loop scripts are problematic
+> 3. **Few Maintenance Scripts Are Useful** - Distinguish maintenance scripts vs loop scripts
+
+Nezha is an AI-powered **CLI tool** that continuously executes tasks from a PostgreSQL database using OpenCode as the AI agent.
 
 ## Design Principle: PostgreSQL-First
 
@@ -25,27 +30,41 @@ Nezha is an AI-powered task automation system that continuously executes tasks f
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────┐     ┌─────────────┐
-│ PostgreSQL  │────▶│   Scheduler   │────▶│  Agent  │────▶│ OpenCode API│
-│   (tasks)   │     │              │     │         │     │   (port     │
-│             │◀────│              │◀────│         │◀────│   4098)     │
-└─────────────┘     └──────────────┘     └─────────┘     └─────────────┘
-                           │
-                    HeartbeatService
-                           │
-                     MemoryService
-                           │
-                      SkillSystem
+┌─────────────────────────────────────────────────────────────────────┐
+│                         Nezha (CLI Tool)                              │
+│  ┌─────────────┐     ┌──────────────┐     ┌─────────┐              │
+│  │ PostgreSQL  │────▶│   Scheduler   │────▶│  Agent  │────┐        │
+│  │   (tasks)   │     │              │     │         │    │        │
+│  │             │◀────│              │◀────│         │◀───┘        │
+│  └─────────────┘     └──────────────┘     └─────────┘   │           │
+│        │                    │                    │       │           │
+│        │              HeartbeatService         │       │           │
+│        │                    │                    │       ▼           │
+│        │              MemoryService            │  ┌──────────┐     │
+│        │                    │                    │  │ OpenCode │     │
+│        │              SkillSystem               │  │   API    │     │
+│        │                                           │          │     │
+│        │              ┌────────────┐              │  │ (port    │     │
+│        └─────────────▶│ Built-in   │              │  │  4098)   │     │
+│                       │   Model    │              │  └──────────┘     │
+│                       │(OpenRouter │              └───────────────────┘
+│                       └────────────┘
+└─────────────────────────────────────────────────────────────────────┘
+                                    ▲
+                                    │
+                            NuPI = Nezha + Pi
+                            (built on top of Nezha)
 ```
 
 ### Components
 
 1. **PostgreSQL Database** - Stores tasks, memories, skills, conversations
-2. **Scheduler** (`src/core/Scheduler.ts`) - Polls DB for pending tasks
-3. **Agent** (`src/core/Agent.ts`) - Communicates with OpenCode API
-4. **HeartbeatService** (`src/services/HeartbeatService.ts`) - Orchestrates everything
-5. **MemoryService** (`src/core/Memory.ts`) - Stores knowledge and patterns
-6. **SkillSystem** (`src/core/SkillSystem.ts`) - DB-only skill loading
+2. **Built-in Model** - OpenRouter models or Ollama local models for reflection, review, inter-review
+3. **Scheduler** (`src/core/Scheduler.ts`) - Polls DB for pending tasks
+4. **Agent** (`src/core/Agent.ts`) - Communicates with OpenCode API
+5. **HeartbeatService** (`src/services/HeartbeatService.ts`) - Orchestrates everything
+6. **MemoryService** (`src/core/Memory.ts`) - Stores knowledge and patterns
+7. **SkillSystem** (`src/core/SkillSystem.ts`) - DB-only skill loading
 
 ## AI Tools for Learning
 
