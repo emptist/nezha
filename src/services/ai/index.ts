@@ -12,55 +12,97 @@ const DEFAULT_GLM5_URL = 'https://open.bigmodel.cn/api/paas/v4';
 
 type ProviderName = 'openrouter' | 'glm5' | 'zhipu' | 'openai' | 'anthropic';
 
-const INNER_PROVIDER_PRIORITY: ProviderName[] = ['openrouter', 'glm5', 'zhipu', 'openai', 'anthropic'];
+export interface InnerProviderResult {
+  provider: AIProvider;
+  identityId: string;
+}
 
 export class AIProviderFactory {
   static async createInnerProvider(db: DatabaseClient): Promise<AIProvider> {
     const apiKeyService = ApiKeyService.getInstance(db);
-    const providers = await apiKeyService.listProviders();
+    const current = await apiKeyService.getCurrentInnerProvider();
 
-    for (const provider of INNER_PROVIDER_PRIORITY) {
-      if (!providers.includes(provider)) continue;
-
-      const apiKey = await apiKeyService.getApiKey(provider);
-      if (!apiKey) continue;
-
-      const config = this.buildInnerConfig(provider, apiKey);
-      if (config) {
-        logger.info(`[AIProviderFactory] createInnerProvider: using provider '${config.provider}' from database`);
-        return this.create(config);
-      }
+    if (!current) {
+      throw new Error('[AIProviderFactory] createInnerProvider: no current inner provider configured');
     }
 
-    throw new Error('[AIProviderFactory] createInnerProvider: no API keys found in database');
+    const config = this.buildInnerConfig(current.provider as ProviderName, current.apiKey, current.model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProvider: unsupported provider '${current.provider}'`);
+    }
+
+    logger.info(`[AIProviderFactory] createInnerProvider: using provider '${config.provider}', model '${config.model}'`);
+    return this.create(config);
   }
 
-  private static buildInnerConfig(provider: ProviderName, apiKey: string): AIProviderConfig | null {
+  static async createInnerProviderWithIdentity(
+    db: DatabaseClient,
+    identityService: { resolve(inner: boolean, name: string): Promise<{ id: string }> }
+  ): Promise<InnerProviderResult> {
+    const apiKeyService = ApiKeyService.getInstance(db);
+    const current = await apiKeyService.getCurrentInnerProvider();
+
+    if (!current) {
+      throw new Error('[AIProviderFactory] createInnerProviderWithIdentity: no current inner provider configured');
+    }
+
+    const config = this.buildInnerConfig(current.provider as ProviderName, current.apiKey, current.model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProviderWithIdentity: unsupported provider '${current.provider}'`);
+    }
+
+    logger.info(`[AIProviderFactory] createInnerProviderWithIdentity: using provider '${config.provider}', model '${config.model}'`);
+    const aiProvider = this.create(config);
+    const identity = await identityService.resolve(true, config.model!);
+    return { provider: aiProvider, identityId: identity.id };
+  }
+
+  static async createInnerProviderWithFallback(
+    db: DatabaseClient,
+    provider: ProviderName,
+    model: string
+  ): Promise<AIProvider> {
+    const apiKeyService = ApiKeyService.getInstance(db);
+    const current = await apiKeyService.getCurrentInnerProvider();
+    const apiKey = current?.apiKey;
+    if (!apiKey) {
+      throw new Error('[AIProviderFactory] createInnerProviderWithFallback: no API key available');
+    }
+    const config = this.buildInnerConfig(provider, apiKey, model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProviderWithFallback: unsupported provider '${provider}'`);
+    }
+
+    logger.info(`[AIProviderFactory] createInnerProviderWithFallback: using provider '${provider}', model '${model}'`);
+    return this.create(config);
+  }
+
+  static buildInnerConfig(provider: ProviderName, apiKey: string, model?: string): AIProviderConfig | null {
     switch (provider) {
       case 'openrouter':
         return {
           provider: 'openrouter',
-          model: process.env.OPENROUTER_MODEL || 'tencent/hy3-preview:free',
+          model: model || 'tencent/hy3-preview:free',
           apiKey,
         };
       case 'glm5':
       case 'zhipu':
         return {
           provider: 'glm5',
-          model: process.env.ZHIPU_MODEL || 'glm-5',
+          model: model || 'glm-5',
           apiKey,
           baseUrl: process.env.ZHIPU_BASE_URL || DEFAULT_GLM5_URL,
         };
       case 'openai':
         return {
           provider: 'openai',
-          model: process.env.OPENAI_MODEL || 'gpt-4',
+          model: model || 'gpt-4',
           apiKey,
         };
       case 'anthropic':
         return {
           provider: 'anthropic',
-          model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+          model: model || 'claude-sonnet-4-20250514',
           apiKey,
         };
       default:

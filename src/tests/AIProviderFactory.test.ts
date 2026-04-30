@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AIProviderFactory } from '../services/ai/index.js';
 
-const mockGetApiKey = vi.hoisted(vi.fn);
-const mockListProviders = vi.hoisted(vi.fn);
+const mockGetCurrentInnerProvider = vi.hoisted(vi.fn);
 
 vi.mock('../services/ApiKeyService.js', () => ({
   ApiKeyService: {
     getInstance: vi.fn().mockReturnValue({
-      getApiKey: mockGetApiKey,
-      listProviders: mockListProviders,
+      getCurrentInnerProvider: mockGetCurrentInnerProvider,
       hasApiKey: vi.fn(),
     }),
   },
@@ -23,13 +21,7 @@ vi.mock('../utils/logger.js', () => ({
   },
 }));
 
-const ENV_KEYS = [
-  'OPENROUTER_MODEL',
-  'ZHIPU_MODEL',
-  'ZHIPU_BASE_URL',
-  'OPENAI_MODEL',
-  'ANTHROPIC_MODEL',
-];
+const ENV_KEYS = ['OPENROUTER_MODEL', 'ZHIPU_MODEL', 'ZHIPU_BASE_URL', 'OPENAI_MODEL', 'ANTHROPIC_MODEL'];
 
 function saveEnv(): Record<string, string | undefined> {
   const saved: Record<string, string | undefined> = {};
@@ -55,21 +47,12 @@ function clearAiEnv() {
   }
 }
 
-function setupDbKeys(providers: string[]) {
-  mockListProviders.mockResolvedValue(providers);
-  mockGetApiKey.mockImplementation((provider: string) => {
-    if (providers.includes(provider)) return Promise.resolve(`db-key-for-${provider}`);
-    return Promise.resolve(null);
-  });
-}
-
 describe('AIProviderFactory.createInnerProvider', () => {
   let mockDb: any;
   let savedEnv: Record<string, string | undefined>;
 
   beforeEach(() => {
-    mockGetApiKey.mockReset();
-    mockListProviders.mockReset();
+    mockGetCurrentInnerProvider.mockReset();
     mockDb = {};
     savedEnv = saveEnv();
     clearAiEnv();
@@ -79,8 +62,11 @@ describe('AIProviderFactory.createInnerProvider', () => {
     restoreEnv(savedEnv);
   });
 
-  it('should return OpenRouter provider when openrouter key exists in DB', async () => {
-    setupDbKeys(['openrouter']);
+  it('should return OpenRouter provider when openrouter is current', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'openrouter',
+      apiKey: 'db-key-openrouter',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
@@ -89,17 +75,23 @@ describe('AIProviderFactory.createInnerProvider', () => {
     expect(provider.getModel()).toBe('tencent/hy3-preview:free');
   });
 
-  it('should use OPENROUTER_MODEL env var when set', async () => {
-    process.env.OPENROUTER_MODEL = 'custom-model-v2';
-    setupDbKeys(['openrouter']);
+  it('should use model from DB when set', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'openrouter',
+      apiKey: 'db-key-openrouter',
+      model: 'custom-model-v2',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
     expect(provider.getModel()).toBe('custom-model-v2');
   });
 
-  it('should return GLM5 provider when glm5 key exists in DB', async () => {
-    setupDbKeys(['glm5']);
+  it('should return GLM5 provider when glm5 is current', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'glm5',
+      apiKey: 'db-key-glm5',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
@@ -107,8 +99,11 @@ describe('AIProviderFactory.createInnerProvider', () => {
     expect(provider.getProvider()).toBe('glm5');
   });
 
-  it('should return GLM5 provider when zhipu key exists in DB', async () => {
-    setupDbKeys(['zhipu']);
+  it('should return GLM5 provider when zhipu is current (maps to glm5)', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'zhipu',
+      apiKey: 'db-key-zhipu',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
@@ -116,16 +111,11 @@ describe('AIProviderFactory.createInnerProvider', () => {
     expect(provider.getProvider()).toBe('glm5');
   });
 
-  it('should prefer openrouter over glm5 when both exist', async () => {
-    setupDbKeys(['glm5', 'openrouter']);
-
-    const provider = await AIProviderFactory.createInnerProvider(mockDb);
-
-    expect(provider.getProvider()).toBe('openrouter');
-  });
-
-  it('should return OpenAI provider when openai key exists in DB', async () => {
-    setupDbKeys(['openai']);
+  it('should return OpenAI provider when openai is current', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'openai',
+      apiKey: 'db-key-openai',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
@@ -133,8 +123,11 @@ describe('AIProviderFactory.createInnerProvider', () => {
     expect(provider.getProvider()).toBe('openai');
   });
 
-  it('should return Anthropic provider when anthropic key exists in DB', async () => {
-    setupDbKeys(['anthropic']);
+  it('should return Anthropic provider when anthropic is current', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'anthropic',
+      apiKey: 'db-key-anthropic',
+    });
 
     const provider = await AIProviderFactory.createInnerProvider(mockDb);
 
@@ -142,33 +135,16 @@ describe('AIProviderFactory.createInnerProvider', () => {
     expect(provider.getProvider()).toBe('anthropic');
   });
 
-  it('should throw when no DB keys found', async () => {
-    setupDbKeys([]);
+  it('should throw when no current provider is configured', async () => {
+    mockGetCurrentInnerProvider.mockResolvedValue(null);
 
     await expect(AIProviderFactory.createInnerProvider(mockDb)).rejects.toThrow(
-      'no API keys found in database'
-    );
-  });
-
-  it('should throw when getApiKey returns null', async () => {
-    mockListProviders.mockResolvedValue(['openrouter']);
-    mockGetApiKey.mockResolvedValue(null);
-
-    await expect(AIProviderFactory.createInnerProvider(mockDb)).rejects.toThrow(
-      'no API keys found in database'
-    );
-  });
-
-  it('should throw when encryption is not initialized', async () => {
-    mockListProviders.mockRejectedValue(new Error('Encryption service not initialized'));
-
-    await expect(AIProviderFactory.createInnerProvider(mockDb)).rejects.toThrow(
-      'Encryption service not initialized'
+      'no current inner provider configured'
     );
   });
 
   it('should throw on DB query error', async () => {
-    mockListProviders.mockRejectedValue(new Error('Connection refused'));
+    mockGetCurrentInnerProvider.mockRejectedValue(new Error('Connection refused'));
 
     await expect(AIProviderFactory.createInnerProvider(mockDb)).rejects.toThrow(
       'Connection refused'
@@ -176,43 +152,21 @@ describe('AIProviderFactory.createInnerProvider', () => {
   });
 
   it('should not cache instance between calls', async () => {
-    setupDbKeys(['openrouter']);
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'openrouter',
+      apiKey: 'db-key-openrouter',
+    });
     const provider1 = await AIProviderFactory.createInnerProvider(mockDb);
 
-    mockGetApiKey.mockReset();
-    mockListProviders.mockReset();
-    setupDbKeys(['openai']);
+    mockGetCurrentInnerProvider.mockReset();
+    mockGetCurrentInnerProvider.mockResolvedValue({
+      provider: 'openai',
+      apiKey: 'db-key-openai',
+    });
     const provider2 = await AIProviderFactory.createInnerProvider(mockDb);
 
     expect(provider1.getProvider()).toBe('openrouter');
     expect(provider2.getProvider()).toBe('openai');
     expect(provider1).not.toBe(provider2);
-  });
-
-  it('should use ZHIPU_MODEL env var for glm5 model name', async () => {
-    process.env.ZHIPU_MODEL = 'glm-4-flash';
-    setupDbKeys(['glm5']);
-
-    const provider = await AIProviderFactory.createInnerProvider(mockDb);
-
-    expect(provider.getModel()).toBe('glm-4-flash');
-  });
-
-  it('should use OPENAI_MODEL env var for openai model name', async () => {
-    process.env.OPENAI_MODEL = 'gpt-4o';
-    setupDbKeys(['openai']);
-
-    const provider = await AIProviderFactory.createInnerProvider(mockDb);
-
-    expect(provider.getModel()).toBe('gpt-4o');
-  });
-
-  it('should use ANTHROPIC_MODEL env var for anthropic model name', async () => {
-    process.env.ANTHROPIC_MODEL = 'claude-3-opus';
-    setupDbKeys(['anthropic']);
-
-    const provider = await AIProviderFactory.createInnerProvider(mockDb);
-
-    expect(provider.getModel()).toBe('claude-3-opus');
   });
 });

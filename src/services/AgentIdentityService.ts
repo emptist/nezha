@@ -7,6 +7,9 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
 import { getAgentSessionService } from './AgentSessionService.js';
+import { ApiKeyService } from './ApiKeyService.js';
+
+const INNER_FALLBACK_MODEL = 'llama3.2:3b';
 
 export interface AgentContext {
   project: string | null;
@@ -16,6 +19,9 @@ export interface AgentContext {
   source?: string;
   branch?: string;
   sessionId?: string;
+  inner?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 export interface AgentIdentity {
@@ -47,25 +53,46 @@ export class AgentIdentityService {
     this.db = db;
   }
 
-  static async getResolvedIdentity(): Promise<AgentIdentity> {
+  static async getResolvedIdentity(inner?: boolean): Promise<AgentIdentity> {
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
-    
-    // Resolve identity
-    const identity = await service.resolve();
-    
-    // Auto-register session in agent_sessions when identity is used
-    // This tracks who is alive - every AI activity triggers this
+
+    let innerModel: string | undefined;
+
+    if (inner) {
+      innerModel = await service.resolveInnerModel();
+    }
+
+    const identity = await service.resolve(inner, innerModel);
+
     const sessionService = getAgentSessionService(db);
     const source = service.detectContext().source || 'nezha';
     await sessionService.registerSession(source, identity.id);
-    
+
     await db.close();
     return identity;
   }
 
-  async resolve(): Promise<AgentIdentity> {
-    const context = this.detectContext();
+  private async resolveInnerModel(): Promise<string> {
+    const apiKeyService = ApiKeyService.getInstance(this.db);
+
+    try {
+      const current = await apiKeyService.getCurrentInnerProvider();
+      if (!current) {
+        logger.warn('[AgentIdentity] No current inner provider configured, using fallback model');
+        return INNER_FALLBACK_MODEL;
+      }
+
+      logger.info(`[AgentIdentity] Resolved inner model: ${current.model} from current provider: ${current.provider}`);
+      return current.model;
+    } catch (error) {
+      logger.warn(`[AgentIdentity] Failed to resolve inner model: ${error}, using fallback`);
+      return INNER_FALLBACK_MODEL;
+    }
+  }
+
+  async resolve(inner?: boolean, model?: string): Promise<AgentIdentity> {
+    const context = this.detectContext(inner, model);
     const id = this.generateSemanticId(context);
 
     const existing = await this.getById(id);
@@ -77,8 +104,7 @@ export class AgentIdentityService {
     return identity;
   }
 
-  detectContext(): AgentContext {
-    // TRAE-specific: check if running in Trae
+  detectContext(inner?: boolean, model?: string): AgentContext {
     const traeEnv = this.detectTraeEnv();
 
     const source = traeEnv.source || this.detectSource();
@@ -97,6 +123,8 @@ export class AgentIdentityService {
       source,
       branch,
       sessionId,
+      inner,
+      model,
     };
   }
 
@@ -215,12 +243,28 @@ export class AgentIdentityService {
   generateSemanticId(context: AgentContext): string {
     const source = context.source || 'unknown';
 
+    if (context.inner) {
+      if (context.model) {
+        if (context.project) {
+          if (context.sessionId) {
+            return `I-${context.model}-${context.project}-${context.sessionId}`;
+          }
+          return `I-${context.model}-${context.project}`;
+        }
+        return `I-${context.model}`;
+      }
+      if (context.project) {
+        if (context.sessionId) {
+          return `I-${source}-${context.project}-${context.sessionId}`;
+        }
+        return `I-${source}-${context.project}`;
+      }
+      return `I-${source}`;
+    }
+
     if (context.project) {
       if (context.sessionId) {
         return `S-${source}-${context.project}-${context.sessionId}`;
-      }
-      if (context.branch) {
-        return `S-${source}-${context.project}-${context.branch}`;
       }
       return `S-${source}-${context.project}`;
     }

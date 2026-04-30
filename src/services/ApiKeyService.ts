@@ -207,6 +207,104 @@ export class ApiKeyService {
       enabled: r.enabled,
     }));
   }
+
+  async getCurrentInnerProvider(): Promise<{ provider: string; apiKey: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      encrypted_key: string;
+      encrypted_iv: string;
+      encrypted_tag: string;
+      encrypted_salt: string;
+      model: string | null;
+    }>(`SELECT provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, model
+        FROM provider_api_keys WHERE status = 'in_use' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+      apiKey: this.encryption.decrypt({
+        encryptedData: row.encrypted_key,
+        iv: row.encrypted_iv,
+        tag: row.encrypted_tag,
+        salt: row.encrypted_salt,
+      }),
+    };
+  }
+
+  async getFallbackInnerProvider(): Promise<{ provider: string; apiKey: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      encrypted_key: string;
+      encrypted_iv: string;
+      encrypted_tag: string;
+      encrypted_salt: string;
+      model: string | null;
+    }>(`SELECT provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, model
+        FROM provider_api_keys WHERE status = 'fallback' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+      apiKey: this.encryption.decrypt({
+        encryptedData: row.encrypted_key,
+        iv: row.encrypted_iv,
+        tag: row.encrypted_tag,
+        salt: row.encrypted_salt,
+      }),
+    };
+  }
+
+  async setCurrentInnerProvider(provider: string, model?: string): Promise<void> {
+    await this.db.query(`UPDATE provider_api_keys SET status = 'not_used'`);
+    const updates: string[] = ["status = 'in_use'"];
+    const values: any[] = [provider];
+
+    if (model) {
+      updates.push(`model = $2`);
+      values.push(model);
+    }
+
+    await this.db.query(
+      `UPDATE provider_api_keys SET ${updates.join(', ')} WHERE provider = $1`,
+      values
+    );
+    logger.info(`Inner AI provider set to '${provider}'${model ? ` with model '${model}'` : ''}`);
+  }
+
+  async setCurrentModel(model: string): Promise<void> {
+    await this.db.query(
+      `UPDATE provider_api_keys SET model = $1 WHERE status = 'in_use'`,
+      [model]
+    );
+    logger.info(`Current inner model set to '${model}'`);
+  }
+
+  async setFallbackProvider(provider: string, model?: string): Promise<void> {
+    await this.db.query(`UPDATE provider_api_keys SET status = 'not_used' WHERE status = 'fallback'`);
+    const updates: string[] = ["status = 'fallback'"];
+    const values: any[] = [provider];
+
+    if (model) {
+      updates.push(`model = $2`);
+      values.push(model);
+    }
+
+    await this.db.query(
+      `UPDATE provider_api_keys SET ${updates.join(', ')} WHERE provider = $1`,
+      values
+    );
+    logger.info(`Fallback provider set to '${provider}'${model ? ` with model '${model}'` : ''}`);
+  }
 }
 
 export const getApiKeyService = (db: DatabaseClient): ApiKeyService => {

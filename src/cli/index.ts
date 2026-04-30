@@ -15,6 +15,7 @@ import { TaskCommands } from './TaskCommands.js';
 import { MeetingCommands, MeetingDbCommands } from './MeetingCommands.js';
 import { BroadcastCommands } from './BroadcastCommands.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { ApiKeyService } from '../services/ApiKeyService.js';
 import { InterReviewService } from '../services/InterReviewService.js';
 import { databaseSkillLoader } from '../services/DatabaseSkillLoader.js';
 import { skillSystem } from '../core/SkillSystem.js';
@@ -357,6 +358,42 @@ case 'broadcast': {
       if (args[1] === 'id') {
         const identity = await AgentIdentityService.getResolvedIdentity();
         console.log(identity.id);
+      }
+      break;
+    }
+    case 'inner': {
+      const subcmd = args[1];
+      const apiKeyService = ApiKeyService.getInstance(db);
+
+      if (subcmd === 'set-model') {
+        const provider = args[2];
+        const model = args[3];
+        if (!provider) {
+          const current = await apiKeyService.getCurrentInnerProvider();
+          console.log(current
+            ? `Provider: ${current.provider}, Model: ${current.model}`
+            : 'No inner model provider configured');
+          break;
+        }
+        await apiKeyService.setCurrentInnerProvider(provider, model);
+        console.log(`Inner model provider set to: ${provider}${model ? ` with model '${model}'` : ''}`);
+      } else if (subcmd === 'model') {
+        const identity = await AgentIdentityService.getResolvedIdentity(true);
+        console.log(identity.id);
+      } else {
+        console.log('Usage: nezha inner set-model [provider] [model]');
+        console.log('       nezha inner model');
+        console.log('');
+        console.log('Commands:');
+        console.log('  set-model [provider] [model]  Set the current inner AI provider and model');
+        console.log('                                If no args, shows current provider and model');
+        console.log('  model                         Show the inner AI agent ID');
+        console.log('');
+        console.log('Examples:');
+        console.log('  nezha inner set-model         Show current provider and model');
+        console.log('  nezha inner set-model openrouter');
+        console.log('  nezha inner set-model openrouter llama3.2:3b');
+        console.log('  nezha inner model             Show inner agent ID');
       }
       break;
     }
