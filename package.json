@@ -62,7 +62,8 @@
     "nezha:logs": "bash bin/nezha-start.sh logs",
     "nezha:logs:follow": "bash bin/nezha-start.sh logs-follow",
     "predev": "npm run typecheck",
-    "prebuild": "npm run typecheck"
+    "prebuild": "npm run typecheck",
+    "global:install": "npm run build && npm uninstall -g nezha && npm install -g ."
   },
   "keywords": [
     "nezha",
