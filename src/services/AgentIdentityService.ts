@@ -225,7 +225,7 @@ export class AgentIdentityService {
       return `S-${source}-${context.project}`;
     }
 
-    return `G-${source}-${context.machineFingerprint}`;
+    return `G-${source}-${context.cwd.split('/').pop() || 'unknown'}-${context.machineFingerprint}`;
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {
