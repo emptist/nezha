@@ -380,11 +380,28 @@ nezha context --json           # 获取结构化上下文 (包含agentId)
 
 ---
 
-## 2026-04-19 更新
+## 2026-04-30 更新
 
-### 1. Agent ID 追踪系统
+### 1. 免费模型发现: tencent/hy3-preview:free
 
-- **Agent ID 必须是函数，不是变量**
+**发现**: OpenRouter 上有免费的 `tencent/hy3-preview:free` 模型
+
+**测试结果**:
+- qwen3:4b (Ollama) - ❌ 太 verbose，无法使用
+- tencent/hy3-preview:free (OpenRouter) - ✅ 适合 QC 任务
+
+**已实现**:
+- 创建 `.env` 文件，设置 `NEZHA_SECRET` 用于加密
+- OpenRouter API key 已安全存储在 `provider_api_keys` 表 (AES-256-GCM 加密)
+- Issue 已解决: #d9fa71fa "Ollama Trials - Local Model Integration"
+
+**下一步**:
+- 添加 OpenRouter provider 到 nezha
+- 使用 hy3-preview:free 进行 QC 任务
+
+### 2. Agent ID 追踪系统
+
+**Agent ID 必须是函数，不是变量**
 - 每次调用 `getResolvedIdentity()` 动态计算，从上下文生成
 - 禁止缓存 Agent ID（破坏追踪系统）
 - 缓存 = 失去追踪能力 = 破坏整个系统
