@@ -100,11 +100,12 @@ export default function nezhaTools(pi: ExtensionAPI): void {
   });
 
   // Save learning using CLI
+  // NOTE: Run from current directory to preserve agent identity (project is derived from git repo name)
   pi.registerCommand("nezha-learn", {
     description: "Save learning to Nezha memory",
     handler: async (insight: string) => {
       const result = runCli(
-        `cd /Users/jk/gits/hub/nezha && node dist/cli/index.js areflect "[LEARN] insight: ${insight}"`,
+        `nezha areflect "[LEARN] insight: ${insight}"`,
       );
       return result || "Learning saved.";
     },
@@ -141,11 +142,12 @@ export default function nezhaTools(pi: ExtensionAPI): void {
   });
 
   // Check broadcasts using CLI
+  // NOTE: Run from current directory to preserve agent identity (project is derived from git repo name)
   pi.registerCommand("nezha-broadcasts", {
     description: "Check recent broadcasts",
     handler: async () => {
       const result = runCli(
-        `cd /Users/jk/gits/hub/nezha && node dist/cli/index.js areflect --check`,
+        `nezha areflect --check`,
       );
       return result || "No broadcasts.";
     },

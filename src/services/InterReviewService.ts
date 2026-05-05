@@ -5,6 +5,7 @@ import { AIProvider, AIProviderFactory } from './ai/index.js';
 import { getSelfImprovement } from './SelfImprovementService.js';
 import { BroadcastService } from './BroadcastService.js';
 import { getCommitDiff } from '../utils/git.js';
+import { AgentIdentityService } from './AgentIdentityService.js';
 
 export interface ReviewFinding {
   type: 'issue' | 'suggestion' | 'praise' | 'question';
@@ -61,18 +62,18 @@ export class InterReviewService extends EventEmitter {
   private broadcastService: BroadcastService | null = null;
   private getSessionId: () => string | null;
 
-  constructor(db: DatabaseClient, aiProvider?: AIProvider, getSessionId?: () => string | null) {
+  constructor(db: DatabaseClient, aiProvider: AIProvider, getSessionId?: () => string | null) {
     super();
     this.db = db;
-    this.aiProvider = aiProvider || this.createAIProvider();
+    this.aiProvider = aiProvider;
     this.getSessionId = getSessionId || (() => null);
   }
 
   static async create(
     db: DatabaseClient,
-    aiProvider?: AIProvider,
     getSessionId?: () => string | null
   ): Promise<InterReviewService> {
+    const aiProvider = await AIProviderFactory.createInnerProvider(db);
     const service = new InterReviewService(db, aiProvider, getSessionId);
     service.broadcastService = await BroadcastService.create(db);
     return service;
@@ -83,16 +84,6 @@ export class InterReviewService extends EventEmitter {
       this.broadcastService = await BroadcastService.create(this.db);
     }
     return this.broadcastService;
-  }
-
-  private createAIProvider(): AIProvider {
-    try {
-      return AIProviderFactory.createFromEnv();
-    } catch (error) {
-      throw new Error(`[InterReview] AI provider not available: ${(error as Error).message}`, {
-        cause: error,
-      });
-    }
   }
 
   private isAIAvailable(): boolean {
@@ -144,7 +135,7 @@ export class InterReviewService extends EventEmitter {
     return response.content;
   }
 
-  async requestReview(request: ReviewRequest): Promise<string> {
+  async requestReview(request: ReviewRequest, broadcast: boolean = true): Promise<string> {
     const result = await this.db.query<{ id: string }>(
       `SELECT request_inter_review($1, $2, $3, $4, $5) as id`,
       [
@@ -159,6 +150,19 @@ export class InterReviewService extends EventEmitter {
     const reviewId = result.rows[0]!.id;
     logger.info(`[InterReview] Review requested: ${reviewId}`);
     this.emit(InterReviewEvent.REVIEW_REQUESTED, { reviewId, request });
+
+    if (broadcast) {
+      try {
+        const bs = await this.ensureBroadcastService();
+        const taskInfo = request.taskId ? `Task: ${request.taskId}` : '';
+        const commitInfo = request.commitHash ? `Commit: ${request.commitHash.slice(0, 7)}` : '';
+        const msg = `🔍 Inter-review requested${taskInfo ? ` (${taskInfo})` : ''}${commitInfo ? ` - ${commitInfo}` : ''}. Please review: ${reviewId}`;
+        await bs.sendBroadcast(msg, { priority: 'normal' });
+        logger.info(`[InterReview] Broadcasted review request: ${reviewId}`);
+      } catch (broadcastErr) {
+        logger.warn(`[InterReview] Broadcast failed: ${broadcastErr}`);
+      }
+    }
 
     return reviewId;
   }
@@ -182,8 +186,11 @@ export class InterReviewService extends EventEmitter {
       await this.db.query('BEGIN');
       logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity(true);
+      const reviewedBy = currentIdentity.id;
+
       await this.db.query(
-        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           reviewId,
           'completed',
@@ -197,9 +204,10 @@ export class InterReviewService extends EventEmitter {
           reviewResult.testCoverageScore,
           reviewResult.documentationScore,
           rawResponse,
+          reviewedBy,
         ]
       );
-      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId} (reviewed_by: ${reviewedBy})`);
 
       if (reviewResult.learnings.length > 0) {
         const review = await this.getReview(reviewId);
@@ -276,8 +284,8 @@ export class InterReviewService extends EventEmitter {
 
       try {
         await this.db.query(
-          `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-          [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null]
+          `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          [reviewId, 'failed', null, null, null, null, null, null, null, null, null, null, null]
         );
         logger.debug(`[InterReview] Marked review as failed: ${reviewId}`);
       } catch (updateErr) {
@@ -295,13 +303,45 @@ export class InterReviewService extends EventEmitter {
   ): Promise<{ reviewResult: ReviewResult; rawResponse: string }> {
     const context = await this.getReviewContext(reviewId);
 
-    const prompt = `You are a senior code reviewer with expertise in TypeScript, Node.js, and software best practices. Be constructive and thorough.
+    // 🆕 Load the inter-review-inner-ai skill for comprehensive system knowledge
+    let skillContent = '';
+    try {
+      const skillJson = await this.loadPromptFromSkills('inter-review-inner-ai');
+      if (skillJson) {
+        // Handle both string and object (JSONB auto-parse)
+        const parsed = typeof skillJson === 'string' ? JSON.parse(skillJson) : skillJson;
+        skillContent = parsed.markdown || (typeof skillJson === 'string' ? skillJson : JSON.stringify(skillJson));
+        logger.info('[InterReview] Loaded inter-review-inner-ai skill successfully');
+      }
+    } catch (err) {
+      logger.warn('[InterReview] Failed to load inter-review-inner-ai skill:', err);
+    }
 
-## Review Context
-${context}
+    // 🆕 Fallback: Load priority learnings and table docs if skill not found
+    let fallbackKnowledge = '';
+    if (!skillContent) {
+      try {
+        const priorityLearnings = await this.getPriorityLearnings();
+        const tableDocs = await this.getTableDocs();
+        fallbackKnowledge = `\n## 🎓 Priority Learnings\n${priorityLearnings}\n\n## 🔧 Nezha CLI Commands\n${tableDocs}\n`;
+        logger.info('[InterReview] Using fallback knowledge (priority learnings + table docs)');
+      } catch (err) {
+        logger.warn('[InterReview] Failed to load fallback knowledge:', err);
+      }
+    }
 
-## Your Task
-Analyze the code changes and provide feedback. But more importantly - EXTRACT LEARNING POINTS that can help the AI avoid similar issues in the future.
+    // Build the system prompt with skill content or fallback
+    const systemKnowledge = skillContent || fallbackKnowledge;
+
+    const prompt = `${systemKnowledge}\n\n## Review Context\n${context}\n\n## Your Task\nAnalyze the code changes and provide feedback. But more importantly - EXTRACT LEARNING POINTS that can help the AI avoid similar issues in the future.
+
+## Test Detection (Important!)
+Carefully check if test files are included in the changes:
+- Look for files matching: *.test.ts, *.test.js, *.spec.ts, *.spec.js, *.e2e.ts, etc.
+- Check for test directories: __tests__/, test/, tests/
+- Look for Python tests: test_*.py, *_test.py
+- Consider if the code changes are properly tested
+- Set testCoverageScore based on ACTUAL test presence (0-100)
 
 ## Output Format
 Return JSON with:
@@ -317,6 +357,12 @@ The "learnings" field is the most valuable output. Write specific, actionable re
 - "When modifying TaskWatchdogService, always update process_pids table"
 - "Use non-null assertion (!) after checking rows.length"
 - "Import Config from config/Config.js, not db/DatabaseClient.js"
+
+## Test Coverage Score Guidelines
+- 90-100: Comprehensive tests included with the changes
+- 70-89: Some tests included, but could be more thorough
+- 50-69: Minimal or basic tests only
+- 0-49: No tests detected or changes not tested
 
 Format:
 {
@@ -378,6 +424,33 @@ Format:
     }
 
     return context || 'Review context not available';
+  }
+
+  private async getPriorityLearnings(): Promise<string> {
+    try {
+      const result = await this.db.query<{ content: string }>(
+        `SELECT content FROM memory WHERE tags @> ARRAY['essential'] OR tags @> ARRAY['tool-discovery'] \n         ORDER BY importance DESC NULLS LAST LIMIT 10`
+      );
+      return result.rows.map(r => `- ${r.content.slice(0, 150)}`).join('\n');
+    } catch (err) {
+      logger.warn('[InterReview] Failed to get priority learnings:', err);
+      return 'Priority learnings not available';
+    }
+  }
+
+  private async getTableDocs(): Promise<string> {
+    try {
+      const result = await this.db.query<{ table_name: string; purpose: string; cli_commands: Array<{cmd: string; desc: string}> }>(
+        `SELECT table_name, purpose, cli_commands FROM table_documentation \n         WHERE ai_can_modify = true LIMIT 15`
+      );
+      return result.rows.map(r => {
+        const cmds = r.cli_commands?.map((c: any) => c.cmd).join(', ') || '';
+        return `- **${r.table_name}**: ${r.purpose} (${cmds})`;
+      }).join('\n');
+    } catch (err) {
+      logger.warn('[InterReview] Failed to get table docs:', err);
+      return 'Table documentation not available';
+    }
   }
 
   private async callReviewAI(systemPrompt: string, userPrompt: string): Promise<string> {
@@ -462,6 +535,56 @@ Format:
     return this.fallbackReview(response);
   }
 
+  private detectTestFiles(context: string): { hasTests: boolean; testFiles: string[] } {
+    const testFiles: string[] = [];
+    
+    // Match diff headers to find changed files
+    const diffFilePattern = /^diff --git a\/(.+?) b\/(.+?)$/gm;
+    let match: RegExpExecArray | null;
+    
+    while ((match = diffFilePattern.exec(context)) !== null) {
+      const fileA = match[1];
+      const fileB = match[2];
+      const filePath = fileB || fileA;
+      if (filePath && this.isTestFile(filePath)) {
+        testFiles.push(filePath);
+      }
+    }
+    
+    // Also check for test patterns in the context more broadly
+    const allFilePattern = /[\w\/\-]+\.(test|spec|e2e)\.[tj]sx?|__tests?__\/[\w\/\-]+\.[tj]sx?|tests?\/[\w\/\-]+\.[tj]sx?|test_[\w\/\-]+\.py|[\w\/\-]+_test\.py/gi;
+    let fileMatch: RegExpExecArray | null;
+    
+    while ((fileMatch = allFilePattern.exec(context)) !== null) {
+      const filePath = fileMatch[0];
+      if (!testFiles.includes(filePath)) {
+        testFiles.push(filePath);
+      }
+    }
+    
+    return {
+      hasTests: testFiles.length > 0,
+      testFiles,
+    };
+  }
+  
+  private isTestFile(filePath: string): boolean {
+    const testPatterns = [
+      /\.test\.[tj]sx?$/,     // *.test.ts, *.test.js, *.test.tsx, *.test.jsx
+      /\.spec\.[tj]sx?$/,     // *.spec.ts, *.spec.js, *.spec.tsx, *.spec.jsx
+      /\.e2e\.[tj]sx?$/,      // *.e2e.ts, *.e2e.js
+      /__tests?__\//,           // __tests__/ directory
+      /^[\w\/]*tests?\//,      // test/ or tests/ directory at start
+      /\/tests?\//,             // /test/ or /tests/ anywhere
+      /test_[\w]+\.py$/,       // test_*.py (Python)
+      /[\w]+_test\.py$/,       // *_test.py (Python)
+      /Test\.java$/,            // *Test.java
+      /Tests\.cs$/,             // *Tests.cs
+    ];
+    
+    return testPatterns.some(pattern => pattern.test(filePath));
+  }
+  
   private fallbackReview(context: string): ReviewResult {
     const issues: ReviewFinding[] = [];
     const suggestions: ReviewFinding[] = [];
@@ -474,13 +597,23 @@ Format:
       });
     }
 
-    if (!context.includes('test') && !context.includes('Test')) {
+    const testDetection = this.detectTestFiles(context);
+    
+    if (!testDetection.hasTests) {
       suggestions.push({
         type: 'suggestion',
         severity: 'medium',
-        message: 'No tests detected - consider adding test coverage',
+        message: 'No test files detected in changes - consider adding test coverage',
+      });
+    } else {
+      suggestions.push({
+        type: 'praise',
+        severity: 'low',
+        message: `Test files detected (${testDetection.testFiles.length}): ${testDetection.testFiles.slice(0, 3).join(', ')}${testDetection.testFiles.length > 3 ? '...' : ''}`,
       });
     }
+
+    const testCoverageScore = testDetection.hasTests ? 75 : 40;
 
     return {
       reviewId: '',
@@ -489,7 +622,7 @@ Format:
       learnings: [],
       overallScore: 70,
       codeQualityScore: 70,
-      testCoverageScore: context.includes('test') ? 80 : 50,
+      testCoverageScore,
       documentationScore: context.includes('docs') || context.includes('comment') ? 75 : 60,
     };
   }
@@ -557,8 +690,11 @@ Format:
       await this.db.query('BEGIN');
       logger.debug(`[InterReview] Transaction started for review: ${reviewId}`);
 
+      const currentIdentity = await AgentIdentityService.getResolvedIdentity();
+      const reviewedBy = currentIdentity.id;
+
       await this.db.query(
-        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        `SELECT update_inter_review($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
         [
           reviewId,
           'completed',
@@ -572,9 +708,10 @@ Format:
           scores.testCoverage ?? null,
           scores.documentation ?? null,
           null,
+          reviewedBy,
         ]
       );
-      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId}`);
+      logger.debug(`[InterReview] update_inter_review completed for: ${reviewId} (reviewed_by: ${reviewedBy})`);
 
       if (response || acceptedSuggestions) {
         await this.db.query(`SELECT respond_to_inter_review($1, $2, $3, $4, $5, $6, $7, $8)`, [

@@ -2,6 +2,7 @@ import { DatabaseClient } from '../db/DatabaseClient.js';
 import { TASK_STATUS } from '../config/constants.js';
 import { colors, cli } from '../utils/cli.js';
 import { AgentIdentityService } from '../services/AgentIdentityService.js';
+import { resolveMeetingId, resolveAgentId } from '../utils/resolve-id.js';
 
 export interface MeetingConfig {
   db: DatabaseClient;
@@ -58,6 +59,39 @@ interface MeetingOpinion {
 export class MeetingDbCommands {
   constructor(protected db: DatabaseClient) {}
 
+  private async resolveAgentNames(agentIds: string[]): Promise<Map<string, string>> {
+    const map = new Map<string, string>();
+    if (agentIds.length === 0) return map;
+    const uniqueIds = [...new Set(agentIds)];
+    const placeholders = uniqueIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await this.db.query<{ id: string; display_name: string | null }>(
+      `SELECT id, display_name FROM agent_identities WHERE id IN (${placeholders})`,
+      uniqueIds
+    );
+    for (const id of uniqueIds) {
+      const row = result.rows.find(r => r.id === id);
+      if (row?.display_name) {
+        map.set(id, row.display_name);
+      } else if (id.startsWith('S-TRAE-')) {
+        const parts = id.split('-');
+        const project = parts[2];
+        map.set(id, project ? `TRAE-${project}` : 'TRAE');
+      } else if (id.startsWith('S-nezha-')) {
+        map.set(id, 'nezha');
+      } else if (id.startsWith('Big-Pickle')) {
+        map.set(id, 'Big-Pickle');
+      } else if (id.startsWith('S-')) {
+        const project = id.split('-')[1];
+        map.set(id, project || id.slice(0, 8));
+      } else if (id.startsWith('bot_')) {
+        map.set(id, 'bot');
+      } else {
+        map.set(id, id.slice(0, 8));
+      }
+    }
+    return map;
+  }
+
   async list(options?: { status?: string; limit?: number }): Promise<void> {
     const limit = options?.limit || 20;
     let sql = `SELECT * FROM meetings WHERE 1=1`;
@@ -79,23 +113,36 @@ export class MeetingDbCommands {
       return;
     }
 
+    const creatorIds = result.rows.map(m => m.created_by);
+    const nameMap = await this.resolveAgentNames(creatorIds);
+
     console.log(`\n${colors.bright}Meetings (${result.rows.length}):${colors.reset}\n`);
 
     for (const meeting of result.rows) {
       const statusIcon =
-        meeting.status === 'active' ? '🟢' : meeting.status === 'completed' ? '✅' : '❌';
+        meeting.status === 'active'
+          ? '🟢'
+          : meeting.status === 'completed'
+            ? '✅'
+            : meeting.status === 'archived'
+              ? '📦'
+              : '❌';
+      const creatorName = nameMap.get(meeting.created_by) || meeting.created_by.slice(0, 8);
       const consensusTag = meeting.consensus ? ' 📋' : '';
       console.log(`${statusIcon} [${meeting.status.padEnd(10)}] ${meeting.topic}${consensusTag}`);
       console.log(
-        `   ${colors.gray}#${meeting.id.slice(0, 8)} | ${meeting.created_by} | ${meeting.created_at}${colors.reset}`
+        `   ${colors.gray}#${meeting.id.slice(0, 8)} | ${creatorName} | ${meeting.created_at}${colors.reset}`
       );
     }
     console.log();
   }
 
   async show(id: string): Promise<void> {
+    const resolvedId = await resolveMeetingId(this.db, id);
+    const meetingId = resolvedId || id;
+    
     const meetingResult = await this.db.query<Meeting>(`SELECT * FROM meetings WHERE id = $1`, [
-      id,
+      meetingId,
     ]);
 
     if (meetingResult.rows.length === 0) {
@@ -112,8 +159,9 @@ export class MeetingDbCommands {
     console.log(`\n${colors.bright}Meeting Details${colors.reset}\n`);
     console.log(`${colors.cyan}Topic:${colors.reset} ${meeting.topic}`);
     console.log(`${colors.cyan}Status:${colors.reset} ${meeting.status}`);
+    const creatorName = (await this.resolveAgentNames([meeting.created_by])).get(meeting.created_by) || meeting.created_by.slice(0, 8);
     console.log(
-      `${colors.cyan}Created by:${colors.reset} ${meeting.created_by} at ${meeting.created_at}`
+      `${colors.cyan}Created by:${colors.reset} ${creatorName} at ${meeting.created_at}`
     );
 
     if (meeting.consensus) {
@@ -123,11 +171,14 @@ export class MeetingDbCommands {
     }
 
     if (opinionsResult.rows.length > 0) {
+      const authorIds = opinionsResult.rows.map(o => o.author);
+      const authorMap = await this.resolveAgentNames(authorIds);
       console.log(`\n${colors.cyan}Opinions (${opinionsResult.rows.length}):${colors.reset}`);
       for (const opinion of opinionsResult.rows) {
         const posIcon =
           opinion.position === 'support' ? '👍' : opinion.position === 'oppose' ? '👎' : '➖';
-        console.log(`\n  ${posIcon} ${colors.bright}${opinion.author}${colors.reset}`);
+        const authorName = authorMap.get(opinion.author) || opinion.author.slice(0, 8);
+        console.log(`\n  ${posIcon} ${colors.bright}${authorName}${colors.reset}`);
         console.log(`     ${opinion.perspective}`);
         if (opinion.reasoning) {
           console.log(`     ${colors.gray}Reasoning: ${opinion.reasoning}${colors.reset}`);
@@ -135,6 +186,69 @@ export class MeetingDbCommands {
       }
     }
     console.log();
+  }
+
+  async complete(id: string, consensus?: string): Promise<void> {
+    const resolvedId = await resolveMeetingId(this.db, id);
+    const meetingId = resolvedId || id;
+
+    const existing = await this.db.query<Meeting>(
+      `SELECT status FROM meetings WHERE id = $1`,
+      [meetingId]
+    );
+
+    if (existing.rows.length === 0) {
+      console.log(`${colors.red}Meeting not found${colors.reset}`);
+      return;
+    }
+
+    if (existing.rows[0]!.status === 'completed') {
+      console.log(`${colors.yellow}Meeting already completed${colors.reset}`);
+      return;
+    }
+
+    const consensusText = consensus || `Completed at ${new Date().toISOString()}`;
+
+    await this.db.query(
+      `UPDATE meetings SET status = 'completed', consensus = $1, consensus_at = NOW() WHERE id = $2`,
+      [consensusText, meetingId]
+    );
+
+    console.log(`${colors.green}Meeting completed${colors.reset}`);
+  }
+
+  async cleanup(daysOld = 5): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE meetings SET status = 'completed', consensus = $1, consensus_at = NOW() 
+       WHERE status = 'active' AND created_at < NOW() - INTERVAL '1 day' * $2
+       RETURNING id, topic`,
+      [`Auto-completed: inactive for ${daysOld}+ days`, daysOld]
+    );
+
+    const count = result.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`${colors.yellow}Marked ${count} old meeting(s) as completed${colors.reset}`);
+    } else {
+      console.log(`${colors.green}No old meetings to clean up${colors.reset}`);
+    }
+    return count;
+  }
+
+  async archive(daysOld = 30): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE meetings SET status = 'archived', consensus = $1, consensus_at = NOW() 
+       WHERE status = 'completed' AND created_at < NOW() - INTERVAL '1 day' * $2
+       RETURNING id, topic`,
+      [`Archived: older than ${daysOld} days`, daysOld]
+    );
+
+    const count = result.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`${colors.yellow}Archived ${count} old meeting(s)${colors.reset}`);
+    } else {
+      console.log(`${colors.green}No old completed meetings to archive${colors.reset}`);
+    }
+    return count;
   }
 
   async create(topic: string): Promise<string> {

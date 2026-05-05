@@ -5,6 +5,22 @@ import { ReviewService, type ReviewFinding } from '../services/ReviewService.js'
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { colors } from '../utils/cli.js';
 
+interface ReviewRow {
+  id: string;
+  task_id?: string;
+  status: string;
+  findings_json?: string;
+  created_at?: Date | string;
+  severity?: string;
+  title?: string;
+  reviewType?: string;
+  reviewerId?: string;
+  createdAt?: Date | string;
+  findings?: unknown[];
+  actionItems?: unknown[];
+  [key: string]: unknown;
+}
+
 export async function reviewTask(
   taskId: string,
   taskTitle: string,
@@ -269,11 +285,11 @@ export class ReviewManagementCommands {
       console.log(
         `  Type: ${review.reviewType} | Reviewer: ${review.reviewerId?.substring(0, 8) || 'unassigned'}...`
       );
-      console.log(`  Created: ${new Date(review.createdAt).toLocaleString()}`);
-      if (review.findings?.length > 0) {
+      console.log(`  Created: ${new Date(review.createdAt ?? review.created_at ?? new Date()).toLocaleString()}`);
+      if (Array.isArray(review.findings) && review.findings.length > 0) {
         console.log(`  Findings: ${review.findings.length}`);
       }
-      if (review.actionItems?.length > 0) {
+      if (Array.isArray(review.actionItems) && review.actionItems.length > 0) {
         console.log(`  Action Items: ${review.actionItems.length}`);
       }
       console.log();
@@ -341,17 +357,16 @@ export class ReviewManagementCommands {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async getReviewsByStatus(status?: string): Promise<any[]> {
+  private async getReviewsByStatus(status?: string): Promise<ReviewRow[]> {
     if (status) {
-      const result = await this.reviewService['db'].query(
+      const result = await this.reviewService['db'].query<ReviewRow>(
         `SELECT * FROM reviews WHERE status = $1 ORDER BY created_at DESC LIMIT 50`,
         [status]
       );
       return result.rows;
     }
 
-    const result = await this.reviewService['db'].query(
+    const result = await this.reviewService['db'].query<ReviewRow>(
       `SELECT * FROM reviews ORDER BY created_at DESC LIMIT 50`
     );
     return result.rows;

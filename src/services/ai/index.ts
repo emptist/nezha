@@ -2,57 +2,112 @@ import { AIProvider, AIProviderConfig } from './AIProvider.js';
 import { OpenAIProvider } from './OpenAIProvider.js';
 import { AnthropicProvider } from './AnthropicProvider.js';
 import { OllamaProvider } from './OllamaProvider.js';
+import { GLM5Provider } from './GLM5Provider.js';
+import { OpenRouterProvider } from './OpenRouterProvider.js';
+import { ApiKeyService } from '../ApiKeyService.js';
+import type { DatabaseClient } from '../../db/DatabaseClient.js';
+import { logger } from '../../utils/logger.js';
+
+const DEFAULT_GLM5_URL = 'https://open.bigmodel.cn/api/paas/v4';
+
+type ProviderName = 'openrouter' | 'glm5' | 'zhipu' | 'openai' | 'anthropic';
+
+export interface InnerProviderResult {
+  provider: AIProvider;
+  identityId: string;
+}
 
 export class AIProviderFactory {
-  private static instance: AIProvider | null = null;
+  static async createInnerProvider(db: DatabaseClient): Promise<AIProvider> {
+    const apiKeyService = ApiKeyService.getInstance(db);
+    const current = await apiKeyService.getCurrentInnerProvider();
 
-  static createFromEnv(): AIProvider {
-    if (this.instance) {
-      return this.instance;
+    if (!current) {
+      throw new Error('[AIProviderFactory] createInnerProvider: no current inner provider configured');
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    const zhipuKey = process.env.ZHIPU_API_KEY;
-    const ollamaEnabled = process.env.OLLAMA_ENABLED === 'true' || process.env.OLLAMA_MODEL;
-
-    let config: AIProviderConfig;
-
-    if (ollamaEnabled && !openaiKey && !anthropicKey && !zhipuKey) {
-      config = {
-        provider: 'ollama',
-        model: process.env.OLLAMA_MODEL || 'mistral:7b',
-        baseUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-      };
-    } else if (zhipuKey && !openaiKey && !anthropicKey) {
-      config = {
-        provider: 'openai',
-        model: process.env.ZHIPU_MODEL || 'glm-4-flash',
-        apiKey: zhipuKey,
-        baseUrl: process.env.ZHIPU_API_URL || 'https://open.bigmodel.cn/api/paas/v4',
-      };
-    } else if (openaiKey?.startsWith('sk-')) {
-      config = {
-        provider: 'openai',
-        model: process.env.OPENAI_MODEL || 'gpt-4',
-        apiKey: openaiKey,
-      };
-    } else if (anthropicKey?.startsWith('sk-ant-')) {
-      config = {
-        provider: 'anthropic',
-        model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
-        apiKey: anthropicKey,
-      };
-    } else {
-      config = {
-        provider: 'ollama',
-        model: process.env.OLLAMA_MODEL || 'mistral:7b',
-        baseUrl: process.env.OLLAMA_API_URL || 'http://localhost:11434',
-      };
+    const config = this.buildInnerConfig(current.provider as ProviderName, current.apiKey, current.model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProvider: unsupported provider '${current.provider}'`);
     }
 
-    this.instance = this.create(config);
-    return this.instance;
+    logger.info(`[AIProviderFactory] createInnerProvider: using provider '${config.provider}', model '${config.model}'`);
+    return this.create(config);
+  }
+
+  static async createInnerProviderWithIdentity(
+    db: DatabaseClient,
+    identityService: { resolve(inner: boolean, name: string): Promise<{ id: string }> }
+  ): Promise<InnerProviderResult> {
+    const apiKeyService = ApiKeyService.getInstance(db);
+    const current = await apiKeyService.getCurrentInnerProvider();
+
+    if (!current) {
+      throw new Error('[AIProviderFactory] createInnerProviderWithIdentity: no current inner provider configured');
+    }
+
+    const config = this.buildInnerConfig(current.provider as ProviderName, current.apiKey, current.model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProviderWithIdentity: unsupported provider '${current.provider}'`);
+    }
+
+    logger.info(`[AIProviderFactory] createInnerProviderWithIdentity: using provider '${config.provider}', model '${config.model}'`);
+    const aiProvider = this.create(config);
+    const identity = await identityService.resolve(true, config.model!);
+    return { provider: aiProvider, identityId: identity.id };
+  }
+
+  static async createInnerProviderWithFallback(
+    db: DatabaseClient,
+    provider: ProviderName,
+    model: string
+  ): Promise<AIProvider> {
+    const apiKeyService = ApiKeyService.getInstance(db);
+    const current = await apiKeyService.getCurrentInnerProvider();
+    const apiKey = current?.apiKey;
+    if (!apiKey) {
+      throw new Error('[AIProviderFactory] createInnerProviderWithFallback: no API key available');
+    }
+    const config = this.buildInnerConfig(provider, apiKey, model);
+    if (!config) {
+      throw new Error(`[AIProviderFactory] createInnerProviderWithFallback: unsupported provider '${provider}'`);
+    }
+
+    logger.info(`[AIProviderFactory] createInnerProviderWithFallback: using provider '${provider}', model '${model}'`);
+    return this.create(config);
+  }
+
+  static buildInnerConfig(provider: ProviderName, apiKey: string, model?: string): AIProviderConfig | null {
+    switch (provider) {
+      case 'openrouter':
+        return {
+          provider: 'openrouter',
+          model: model || 'tencent/hy3-preview:free',
+          apiKey,
+        };
+      case 'glm5':
+      case 'zhipu':
+        return {
+          provider: 'glm5',
+          model: model || 'glm-5',
+          apiKey,
+          baseUrl: process.env.ZHIPU_BASE_URL || DEFAULT_GLM5_URL,
+        };
+      case 'openai':
+        return {
+          provider: 'openai',
+          model: model || 'gpt-4',
+          apiKey,
+        };
+      case 'anthropic':
+        return {
+          provider: 'anthropic',
+          model: model || 'claude-sonnet-4-20250514',
+          apiKey,
+        };
+      default:
+        return null;
+    }
   }
 
   static create(config: AIProviderConfig): AIProvider {
@@ -63,13 +118,13 @@ export class AIProviderFactory {
         return new AnthropicProvider(config);
       case 'ollama':
         return new OllamaProvider(config);
+      case 'glm5':
+        return new GLM5Provider(config);
+      case 'openrouter':
+        return new OpenRouterProvider(config);
       default:
         throw new Error(`Unsupported AI provider: ${config.provider}`);
     }
-  }
-
-  static reset(): void {
-    this.instance = null;
   }
 }
 
@@ -77,3 +132,5 @@ export type { AIProvider, AIProviderConfig, AICompletionResponse } from './AIPro
 export { OpenAIProvider } from './OpenAIProvider.js';
 export { AnthropicProvider } from './AnthropicProvider.js';
 export { OllamaProvider } from './OllamaProvider.js';
+export { GLM5Provider } from './GLM5Provider.js';
+export { OpenRouterProvider } from './OpenRouterProvider.js';

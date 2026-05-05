@@ -1,19 +1,27 @@
 import crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
+import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseClient } from '../db/DatabaseClient.js';
 import { Config } from '../config/Config.js';
 import { logger } from '../utils/logger.js';
+import { getAgentSessionService } from './AgentSessionService.js';
+import { ApiKeyService } from './ApiKeyService.js';
+
+const INNER_FALLBACK_MODEL = 'llama3.2:3b';
 
 export interface AgentContext {
-  project: string;
+  project: string | null;
   gitHash: string | null;
   machineFingerprint: string;
   cwd: string;
   source?: string;
   branch?: string;
   sessionId?: string;
+  inner?: boolean;
+  provider?: string;
+  model?: string;
 }
 
 export interface AgentIdentity {
@@ -40,55 +48,63 @@ interface IdentityRow {
 
 export class AgentIdentityService {
   private db: DatabaseClient;
-  private static currentIdentity: AgentIdentity | null = null;
-  private static externalIdentity: AgentIdentity | null = null;
 
   constructor(db: DatabaseClient) {
     this.db = db;
   }
 
-  static setExternalIdentity(identity: AgentIdentity): void {
-    AgentIdentityService.externalIdentity = identity;
-    AgentIdentityService.currentIdentity = identity;
-    logger.info(`[AgentIdentity] External identity set: ${identity.id}`);
-  }
-
-  static getExternalIdentity(): AgentIdentity | null {
-    return AgentIdentityService.externalIdentity;
-  }
-
-  static async getResolvedIdentity(): Promise<AgentIdentity> {
-    if (AgentIdentityService.currentIdentity) {
-      return AgentIdentityService.currentIdentity;
-    }
+  static async getResolvedIdentity(inner?: boolean): Promise<AgentIdentity> {
     const db = new DatabaseClient(Config.getInstance());
     const service = new AgentIdentityService(db);
-    const identity = await service.resolve();
+
+    let innerModel: string | undefined;
+
+    if (inner) {
+      innerModel = await service.resolveInnerModel();
+    }
+
+    const identity = await service.resolve(inner, innerModel);
+
+    const sessionService = getAgentSessionService(db);
+    const source = service.detectContext().source || 'nezha';
+    await sessionService.registerSession(source, identity.id);
+
     await db.close();
     return identity;
   }
 
-  async resolve(): Promise<AgentIdentity> {
-    if (AgentIdentityService.externalIdentity) {
-      return AgentIdentityService.externalIdentity;
-    }
+  private async resolveInnerModel(): Promise<string> {
+    const apiKeyService = ApiKeyService.getInstance(this.db);
 
-    const context = this.detectContext();
+    try {
+      const current = await apiKeyService.getCurrentInnerModel();
+      if (!current) {
+        logger.warn('[AgentIdentity] No current inner provider configured, using fallback model');
+        return INNER_FALLBACK_MODEL;
+      }
+
+      logger.info(`[AgentIdentity] Resolved inner model: ${current.model} from current provider: ${current.provider}`);
+      return current.model;
+    } catch (error) {
+      logger.warn(`[AgentIdentity] Failed to resolve inner model: ${error}, using fallback`);
+      return INNER_FALLBACK_MODEL;
+    }
+  }
+
+  async resolve(inner?: boolean, model?: string): Promise<AgentIdentity> {
+    const context = this.detectContext(inner, model);
     const id = this.generateSemanticId(context);
 
     const existing = await this.getById(id);
     if (existing) {
-      AgentIdentityService.currentIdentity = existing;
       return existing;
     }
 
     const identity = await this.createIdentity(context);
-    AgentIdentityService.currentIdentity = identity;
     return identity;
   }
 
-  detectContext(): AgentContext {
-    // TRAE-specific: check if running in Trae
+  detectContext(inner?: boolean, model?: string): AgentContext {
     const traeEnv = this.detectTraeEnv();
 
     const source = traeEnv.source || this.detectSource();
@@ -107,6 +123,8 @@ export class AgentIdentityService {
       source,
       branch,
       sessionId,
+      inner,
+      model,
     };
   }
 
@@ -120,12 +138,52 @@ export class AgentIdentityService {
   }
 
   private detectTraeEnv(): { source: string | null; sessionId: string | null } {
-    if (process.env.AI_AGENT !== 'TRAE') {
-      return { source: null, sessionId: null };
+    // First try env vars (works in normal terminal)
+    if (process.env.AI_AGENT === 'TRAE') {
+      const logDir = process.env.TRAE_SANDBOX_LOG_DIR;
+      const sessionId = logDir?.match(/\/logs\/(\d{8}T\d{6})\//)?.[1] || null;
+      return { source: 'TRAE', sessionId };
     }
-    const logDir = process.env.TRAE_SANDBOX_LOG_DIR;
-    const sessionId = logDir?.match(/\/logs\/(\d{8}T\d{6})\//)?.[1] || null;
-    return { source: 'TRAE', sessionId };
+
+    // Fallback: dynamic detection (works in git hooks where env vars are not inherited)
+    return this.detectTraeDynamically();
+  }
+
+  private detectTraeDynamically(): { source: string | null; sessionId: string | null } {
+    try {
+      const homeDir = os.homedir();
+      const traeLogDir = path.join(homeDir, '.trae', 'logs');
+
+      if (!fs.existsSync(traeLogDir)) {
+        return { source: null, sessionId: null };
+      }
+
+      // Scan for most recent session directory
+      const dirs = fs
+        .readdirSync(traeLogDir, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .sort((a, b) => b.name.localeCompare(a.name));
+
+      if (dirs.length > 0) {
+        // Directory name format: YYYYMMDDTHHMMSS
+        const firstDirName = dirs[0]?.name;
+        if (!firstDirName) {
+          // fall through to return null at end
+        } else {
+          const match = firstDirName.match(/^\d{8}T\d{6}$/);
+          const sessionId = match ? match[0] : null;
+          if (sessionId) {
+            logger.info(
+              `[AgentIdentity] Detected Trae dynamically via ~/.trae/logs/ (session: ${sessionId})`
+            );
+            return { source: 'TRAE', sessionId };
+          }
+        }
+      }
+    } catch {
+      // Ignore errors - Trae may not be installed
+    }
+    return { source: null, sessionId: null };
   }
 
   private getGitBranch(): string {
@@ -140,7 +198,7 @@ export class AgentIdentityService {
     }
   }
 
-  private getProjectName(): string {
+  private getProjectName(): string | null {
     try {
       // Try git remote first
       const remote = execSync('git remote get-url origin 2>/dev/null || echo ""', {
@@ -157,8 +215,9 @@ export class AgentIdentityService {
       // Fall through
     }
 
-    // Fallback to directory name
-    return path.basename(process.cwd()) || 'unknown';
+    // Not in a git repo - return null to indicate this is a global (non-project) context
+    // This will trigger G- ID generation instead of S- ID
+    return null;
   }
 
   private getGitHash(): string | null {
@@ -184,17 +243,33 @@ export class AgentIdentityService {
   generateSemanticId(context: AgentContext): string {
     const source = context.source || 'unknown';
 
+    if (context.inner) {
+      if (context.model) {
+        if (context.project) {
+          if (context.sessionId) {
+            return `I-${context.model}-${context.project}-${context.sessionId}`;
+          }
+          return `I-${context.model}-${context.project}`;
+        }
+        return `I-${context.model}`;
+      }
+      if (context.project) {
+        if (context.sessionId) {
+          return `I-${source}-${context.project}-${context.sessionId}`;
+        }
+        return `I-${source}-${context.project}`;
+      }
+      return `I-${source}`;
+    }
+
     if (context.project) {
       if (context.sessionId) {
         return `S-${source}-${context.project}-${context.sessionId}`;
       }
-      if (context.branch) {
-        return `S-${source}-${context.project}-${context.branch}`;
-      }
       return `S-${source}-${context.project}`;
     }
 
-    return `G-${source}-${context.machineFingerprint}`;
+    return `G-${source}-${context.cwd.split('/').pop() || 'unknown'}-${context.machineFingerprint}`;
   }
 
   private async createIdentity(context: AgentContext): Promise<AgentIdentity> {

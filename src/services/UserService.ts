@@ -316,9 +316,8 @@ export class UserService {
   }
 
   private toPublicUser(user: User): PublicUser {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password_hash: _unused, ...publicUser } = user;
-    return publicUser as PublicUser;
+    const { password_hash, updated_at, ...publicUser } = user;
+    return publicUser as Omit<User, 'password_hash' | 'updated_at'> as PublicUser;
   }
 
   private async createSession(userId: string, refreshToken: string): Promise<void> {

@@ -1,5 +1,40 @@
 # Learnings
 
+## 2026-04-30
+
+### Free Model Discovery: tencent/hy3-preview:free
+
+**Background**: Testing local model integration for QC tasks to reduce external API dependency.
+
+**Tests Conducted**:
+1. **qwen3:4b (Ollama)**
+   - Issue: Very verbose, over-thinks simple questions
+   - /no_think flag does not work reliably
+   - Verdict: UNSUITABLE
+
+2. **tencent/hy3-preview:free (OpenRouter)**
+   - Test 1 - Simple math (2+2): Correctly answered "four"
+   - Test 2 - Commit message QC ("fix bug"): Correctly identified as NOT good
+   - Speed: ~5-10 seconds
+   - Verdict: SUITABLE for routine QC tasks
+
+**Implementation**:
+- Created `.env` file with `NEZHA_SECRET` for AES-256-GCM encryption
+- OpenRouter API key stored in `provider_api_keys` table (encrypted)
+- Encryption: PBKDF2 key derivation (100k iterations) + AES-256-GCM
+- **NEW**: Added `OpenRouterProvider` class at `src/services/ai/OpenRouterProvider.ts`
+- Provider auto-detected in `AIProviderFactory.createFromEnv()` when `OPENROUTER_API_KEY` is set
+- Default model: `tencent/hy3-preview:free` (free, works well)
+
+**Next Steps**:
+- Add OpenRouter provider to nezha ✅ DONE
+- Use hy3-preview:free for QC tasks (not yet)
+- Test inter-review request detection
+
+**References**:
+- Issue: #d9fa71fa "Ollama Trials - Local Model Integration" (RESOLVED)
+- Model: tencent/hy3-preview:free on OpenRouter ($0 cost)
+
 ## 2026-03-20
 
 ### InterReview→Memory→SelfImprovement Pipeline

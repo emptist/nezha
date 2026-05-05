@@ -51,3 +51,7 @@ AI_providers.md
 !AI_providers.md.example
 # conversations/ operational data in PostgreSQL
 data.db
+
+# Example outputs
+examples/*/output/
+examples/*/temp/

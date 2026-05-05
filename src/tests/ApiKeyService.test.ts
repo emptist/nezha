@@ -11,43 +11,43 @@ vi.mock('../db/DatabaseClient.js', () => ({
   DatabaseClient: vi.fn().mockImplementation(() => mockDb),
 }));
 
+vi.mock('../services/EncryptionService.js', () => ({
+  EncryptionService: vi.fn(),
+  getEncryptionService: vi.fn().mockReturnValue({
+    encrypt: vi.fn().mockReturnValue({
+      encryptedData: 'encrypted-key',
+      iv: 'iv-data',
+      tag: 'tag-data',
+      salt: 'salt-data',
+    }),
+    decrypt: vi.fn().mockReturnValue('decrypted-api-key'),
+  }),
+}));
+
 describe('ApiKeyService', () => {
   let ApiKeyService: any;
   let service: any;
+  let originalSecret: string | undefined;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
-    vi.mock('../services/EncryptionService.js', () => ({
-      EncryptionService: vi.fn(),
-      getEncryptionService: vi.fn().mockReturnValue({
-        isInitialized: vi.fn().mockReturnValue(true),
-        encrypt: vi.fn().mockReturnValue({
-          encryptedData: 'encrypted-key',
-          iv: 'iv-data',
-          tag: 'tag-data',
-          salt: 'salt-data',
-        }),
-        decrypt: vi.fn().mockReturnValue('decrypted-api-key'),
-      }),
-    }));
+    originalSecret = process.env.NEZHA_SECRET;
+    process.env.NEZHA_SECRET = 'test-secret';
     const module = await import('../services/ApiKeyService.js');
     ApiKeyService = module.ApiKeyService;
+    ApiKeyService.resetInstance();
     mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<unknown>);
-    service = new ApiKeyService(mockDb as unknown as DatabaseClient, {
-      isInitialized: vi.fn().mockReturnValue(true),
-      encrypt: vi.fn().mockReturnValue({
-        encryptedData: 'encrypted-key',
-        iv: 'iv-data',
-        tag: 'tag-data',
-        salt: 'salt-data',
-      }),
-      decrypt: vi.fn().mockReturnValue('decrypted-api-key'),
-    } as any);
+    service = ApiKeyService.getInstance(mockDb as unknown as DatabaseClient);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    if (originalSecret) {
+      process.env.NEZHA_SECRET = originalSecret;
+    } else {
+      delete process.env.NEZHA_SECRET;
+    }
   });
 
   describe('storeApiKey', () => {
@@ -56,11 +56,10 @@ describe('ApiKeyService', () => {
       expect(mockDb.query).toHaveBeenCalled();
     });
 
-    it('should throw error when encryption not initialized', async () => {
-      service.encryption.isInitialized.mockReturnValue(false);
-
+    it('should throw error when NEZHA_SECRET not set', async () => {
+      delete process.env.NEZHA_SECRET;
       await expect(service.storeApiKey('openai', 'sk-secret123')).rejects.toThrow(
-        'Encryption service not initialized'
+        'NEZHA_SECRET not set'
       );
     });
   });
@@ -84,9 +83,16 @@ describe('ApiKeyService', () => {
     });
 
     it('should return null when key not found', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
       const result = await service.getApiKey('nonexistent');
       expect(result).toBeNull();
+    });
+
+    it('should throw error when NEZHA_SECRET not set', async () => {
+      delete process.env.NEZHA_SECRET;
+      await expect(service.getApiKey('openai')).rejects.toThrow(
+        'NEZHA_SECRET not set'
+      );
     });
   });
 
@@ -112,7 +118,7 @@ describe('ApiKeyService', () => {
     });
 
     it('should return empty array when no providers', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
       const result = await service.listProviders();
       expect(result).toEqual([]);
     });
@@ -146,11 +152,10 @@ describe('ApiKeyService', () => {
       expect(mockDb.query).toHaveBeenCalled();
     });
 
-    it('should throw error when encryption not initialized', async () => {
-      service.encryption.isInitialized.mockReturnValue(false);
-
+    it('should throw error when NEZHA_SECRET not set', async () => {
+      delete process.env.NEZHA_SECRET;
       await expect(service.storeUserApiKeyEncrypted('user-key-1', 'sk-user123')).rejects.toThrow(
-        'Encryption service not initialized'
+        'NEZHA_SECRET not set'
       );
     });
   });
@@ -196,16 +201,15 @@ describe('ApiKeyService', () => {
     });
 
     it('should return null when user API key not found', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
       const result = await service.getUserApiKeyDecrypted('nonexistent', 'admin');
       expect(result).toBeNull();
     });
 
-    it('should throw error when encryption not initialized', async () => {
-      service.encryption.isInitialized.mockReturnValue(false);
-
+    it('should throw error when NEZHA_SECRET not set', async () => {
+      delete process.env.NEZHA_SECRET;
       await expect(service.getUserApiKeyDecrypted('user-key-1', 'admin')).rejects.toThrow(
-        'Encryption service not initialized'
+        'NEZHA_SECRET not set'
       );
     });
   });
@@ -240,31 +244,69 @@ describe('ApiKeyService', () => {
     });
 
     it('should return empty array when no keys', async () => {
-      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
       const result = await service.listUserApiKeys('admin');
       expect(result).toEqual([]);
+    });
+  });
+
+  describe('getCurrentInnerProvider', () => {
+    it('should return current inner provider', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [
+          {
+            provider: 'openai',
+            encrypted_key: 'encrypted-key',
+            encrypted_iv: 'iv-data',
+            encrypted_tag: 'tag-data',
+            encrypted_salt: 'salt-data',
+            model: 'gpt-4',
+          },
+        ],
+        rowCount: 1,
+      } as QueryResult<any>);
+
+      const result = await service.getCurrentInnerProvider();
+      expect(result).toHaveProperty('provider', 'openai');
+      expect(result).toHaveProperty('model', 'gpt-4');
+    });
+
+    it('should return null when no provider set', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
+      const result = await service.getCurrentInnerProvider();
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getCurrentInnerModel', () => {
+    it('should return current inner model', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({
+        rows: [
+          {
+            provider: 'openai',
+            model: 'gpt-4',
+          },
+        ],
+        rowCount: 1,
+      } as QueryResult<any>);
+
+      const result = await service.getCurrentInnerModel();
+      expect(result).toHaveProperty('provider', 'openai');
+      expect(result).toHaveProperty('model', 'gpt-4');
+    });
+
+    it('should return null when no provider set', async () => {
+      mockDb.query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 } as QueryResult<any>);
+      const result = await service.getCurrentInnerModel();
+      expect(result).toBeNull();
     });
   });
 
   describe('getInstance', () => {
     it('should return singleton instance', async () => {
       vi.resetModules();
-      vi.mock('../services/EncryptionService.js', () => ({
-        EncryptionService: vi.fn(),
-        getEncryptionService: vi.fn().mockReturnValue({
-          isInitialized: vi.fn().mockReturnValue(true),
-          encrypt: vi.fn().mockReturnValue({
-            encryptedData: 'encrypted-key',
-            iv: 'iv-data',
-            tag: 'tag-data',
-            salt: 'salt-data',
-          }),
-          decrypt: vi.fn().mockReturnValue('decrypted-api-key'),
-        }),
-      }));
-
       const module = await import('../services/ApiKeyService.js');
-      const { ApiKeyService } = module;
+      const { ApiKeyService: AKService } = module;
 
       const instance1 = ApiKeyService.getInstance(mockDb as unknown as DatabaseClient);
       const instance2 = ApiKeyService.getInstance(mockDb as unknown as DatabaseClient);

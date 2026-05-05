@@ -40,7 +40,7 @@ export class IssueTrackingService {
     }>(
       `SELECT id, title, description, status, resolution, issue_type, severity, created_at, resolved_at
        FROM issues
-       WHERE (${conditions}) AND status = 'OPEN'
+       WHERE (${conditions}) AND status = 'open'
        ORDER BY created_at DESC
        LIMIT 5`,
       values
@@ -161,7 +161,7 @@ export class IssueTrackingService {
 
   async getOpenIssuesCount(): Promise<number> {
     const result = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM issues WHERE status = 'OPEN'`
+      `SELECT COUNT(*) as count FROM issues WHERE status = 'open'`
     );
     return parseInt(result.rows[0]?.count ?? '0', 10);
   }

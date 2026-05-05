@@ -65,12 +65,12 @@ nezha start       # 开始工作
 
 ### 以前 vs 现在
 
-| 方面 | 以前                        | 现在               |
-| ---- | --------------------------- | ------------------ |
-| 启动 | 打开项目即可                | 先确保 daemon 运行 |
+| 方面 | 以前                                     | 现在                   |
+| ---- | ---------------------------------------- | ---------------------- |
+| 启动 | 打开项目即可                             | 先确保 daemon 运行     |
 | ID   | ~~共享 `.nezha/agent-id.json`~~ (已移除) | 幂等分配（PostgreSQL） |
-| 身份 | 无追踪                      | 自动关联           |
-| 知识 | 混乱累积                    | 确定性累积         |
+| 身份 | 无追踪                                   | 自动关联               |
+| 知识 | 混乱累积                                 | 确定性累积             |
 
 > **清理记录**: 2026-03-27 彻底移除 `.nezha/agent-id.json` 相关代码和文档。详见 `docs/reviews/agent_id_migration_report_2026-03-27.md`
 
@@ -104,18 +104,20 @@ nezha start       # 开始工作
 
 Nezha 采用三层架构设计：
 
-| 层级 | 说明 | 独立性 | 示例服务 |
-|------|------|--------|----------|
-| **核心层** | Nezha 的核心功能 | ✅ 可以独立运行 | HeartbeatService, MemoryService, Scheduler |
-| **集成层** | 与外部 AI 系统的集成 | ⚠️ 可选部署 | OpenCodeReminderService, TraeSkillSyncService |
-| **支持层** | 支持核心层和集成层 | ✅ 通用服务 | AIProvider, CacheService, EncryptionService |
+| 层级       | 说明                 | 独立性          | 示例服务                                      |
+| ---------- | -------------------- | --------------- | --------------------------------------------- |
+| **核心层** | Nezha 的核心功能     | ✅ 可以独立运行 | HeartbeatService, MemoryService, Scheduler    |
+| **集成层** | 与外部 AI 系统的集成 | ⚠️ 可选部署     | OpenCodeReminderService, TraeSkillSyncService |
+| **支持层** | 支持核心层和集成层   | ✅ 通用服务     | AIProvider, CacheService, EncryptionService   |
 
 **核心原则**:
+
 - ✅ 核心层不依赖集成层
 - ✅ 集成层失败不影响核心功能
 - ✅ 集成层可以替换为其他 AI 系统
 
 **详细文档**:
+
 - [ARCHITECTURE.md](./ARCHITECTURE.md) - 架构设计文档
 - [SERVICE_CATALOG.md](./SERVICE_CATALOG.md) - 服务目录
 - [INTEGRATION_ARCHITECTURE.md](./INTEGRATION_ARCHITECTURE.md) - 集成架构原则
@@ -1807,7 +1809,7 @@ If commit is blocked, you'll see:
 
 ### 代码贡献
 
-1. **whoami display_name bug 修复** - MCP 从数据库读取 display_name
+1. **whoami display_name bug 修复** - 从数据库读取 display_name
 2. **YAML inline 注释解析 bug 修复** - config.yaml heartbeatIntervalMs
 3. **AI ID 生成机制 bug 修复** - PostgreSQL 多级匹配 + 语义化 ID (S-/G-格式)
 4. **memory 表 agent_id 关联** - learn 现在自动记录 AI 身份

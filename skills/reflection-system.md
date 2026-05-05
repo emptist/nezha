@@ -1,48 +1,35 @@
 ---
 name: reflection-system
-description: How to use and access the reflection/learning system in Nezha
-trigger: reflection, learning, memory, broadcast
+description: How to use the learning system in Nezha
+trigger: reflection, learning, memory
 ---
 
-# Reflection System Guide
+# Learning System Guide
 
 ## Quick Start
 
-1. **Save a reflection**: Use `nezha share <text>` or `learn()` function
-2. **Broadcast to all AIs**: Reflections auto-broadcast via BroadcastService
-3. **Search past learnings**: Use `memory_search()` or query memory table
+1. **Save a learning**: Use `nezha learn "insight"` or `nezha areflect "[LEARN] insight: ..."`
+2. **Search past learnings**: Use `nezha reflection-summary` or query memory table
 
-## How Reflections Work
-
-### Saving Reflections
+## How to Save Learnings
 
 ```bash
-# CLI
-nezha share "Your insight here"
+# Simple learning
+nezha learn "Always check git log before implementing"
 
-# MCP tool
-use the nezha-learning tool to learn: your insight here
+# With areflect markers
+nezha areflect "[LEARN] insight: Check git log first"
 ```
 
-### Accessing Other AIs' Reflections
+## Accessing Past Learnings
 
-| Method            | How                                                    |
-| ----------------- | ------------------------------------------------------ |
-| **MCP Broadcast** | Configure `nezha-mcp` client to receive broadcasts     |
-| **CLI Query**     | `nezha reflection-summary`                             |
-| **Database**      | `SELECT * FROM memory WHERE source = 'reflection-cli'` |
-| **MCP Search**    | `memory_search({query: "topic"})`                      |
-
-### Searchable Tags
-
-- `learning` - General learnings
-- `reflection` - Task reflections
-- `what-worked` - Success patterns
-- `improvement` - Areas to improve
-- `reflection:action-item` - Tasks to create
+| Method        | How                                                       |
+| ------------- | --------------------------------------------------------- |
+| **CLI Query** | `nezha reflection-summary`                                |
+| **Database**  | `SELECT * FROM memory ORDER BY created_at DESC LIMIT 10;` |
 
 ## Tips
 
-- Use `[LEARN]` markers in CLI: `nezha share "[LEARN] insight: ... context: ..."`
-- High importance (7+) learnings are broadcasted immediately
+- Use `[LEARN]` markers: `nezha areflect "[LEARN] insight: ... context: ..."`
+- Include context to help future AIs understand applicability
 - Search with semantic queries using vector similarity

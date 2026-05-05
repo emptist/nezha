@@ -80,17 +80,14 @@
 
 ### Learning System Gap
 
-**Current state:**
+**Current state (2026-04-17 - FIXED):**
 
-- `[LEARN]` blocks are just text in conversations
-- `learn()` function exists but requires MCP tool access
-- No tool available to save learnings directly
+- ✅ `nezha learn "insight"` - CLI command working
+- ✅ `nezha areflect "[LEARN] insight: ..."` - All-in-one working
+- ✅ 614 skills in PostgreSQL
+- ✅ `nezha skill list/search/show/build/suggest` - All working
 
-**Need:**
-
-- Either enable `nezha-learning` MCP server
-- Or add learn() as a CLI command
-- Or connect HeartbeatService to parse conversation output
+**No MCP needed!** CLI-first, like ls/cd/grep.
 
 ### Pattern: Observability Gaps
 

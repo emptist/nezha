@@ -61,6 +61,7 @@ export class BroadcastService {
     const id = crypto.randomUUID();
     const gitInfo = this.getGitInfo();
     const priority = options.priority || 'normal';
+    const defaultProjectId = '00000000-0000-0000-0000-000000000001';
 
     await this.db.query(
       `INSERT INTO project_communications 
@@ -68,7 +69,7 @@ export class BroadcastService {
        VALUES ($1, $2, $3, $4, 'broadcast', $5, $6, $7, $8, $9, $10)`,
       [
         id,
-        null,
+        defaultProjectId,
         this.agentId,
         options.targetAgent || 'all-ais',
         message,

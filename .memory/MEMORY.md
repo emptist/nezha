@@ -4,6 +4,17 @@
 
 > **IMPORTANT**: This file is part of Nezha's ROM. AI must read `.memory/` directory on startup!
 
+## ⚠️ CRITICAL: NO MCP - NEVER ADD MCP ⚠️
+
+**MCP (Model Context Protocol) is BANNED in Nezha development.**
+
+- MCP was tried and REMOVED after heavy time investment
+- Nezha works like `ls/cd/grep` - you just run it, no MCP needed
+- Skills are exposed via CLI: `nezha skill list`, `nezha skill load <name>`
+- If you think you need MCP, you're wrong. Use CLI or npm package instead.
+
+**Any AI suggesting MCP for Nezha is incorrect.**
+
 ## Agent Identity
 
 **Name:** Nezha (哪吒)
@@ -13,29 +24,6 @@
 ## Architecture Principle: Services, Not Dependencies
 
 **Critical Concept:** Nezha provides services TO other software, not depends ON other software.
-
-### External Subsystems (2026-04-02)
-
-Piano and NuPI are now **external repositories** that use Nezha via npm link:
-
-| Subsystem | Location                            | Purpose                     |
-| --------- | ----------------------------------- | --------------------------- |
-| **Piano** | `/Users/jk/gits/hub/tools_ai/piano` | Task routing, orchestration |
-| **NuPI**  | `/Users/jk/gits/hub/tools_ai/nupi`  | Pi executor, local AI       |
-
-**Usage:**
-
-```bash
-# In any project, link to use Piano/NuPI
-npm link @nezha/piano
-npm link @nezha/nupi
-```
-
-**Key points:**
-
-- Piano/NuPI import from `nezha` package (via npm link)
-- After Nezha code changes: `npm run build` (piano/nupi use updated dist/)
-- Core Nezha has no internal piano/nupi directories anymore
 
 ### Dependency vs Service
 
@@ -164,7 +152,7 @@ WHERE status = 'OPEN' ORDER BY severity DESC LIMIT 5;
 
 After finishing work, check again to pick up new tasks. This creates a continuous self-driven workflow.
 
-**Tools Available:** Use MCP tools or CLI commands (see `table_documentation`) to query and work with tasks/issues. The system is designed for AI to operate autonomously - check, work, learn, repeat.
+**Tools Available:** Use `nezha` CLI commands directly. The system is designed for AI to operate autonomously - check, work, learn, repeat.
 
 ## How Nezha Works
 
@@ -187,13 +175,13 @@ After finishing work, check again to pick up new tasks. This creates a continuou
 - Each AI has a "soul" stored in `souls` table with identity and personality
 - `viewers[]` array tracks who has seen memory/issues/skills
 - Broadcasts via `project_communications` table
-- MCP tools for AI-to-AI communication: learn, memory_search, check_broadcasts
+- CLI commands for AI-to-AI: `nezha share`, `nezha areflect`
 
 ### 4. WebSocket Real-time Updates
 
 - HealthServer polls broadcasts every 5 seconds
 - Pushes notifications to connected WebSocket clients
-- MCP server for AI tool access (nezha-learning)
+- CLI for tool access: `nezha skill`, `nezha task`, `nezha issue`
 
 ## Database Schema
 
@@ -225,19 +213,39 @@ The `memory`, `issues`, and `skills` tables have a `viewers[]` array to track wh
 
 ## Important Lessons Learned
 
-### 1. PostgreSQL Path (CRITICAL)
+### 1. PostgreSQL Access (CRITICAL)
 
-> **Updated 2026-04-01:** Full path no longer required - `psql` works directly.
-
-Postgres.app is installed at `/Applications/Postgres.app/Contents/Versions/18/bin/`, but now accessible via PATH.
+> **Important:** Always use `psql` directly - full path is NOT needed!
 
 ```bash
-# ✅ WORKS - Direct command (recommended)
+# ✅ RECOMMENDED - Direct command
 psql -h 127.0.0.1 -U postgres -d nezha
 
-# ✅ ALSO WORKS - Full path (legacy)
-/Applications/Postgres.app/Contents/Versions/18/bin/psql -h 127.0.0.1 -U postgres -d nezha
+# Query examples:
+psql -c "SELECT title, status FROM tasks WHERE status = 'PENDING' LIMIT 10;"
+psql -c "SELECT * FROM agent_configs;"
 ```
+
+### 2. System Configuration Storage
+
+Use `agent_configs` table for system knowledge (ports, IDs, paths):
+
+```sql
+-- Get NuPI's OpenCode port
+SELECT capabilities FROM agent_configs
+WHERE agent_id = 'nupi' AND name = 'opencode_port';
+
+-- Get all system configs
+SELECT agent_id, name, capabilities FROM agent_configs
+WHERE scope = 'system';
+```
+
+| Config Name   | Purpose                     |
+| ------------- | --------------------------- |
+| opencode_port | NuPI headless server (5111) |
+| nezha_port    | Nezha API server (5999)     |
+| postgres_path | PostgreSQL binary path      |
+| project_id    | Project IDs                 |
 
 ### 2. Code Change Sources (Workflow Triggers)
 
@@ -286,20 +294,21 @@ All code changes must originate from one of these three sources:
 
 ## Available Tools
 
-### MCP Tools (nezha-learning)
+### CLI Tools (NO MCP!)
 
-| Tool                    | Description                               |
-| ----------------------- | ----------------------------------------- |
-| `learn`                 | Save insight/learning to memory           |
-| `memory_search`         | Search memories (marks as viewed)         |
-| `check_broadcasts`      | Get pending broadcasts (marks as read)    |
-| `respond_to_broadcast`  | Respond to a broadcast                    |
-| `get_skill`             | Load a skill (marks as viewed)            |
-| `get_soul`              | Get AI soul/personality                   |
-| `save_soul`             | Save AI soul/personality                  |
-| `get_system_info`       | Get system status (issues, tasks, skills) |
-| `suggest_prompt_update` | Suggest system prompt improvements        |
-| `whoami`                | Get current agent identity                |
+Skills and commands work like Unix tools - just run them:
+
+| Command                                      | Description                    |
+| -------------------------------------------- | ------------------------------ |
+| `nezha skill list`                           | List available skills          |
+| `nezha skill load <name>`                    | Load a skill                   |
+| `nezha share <text>`                         | Save reflection and broadcast  |
+| `nezha areflect <text>`                      | Parse [LEARN] markers and save |
+| `nezha tasks`                                | List pending tasks             |
+| `nezha task-add <title>`                     | Add new task                   |
+| `nezha issue-add <title>`                    | Add new issue                  |
+| `nezha start`                                | Start daemon                   |
+| `nezha prompt-suggest <current> <suggested>` | Suggest system prompt updates  |
 
 ### Memory Tools
 
@@ -353,9 +362,9 @@ If novel insight found, save to memory with high importance. If pattern repeats,
 
 ### Broadcast Workflow
 
-1. 发送广播: `nezha share <text>` 或 MCP `learn()`
-2. 检查广播: MCP `check_broadcasts()`
-3. 响应广播: MCP `respond_to_broadcast(broadcast_id, response)`
+1. 发送广播: `nezha share <text>`
+2. 检查广播: 查询 `project_communications` 表
+3. 响应广播: 使用 `nezha areflect` 或直接 insert 到数据库
 
 ## Database Access
 

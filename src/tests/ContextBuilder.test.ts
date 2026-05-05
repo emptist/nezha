@@ -173,11 +173,13 @@ describe('ContextBuilder', () => {
         getLearningsForAIContext: vi.fn().mockResolvedValue('Review findings: Be more careful'),
       };
       InterReviewService.mockImplementation(() => mockInterReview);
+      InterReviewService.create = vi.fn().mockResolvedValue(mockInterReview);
 
       fs.access = vi.fn().mockRejectedValue(new Error('Not found'));
       fs.readFile = vi.fn().mockRejectedValue(new Error('Not found'));
 
       contextBuilder = new ContextBuilder(mockDb as unknown as DatabaseClient);
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       const result = await contextBuilder.buildContext({
         taskId: 'task-1',

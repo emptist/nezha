@@ -1,4 +1,10 @@
-# AI Capability Levels
+# AI Capability Levels (DEPRECATED)
+
+> ⚠️ **过时文件** - 2026-04-05
+>
+> 该配置已不适用。Nezha 现在是核心系统，AI 级别路由应通过数据库 tasks 表的 assigned_to 字段管理。
+
+## Original Content (Archived)
 
 Human-defined capability levels for delegation routing.
 

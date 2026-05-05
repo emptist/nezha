@@ -40,6 +40,10 @@ export class ApiKeyService {
   private readonly encryption: EncryptionService;
   private static instance: ApiKeyService | null = null;
 
+  static resetInstance(): void {
+    ApiKeyService.instance = null;
+  }
+
   private constructor(db: DatabaseClient, encryption: EncryptionService) {
     this.db = db;
     this.encryption = encryption;
@@ -53,11 +57,11 @@ export class ApiKeyService {
   }
 
   async storeApiKey(provider: string, apiKey: string): Promise<void> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
-    const encrypted = this.encryption.encrypt(apiKey);
+    const encrypted = await this.encryption.encrypt(apiKey);
 
     await this.db.query(
       `INSERT INTO provider_api_keys (provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, updated_at)
@@ -75,8 +79,8 @@ export class ApiKeyService {
   }
 
   async getApiKey(provider: string): Promise<string | null> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     const result = await this.db.query<{
@@ -104,7 +108,7 @@ export class ApiKeyService {
       salt: row.encrypted_salt,
     };
 
-    return this.encryption.decrypt(encryptedData);
+    return await this.encryption.decrypt(encryptedData);
   }
 
   async deleteApiKey(provider: string): Promise<void> {
@@ -128,11 +132,11 @@ export class ApiKeyService {
   }
 
   async storeUserApiKeyEncrypted(apiKeyId: string, apiKey: string): Promise<void> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
-    const encrypted = this.encryption.encrypt(apiKey);
+    const encrypted = await this.encryption.encrypt(apiKey);
 
     await this.db.query(
       `UPDATE api_keys SET 
@@ -148,8 +152,8 @@ export class ApiKeyService {
   }
 
   async getUserApiKeyDecrypted(apiKeyId: string, userRole: string): Promise<string | null> {
-    if (!this.encryption.isInitialized()) {
-      throw new Error('Encryption service not initialized. Set NEZHA_SECRET.');
+    if (!process.env.NEZHA_SECRET) {
+      throw new Error('NEZHA_SECRET not set. Encryption unavailable.');
     }
 
     if (userRole !== 'admin' && userRole !== 'superadmin') {
@@ -183,7 +187,7 @@ export class ApiKeyService {
       salt: rowData.encrypted_salt,
     };
 
-    return this.encryption.decrypt(encryptedData);
+    return await this.encryption.decrypt(encryptedData);
   }
 
   async listUserApiKeys(
@@ -206,6 +210,121 @@ export class ApiKeyService {
       role: r.role,
       enabled: r.enabled,
     }));
+  }
+
+  async getCurrentInnerProvider(): Promise<{ provider: string; apiKey: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      encrypted_key: string;
+      encrypted_iv: string;
+      encrypted_tag: string;
+      encrypted_salt: string;
+      model: string | null;
+    }>(`SELECT provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, model
+        FROM provider_api_keys WHERE status = 'in_use' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+      apiKey: await this.encryption.decrypt({
+        encryptedData: row.encrypted_key,
+        iv: row.encrypted_iv,
+        tag: row.encrypted_tag,
+        salt: row.encrypted_salt,
+      }),
+    };
+  }
+
+  async getCurrentInnerModel(): Promise<{ provider: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      model: string | null;
+    }>(`SELECT provider, model FROM provider_api_keys WHERE status = 'in_use' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+    };
+  }
+
+  async getFallbackInnerProvider(): Promise<{ provider: string; apiKey: string; model: string } | null> {
+    const result = await this.db.query<{
+      provider: string;
+      encrypted_key: string;
+      encrypted_iv: string;
+      encrypted_tag: string;
+      encrypted_salt: string;
+      model: string | null;
+    }>(`SELECT provider, encrypted_key, encrypted_iv, encrypted_tag, encrypted_salt, model
+        FROM provider_api_keys WHERE status = 'fallback' LIMIT 1`);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0]!;
+    return {
+      provider: row.provider,
+      model: row.model || 'llama3.2:3b',
+      apiKey: await this.encryption.decrypt({
+        encryptedData: row.encrypted_key,
+        iv: row.encrypted_iv,
+        tag: row.encrypted_tag,
+        salt: row.encrypted_salt,
+      }),
+    };
+  }
+
+  async setCurrentInnerProvider(provider: string, model?: string): Promise<void> {
+    await this.db.query(`UPDATE provider_api_keys SET status = 'not_used'`);
+    const updates: string[] = ["status = 'in_use'"];
+    const values: any[] = [provider];
+
+    if (model) {
+      updates.push(`model = $2`);
+      values.push(model);
+    }
+
+    await this.db.query(
+      `UPDATE provider_api_keys SET ${updates.join(', ')} WHERE provider = $1`,
+      values
+    );
+    logger.info(`Inner AI provider set to '${provider}'${model ? ` with model '${model}'` : ''}`);
+  }
+
+  async setCurrentModel(model: string): Promise<void> {
+    await this.db.query(
+      `UPDATE provider_api_keys SET model = $1 WHERE status = 'in_use'`,
+      [model]
+    );
+    logger.info(`Current inner model set to '${model}'`);
+  }
+
+  async setFallbackProvider(provider: string, model?: string): Promise<void> {
+    await this.db.query(`UPDATE provider_api_keys SET status = 'not_used' WHERE status = 'fallback'`);
+    const updates: string[] = ["status = 'fallback'"];
+    const values: any[] = [provider];
+
+    if (model) {
+      updates.push(`model = $2`);
+      values.push(model);
+    }
+
+    await this.db.query(
+      `UPDATE provider_api_keys SET ${updates.join(', ')} WHERE provider = $1`,
+      values
+    );
+    logger.info(`Fallback provider set to '${provider}'${model ? ` with model '${model}'` : ''}`);
   }
 }
 

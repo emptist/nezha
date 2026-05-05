@@ -195,15 +195,21 @@ export class ReflectionPlugin implements Plugin {
           const parts = this.config.githubRepo.split('/');
           const owner = parts[0] ?? 'emptist';
           const repo = parts[1] ?? 'nezha';
-          const body = `${description}\n\n---\n*Auto-created by Nezha AI from task: ${context.taskId}*`;
+          const agentId = (await AgentIdentityService.getResolvedIdentity()).id;
+          const agentName = agentId.split('-').slice(2).join('-');
+          const body = `${description}\n\n---\n*Auto-created by ${agentName} (Nezha AI)*`;
           try {
-            const githubIssue = await gitHubService.createIssue({
-              owner,
-              repo,
-              title: `[AI] ${title}`,
-              body,
-              labels: ['nezha-ai', severity],
-            });
+            const githubIssue = await gitHubService.createIssue(
+              {
+                owner,
+                repo,
+                title: `[AI] ${title}`,
+                body,
+                labels: ['nezha-ai', severity],
+              },
+              agentName,
+              agentId
+            );
             await this.db.query(
               `UPDATE issues SET metadata = jsonb_set(metadata, '{github_url}', $1) WHERE id = $2`,
               [JSON.stringify(githubIssue.html_url), id]

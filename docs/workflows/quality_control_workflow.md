@@ -13,20 +13,30 @@
 **文件**: `scripts/git-hooks/prepare-commit-msg`
 
 **功能**:
-- ✅ 验证 commit message 包含 task/issue/inter-review ID
-- ✅ 所有 ID 必须存在于数据库中
+- ✅ 验证 commit message 包含 inter-review ID（强制要求）
+- ✅ 验证 commit message 包含 task 或 issue ID（至少一个）
+- ✅ 验证所有 ID 存在于数据库中且状态正确
 - ✅ 如果验证失败，commit 被阻止
 
 **验证规则**:
 ```bash
-# 必须包含至少一个 ID
-[task: <uuid>]
-[issue: <uuid>]
+# 必需: inter-review（必须存在且状态为 completed）
 [inter-review: <uuid>]
 
-# 示例
-git commit -m "Fix bug [task: 43b880df-9d65-48b2-8747-495f310010c3]"
+# 必需: task 或 issue（至少一个）
+[task: <uuid>]
+[issue: <uuid>]
+
+# 有效 commit 示例
+git commit -m "feat: add feature [task: 43b880df-9d65-48b2-8747-495f310010c3] [inter-review: abc123]"
+git commit -m "fix: bug [issue: def456] [inter-review: abc123]"
 ```
+
+**验证流程**:
+1. **CLI 可用时**: 调用 `nezha validate-commit` 进行严格验证
+   - 检查 inter-review 存在且状态为 completed
+   - 检查 task/issue 存在
+2. **CLI 不可用时**: 回退到简单正则检查（较宽松）
 
 **安装**:
 ```bash
@@ -72,7 +82,8 @@ node dist/cli/index.js setup-hooks
 ### 1. 不是所有 commit 都需要 QC Review
 
 **当前状态**:
-- ✅ 所有 commit 必须有 ID（task/issue/inter-review）
+- ✅ 所有 commit 必须包含 inter-review ID（已强制）
+- ✅ 所有 commit 必须包含 task 或 issue ID（至少一个）
 - ⚠️ 不是所有 commit 都触发 QC review
 - ⚠️ 只有高优先级任务才自动触发 QC
 

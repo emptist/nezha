@@ -161,7 +161,21 @@ export class SkillSystem {
       });
     }
 
+    if (suggestions.length > 0) {
+      const skillNames = suggestions.map(s => s.skill.name);
+      await this.incrementUseCount(skillNames);
+    }
+
     return suggestions;
+  }
+
+  private async incrementUseCount(skillNames: string[]): Promise<void> {
+    if (skillNames.length === 0) return;
+    try {
+      await databaseSkillLoader.incrementUseCount(skillNames);
+    } catch (error) {
+      logger.debug('Failed to increment skill use_count:', error);
+    }
   }
 
   async checkSkillSuitability(

@@ -81,7 +81,7 @@ export class EmailService {
     const issuesResult = await this.pool.query(`
       SELECT COUNT(*) as count
       FROM issues
-      WHERE status = 'OPEN'
+      WHERE status = 'open'
     `);
 
     const completed = tasksResult.rows[0]?.completed;
